@@ -4,6 +4,8 @@ require "minitest/autorun"
 require "rubygems"
 
 class OpenAuthAliasPackagesTest < Minitest::Test
+  ROOT = File.expand_path("..", __dir__)
+
   PACKAGE_PAIRS = {
     "openauth" => ["better_auth", "openauth"],
     "openauth-api-key" => ["better_auth-api-key", "openauth/api_key"],
@@ -18,6 +20,23 @@ class OpenAuthAliasPackagesTest < Minitest::Test
     "openauth-sso" => ["better_auth-sso", "openauth/sso"],
     "openauth-stripe" => ["better_auth-stripe", "openauth/stripe"]
   }.freeze
+
+  OPENAUTH_REQUIRE_PATHS = PACKAGE_PAIRS.values.map(&:last).freeze
+
+  PACKAGE_OPENAUTH_ALIASES = %i[
+    APIKey
+    Hanami
+    MongoAdapter
+    MongoDB
+    OAuthProvider
+    Passkey
+    Rails
+    RedisStorage
+    SCIM
+    Sinatra
+    SSO
+    Stripe
+  ].freeze
 
   def test_alias_packages_match_canonical_versions_and_documentation
     PACKAGE_PAIRS.each do |alias_name, (canonical_name, require_name)|
@@ -40,6 +59,32 @@ class OpenAuthAliasPackagesTest < Minitest::Test
       assert_includes readme, "gem \"#{alias_name}\""
       assert_includes readme, "require \"#{require_name}\""
       assert_includes readme, canonical_name
+    end
+  end
+
+  def test_openauth_exposes_core_and_package_constants_directly
+    add_package_libs_to_load_path
+    OPENAUTH_REQUIRE_PATHS.each { |path| require path }
+
+    expected_aliases = (BetterAuth.constants(false) + PACKAGE_OPENAUTH_ALIASES).uniq
+    missing_aliases = expected_aliases.reject { |constant_name| OpenAuth.const_defined?(constant_name, false) }
+
+    assert_empty missing_aliases, "OpenAuth is missing direct aliases for: #{missing_aliases.sort.join(", ")}"
+
+    assert_same BetterAuth::Adapters::Memory, OpenAuth::Adapters::Memory
+    assert_same BetterAuth::Adapters::MongoDB, OpenAuth::Adapters::MongoDB
+    assert_same BetterAuth::Plugins, OpenAuth::Plugins
+    assert_same BetterAuth::APIKey, OpenAuth::APIKey
+    assert_same BetterAuth::Rails, OpenAuth::Rails
+    assert_same BetterAuth::Sinatra, OpenAuth::Sinatra
+    assert_same BetterAuth::MongoAdapter, OpenAuth::MongoDB
+  end
+
+  private
+
+  def add_package_libs_to_load_path
+    Dir[File.join(ROOT, "packages", "*", "lib")].sort.reverse_each do |path|
+      $LOAD_PATH.unshift(path) unless $LOAD_PATH.include?(path)
     end
   end
 end

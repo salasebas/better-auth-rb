@@ -5,4 +5,5 @@ require "better_auth/hanami"
 
 module OpenAuth
   Hanami = BetterAuth::Hanami unless const_defined?(:Hanami, false)
+  alias_better_auth_constants!
 end

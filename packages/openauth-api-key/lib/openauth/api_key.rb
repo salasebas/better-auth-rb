@@ -5,4 +5,5 @@ require "better_auth/api_key"
 
 module OpenAuth
   APIKey = BetterAuth::APIKey unless const_defined?(:APIKey, false)
+  alias_better_auth_constants!
 end

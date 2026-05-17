@@ -5,4 +5,5 @@ require "better_auth/sinatra"
 
 module OpenAuth
   Sinatra = BetterAuth::Sinatra unless const_defined?(:Sinatra, false)
+  alias_better_auth_constants!
 end
