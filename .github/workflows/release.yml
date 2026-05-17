@@ -11,6 +11,7 @@ on:
       - 'better_auth-api-key-v*'
       - 'better_auth-oauth-provider-v*'
       - 'better_auth-redis-storage-v*'
+      - 'better_auth-mongodb-v*'
       - 'better_auth-mongo-adapter-v*'
       - 'better_auth-scim-v*'
       - 'better_auth-sso-v*'
@@ -59,6 +60,7 @@ jobs:
       api_key_version: ${{ steps.detect.outputs.api_key_version }}
       oauth_provider_version: ${{ steps.detect.outputs.oauth_provider_version }}
       redis_storage_version: ${{ steps.detect.outputs.redis_storage_version }}
+      mongodb_version: ${{ steps.detect.outputs.mongodb_version }}
       mongo_adapter_version: ${{ steps.detect.outputs.mongo_adapter_version }}
       scim_version: ${{ steps.detect.outputs.scim_version }}
       sso_version: ${{ steps.detect.outputs.sso_version }}
@@ -73,6 +75,7 @@ jobs:
       api_key_releases: ${{ steps.detect.outputs.api_key_releases }}
       oauth_provider_releases: ${{ steps.detect.outputs.oauth_provider_releases }}
       redis_storage_releases: ${{ steps.detect.outputs.redis_storage_releases }}
+      mongodb_releases: ${{ steps.detect.outputs.mongodb_releases }}
       mongo_adapter_releases: ${{ steps.detect.outputs.mongo_adapter_releases }}
       scim_releases: ${{ steps.detect.outputs.scim_releases }}
       sso_releases: ${{ steps.detect.outputs.sso_releases }}
@@ -100,6 +103,7 @@ jobs:
           api_key_file="packages/better_auth-api-key/lib/better_auth/api_key/version.rb"
           oauth_provider_file="packages/better_auth-oauth-provider/lib/better_auth/oauth_provider/version.rb"
           redis_storage_file="packages/better_auth-redis-storage/lib/better_auth/redis_storage/version.rb"
+          mongodb_file="packages/better_auth-mongodb/lib/better_auth/mongodb/version.rb"
           mongo_adapter_file="packages/better_auth-mongo-adapter/lib/better_auth/mongo_adapter/version.rb"
           scim_file="packages/better_auth-scim/lib/better_auth/scim/version.rb"
           sso_file="packages/better_auth-sso/lib/better_auth/sso/version.rb"
@@ -113,6 +117,7 @@ jobs:
           api_key_version=$(ruby -e 'print File.read(ARGV[0])[/VERSION\s*=\s*"([^"]+)"/, 1]' "$api_key_file")
           oauth_provider_version=$(ruby -e 'print File.read(ARGV[0])[/VERSION\s*=\s*"([^"]+)"/, 1]' "$oauth_provider_file")
           redis_storage_version=$(ruby -e 'print File.read(ARGV[0])[/VERSION\s*=\s*"([^"]+)"/, 1]' "$redis_storage_file")
+          mongodb_version=$(ruby -e 'print File.read(ARGV[0])[/VERSION\s*=\s*"([^"]+)"/, 1]' "$mongodb_file")
           mongo_adapter_version=$(ruby -e 'print File.read(ARGV[0])[/VERSION\s*=\s*"([^"]+)"/, 1]' "$mongo_adapter_file")
           scim_version=$(ruby -e 'print File.read(ARGV[0])[/VERSION\s*=\s*"([^"]+)"/, 1]' "$scim_file")
           sso_version=$(ruby -e 'print File.read(ARGV[0])[/VERSION\s*=\s*"([^"]+)"/, 1]' "$sso_file")
@@ -129,6 +134,7 @@ jobs:
           api_key_releases=false
           oauth_provider_releases=false
           redis_storage_releases=false
+          mongodb_releases=false
           mongo_adapter_releases=false
           scim_releases=false
           sso_releases=false
@@ -188,6 +194,12 @@ jobs:
                 expected_version="$redis_storage_version"
                 redis_storage_releases=true
                 ;;
+              better_auth-mongodb-v*)
+                target_package="better_auth-mongodb"
+                tag_version="${tag_name#better_auth-mongodb-v}"
+                expected_version="$mongodb_version"
+                mongodb_releases=true
+                ;;
               better_auth-mongo-adapter-v*)
                 target_package="better_auth-mongo-adapter"
                 tag_version="${tag_name#better_auth-mongo-adapter-v}"
@@ -213,7 +225,7 @@ jobs:
                 stripe_releases=true
                 ;;
               *)
-                echo "::error ::Release tags must use a package prefix: better_auth-vX.Y.Z, better_auth-rails-vX.Y.Z, better_auth-passkey-vX.Y.Z, better_auth-sinatra-vX.Y.Z, better_auth-hanami-vX.Y.Z, better_auth-api-key-vX.Y.Z, better_auth-oauth-provider-vX.Y.Z, better_auth-redis-storage-vX.Y.Z, better_auth-mongo-adapter-vX.Y.Z, better_auth-scim-vX.Y.Z, better_auth-sso-vX.Y.Z, or better_auth-stripe-vX.Y.Z."
+                echo "::error ::Release tags must use a package prefix: better_auth-vX.Y.Z, better_auth-rails-vX.Y.Z, better_auth-passkey-vX.Y.Z, better_auth-sinatra-vX.Y.Z, better_auth-hanami-vX.Y.Z, better_auth-api-key-vX.Y.Z, better_auth-oauth-provider-vX.Y.Z, better_auth-redis-storage-vX.Y.Z, better_auth-mongodb-vX.Y.Z, better_auth-mongo-adapter-vX.Y.Z, better_auth-scim-vX.Y.Z, better_auth-sso-vX.Y.Z, or better_auth-stripe-vX.Y.Z."
                 exit 1
                 ;;
             esac
@@ -267,6 +279,7 @@ jobs:
           echo "api_key_version=$api_key_version" >> "$GITHUB_OUTPUT"
           echo "oauth_provider_version=$oauth_provider_version" >> "$GITHUB_OUTPUT"
           echo "redis_storage_version=$redis_storage_version" >> "$GITHUB_OUTPUT"
+          echo "mongodb_version=$mongodb_version" >> "$GITHUB_OUTPUT"
           echo "mongo_adapter_version=$mongo_adapter_version" >> "$GITHUB_OUTPUT"
           echo "scim_version=$scim_version" >> "$GITHUB_OUTPUT"
           echo "sso_version=$sso_version" >> "$GITHUB_OUTPUT"
@@ -281,6 +294,7 @@ jobs:
           echo "api_key_releases=$api_key_releases" >> "$GITHUB_OUTPUT"
           echo "oauth_provider_releases=$oauth_provider_releases" >> "$GITHUB_OUTPUT"
           echo "redis_storage_releases=$redis_storage_releases" >> "$GITHUB_OUTPUT"
+          echo "mongodb_releases=$mongodb_releases" >> "$GITHUB_OUTPUT"
           echo "mongo_adapter_releases=$mongo_adapter_releases" >> "$GITHUB_OUTPUT"
           echo "scim_releases=$scim_releases" >> "$GITHUB_OUTPUT"
           echo "sso_releases=$sso_releases" >> "$GITHUB_OUTPUT"
@@ -297,6 +311,7 @@ jobs:
           echo "api_key_version=$api_key_version"
           echo "oauth_provider_version=$oauth_provider_version"
           echo "redis_storage_version=$redis_storage_version"
+          echo "mongodb_version=$mongodb_version"
           echo "mongo_adapter_version=$mongo_adapter_version"
           echo "scim_version=$scim_version"
           echo "sso_version=$sso_version"
@@ -311,6 +326,7 @@ jobs:
           echo "api_key_releases=$api_key_releases"
           echo "oauth_provider_releases=$oauth_provider_releases"
           echo "redis_storage_releases=$redis_storage_releases"
+          echo "mongodb_releases=$mongodb_releases"
           echo "mongo_adapter_releases=$mongo_adapter_releases"
           echo "scim_releases=$scim_releases"
           echo "sso_releases=$sso_releases"
@@ -596,10 +612,10 @@ jobs:
           REDIS_URL: redis://localhost:6379/0
         run: bundle exec rake test:integration
 
-  test-mongo-adapter:
-    name: Test better_auth-mongo-adapter (MongoDB Adapter)
+  test-mongodb:
+    name: Test better_auth-mongodb (MongoDB Adapter)
     needs: [prepare-release]
-    if: needs.prepare-release.outputs.mongo_adapter_releases == 'true' || needs.prepare-release.outputs.dry_run == 'true'
+    if: needs.prepare-release.outputs.mongodb_releases == 'true' || needs.prepare-release.outputs.dry_run == 'true'
     runs-on: ubuntu-latest
     services:
       mongodb:
@@ -612,6 +628,29 @@ jobs:
           --health-timeout 5s
           --health-retries 20
           --health-start-period 10s
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: .ruby-version
+          bundler-cache: true
+          working-directory: packages/better_auth-mongodb
+
+      - name: Run linter
+        working-directory: packages/better_auth-mongodb
+        run: bundle exec standardrb
+
+      - name: Run tests
+        working-directory: packages/better_auth-mongodb
+        run: bundle exec rake test
+
+  test-mongo-adapter:
+    name: Test better_auth-mongo-adapter (Compatibility)
+    needs: [prepare-release]
+    if: needs.prepare-release.outputs.mongo_adapter_releases == 'true' || needs.prepare-release.outputs.dry_run == 'true'
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
@@ -1163,6 +1202,54 @@ jobs:
 
           gem push better_auth-redis-storage-*.gem
 
+  publish-mongodb:
+    name: Build and publish better_auth-mongodb
+    needs: [prepare-release, verify-ci, test-mongodb]
+    if: needs.prepare-release.outputs.mongodb_releases == 'true' || needs.prepare-release.outputs.dry_run == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: .ruby-version
+          bundler-cache: true
+          working-directory: packages/better_auth-mongodb
+
+      - name: Configure RubyGems credentials
+        if: needs.prepare-release.outputs.mongodb_releases == 'true' && needs.prepare-release.outputs.dry_run != 'true'
+        uses: rubygems/configure-rubygems-credentials@v1.0.0
+
+      - name: Build better_auth-mongodb gem
+        working-directory: packages/better_auth-mongodb
+        run: |
+          set -euo pipefail
+          rm -f better_auth-mongodb-*.gem
+          gem build better_auth-mongodb.gemspec
+
+      - name: Publish better_auth-mongodb gem
+        if: needs.prepare-release.outputs.mongodb_releases == 'true'
+        working-directory: packages/better_auth-mongodb
+        env:
+          TARGET_VERSION: ${{ needs.prepare-release.outputs.mongodb_version }}
+          DRY_RUN: ${{ needs.prepare-release.outputs.dry_run }}
+        run: |
+          set -euo pipefail
+          if [ "$DRY_RUN" = "true" ]; then
+            echo "Dry run enabled, skipping gem push for better_auth-mongodb"
+            exit 0
+          fi
+
+          already_exists=$(ruby -rjson -ropen-uri -e 'gem_name = "better_auth-mongodb"; version = ENV.fetch("TARGET_VERSION"); begin; body = URI.open("https://rubygems.org/api/v1/versions/#{gem_name}.json").read; versions = JSON.parse(body).map { |v| v["number"] }; print versions.include?(version) ? "true" : "false"; rescue StandardError; print "false"; end')
+
+          if [ "$already_exists" = "true" ]; then
+            echo "better_auth-mongodb $TARGET_VERSION already exists on RubyGems, skipping push"
+            exit 0
+          fi
+
+          gem push better_auth-mongodb-*.gem
+
   publish-mongo-adapter:
     name: Build and publish better_auth-mongo-adapter
     needs: [prepare-release, verify-ci, test-mongo-adapter]
@@ -1481,7 +1568,7 @@ jobs:
 
   create-release:
     name: Create GitHub release
-    needs: [prepare-release, publish-core, publish-passkey, publish-rails, publish-sinatra, publish-hanami, publish-api-key, publish-oauth-provider, publish-redis-storage, publish-mongo-adapter, publish-scim, publish-sso, publish-stripe]
+    needs: [prepare-release, publish-core, publish-passkey, publish-rails, publish-sinatra, publish-hanami, publish-api-key, publish-oauth-provider, publish-redis-storage, publish-mongodb, publish-mongo-adapter, publish-scim, publish-sso, publish-stripe]
     if: |
       always() &&
       needs.prepare-release.outputs.should_publish == 'true' &&
@@ -1495,6 +1582,7 @@ jobs:
         needs.publish-api-key.result == 'success' ||
         needs.publish-oauth-provider.result == 'success' ||
         needs.publish-redis-storage.result == 'success' ||
+        needs.publish-mongodb.result == 'success' ||
         needs.publish-mongo-adapter.result == 'success' ||
         needs.publish-scim.result == 'success' ||
         needs.publish-sso.result == 'success' ||
@@ -1521,6 +1609,7 @@ jobs:
             - `better_auth-api-key` version `${{ needs.prepare-release.outputs.api_key_version }}` (released: `${{ needs.prepare-release.outputs.api_key_releases }}`)
             - `better_auth-oauth-provider` version `${{ needs.prepare-release.outputs.oauth_provider_version }}` (released: `${{ needs.prepare-release.outputs.oauth_provider_releases }}`)
             - `better_auth-redis-storage` version `${{ needs.prepare-release.outputs.redis_storage_version }}` (released: `${{ needs.prepare-release.outputs.redis_storage_releases }}`)
+            - `better_auth-mongodb` version `${{ needs.prepare-release.outputs.mongodb_version }}` (released: `${{ needs.prepare-release.outputs.mongodb_releases }}`)
             - `better_auth-mongo-adapter` version `${{ needs.prepare-release.outputs.mongo_adapter_version }}` (released: `${{ needs.prepare-release.outputs.mongo_adapter_releases }}`)
             - `better_auth-scim` version `${{ needs.prepare-release.outputs.scim_version }}` (released: `${{ needs.prepare-release.outputs.scim_releases }}`)
             - `better_auth-sso` version `${{ needs.prepare-release.outputs.sso_version }}` (released: `${{ needs.prepare-release.outputs.sso_releases }}`)

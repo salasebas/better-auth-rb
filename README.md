@@ -124,7 +124,7 @@ Short version:
   Rack mounting, helpers, and migration tasks.
 - [`better_auth-hanami`](packages/better_auth-hanami/): Hanami integration,
   action helpers, Sequel adapter, migrations, and generators.
-- [`better_auth-mongo-adapter`](packages/better_auth-mongo-adapter/): MongoDB
+- [`better_auth-mongodb`](packages/better_auth-mongodb/): MongoDB
   database adapter.
 - [`better_auth-redis-storage`](packages/better_auth-redis-storage/): Redis
   secondary storage.
@@ -149,7 +149,7 @@ point back to the canonical documentation at https://better-auth-rb.vercel.app/.
 - [`openauth-sinatra`](packages/openauth-sinatra/): Alias for `better_auth-sinatra`.
 - [`openauth-hanami`](packages/openauth-hanami/): Alias for `better_auth-hanami`.
 - [`openauth-mongodb`](packages/openauth-mongodb/): Alias for
-  `better_auth-mongo-adapter`.
+  `better_auth-mongodb`.
 - [`openauth-redis-storage`](packages/openauth-redis-storage/): Alias for
   `better_auth-redis-storage`.
 - [`openauth-api-key`](packages/openauth-api-key/): Alias for

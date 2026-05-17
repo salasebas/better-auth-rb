@@ -3,7 +3,7 @@ title: MongoDB
 description: Use Better Auth Ruby with MongoDB.
 ---
 
-MongoDB support ships in the external `better_auth-mongo-adapter` gem, so
+MongoDB support ships in the external `better_auth-mongodb` gem, so
 SQL-only applications do not install the MongoDB driver.
 
 <Callout type="info">
@@ -16,7 +16,7 @@ collections use upstream-compatible singular names by default: `user`,
 
 ```ruby title="Gemfile"
 gem "better_auth"
-gem "better_auth-mongo-adapter"
+gem "better_auth-mongodb"
 ```
 
 ```bash title="Terminal"
@@ -27,7 +27,7 @@ bundle install
 
 ```ruby title="config/auth.rb"
 require "better_auth"
-require "better_auth/mongo_adapter"
+require "better_auth/mongodb"
 
 mongo_client = Mongo::Client.new(
   ENV.fetch("MONGODB_URL", "mongodb://127.0.0.1:27017/better_auth")
@@ -162,6 +162,9 @@ before the Mongo adapter internals receive them.
 - The upstream TypeScript adapter exposes `debugLogs`; Better Auth Ruby does not
   currently have an adapter-level debug logging contract, so that option is not
   ported.
+- The older `better_auth-mongo-adapter` gem and
+  `require "better_auth/mongo_adapter"` entrypoint remain available as
+  deprecated compatibility shims.
 
 ```ruby title="config/auth.rb"
 BetterAuth::Adapters::MongoDB.new(

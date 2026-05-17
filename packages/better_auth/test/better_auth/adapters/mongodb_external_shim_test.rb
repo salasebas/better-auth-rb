@@ -12,7 +12,7 @@ class MongoDBExternalShimTest < Minitest::Test
       load File.expand_path("../../../lib/better_auth/adapters/mongodb.rb", __dir__)
     end
 
-    assert_includes error.message, "better_auth-mongo-adapter"
-    assert_includes error.message, "require \"better_auth/mongo_adapter\""
+    assert_includes error.message, "better_auth-mongodb"
+    assert_includes error.message, "require \"better_auth/mongodb\""
   end
 end

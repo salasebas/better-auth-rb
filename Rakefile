@@ -14,6 +14,9 @@ STANDARD_PATHS = [
   "packages/better_auth-redis-storage/Rakefile",
   "packages/better_auth-redis-storage/lib",
   "packages/better_auth-redis-storage/test",
+  "packages/better_auth-mongodb/Rakefile",
+  "packages/better_auth-mongodb/lib",
+  "packages/better_auth-mongodb/test",
   "packages/better_auth-mongo-adapter/Rakefile",
   "packages/better_auth-mongo-adapter/lib",
   "packages/better_auth-mongo-adapter/test",
@@ -73,7 +76,12 @@ task :ci do
     end
   end
 
-  puts "\n🧪 Running tests in packages/better_auth-mongo-adapter..."
+  puts "\n🧪 Running tests in packages/better_auth-mongodb..."
+  cd "packages/better_auth-mongodb" do
+    sh "BUNDLE_GEMFILE=Gemfile bundle exec rake"
+  end
+
+  puts "\n🧪 Running compatibility tests in packages/better_auth-mongo-adapter..."
   cd "packages/better_auth-mongo-adapter" do
     sh "BUNDLE_GEMFILE=Gemfile bundle exec rake"
   end
@@ -141,6 +149,11 @@ task :install do
     sh "BUNDLE_GEMFILE=Gemfile bundle install"
   end
 
+  puts "\n📦 Installing packages/better_auth-mongodb dependencies..."
+  cd "packages/better_auth-mongodb" do
+    sh "BUNDLE_GEMFILE=Gemfile bundle install"
+  end
+
   puts "\n📦 Installing packages/better_auth-mongo-adapter dependencies..."
   cd "packages/better_auth-mongo-adapter" do
     sh "BUNDLE_GEMFILE=Gemfile bundle install"
@@ -204,6 +217,10 @@ task :lint do
     sh "BUNDLE_GEMFILE=Gemfile bundle exec standardrb"
   end
 
+  cd "packages/better_auth-mongodb" do
+    sh "BUNDLE_GEMFILE=Gemfile bundle exec standardrb"
+  end
+
   cd "packages/better_auth-mongo-adapter" do
     sh "BUNDLE_GEMFILE=Gemfile bundle exec standardrb"
   end
@@ -254,6 +271,10 @@ task "lint:fix" do
   end
 
   cd "packages/better_auth-redis-storage" do
+    sh "BUNDLE_GEMFILE=Gemfile bundle exec standardrb --fix"
+  end
+
+  cd "packages/better_auth-mongodb" do
     sh "BUNDLE_GEMFILE=Gemfile bundle exec standardrb --fix"
   end
 
@@ -322,6 +343,10 @@ task :clean do
   end
 
   cd "packages/better_auth-redis-storage" do
+    sh "rm -rf Gemfile.lock *.gem coverage/"
+  end
+
+  cd "packages/better_auth-mongodb" do
     sh "rm -rf Gemfile.lock *.gem coverage/"
   end
 

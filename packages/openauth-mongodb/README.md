@@ -1,6 +1,6 @@
 # openauth-mongodb
 
-Alias package for `better_auth-mongo-adapter`.
+Alias package for `better_auth-mongodb`.
 
 ## Installation
 
@@ -12,6 +12,6 @@ gem "openauth-mongodb"
 require "openauth/mongodb"
 ```
 
-This package depends on `better_auth-mongo-adapter` and loads the canonical Better Auth Ruby MongoDB adapter.
+This package depends on `better_auth-mongodb` and loads the canonical Better Auth Ruby MongoDB adapter.
 
 For documentation, visit https://better-auth-rb.vercel.app/.

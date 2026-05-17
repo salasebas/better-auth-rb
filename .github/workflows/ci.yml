@@ -307,8 +307,8 @@ jobs:
           REDIS_URL: redis://localhost:6379/0
         run: bundle exec rake test:integration
 
-  test-mongo-adapter:
-    name: Test better_auth-mongo-adapter (MongoDB Adapter)
+  test-mongodb:
+    name: Test better_auth-mongodb (MongoDB Adapter)
     runs-on: ubuntu-latest
     services:
       mongodb:
@@ -321,6 +321,27 @@ jobs:
           --health-timeout 5s
           --health-retries 20
           --health-start-period 10s
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: .ruby-version
+          bundler-cache: true
+          working-directory: packages/better_auth-mongodb
+
+      - name: Run linter
+        working-directory: packages/better_auth-mongodb
+        run: bundle exec standardrb
+
+      - name: Run tests
+        working-directory: packages/better_auth-mongodb
+        run: bundle exec rake test
+
+  test-mongo-adapter:
+    name: Test better_auth-mongo-adapter (Compatibility)
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
@@ -414,6 +435,7 @@ jobs:
       - test-hanami
       - test-oauth-provider
       - test-redis-storage
+      - test-mongodb
       - test-mongo-adapter
       - test-scim
       - test-sso

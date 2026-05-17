@@ -2,4 +2,4 @@
 
 ## 0.7.0
 
-- Initial alias package for `better_auth-mongo-adapter`.
+- Initial alias package for `better_auth-mongodb`.

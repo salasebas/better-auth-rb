@@ -6,8 +6,8 @@ Gem::Specification.new do |spec|
   spec.authors = ["Sebastian Sala"]
   spec.email = ["sebastian.sala.tech@gmail.com"]
 
-  spec.summary = "Alias package for better_auth-mongo-adapter"
-  spec.description = "OpenAuth MongoDB alias package that installs better_auth-mongo-adapter."
+  spec.summary = "Alias package for better_auth-mongodb"
+  spec.description = "OpenAuth MongoDB alias package that installs better_auth-mongodb."
   spec.homepage = "https://better-auth-rb.vercel.app/"
   spec.license = "MIT"
   spec.required_ruby_version = ">= 3.2.0"
@@ -16,5 +16,5 @@ Gem::Specification.new do |spec|
   spec.metadata["bug_tracker_uri"] = "https://github.com/sebasxsala/better-auth/issues"
   spec.files = Dir.glob("lib/**/*", File::FNM_DOTMATCH).select { |file| File.file?(file) } + ["README.md", "CHANGELOG.md"].select { |file| File.exist?(file) }
   spec.require_paths = ["lib"]
-  spec.add_dependency "better_auth-mongo-adapter", "0.7.0"
+  spec.add_dependency "better_auth-mongodb", "0.7.0"
 end

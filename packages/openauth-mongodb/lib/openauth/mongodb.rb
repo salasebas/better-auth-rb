@@ -1,11 +1,10 @@
 # frozen_string_literal: true
 
 require "openauth"
-require "better_auth/mongo_adapter"
-require "better_auth/mongo_adapter/version"
+require "better_auth/mongodb"
 
 module OpenAuth
-  MongoAdapter = BetterAuth::MongoAdapter unless const_defined?(:MongoAdapter, false)
-  MongoDB = BetterAuth::MongoAdapter unless const_defined?(:MongoDB, false)
+  MongoDB = BetterAuth::MongoDB unless const_defined?(:MongoDB, false)
+  MongoAdapter = BetterAuth::MongoDB unless const_defined?(:MongoAdapter, false)
   alias_better_auth_constants!
 end

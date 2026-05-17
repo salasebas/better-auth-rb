@@ -10,7 +10,7 @@ class OpenAuthAliasPackagesTest < Minitest::Test
     "openauth" => ["better_auth", "openauth"],
     "openauth-api-key" => ["better_auth-api-key", "openauth/api_key"],
     "openauth-hanami" => ["better_auth-hanami", "openauth/hanami"],
-    "openauth-mongodb" => ["better_auth-mongo-adapter", "openauth/mongodb"],
+    "openauth-mongodb" => ["better_auth-mongodb", "openauth/mongodb"],
     "openauth-oauth-provider" => ["better_auth-oauth-provider", "openauth/oauth_provider"],
     "openauth-passkey" => ["better_auth-passkey", "openauth/passkey"],
     "openauth-rails" => ["better_auth-rails", "openauth/rails"],
@@ -77,7 +77,7 @@ class OpenAuthAliasPackagesTest < Minitest::Test
     assert_same BetterAuth::APIKey, OpenAuth::APIKey
     assert_same BetterAuth::Rails, OpenAuth::Rails
     assert_same BetterAuth::Sinatra, OpenAuth::Sinatra
-    assert_same BetterAuth::MongoAdapter, OpenAuth::MongoDB
+    assert_same BetterAuth::MongoDB, OpenAuth::MongoDB
   end
 
   private

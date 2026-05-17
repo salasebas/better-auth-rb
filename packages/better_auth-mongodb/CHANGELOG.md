@@ -2,8 +2,8 @@
 
 ## Unreleased
 
-- Deprecated this package in favor of `better_auth-mongodb`.
-- Kept `require "better_auth/mongo_adapter"` as a compatibility entrypoint.
+- Rename the canonical Ruby gem to `better_auth-mongodb` while keeping
+  `better_auth-mongo-adapter` as a deprecated compatibility package.
 
 ## 0.7.0 - 2026-05-05
 

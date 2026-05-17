@@ -1,32 +1,18 @@
-# better_auth-mongo-adapter
+# better_auth-mongodb
 
-Deprecated compatibility package for Better Auth Ruby MongoDB support.
-
-New applications should use `better_auth-mongodb`:
-
-```ruby
-gem "better_auth-mongodb"
-```
-
-```ruby
-require "better_auth/mongodb"
-```
-
-This package remains available so existing applications that install
-`better_auth-mongo-adapter` and require `better_auth/mongo_adapter` continue to
-load the same adapter.
+MongoDB database adapter package for Better Auth Ruby.
 
 ## Installation
 
 Add the gem and require the package before configuring auth:
 
 ```ruby
-gem "better_auth-mongo-adapter"
+gem "better_auth-mongodb"
 ```
 
 ```ruby
 require "mongo"
-require "better_auth/mongo_adapter"
+require "better_auth/mongodb"
 
 mongo_client = Mongo::Client.new(ENV.fetch("BETTER_AUTH_MONGODB_URL"))
 
@@ -114,3 +100,9 @@ Ruby's adapters accept scalar values for `in` and `not_in` filters and coerce
 them to a one-element list. This is an intentional Ruby adapter-family behavior;
 upstream's TypeScript adapter factory is stricter before the Mongo adapter sees
 the query.
+
+## Compatibility
+
+The older `better_auth-mongo-adapter` gem and `require "better_auth/mongo_adapter"`
+entrypoint are deprecated compatibility shims. New applications should use
+`better_auth-mongodb` and `require "better_auth/mongodb"`.

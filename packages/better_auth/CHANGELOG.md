@@ -50,7 +50,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- Extracted MongoDB adapter support behind the external `better_auth-mongo-adapter` shim while preserving compatibility for existing adapter configuration.
+- Extracted MongoDB adapter support behind the external `better_auth-mongodb` package while preserving compatibility for existing adapter configuration.
 - Updated auth routes, router behavior, rate limiting, password and email-verification flows, and schema metadata to match upstream semantics more closely.
 
 ### Fixed

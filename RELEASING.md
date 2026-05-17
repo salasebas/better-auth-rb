@@ -37,7 +37,7 @@ Update the version constant in the relevant package(s):
 - Sinatra: `packages/better_auth-sinatra/lib/better_auth/sinatra/version.rb`
 - Hanami: `packages/better_auth-hanami/lib/better_auth/hanami/version.rb`
 - Redis storage: `packages/better_auth-redis-storage/lib/better_auth/redis_storage/version.rb`
-- Mongo adapter: `packages/better_auth-mongo-adapter/lib/better_auth/mongo_adapter/version.rb`
+- MongoDB adapter: `packages/better_auth-mongodb/lib/better_auth/mongodb/version.rb`
 - API key: `packages/better_auth-api-key/lib/better_auth/api_key/version.rb`
 - Passkey: `packages/better_auth-passkey/lib/better_auth/passkey/version.rb`
 - OAuth provider: `packages/better_auth-oauth-provider/lib/better_auth/oauth_provider/version.rb`
@@ -122,7 +122,7 @@ Each gem has independent versioning:
 | `better_auth-sinatra` | `packages/better_auth-sinatra/lib/better_auth/sinatra/version.rb` |
 | `better_auth-hanami` | `packages/better_auth-hanami/lib/better_auth/hanami/version.rb` |
 | `better_auth-redis-storage` | `packages/better_auth-redis-storage/lib/better_auth/redis_storage/version.rb` |
-| `better_auth-mongo-adapter` | `packages/better_auth-mongo-adapter/lib/better_auth/mongo_adapter/version.rb` |
+| `better_auth-mongodb` | `packages/better_auth-mongodb/lib/better_auth/mongodb/version.rb` |
 | `better_auth-api-key` | `packages/better_auth-api-key/lib/better_auth/api_key/version.rb` |
 | `better_auth-passkey` | `packages/better_auth-passkey/lib/better_auth/passkey/version.rb` |
 | `better_auth-oauth-provider` | `packages/better_auth-oauth-provider/lib/better_auth/oauth_provider/version.rb` |
