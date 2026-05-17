@@ -1,98 +1,54 @@
-# AGENTS.md - better_auth (Core)
+# Core Package Guide
 
-**Always read this file when editing files in `packages/better_auth/`.**
+Read this file when editing `packages/better_auth/`.
 
-This is the core authentication library. It is **framework-agnostic** and depends only on Rack. No Rails code belongs here.
-
-## What This Package Is
-
-`better_auth` is the Ruby translation of the upstream `packages/better-auth` TypeScript package. It contains all core authentication logic: session management, token handling, OAuth flows, user/account models, password hashing, and the plugin system.
+`better_auth` is the framework-agnostic core gem. It should depend only on Rack
+and small runtime dependencies. Rails, Sinatra, Hanami, and other framework code
+belongs in adapter packages.
 
 ## Upstream Reference
 
-**Always check `upstream/better-auth/1.6.9/` before implementing or modifying features.**
+This package maps to:
 
-The TypeScript code in `upstream/better-auth/1.6.9/packages/better-auth/` is the source of truth. Workflow:
+```text
+upstream/better-auth/1.6.9/packages/better-auth/
+```
 
-1. **Find the feature** in `upstream/better-auth/1.6.9/packages/better-auth/src/` (and `plugins/` when applicable)
-2. **Understand how it works** in TypeScript
-3. **Translate to Ruby** using idiomatic Ruby and this gem’s patterns
-4. **Adapt** — same behavior, not necessarily a line-by-line port
+Before changing upstream-backed behavior:
 
-Key paths:
+1. Read the matching TypeScript source.
+2. Check the upstream tests for edge cases.
+3. Port the behavior to idiomatic Ruby using this gem's existing patterns.
+4. Document any meaningful Ruby-specific adaptation in the relevant plan or PR
+   notes.
 
-- `upstream/better-auth/1.6.9/packages/better-auth/src/` — core auth logic
-- `upstream/better-auth/1.6.9/packages/better-auth/src/plugins/` — plugins
+## Boundaries
 
-## Constraints
-
-- **No Rails dependencies.** This gem must work with any Rack-based app (Sinatra, Hanami, Roda, etc.)
-- **No RSpec.** This package uses Minitest exclusively.
-- Runtime deps are intentionally small and framework-agnostic. `bcrypt` is optional: default password hashing uses `OpenSSL::KDF.scrypt`, and apps that configure `password_hasher: :bcrypt` must add `gem "bcrypt"`.
-- If a dependency is needed for a feature, optimization, or simplification, ask for approval before adding it.
+- Keep public APIs under the `BetterAuth` namespace.
+- Use `require "better_auth"` as the main require path.
+- Do not add Rails, Sinatra, or Hanami dependencies here.
+- Keep optional dependencies optional. For example, `bcrypt` is only required
+  by apps that configure `password_hasher: :bcrypt`.
+- Ask before adding a new dependency for convenience, optimization, or feature
+  support.
 
 ## Development
 
 ```bash
-bundle install
-bundle exec rake test       # Run Minitest suite
-bundle exec standardrb      # Check linting
-bundle exec standardrb --fix # Auto-fix
-bundle exec rake ci         # Full CI (lint + test)
+bundle exec rake test
+bundle exec standardrb
+bundle exec rake ci
 ```
 
-## Directory Structure
+Use Minitest for this package. Test files live under `test/**/*_test.rb` and
+should exercise real behavior where practical.
 
-```
-lib/
-  better_auth.rb              # Main entry point, autoloads
-  better_auth/
-    version.rb                # BetterAuth::VERSION
-    core.rb                   # Core module loader
-    core/                     # Core auth logic (sessions, tokens, OAuth, etc.)
+## Style
 
-test/
-  test_helper.rb              # Minitest setup, shared helpers
-  better_auth_test.rb         # Top-level smoke tests
-  better_auth/
-    <module>_test.rb          # Tests mirror lib/ structure
-```
+- StandardRB formatting.
+- `# frozen_string_literal: true` in Ruby files.
+- `snake_case` files and methods.
+- `CamelCase` classes and modules.
 
-## Namespace
-
-- **Gem name**: `better_auth`
-- **Require path**: `require "better_auth"`
-- **Top-level module**: `BetterAuth`
-- Everything lives under `BetterAuth::` (e.g., `BetterAuth::Session`, `BetterAuth::OAuth::Provider`)
-
-## Testing
-
-- Framework: **Minitest**
-- Files: `test/**/*_test.rb`
-- Run: `bundle exec rake test`
-- All public APIs must have tests
-- Prefer integration-style tests that exercise real flows over unit tests with mocks
-- Use `cd ../.. && docker compose up -d` for database-dependent tests when working from this package
-
-## Translating from Upstream
-
-When porting a feature from `upstream/better-auth/1.6.9/packages/better-auth/src/`:
-
-1. Read the TypeScript source thoroughly
-2. Understand the data flow and side effects
-3. Write the Ruby equivalent using idiomatic patterns
-4. Ensure the same edge cases are handled
-5. Write tests that verify the same behavior (check `upstream/better-auth/1.6.9/packages/better-auth/src/**/*.test.ts` for cases to port)
-
-## Code Style
-
-- StandardRB
-- `# frozen_string_literal: true` in all Ruby files
-- `snake_case` files/methods; `CamelCase` classes/modules
-
-## After Everything is Done
-
-**Unless the user asked for it or you are working on CI, do not commit.**
-
-- `bundle exec standardrb` passes
-- `bundle exec rake test` passes
+Do not commit unless the user asks for it or the task is explicitly about CI,
+release, or repository automation.
