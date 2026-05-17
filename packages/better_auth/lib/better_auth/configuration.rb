@@ -280,10 +280,6 @@ module BetterAuth
       base_url = ENV["BASE_URL"]
       [
         Env.get("BETTER_AUTH_URL"),
-        Env.get("NEXT_PUBLIC_BETTER_AUTH_URL"),
-        Env.get("PUBLIC_BETTER_AUTH_URL"),
-        Env.get("NUXT_PUBLIC_BETTER_AUTH_URL"),
-        ENV["NUXT_PUBLIC_AUTH_URL"],
         (base_url unless base_url == "/")
       ].find { |value| value && !value.empty? }
     end

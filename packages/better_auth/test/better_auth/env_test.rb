@@ -12,12 +12,12 @@ class BetterAuthEnvTest < Minitest::Test
     end
   end
 
-  def test_get_supports_prefixed_public_open_auth_aliases
+  def test_get_does_not_support_public_client_open_auth_aliases
     with_env(
       "NEXT_PUBLIC_OPEN_AUTH_URL" => "http://open.example",
       "NEXT_PUBLIC_BETTER_AUTH_URL" => "http://better.example"
     ) do
-      assert_equal "http://open.example", BetterAuth::Env.get("NEXT_PUBLIC_BETTER_AUTH_URL")
+      assert_nil BetterAuth::Env.get("NEXT_PUBLIC_BETTER_AUTH_URL")
     end
   end
 

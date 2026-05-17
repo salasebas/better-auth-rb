@@ -6,6 +6,8 @@ module BetterAuth
 
     def get(name)
       open_auth_name = open_auth_name(name)
+      return nil unless open_auth_name
+
       value = ENV[open_auth_name]
       return value if present?(value)
 
@@ -23,7 +25,10 @@ module BetterAuth
     end
 
     def open_auth_name(name)
-      name.to_s.sub("BETTER_AUTH", "OPEN_AUTH")
+      text = name.to_s
+      return nil unless text.start_with?("BETTER_AUTH_")
+
+      text.sub(/\ABETTER_AUTH_/, "OPEN_AUTH_")
     end
 
     def present?(value)

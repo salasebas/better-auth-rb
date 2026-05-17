@@ -140,6 +140,27 @@ class BetterAuthConfigurationTest < Minitest::Test
     end
   end
 
+  def test_public_client_env_urls_are_ignored_for_server_configuration
+    with_env(
+      "BETTER_AUTH_SECRET" => SECRET,
+      "BETTER_AUTH_URL" => nil,
+      "OPEN_AUTH_URL" => nil,
+      "NEXT_PUBLIC_BETTER_AUTH_URL" => "http://next-public-better.example",
+      "NEXT_PUBLIC_OPEN_AUTH_URL" => "http://next-public-open.example",
+      "PUBLIC_BETTER_AUTH_URL" => "http://public-better.example",
+      "PUBLIC_OPEN_AUTH_URL" => "http://public-open.example",
+      "NUXT_PUBLIC_BETTER_AUTH_URL" => "http://nuxt-public-better.example",
+      "NUXT_PUBLIC_OPEN_AUTH_URL" => "http://nuxt-public-open.example",
+      "NUXT_PUBLIC_AUTH_URL" => "http://nuxt-public-auth.example",
+      "BASE_URL" => nil
+    ) do
+      config = BetterAuth::Configuration.new
+
+      assert_equal "", config.base_url
+      assert_equal "", config.context_base_url
+    end
+  end
+
   def test_rejects_unknown_password_hasher
     error = assert_raises(BetterAuth::Error) do
       BetterAuth::Configuration.new(secret: SECRET, password_hasher: :argon2)
