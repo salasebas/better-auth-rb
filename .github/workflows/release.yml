@@ -16,6 +16,7 @@ on:
       - 'better_auth-scim-v*'
       - 'better_auth-sso-v*'
       - 'better_auth-stripe-v*'
+      - 'better_auth-telemetry-v*'
   workflow_dispatch:
     inputs:
       dry_run:
@@ -65,6 +66,7 @@ jobs:
       scim_version: ${{ steps.detect.outputs.scim_version }}
       sso_version: ${{ steps.detect.outputs.sso_version }}
       stripe_version: ${{ steps.detect.outputs.stripe_version }}
+      telemetry_version: ${{ steps.detect.outputs.telemetry_version }}
       tag_version: ${{ steps.detect.outputs.tag_version }}
       target_package: ${{ steps.detect.outputs.target_package }}
       core_releases: ${{ steps.detect.outputs.core_releases }}
@@ -80,6 +82,7 @@ jobs:
       scim_releases: ${{ steps.detect.outputs.scim_releases }}
       sso_releases: ${{ steps.detect.outputs.sso_releases }}
       stripe_releases: ${{ steps.detect.outputs.stripe_releases }}
+      telemetry_releases: ${{ steps.detect.outputs.telemetry_releases }}
       should_publish: ${{ steps.detect.outputs.should_publish }}
       is_prerelease: ${{ steps.detect.outputs.is_prerelease }}
       dry_run: ${{ steps.detect.outputs.dry_run }}
@@ -108,6 +111,7 @@ jobs:
           scim_file="packages/better_auth-scim/lib/better_auth/scim/version.rb"
           sso_file="packages/better_auth-sso/lib/better_auth/sso/version.rb"
           stripe_file="packages/better_auth-stripe/lib/better_auth/stripe/version.rb"
+          telemetry_file="packages/better_auth-telemetry/lib/better_auth/telemetry/version.rb"
 
           core_version=$(ruby -e 'print File.read(ARGV[0])[/VERSION\s*=\s*"([^"]+)"/, 1]' "$core_file")
           rails_version=$(ruby -e 'print File.read(ARGV[0])[/VERSION\s*=\s*"([^"]+)"/, 1]' "$rails_file")
@@ -122,6 +126,7 @@ jobs:
           scim_version=$(ruby -e 'print File.read(ARGV[0])[/VERSION\s*=\s*"([^"]+)"/, 1]' "$scim_file")
           sso_version=$(ruby -e 'print File.read(ARGV[0])[/VERSION\s*=\s*"([^"]+)"/, 1]' "$sso_file")
           stripe_version=$(ruby -e 'print File.read(ARGV[0])[/VERSION\s*=\s*"([^"]+)"/, 1]' "$stripe_file")
+          telemetry_version=$(ruby -e 'print File.read(ARGV[0])[/VERSION\s*=\s*"([^"]+)"/, 1]' "$telemetry_file")
 
           tag_name=""
           tag_version=""
@@ -139,6 +144,7 @@ jobs:
           scim_releases=false
           sso_releases=false
           stripe_releases=false
+          telemetry_releases=false
           should_publish=false
           is_prerelease=false
 
@@ -224,8 +230,14 @@ jobs:
                 expected_version="$stripe_version"
                 stripe_releases=true
                 ;;
+              better_auth-telemetry-v*)
+                target_package="better_auth-telemetry"
+                tag_version="${tag_name#better_auth-telemetry-v}"
+                expected_version="$telemetry_version"
+                telemetry_releases=true
+                ;;
               *)
-                echo "::error ::Release tags must use a package prefix: better_auth-vX.Y.Z, better_auth-rails-vX.Y.Z, better_auth-passkey-vX.Y.Z, better_auth-sinatra-vX.Y.Z, better_auth-hanami-vX.Y.Z, better_auth-api-key-vX.Y.Z, better_auth-oauth-provider-vX.Y.Z, better_auth-redis-storage-vX.Y.Z, better_auth-mongodb-vX.Y.Z, better_auth-mongo-adapter-vX.Y.Z, better_auth-scim-vX.Y.Z, better_auth-sso-vX.Y.Z, or better_auth-stripe-vX.Y.Z."
+                echo "::error ::Release tags must use a package prefix: better_auth-vX.Y.Z, better_auth-rails-vX.Y.Z, better_auth-passkey-vX.Y.Z, better_auth-sinatra-vX.Y.Z, better_auth-hanami-vX.Y.Z, better_auth-api-key-vX.Y.Z, better_auth-oauth-provider-vX.Y.Z, better_auth-redis-storage-vX.Y.Z, better_auth-mongodb-vX.Y.Z, better_auth-mongo-adapter-vX.Y.Z, better_auth-scim-vX.Y.Z, better_auth-sso-vX.Y.Z, better_auth-stripe-vX.Y.Z, or better_auth-telemetry-vX.Y.Z."
                 exit 1
                 ;;
             esac
@@ -284,6 +296,7 @@ jobs:
           echo "scim_version=$scim_version" >> "$GITHUB_OUTPUT"
           echo "sso_version=$sso_version" >> "$GITHUB_OUTPUT"
           echo "stripe_version=$stripe_version" >> "$GITHUB_OUTPUT"
+          echo "telemetry_version=$telemetry_version" >> "$GITHUB_OUTPUT"
           echo "tag_version=$tag_version" >> "$GITHUB_OUTPUT"
           echo "target_package=$target_package" >> "$GITHUB_OUTPUT"
           echo "core_releases=$core_releases" >> "$GITHUB_OUTPUT"
@@ -299,6 +312,7 @@ jobs:
           echo "scim_releases=$scim_releases" >> "$GITHUB_OUTPUT"
           echo "sso_releases=$sso_releases" >> "$GITHUB_OUTPUT"
           echo "stripe_releases=$stripe_releases" >> "$GITHUB_OUTPUT"
+          echo "telemetry_releases=$telemetry_releases" >> "$GITHUB_OUTPUT"
           echo "should_publish=$should_publish" >> "$GITHUB_OUTPUT"
           echo "is_prerelease=$is_prerelease" >> "$GITHUB_OUTPUT"
           echo "dry_run=$DRY_RUN_INPUT" >> "$GITHUB_OUTPUT"
@@ -316,6 +330,7 @@ jobs:
           echo "scim_version=$scim_version"
           echo "sso_version=$sso_version"
           echo "stripe_version=$stripe_version"
+          echo "telemetry_version=$telemetry_version"
           echo "tag_version=${tag_version:-manual-dry-run}"
           echo "target_package=${target_package:-manual-dry-run}"
           echo "core_releases=$core_releases"
@@ -331,6 +346,7 @@ jobs:
           echo "scim_releases=$scim_releases"
           echo "sso_releases=$sso_releases"
           echo "stripe_releases=$stripe_releases"
+          echo "telemetry_releases=$telemetry_releases"
           echo "should_publish=$should_publish"
           echo "is_prerelease=$is_prerelease"
           echo "dry_run=$DRY_RUN_INPUT"
@@ -747,6 +763,29 @@ jobs:
 
       - name: Run tests
         working-directory: packages/better_auth-stripe
+        run: bundle exec rake test
+
+  test-telemetry:
+    name: Test better_auth-telemetry
+    needs: [prepare-release]
+    if: needs.prepare-release.outputs.telemetry_releases == 'true' || needs.prepare-release.outputs.dry_run == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: .ruby-version
+          bundler-cache: true
+          working-directory: packages/better_auth-telemetry
+
+      - name: Run linter
+        working-directory: packages/better_auth-telemetry
+        run: bundle exec standardrb
+
+      - name: Run tests
+        working-directory: packages/better_auth-telemetry
         run: bundle exec rake test
 
   verify-ci:
@@ -1453,6 +1492,54 @@ jobs:
 
           gem push better_auth-stripe-*.gem
 
+  publish-telemetry:
+    name: Build and publish better_auth-telemetry
+    needs: [prepare-release, verify-ci, test-telemetry]
+    if: needs.prepare-release.outputs.telemetry_releases == 'true' || needs.prepare-release.outputs.dry_run == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: .ruby-version
+          bundler-cache: true
+          working-directory: packages/better_auth-telemetry
+
+      - name: Configure RubyGems credentials
+        if: needs.prepare-release.outputs.telemetry_releases == 'true' && needs.prepare-release.outputs.dry_run != 'true'
+        uses: rubygems/configure-rubygems-credentials@v1.0.0
+
+      - name: Build better_auth-telemetry gem
+        working-directory: packages/better_auth-telemetry
+        run: |
+          set -euo pipefail
+          rm -f better_auth-telemetry-*.gem
+          gem build better_auth-telemetry.gemspec
+
+      - name: Publish better_auth-telemetry gem
+        if: needs.prepare-release.outputs.telemetry_releases == 'true'
+        working-directory: packages/better_auth-telemetry
+        env:
+          TARGET_VERSION: ${{ needs.prepare-release.outputs.telemetry_version }}
+          DRY_RUN: ${{ needs.prepare-release.outputs.dry_run }}
+        run: |
+          set -euo pipefail
+          if [ "$DRY_RUN" = "true" ]; then
+            echo "Dry run enabled, skipping gem push for better_auth-telemetry"
+            exit 0
+          fi
+
+          already_exists=$(ruby -rjson -ropen-uri -e 'gem_name = "better_auth-telemetry"; version = ENV.fetch("TARGET_VERSION"); begin; body = URI.open("https://rubygems.org/api/v1/versions/#{gem_name}.json").read; versions = JSON.parse(body).map { |v| v["number"] }; print versions.include?(version) ? "true" : "false"; rescue StandardError; print "false"; end')
+
+          if [ "$already_exists" = "true" ]; then
+            echo "better_auth-telemetry $TARGET_VERSION already exists on RubyGems, skipping push"
+            exit 0
+          fi
+
+          gem push better_auth-telemetry-*.gem
+
   publish-openauth-aliases:
     name: Build and publish OpenAuth alias packages
     needs: [prepare-release]
@@ -1489,6 +1576,7 @@ jobs:
             "openauth-sinatra"
             "openauth-sso"
             "openauth-stripe"
+            "openauth-telemetry"
           )
 
           for gem_name in "${packages[@]}"; do
@@ -1546,6 +1634,7 @@ jobs:
             "openauth-sinatra"
             "openauth-sso"
             "openauth-stripe"
+            "openauth-telemetry"
           )
 
           failures=()
@@ -1579,7 +1668,7 @@ jobs:
 
   create-release:
     name: Create GitHub release
-    needs: [prepare-release, publish-core, publish-passkey, publish-rails, publish-sinatra, publish-hanami, publish-api-key, publish-oauth-provider, publish-redis-storage, publish-mongodb, publish-mongo-adapter, publish-scim, publish-sso, publish-stripe]
+    needs: [prepare-release, publish-core, publish-passkey, publish-rails, publish-sinatra, publish-hanami, publish-api-key, publish-oauth-provider, publish-redis-storage, publish-mongodb, publish-mongo-adapter, publish-scim, publish-sso, publish-stripe, publish-telemetry]
     if: |
       always() &&
       needs.prepare-release.outputs.should_publish == 'true' &&
@@ -1597,7 +1686,8 @@ jobs:
         needs.publish-mongo-adapter.result == 'success' ||
         needs.publish-scim.result == 'success' ||
         needs.publish-sso.result == 'success' ||
-        needs.publish-stripe.result == 'success'
+        needs.publish-stripe.result == 'success' ||
+        needs.publish-telemetry.result == 'success'
       )
     runs-on: ubuntu-latest
     steps:
@@ -1625,3 +1715,4 @@ jobs:
             - `better_auth-scim` version `${{ needs.prepare-release.outputs.scim_version }}` (released: `${{ needs.prepare-release.outputs.scim_releases }}`)
             - `better_auth-sso` version `${{ needs.prepare-release.outputs.sso_version }}` (released: `${{ needs.prepare-release.outputs.sso_releases }}`)
             - `better_auth-stripe` version `${{ needs.prepare-release.outputs.stripe_version }}` (released: `${{ needs.prepare-release.outputs.stripe_releases }}`)
+            - `better_auth-telemetry` version `${{ needs.prepare-release.outputs.telemetry_version }}` (released: `${{ needs.prepare-release.outputs.telemetry_releases }}`)

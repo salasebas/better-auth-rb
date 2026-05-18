@@ -74,6 +74,25 @@ class BetterAuthConfigurationTest < Minitest::Test
     assert_equal :bcrypt, config.password_hasher
   end
 
+  def test_telemetry_option_is_normalized_and_exposed
+    config = BetterAuth::Configuration.new(
+      secret: SECRET,
+      telemetry: {enabled: true, debug: false}
+    )
+
+    assert_equal({enabled: true, debug: false}, config.telemetry)
+    assert_equal({enabled: true, debug: false}, config.to_h[:telemetry])
+  end
+
+  def test_telemetry_option_accepts_string_and_camel_case_keys
+    config = BetterAuth::Configuration.new(
+      "secret" => SECRET,
+      "telemetry" => {"enabled" => true, "debug" => true}
+    )
+
+    assert_equal({enabled: true, debug: true}, config.telemetry)
+  end
+
   def test_base_url_base_path_env_and_protocol_match_upstream_context_cases
     with_env("BETTER_AUTH_URL" => "http://localhost:5147") do
       config = BetterAuth::Configuration.new(secret: SECRET)

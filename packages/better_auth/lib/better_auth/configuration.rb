@@ -56,6 +56,7 @@ module BetterAuth
       :on_api_error,
       :disabled_paths,
       :trusted_origins_callback,
+      :telemetry,
       :logger
 
     def initialize(options = {})
@@ -73,6 +74,7 @@ module BetterAuth
       @database_hooks = options[:database_hooks]
       @hooks = options[:hooks]
       @on_api_error = symbolize_keys(options[:on_api_error] || options[:on_apierror] || {})
+      @telemetry = symbolize_keys(options[:telemetry] || {})
       @social_providers = symbolize_keys(options[:social_providers] || {})
       @trusted_origins_callbacks = []
       @trusted_origins_callbacks << options[:trusted_origins] if options[:trusted_origins].respond_to?(:call)
@@ -153,7 +155,8 @@ module BetterAuth
         database_hooks: database_hooks,
         hooks: hooks,
         on_api_error: on_api_error,
-        disabled_paths: disabled_paths
+        disabled_paths: disabled_paths,
+        telemetry: telemetry
       }
     end
 

@@ -30,6 +30,9 @@ STANDARD_PATHS = [
   "packages/better_auth-stripe/Rakefile",
   "packages/better_auth-stripe/lib",
   "packages/better_auth-stripe/test",
+  "packages/better_auth-telemetry/Rakefile",
+  "packages/better_auth-telemetry/lib",
+  "packages/better_auth-telemetry/test",
   "packages/better_auth-oauth-provider/Rakefile",
   "packages/better_auth-oauth-provider/lib",
   "packages/better_auth-oauth-provider/test",
@@ -60,7 +63,7 @@ task :ci do
   sh "bundle exec standardrb #{STANDARD_PATHS.join(" ")}"
 
   puts "\n🧪 Running workspace packaging tests..."
-  sh "ruby -Itest test/openauth_alias_packages_test.rb test/release_version_manifest_test.rb"
+  sh "ruby -Itest -e 'require \"./test/openauth_alias_packages_test\"; require \"./test/release_version_manifest_test\"'"
 
   # Per-package tests
   puts "\n🧪 Running tests in packages/better_auth..."
@@ -99,6 +102,16 @@ task :ci do
 
   puts "\n🧪 Running tests in packages/better_auth-stripe..."
   cd "packages/better_auth-stripe" do
+    sh "BUNDLE_GEMFILE=Gemfile bundle exec rake"
+  end
+
+  puts "\n🧪 Running tests in packages/better_auth-telemetry..."
+  cd "packages/better_auth-telemetry" do
+    sh "BUNDLE_GEMFILE=Gemfile bundle exec rake"
+  end
+
+  puts "\n🧪 Running tests in packages/openauth-telemetry..."
+  cd "packages/openauth-telemetry" do
     sh "BUNDLE_GEMFILE=Gemfile bundle exec rake"
   end
 
@@ -175,6 +188,16 @@ task :install do
     sh "BUNDLE_GEMFILE=Gemfile bundle install"
   end
 
+  puts "\n📦 Installing packages/better_auth-telemetry dependencies..."
+  cd "packages/better_auth-telemetry" do
+    sh "BUNDLE_GEMFILE=Gemfile bundle install"
+  end
+
+  puts "\n📦 Installing packages/openauth-telemetry dependencies..."
+  cd "packages/openauth-telemetry" do
+    sh "BUNDLE_GEMFILE=Gemfile bundle install"
+  end
+
   puts "\n📦 Installing packages/better_auth-oauth-provider dependencies..."
   cd "packages/better_auth-oauth-provider" do
     sh "BUNDLE_GEMFILE=Gemfile bundle install"
@@ -238,6 +261,14 @@ task :lint do
     sh "BUNDLE_GEMFILE=Gemfile bundle exec standardrb"
   end
 
+  cd "packages/better_auth-telemetry" do
+    sh "BUNDLE_GEMFILE=Gemfile bundle exec standardrb"
+  end
+
+  cd "packages/openauth-telemetry" do
+    sh "BUNDLE_GEMFILE=Gemfile bundle exec standardrb"
+  end
+
   cd "packages/better_auth-oauth-provider" do
     sh "BUNDLE_GEMFILE=Gemfile bundle exec standardrb"
   end
@@ -292,6 +323,14 @@ task "lint:fix" do
   end
 
   cd "packages/better_auth-stripe" do
+    sh "BUNDLE_GEMFILE=Gemfile bundle exec standardrb --fix"
+  end
+
+  cd "packages/better_auth-telemetry" do
+    sh "BUNDLE_GEMFILE=Gemfile bundle exec standardrb --fix"
+  end
+
+  cd "packages/openauth-telemetry" do
     sh "BUNDLE_GEMFILE=Gemfile bundle exec standardrb --fix"
   end
 
@@ -364,6 +403,14 @@ task :clean do
   end
 
   cd "packages/better_auth-stripe" do
+    sh "rm -rf Gemfile.lock *.gem coverage/"
+  end
+
+  cd "packages/better_auth-telemetry" do
+    sh "rm -rf Gemfile.lock *.gem coverage/"
+  end
+
+  cd "packages/openauth-telemetry" do
     sh "rm -rf Gemfile.lock *.gem coverage/"
   end
 

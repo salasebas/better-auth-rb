@@ -65,7 +65,7 @@ jobs:
           bundler-cache: true
 
       - name: Run workspace packaging tests
-        run: ruby -Itest test/openauth_alias_packages_test.rb test/release_version_manifest_test.rb
+        run: ruby -Itest -e 'require "./test/openauth_alias_packages_test"; require "./test/release_version_manifest_test"'
 
   test-core:
     name: Test better_auth (Core)
@@ -455,6 +455,27 @@ jobs:
         working-directory: packages/better_auth-stripe
         run: bundle exec rake test
 
+  test-telemetry:
+    name: Test better_auth-telemetry
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: .ruby-version
+          bundler-cache: true
+          working-directory: packages/better_auth-telemetry
+
+      - name: Run linter
+        working-directory: packages/better_auth-telemetry
+        run: bundle exec standardrb
+
+      - name: Run tests
+        working-directory: packages/better_auth-telemetry
+        run: bundle exec rake test
+
   ci:
     name: ci
     runs-on: ubuntu-latest
@@ -473,6 +494,7 @@ jobs:
       - test-scim
       - test-sso
       - test-stripe
+      - test-telemetry
     if: always()
     steps:
       - uses: re-actors/alls-green@05ac9388f0aebcb5727afa17fcccfecd6f8ec5fe # v1.2.2

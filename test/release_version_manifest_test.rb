@@ -40,6 +40,17 @@ class ReleaseVersionManifestTest < Minitest::Test
     assert_match(/task\s+"release:sync_versions"/, rakefile)
   end
 
+  def test_release_workflow_includes_telemetry_package
+    workflow = File.read(File.join(ROOT, ".github/workflows/release.yml"))
+
+    assert_includes workflow, "better_auth-telemetry-v*"
+    assert_includes workflow, "telemetry_version"
+    assert_includes workflow, "telemetry_releases"
+    assert_includes workflow, "Test better_auth-telemetry"
+    assert_includes workflow, "Build and publish better_auth-telemetry"
+    assert_includes workflow, "\"openauth-telemetry\""
+  end
+
   private
 
   def release_manifest

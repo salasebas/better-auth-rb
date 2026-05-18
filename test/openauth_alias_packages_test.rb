@@ -2,6 +2,7 @@
 
 require "minitest/autorun"
 require "rubygems"
+require "yaml"
 
 class OpenAuthAliasPackagesTest < Minitest::Test
   ROOT = File.expand_path("..", __dir__)
@@ -18,7 +19,8 @@ class OpenAuthAliasPackagesTest < Minitest::Test
     "openauth-scim" => ["better_auth-scim", "openauth/scim"],
     "openauth-sinatra" => ["better_auth-sinatra", "openauth/sinatra"],
     "openauth-sso" => ["better_auth-sso", "openauth/sso"],
-    "openauth-stripe" => ["better_auth-stripe", "openauth/stripe"]
+    "openauth-stripe" => ["better_auth-stripe", "openauth/stripe"],
+    "openauth-telemetry" => ["better_auth-telemetry", "openauth/telemetry"]
   }.freeze
 
   OPENAUTH_REQUIRE_PATHS = PACKAGE_PAIRS.values.map(&:last).freeze
@@ -36,6 +38,7 @@ class OpenAuthAliasPackagesTest < Minitest::Test
     Sinatra
     SSO
     Stripe
+    Telemetry
   ].freeze
 
   def test_alias_packages_match_canonical_versions_and_documentation
@@ -51,7 +54,7 @@ class OpenAuthAliasPackagesTest < Minitest::Test
 
       spec = Gem::Specification.load(gemspec_path)
       assert_equal alias_name, spec.name
-      assert_equal "0.7.0", spec.version.to_s
+      assert_equal release_version, spec.version.to_s
       assert_includes spec.runtime_dependencies.map(&:name), canonical_name
 
       readme = File.read(readme_path)
@@ -86,5 +89,9 @@ class OpenAuthAliasPackagesTest < Minitest::Test
     Dir[File.join(ROOT, "packages", "*", "lib")].sort.reverse_each do |path|
       $LOAD_PATH.unshift(path) unless $LOAD_PATH.include?(path)
     end
+  end
+
+  def release_version
+    @release_version ||= YAML.safe_load_file(File.join(ROOT, ".release.yml")).fetch("version")
   end
 end

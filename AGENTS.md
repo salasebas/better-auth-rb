@@ -46,6 +46,7 @@ when Ruby structure, naming, or error handling should differ.
 | `packages/better_auth-scim` | SCIM provisioning plugin. |
 | `packages/better_auth-sso` | SSO plugin. |
 | `packages/better_auth-stripe` | Stripe plugin. |
+| `packages/better_auth-telemetry` | Canonical telemetry gem. Opt-in usage analytics, port of `@better-auth/telemetry`. |
 | `packages/better_auth-redis-storage` | Redis secondary storage package. |
 | `packages/better_auth-mongodb` | MongoDB adapter package. |
 | `packages/better_auth-mongo-adapter` | Legacy MongoDB adapter package kept for compatibility. |
