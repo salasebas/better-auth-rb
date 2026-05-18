@@ -58,14 +58,17 @@ Hanami.app.register_provider(:better_auth) do
   end
 
   start do
+    better_auth_url = target["settings"].better_auth_url.to_s
+    raise "better_auth_url must be configured" if better_auth_url.empty?
+
     BetterAuth::Hanami.configure do |config|
       config.secret = target["settings"].better_auth_secret
-      config.base_url = target["settings"].better_auth_url
+      config.base_url = better_auth_url
       config.base_path = "/api/auth"
       config.database = ->(options) {
         BetterAuth::Hanami::SequelAdapter.from_container(target, options)
       }
-      config.trusted_origins = [target["settings"].better_auth_url].compact
+      config.trusted_origins = [better_auth_url]
       config.email_and_password = {enabled: true}
       config.plugins = []
     end
@@ -84,8 +87,10 @@ CORS middleware in your Hanami app as well so preflight requests and
 policy. For the shared Rack/CORS/CSRF boundary, see
 [`host-app-responsibilities.md`](../../.docs/features/host-app-responsibilities.md).
 
-Do not rely on a Hanami-only empty `trusted_origins` list as a strict
-deny-all-origin policy; set real deployment URLs in app settings. Keep
+Do not rely on a Hanami-only empty `trusted_origins` list or inferred request
+hosts as a strict deny-all-origin policy; set a canonical deployment URL in app
+settings. The generated provider raises when `better_auth_url` is blank so auth
+URLs and origin checks are not derived from an untrusted `Host` header. Keep
 `BetterAuth::Hanami::MountedApp` behavior aligned with Hanami's router instead
 of copying Rails mount internals without integration tests. Be cautious with
 relation or inflector overrides generated for an app, because overwriting
@@ -173,6 +178,10 @@ BetterAuth::Hanami.configure do |config|
   config.database = ->(options) { MyBetterAuthAdapter.new(options) }
 end
 ```
+
+When no Hanami `db.gateway` is available, the adapter still falls back to
+memory storage in development and tests with a warning. In production it raises
+instead, unless you intentionally set `config.allow_memory_fallback = true`.
 
 ## Limitations
 

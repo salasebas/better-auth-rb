@@ -11,7 +11,7 @@ module BetterAuth
 
       def better_auth(auth: nil, at: BetterAuth::Configuration::DEFAULT_BASE_PATH)
         mount_path = normalize_better_auth_mount_path(at)
-        auth ||= BetterAuth::Hanami.auth(base_path: mount_path)
+        auth ||= auth_for_better_auth_mount(mount_path)
         app = BetterAuth::Hanami::MountedApp.new(auth, mount_path: mount_path)
 
         HTTP_METHODS.each do |method_name|
@@ -28,6 +28,13 @@ module BetterAuth
         normalized = normalized.squeeze("/")
         normalized = normalized.delete_suffix("/") unless normalized == "/"
         normalized.empty? ? "/" : normalized
+      end
+
+      def auth_for_better_auth_mount(mount_path)
+        configured_path = normalize_better_auth_mount_path(BetterAuth::Hanami.configuration.base_path)
+        return BetterAuth::Hanami.auth if mount_path == configured_path
+
+        BetterAuth::Hanami.auth(base_path: mount_path)
       end
     end
   end

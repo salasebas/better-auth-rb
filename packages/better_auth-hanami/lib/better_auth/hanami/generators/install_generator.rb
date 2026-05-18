@@ -65,11 +65,16 @@ module BetterAuth
           end
 
           content = File.read(path)
-          return if content.include?("setting :better_auth_secret")
+          required_url_setting = "setting :better_auth_url, constructor: Types::String.constrained(min_size: 1)"
+          content = content.gsub("setting :better_auth_url, constructor: Types::String.optional", required_url_setting)
+          if content.include?("setting :better_auth_secret")
+            File.write(path, content)
+            return
+          end
 
           insertion = [
             "    setting :better_auth_secret, constructor: Types::String.constrained(min_size: 32)",
-            "    setting :better_auth_url, constructor: Types::String.optional"
+            "    #{required_url_setting}"
           ].join("\n")
           content = content.sub(/(class[ \t]+Settings[ \t]*<[ \t]*Hanami::Settings[ \t]*\n)/, "\\1#{insertion}\n")
           File.write(path, content)
@@ -96,14 +101,17 @@ module BetterAuth
               end
 
               start do
+                better_auth_url = target["settings"].better_auth_url.to_s
+                raise "better_auth_url must be configured" if better_auth_url.empty?
+
                 BetterAuth::Hanami.configure do |config|
                   config.secret = target["settings"].better_auth_secret
-                  config.base_url = target["settings"].better_auth_url
+                  config.base_url = better_auth_url
                   config.base_path = "/api/auth"
                   config.database = ->(options) {
                     BetterAuth::Hanami::SequelAdapter.from_container(target, options)
                   }
-                  config.trusted_origins = [target["settings"].better_auth_url].compact
+                  config.trusted_origins = [better_auth_url]
                   config.email_and_password = {enabled: true}
                   config.plugins = []
                 end

@@ -25,6 +25,7 @@ RSpec.describe BetterAuth::Hanami::Generators::InstallGenerator do
 
     expect(File.read(provider)).to include("Hanami.app.register_provider(:better_auth)")
     expect(File.read(provider)).to include("BetterAuth::Hanami.configure")
+    expect(File.read(provider)).to include("raise \"better_auth_url must be configured\"")
     expect(File.read(migration)).to include("ROM::SQL.migration")
     expect(File.read(task)).to include("namespace :generate")
     expect(File.read(task)).to include("task :migration")
@@ -35,6 +36,7 @@ RSpec.describe BetterAuth::Hanami::Generators::InstallGenerator do
     expect(File.read(File.join(@destination, "config/routes.rb"))).to include("better_auth")
     expect(File.read(File.join(@destination, "config/routes.rb"))).to include(%(require "better_auth/hanami"))
     expect(File.read(File.join(@destination, "config/settings.rb"))).to include("setting :better_auth_secret")
+    expect(File.read(File.join(@destination, "config/settings.rb"))).to include("setting :better_auth_url, constructor: Types::String.constrained")
   end
 
   it "mounts routes when the routing module is already included" do
@@ -129,10 +131,29 @@ RSpec.describe BetterAuth::Hanami::Generators::InstallGenerator do
     expect(settings).to include(<<~RUBY)
       class Settings < Hanami::Settings
           setting :better_auth_secret, constructor: Types::String.constrained(min_size: 32)
-          setting :better_auth_url, constructor: Types::String.optional
+          setting :better_auth_url, constructor: Types::String.constrained(min_size: 1)
 
           setting :foo, default: 1
     RUBY
+  end
+
+  it "upgrades an existing optional Better Auth URL setting to required" do
+    File.write(File.join(@destination, "config/settings.rb"), <<~RUBY)
+      # frozen_string_literal: true
+
+      module Bookshelf
+        class Settings < Hanami::Settings
+          setting :better_auth_secret, constructor: Types::String.constrained(min_size: 32)
+          setting :better_auth_url, constructor: Types::String.optional
+        end
+      end
+    RUBY
+
+    described_class.new(destination_root: @destination).run
+
+    settings = File.read(File.join(@destination, "config/settings.rb"))
+    expect(settings).to include("setting :better_auth_url, constructor: Types::String.constrained(min_size: 1)")
+    expect(settings).not_to include("setting :better_auth_url, constructor: Types::String.optional")
   end
 
   it "does not overwrite an existing provider" do
