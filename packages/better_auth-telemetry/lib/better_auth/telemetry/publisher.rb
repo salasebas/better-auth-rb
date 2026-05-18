@@ -31,9 +31,9 @@ module BetterAuth
     #    never escape `#publish`.
     #
     # The publisher is intentionally stateless beyond the cached
-    # `anonymous_id`: there is no internal queue and no batching. It calls
-    # the supplied `track` lambda synchronously; the HTTP track implementation
-    # may then hand the actual POST to a short-lived background thread.
+    # `anonymous_id`: delivery mode is owned by the supplied `track`
+    # lambda. The HTTP track implementation enqueues into a bounded
+    # background dispatcher.
     #
     # @example wiring with a `RecordingTrack` (test seam)
     #   recorder = BetterAuth::Telemetry::Test::RecordingTrack.new

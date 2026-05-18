@@ -106,7 +106,6 @@ class RawFieldsPropertyTest < Minitest::Test
     # advanced
     [[:advanced, :cross_sub_domain_cookies, :enabled], [:advanced, :crossSubDomainCookies, :enabled]],
     [[:advanced, :cross_sub_domain_cookies, :additional_cookies], [:advanced, :crossSubDomainCookies, :additionalCookies]],
-    [[:advanced, :database, :generate_id], [:advanced, :database, :generateId]],
     [[:advanced, :database, :default_find_many_limit], [:advanced, :database, :defaultFindManyLimit]],
     [[:advanced, :use_secure_cookies], [:advanced, :useSecureCookies]],
     [[:advanced, :ip_address, :disable_ip_tracking], [:advanced, :ipAddress, :disableIpTracking]],
@@ -128,7 +127,6 @@ class RawFieldsPropertyTest < Minitest::Test
     [[:rate_limit, :max], [:rateLimit, :max]],
 
     # on_api_error
-    [[:on_api_error, :error_url], [:onAPIError, :errorURL]],
     [[:on_api_error, :throw], [:onAPIError, :throw]],
 
     # logger

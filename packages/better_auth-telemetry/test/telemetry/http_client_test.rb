@@ -97,4 +97,44 @@ class HttpClientTest < Minitest::Test
     assert_includes message, "[better-auth.telemetry]"
     assert_includes message, "http delivery failed"
   end
+
+  def test_post_json_logs_sanitized_error_for_non_success_response
+    @server = LocalEndpointServer.new(status: 500, body: "secret-response-body")
+    logger = RecordingLogger.new
+
+    result = HttpClient.post_json(
+      @server.url,
+      {type: "init", payload: {}},
+      logger: logger
+    )
+
+    assert_nil result
+
+    error_calls = logger.calls.select { |entry| entry.first == :error }
+    assert_equal 1, error_calls.size
+
+    _level, message = error_calls.first
+    assert_includes message, "http delivery failed"
+    assert_includes message, "500"
+    refute_includes message, "secret-response-body"
+  end
+
+  def test_post_json_configures_write_timeout
+    logger = RecordingLogger.new
+    captured = nil
+
+    fake_http = Object.new
+    def fake_http.request(_request)
+      Net::HTTPNoContent.new("1.1", "204", "No Content")
+    end
+
+    Net::HTTP.stub(:start, lambda { |_host, _port, **kwargs, &block|
+      captured = kwargs
+      block.call(fake_http)
+    }) do
+      HttpClient.post_json("https://telemetry.example.test/collect", {type: "init"}, logger: logger)
+    end
+
+    assert_equal HttpClient::WRITE_TIMEOUT_SECONDS, captured[:write_timeout]
+  end
 end

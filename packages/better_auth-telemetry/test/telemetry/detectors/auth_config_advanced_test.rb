@@ -201,7 +201,7 @@ class AuthConfigAdvancedTest < Minitest::Test
 
     assert_equal RAW_SENTINELS[:cross_sub_domain_enabled], advanced[:crossSubDomainCookies][:enabled]
     assert_equal RAW_SENTINELS[:cross_sub_domain_additional], advanced[:crossSubDomainCookies][:additionalCookies]
-    assert_equal RAW_SENTINELS[:advanced_database_generate_id], advanced[:database][:generateId]
+    assert_equal true, advanced[:database][:generateId]
     assert_equal RAW_SENTINELS[:advanced_database_default_find_many_limit], advanced[:database][:defaultFindManyLimit]
     assert_equal RAW_SENTINELS[:advanced_use_secure_cookies], advanced[:useSecureCookies]
     assert_equal RAW_SENTINELS[:ip_address_disable_ip_tracking], advanced[:ipAddress][:disableIpTracking]
@@ -272,7 +272,7 @@ class AuthConfigAdvancedTest < Minitest::Test
   def test_on_api_error_section_carries_documented_camelcase_keys
     section = payload[:onAPIError]
 
-    assert_equal RAW_SENTINELS[:on_api_error_error_url], section[:errorURL]
+    assert_equal true, section[:errorURL]
     assert_equal true, section[:onError]
     assert_equal RAW_SENTINELS[:on_api_error_throw], section[:throw]
   end
@@ -383,7 +383,7 @@ class AuthConfigAdvancedTest < Minitest::Test
   def test_json_generate_payload_contains_raw_scalars
     json = JSON.generate(payload)
 
-    RAW_SENTINELS.each do |label, sentinel|
+    RAW_SENTINELS.except(:advanced_database_generate_id, :on_api_error_error_url).each do |label, sentinel|
       assert_includes json, sentinel.to_s,
         "raw sentinel #{label.inspect} (#{sentinel.inspect}) should appear in JSON payload"
     end

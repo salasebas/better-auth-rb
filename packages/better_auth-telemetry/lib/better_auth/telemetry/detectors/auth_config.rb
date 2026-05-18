@@ -77,7 +77,7 @@ module BetterAuth
         def call(options, context)
           {
             database: context_value(context, :database),
-            adapter: context_value(context, :adapter),
+            adapter: sanitize_adapter(context_value(context, :adapter)),
             emailVerification: redact_email_verification(options),
             emailAndPassword: redact_email_and_password(options),
             socialProviders: redact_social_providers(options),
@@ -145,6 +145,13 @@ module BetterAuth
         # @return [Integer]
         def count(array)
           Array(array).length
+        end
+
+        def count_metadata(value)
+          return nil if value.nil?
+          return value.length if value.is_a?(Hash) || value.is_a?(Array)
+
+          raw(value)
         end
 
         # ------------------------------------------------------------------
@@ -335,8 +342,8 @@ module BetterAuth
         def redact_user(opts)
           {
             modelName: raw(fetch_path(opts, [:user, :model_name])),
-            fields: raw(fetch_path(opts, [:user, :fields])),
-            additionalFields: raw(fetch_path(opts, [:user, :additional_fields])),
+            fields: count_metadata(fetch_path(opts, [:user, :fields])),
+            additionalFields: count_metadata(fetch_path(opts, [:user, :additional_fields])),
             changeEmail: {
               enabled: raw(fetch_path(opts, [:user, :change_email, :enabled])),
               sendChangeEmailConfirmation: bool(fetch_path(opts, [:user, :change_email, :send_change_email_confirmation]))
@@ -353,7 +360,7 @@ module BetterAuth
           {
             modelName: raw(fetch_path(opts, [:verification, :model_name])),
             disableCleanup: raw(fetch_path(opts, [:verification, :disable_cleanup])),
-            fields: raw(fetch_path(opts, [:verification, :fields]))
+            fields: count_metadata(fetch_path(opts, [:verification, :fields]))
           }
         end
 
@@ -367,7 +374,7 @@ module BetterAuth
         def redact_session(opts)
           {
             modelName: raw(fetch_path(opts, [:session, :model_name])),
-            additionalFields: raw(fetch_path(opts, [:session, :additional_fields])),
+            additionalFields: count_metadata(fetch_path(opts, [:session, :additional_fields])),
             cookieCache: {
               enabled: raw(fetch_path(opts, [:session, :cookie_cache, :enabled])),
               maxAge: raw(fetch_path(opts, [:session, :cookie_cache, :max_age])),
@@ -375,7 +382,7 @@ module BetterAuth
             },
             disableSessionRefresh: raw(fetch_path(opts, [:session, :disable_session_refresh])),
             expiresIn: raw(fetch_path(opts, [:session, :expires_in])),
-            fields: raw(fetch_path(opts, [:session, :fields])),
+            fields: count_metadata(fetch_path(opts, [:session, :fields])),
             freshAge: raw(fetch_path(opts, [:session, :fresh_age])),
             preserveSessionInDatabase: raw(fetch_path(opts, [:session, :preserve_session_in_database])),
             storeSessionInDatabase: raw(fetch_path(opts, [:session, :store_session_in_database])),
@@ -393,12 +400,12 @@ module BetterAuth
         def redact_account(opts)
           {
             modelName: raw(fetch_path(opts, [:account, :model_name])),
-            fields: raw(fetch_path(opts, [:account, :fields])),
+            fields: count_metadata(fetch_path(opts, [:account, :fields])),
             encryptOAuthTokens: raw(fetch_path(opts, [:account, :encrypt_oauth_tokens])),
             updateAccountOnSignIn: raw(fetch_path(opts, [:account, :update_account_on_sign_in])),
             accountLinking: {
               enabled: raw(fetch_path(opts, [:account, :account_linking, :enabled])),
-              trustedProviders: raw(fetch_path(opts, [:account, :account_linking, :trusted_providers])),
+              trustedProviders: count_metadata(fetch_path(opts, [:account, :account_linking, :trusted_providers])),
               updateUserInfoOnLink: raw(fetch_path(opts, [:account, :account_linking, :update_user_info_on_link])),
               allowUnlinkingAll: raw(fetch_path(opts, [:account, :account_linking, :allow_unlinking_all]))
             }
@@ -464,16 +471,16 @@ module BetterAuth
             crossSubDomainCookies: {
               domain: bool(fetch_path(opts, [:advanced, :cross_sub_domain_cookies, :domain])),
               enabled: raw(fetch_path(opts, [:advanced, :cross_sub_domain_cookies, :enabled])),
-              additionalCookies: raw(fetch_path(opts, [:advanced, :cross_sub_domain_cookies, :additional_cookies]))
+              additionalCookies: count_metadata(fetch_path(opts, [:advanced, :cross_sub_domain_cookies, :additional_cookies]))
             },
             database: {
-              generateId: raw(fetch_path(opts, [:advanced, :database, :generate_id])),
+              generateId: bool(fetch_path(opts, [:advanced, :database, :generate_id])),
               defaultFindManyLimit: raw(fetch_path(opts, [:advanced, :database, :default_find_many_limit]))
             },
             useSecureCookies: raw(fetch_path(opts, [:advanced, :use_secure_cookies])),
             ipAddress: {
               disableIpTracking: raw(fetch_path(opts, [:advanced, :ip_address, :disable_ip_tracking])),
-              ipAddressHeaders: raw(fetch_path(opts, [:advanced, :ip_address, :ip_address_headers]))
+              ipAddressHeaders: count_metadata(fetch_path(opts, [:advanced, :ip_address, :ip_address_headers]))
             },
             disableCSRFCheck: raw(fetch_path(opts, [:advanced, :disable_csrf_check])),
             cookieAttributes: {
@@ -540,7 +547,7 @@ module BetterAuth
         # @return [Hash{Symbol => Object}]
         def redact_on_api_error(opts)
           {
-            errorURL: raw(fetch_path(opts, [:on_api_error, :error_url])),
+            errorURL: bool_present(fetch_path(opts, [:on_api_error, :error_url])),
             onError: bool(fetch_path(opts, [:on_api_error, :on_error])),
             throw: raw(fetch_path(opts, [:on_api_error, :throw]))
           }
@@ -617,6 +624,14 @@ module BetterAuth
           return context[string_key] if context.key?(string_key)
 
           nil
+        rescue
+          nil
+        end
+
+        def sanitize_adapter(value)
+          return "adapter" if value.is_a?(String) && value.include?("::")
+
+          value
         rescue
           nil
         end

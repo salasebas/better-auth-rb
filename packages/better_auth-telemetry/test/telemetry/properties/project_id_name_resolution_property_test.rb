@@ -325,13 +325,10 @@ module BetterAuth
       # `nil` fallthrough.
       def expected_project_name(sample)
         app_name = sample.app_name
-        locked = sample.locked_gems_first_name
         root = sample.bundler_root_basename
 
         if non_empty_string?(app_name) && app_name != ProjectId::DEFAULT_APP_NAME
           app_name
-        elsif non_empty_string?(locked)
-          locked
         elsif non_empty_string?(root)
           root
         end

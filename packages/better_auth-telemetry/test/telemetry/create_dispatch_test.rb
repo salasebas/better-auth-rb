@@ -98,6 +98,24 @@ class CreateDispatchTest < Minitest::Test
     )
   end
 
+  def test_create_swallows_raising_custom_track_for_init_event
+    logger = RecordingLogger.new
+    raising_track = ->(_event) { raise "boom" }
+
+    EnvHelpers.with_env(neutral_env_overrides) do
+      publisher = Telemetry.create(
+        {telemetry: {enabled: true}, logger: logger, base_url: "https://example.com"},
+        {custom_track: raising_track, skip_test_check: true}
+      )
+
+      assert_kind_of Publisher, publisher
+      assert_predicate publisher, :enabled?
+    end
+
+    error_messages = logger.calls.filter_map { |level, message| message if level == :error }
+    assert(error_messages.any? { |m| m.include?("custom_track failed") && m.include?("boom") })
+  end
+
   # ---------------------------------------------------------------------
   # Path 2: debug mode (Requirements 5.4, 5.9).
   # ---------------------------------------------------------------------
@@ -228,6 +246,43 @@ class CreateDispatchTest < Minitest::Test
     )
   end
 
+  def test_http_path_posts_subsequent_publish_event
+    logger = RecordingLogger.new
+    calls = Queue.new
+
+    EnvHelpers.with_env(
+      neutral_env_overrides.merge(
+        "BETTER_AUTH_TELEMETRY_ENDPOINT" => "https://telemetry.example.test/collect",
+        "BETTER_AUTH_TELEMETRY_DEBUG" => nil,
+        "OPEN_AUTH_TELEMETRY_DEBUG" => nil
+      )
+    ) do
+      BetterAuth::Telemetry::HttpClient.stub(:post_json, lambda { |url, event, logger:|
+        calls << [url, event, logger]
+        nil
+      }) do
+        publisher = Telemetry.create(
+          {
+            telemetry: {enabled: true},
+            logger: logger,
+            base_url: "https://example.com"
+          },
+          {skip_test_check: true}
+        )
+
+        publisher.publish(type: "ping", payload: {n: 1})
+
+        first = Timeout.timeout(1) { calls.pop }
+        second = Timeout.timeout(1) { calls.pop }
+
+        assert_equal "init", first[1][:type]
+        assert_equal "ping", second[1][:type]
+        assert_equal({n: 1}, second[1][:payload])
+        assert_equal first[1][:anonymousId], second[1][:anonymousId]
+      end
+    end
+  end
+
   def test_http_path_dispatches_init_event_without_blocking_create
     logger = RecordingLogger.new
     captured = Queue.new
@@ -281,7 +336,8 @@ class CreateDispatchTest < Minitest::Test
       "OPEN_AUTH_TELEMETRY_DEBUG" => nil,
       "RACK_ENV" => nil,
       "RAILS_ENV" => nil,
-      "APP_ENV" => nil
+      "APP_ENV" => nil,
+      "TEST" => nil
     }
   end
 
