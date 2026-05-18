@@ -16,8 +16,8 @@ Gem::Specification.new do |spec|
   spec.required_ruby_version = ">= 3.2.0"
 
   spec.metadata["homepage_uri"] = spec.homepage
-  spec.metadata["source_code_uri"] = "https://github.com/sebasxsala/better-auth"
-  spec.metadata["bug_tracker_uri"] = "https://github.com/sebasxsala/better-auth/issues"
+  spec.metadata["source_code_uri"] = "https://github.com/sebasxsala/better-auth-rb"
+  spec.metadata["bug_tracker_uri"] = "https://github.com/sebasxsala/better-auth-rb/issues"
 
   spec.files = Dir.glob("lib/**/*", File::FNM_DOTMATCH).select { |file| File.file?(file) } +
     ["README.md", "CHANGELOG.md", "LICENSE.md"].select { |file| File.exist?(file) }

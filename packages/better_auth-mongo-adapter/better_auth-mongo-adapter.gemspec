@@ -13,14 +13,14 @@ Gem::Specification.new do |spec|
     "Deprecated compatibility package for Better Auth Ruby MongoDB support.",
     "Use the better_auth-mongodb gem and require \"better_auth/mongodb\" instead."
   ].join(" ")
-  spec.homepage = "https://github.com/sebasxsala/better-auth"
+  spec.homepage = "https://github.com/sebasxsala/better-auth-rb"
   spec.license = "MIT"
   spec.required_ruby_version = ">= 3.2.0"
 
   spec.metadata["homepage_uri"] = spec.homepage
-  spec.metadata["source_code_uri"] = "https://github.com/sebasxsala/better-auth"
-  spec.metadata["changelog_uri"] = "https://github.com/sebasxsala/better-auth/blob/main/packages/better_auth-mongo-adapter/CHANGELOG.md"
-  spec.metadata["bug_tracker_uri"] = "https://github.com/sebasxsala/better-auth/issues"
+  spec.metadata["source_code_uri"] = "https://github.com/sebasxsala/better-auth-rb"
+  spec.metadata["changelog_uri"] = "https://github.com/sebasxsala/better-auth-rb/blob/main/packages/better_auth-mongo-adapter/CHANGELOG.md"
+  spec.metadata["bug_tracker_uri"] = "https://github.com/sebasxsala/better-auth-rb/issues"
 
   spec.files = Dir.glob("lib/**/*", File::FNM_DOTMATCH).select { |file| File.file?(file) } +
     ["LICENSE.md", "README.md", "CHANGELOG.md"].select { |file| File.exist?(file) }

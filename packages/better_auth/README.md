@@ -13,11 +13,11 @@
     ·
     <a href="https://better-auth.com">Website</a>
     ·
-    <a href="https://github.com/sebasxsala/better-auth/issues">Issues</a>
+    <a href="https://github.com/sebasxsala/better-auth-rb/issues">Issues</a>
   </p>
 
 [![Gem](https://img.shields.io/gem/v/better_auth?style=flat&colorA=000000&colorB=000000)](https://rubygems.org/gems/better_auth)
-[![GitHub stars](https://img.shields.io/github/stars/sebasxsala/better-auth?style=flat&colorA=000000&colorB=000000)](https://github.com/sebasxsala/better-auth/stargazers)
+[![GitHub stars](https://img.shields.io/github/stars/sebasxsala/better-auth?style=flat&colorA=000000&colorB=000000)](https://github.com/sebasxsala/better-auth-rb/stargazers)
 </p>
 
 ## About the Project
@@ -212,7 +212,7 @@ Full documentation is being adapted in the root [`docs/`](/Users/sebastiansala/p
 
 ```bash
 # 1. Clone the repository
-git clone https://github.com/sebasxsala/better-auth.git
+git clone https://github.com/sebasxsala/better-auth-rb.git
 cd better-auth/packages/better_auth
 
 # 2. Install dependencies
@@ -370,7 +370,7 @@ test/                       # Core tests (Minitest)
 
 ## Contributing
 
-Bug reports and pull requests are welcome on GitHub at https://github.com/sebasxsala/better-auth. This project is intended to be a safe, welcoming space for collaboration, and contributors are expected to adhere to the [code of conduct](https://github.com/sebasxsala/better-auth/blob/main/CODE_OF_CONDUCT.md).
+Bug reports and pull requests are welcome on GitHub at https://github.com/sebasxsala/better-auth-rb. This project is intended to be a safe, welcoming space for collaboration, and contributors are expected to adhere to the [code of conduct](https://github.com/sebasxsala/better-auth-rb/blob/main/CODE_OF_CONDUCT.md).
 
 ## License
 

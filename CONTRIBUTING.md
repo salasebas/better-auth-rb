@@ -24,8 +24,8 @@ upstream/                 # Git submodule: original TypeScript better-auth (read
 2. Clone your fork (with the submodule):
 
    ```bash
-   git clone --recursive https://github.com/your-username/better-auth.git
-   cd better-auth
+   git clone --recursive https://github.com/your-username/better-auth-rb.git
+   cd better-auth-rb
    ```
 
 3. Install Ruby 3.2+ (3.3 recommended). We recommend [rbenv](https://github.com/rbenv/rbenv) or [asdf](https://asdf-vm.com/).

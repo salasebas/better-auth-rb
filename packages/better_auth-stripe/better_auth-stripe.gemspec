@@ -13,14 +13,14 @@ Gem::Specification.new do |spec|
     "Adds Stripe customer, subscription, checkout, billing portal, and webhook routes for Better Auth Ruby.",
     "Better Auth Ruby is an independent modern authentication framework for Ruby inspired by Better Auth."
   ].join(" ")
-  spec.homepage = "https://github.com/sebasxsala/better-auth"
+  spec.homepage = "https://github.com/sebasxsala/better-auth-rb"
   spec.license = "MIT"
   spec.required_ruby_version = ">= 3.2.0"
 
   spec.metadata["homepage_uri"] = spec.homepage
-  spec.metadata["source_code_uri"] = "https://github.com/sebasxsala/better-auth"
-  spec.metadata["changelog_uri"] = "https://github.com/sebasxsala/better-auth/blob/main/packages/better_auth-stripe/CHANGELOG.md"
-  spec.metadata["bug_tracker_uri"] = "https://github.com/sebasxsala/better-auth/issues"
+  spec.metadata["source_code_uri"] = "https://github.com/sebasxsala/better-auth-rb"
+  spec.metadata["changelog_uri"] = "https://github.com/sebasxsala/better-auth-rb/blob/main/packages/better_auth-stripe/CHANGELOG.md"
+  spec.metadata["bug_tracker_uri"] = "https://github.com/sebasxsala/better-auth-rb/issues"
 
   spec.files = Dir.glob("lib/**/*", File::FNM_DOTMATCH).select { |file| File.file?(file) } +
     ["LICENSE.md", "README.md", "CHANGELOG.md"].select { |file| File.exist?(file) }

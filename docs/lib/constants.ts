@@ -7,9 +7,9 @@ export const ENV = {
 
 export const GITHUB_REPO = {
 	owner: "sebasxsala",
-	name: "better-auth",
-	url: "https://github.com/sebasxsala/better-auth",
-	apiUrl: "https://api.github.com/repos/sebasxsala/better-auth",
+	name: "better-auth-rb",
+	url: "https://github.com/sebasxsala/better-auth-rb",
+	apiUrl: "https://api.github.com/repos/sebasxsala/better-auth-rb",
 };
 
 export const SHOW_UPSTREAM_BLOG_CONTENT = false;

@@ -8,10 +8,10 @@ Ruby server packages for [Better Auth](https://github.com/better-auth/better-aut
 The core is Rack-first, with adapters for Rails, Sinatra, and Hanami, plus
 Ruby packages for selected Better Auth plugins.
 
-[Documentation](https://better-auth-ruby.vercel.app/) -
-[Supported features](https://better-auth-ruby.vercel.app/docs/supported-features) -
+[Documentation](https://better-auth-rb.vercel.app/) -
+[Supported features](https://better-auth-rb.vercel.app/docs/supported-features) -
 [Upstream Better Auth](https://better-auth.com) -
-[Issues](https://github.com/sebasxsala/better-auth/issues)
+[Issues](https://github.com/sebasxsala/better-auth-rb/issues)
 
 Current upstream target: Better Auth `v1.6.9`.
 
@@ -100,7 +100,7 @@ bin/hanami db migrate
 
 See the docs page for the current support inventory:
 
-- [Supported Features](https://better-auth-ruby.vercel.app/docs/supported-features)
+- [Supported Features](https://better-auth-rb.vercel.app/docs/supported-features)
 - [Local feature notes](.docs/features/)
 - [Implementation plans](.docs/plans/)
 
@@ -166,8 +166,8 @@ point back to the canonical documentation at https://better-auth-rb.vercel.app/.
 ## Development
 
 ```bash
-git clone --recursive https://github.com/sebasxsala/better-auth.git
-cd better-auth
+git clone --recursive https://github.com/sebasxsala/better-auth-rb.git
+cd better-auth-rb
 make install
 make ci
 ```

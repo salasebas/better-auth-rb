@@ -233,7 +233,7 @@ Full documentation is being adapted in the root `docs/` app. The Rails guide liv
 
 ```bash
 # Clone the monorepo
-git clone --recursive https://github.com/sebasxsala/better-auth.git
+git clone --recursive https://github.com/sebasxsala/better-auth-rb.git
 cd better-auth/packages/better_auth-rails
 
 # Install dependencies
@@ -267,7 +267,7 @@ RUBOCOP_CACHE_ROOT=/private/var/folders/7x/jrsz946d2w73n42fb1_ff5000000gn/T/rubo
 
 ## Contributing
 
-Bug reports and pull requests are welcome on GitHub at https://github.com/sebasxsala/better-auth.
+Bug reports and pull requests are welcome on GitHub at https://github.com/sebasxsala/better-auth-rb.
 
 When contributing:
 1. Fork the repository

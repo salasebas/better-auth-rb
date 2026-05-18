@@ -14,14 +14,14 @@ Gem::Specification.new do |spec|
     "It is not affiliated with, maintained by, or endorsed by the Better Auth project.",
     "It provides a framework-agnostic Rack core, auth routes, sessions, adapters, and a plugin system."
   ].join(" ")
-  spec.homepage = "https://github.com/sebasxsala/better-auth"
+  spec.homepage = "https://github.com/sebasxsala/better-auth-rb"
   spec.license = "MIT"
   spec.required_ruby_version = ">= 3.2.0"
 
   spec.metadata["homepage_uri"] = spec.homepage
-  spec.metadata["source_code_uri"] = "https://github.com/sebasxsala/better-auth"
-  spec.metadata["changelog_uri"] = "https://github.com/sebasxsala/better-auth/blob/main/packages/better_auth/CHANGELOG.md"
-  spec.metadata["bug_tracker_uri"] = "https://github.com/sebasxsala/better-auth/issues"
+  spec.metadata["source_code_uri"] = "https://github.com/sebasxsala/better-auth-rb"
+  spec.metadata["changelog_uri"] = "https://github.com/sebasxsala/better-auth-rb/blob/main/packages/better_auth/CHANGELOG.md"
+  spec.metadata["bug_tracker_uri"] = "https://github.com/sebasxsala/better-auth-rb/issues"
 
   # Specify which files should be added to the gem when it is released.
   spec.files = Dir.glob("lib/**/*", File::FNM_DOTMATCH).select { |f| File.file?(f) } +
