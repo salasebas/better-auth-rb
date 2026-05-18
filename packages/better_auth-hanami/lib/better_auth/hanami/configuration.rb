@@ -30,13 +30,14 @@ module BetterAuth
         logger
       ].freeze
 
-      attr_accessor(*AUTH_OPTION_NAMES)
+      attr_accessor(*AUTH_OPTION_NAMES, :allow_memory_fallback)
 
       def initialize
         @base_path = BetterAuth::Configuration::DEFAULT_BASE_PATH
         @plugins = []
         @trusted_origins = []
-        @database = ->(options) { SequelAdapter.from_hanami(options) }
+        @allow_memory_fallback = false
+        @database = ->(options) { SequelAdapter.from_hanami(options, allow_memory_fallback: allow_memory_fallback) }
       end
 
       def to_auth_options

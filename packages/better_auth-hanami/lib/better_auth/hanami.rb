@@ -20,15 +20,23 @@ module BetterAuth
       end
 
       def configure
-        yield configuration
-        @auth = nil
+        auth_mutex.synchronize do
+          yield configuration
+          @auth = nil
+        end
       end
 
       def auth(overrides = nil)
         options = configuration.to_auth_options
-        return @auth ||= BetterAuth.auth(options) if overrides.nil? || overrides.empty?
+        return auth_mutex.synchronize { @auth ||= BetterAuth.auth(options) } if overrides.nil? || overrides.empty?
 
         BetterAuth.auth(options.merge(overrides))
+      end
+
+      private
+
+      def auth_mutex
+        @auth_mutex ||= Mutex.new
       end
     end
   end

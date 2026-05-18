@@ -37,6 +37,25 @@ RSpec.describe BetterAuth::Hanami::Routing do
     expect(routes.calls.map { |call| call[1] }).to include("/auth", "/auth/*path")
   end
 
+  it "uses the memoized Hanami auth instance when mounted at the configured base path" do
+    BetterAuth::Hanami.configure do |config|
+      config.secret = secret
+      config.database = :memory
+      config.base_path = "/api/auth"
+    end
+    memoized_auth = BetterAuth::Hanami.auth
+    routes = BetterAuthHanamiFakeRoutes.new
+
+    routes.better_auth
+
+    mounted_apps = routes.calls.map { |call| call[2] }.uniq
+    expect(mounted_apps.length).to eq(1)
+    expect(mounted_apps.first.instance_variable_get(:@auth)).to equal(memoized_auth)
+  ensure
+    BetterAuth::Hanami.instance_variable_set(:@auth, nil)
+    BetterAuth::Hanami.instance_variable_set(:@configuration, nil)
+  end
+
   it "dispatches core endpoints through a real Hanami route set" do
     auth = BetterAuth.auth(secret: secret, database: :memory)
     router = build_hanami_router(auth)

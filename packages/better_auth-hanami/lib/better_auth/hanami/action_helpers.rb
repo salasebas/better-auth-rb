@@ -20,6 +20,7 @@ module BetterAuth
       def require_authentication(request, response)
         return true if authenticated?(request)
 
+        apply_better_auth_session_headers(request, response)
         response.status = 401 if response.respond_to?(:status=)
         false
       end
@@ -36,18 +37,28 @@ module BetterAuth
       def resolve_better_auth_session(request)
         auth = BetterAuth::Hanami.auth
         auth.context.prepare_for_request!(request) if auth.context.respond_to?(:prepare_for_request!)
-
-        context = BetterAuth::Endpoint::Context.new(
-          path: request_path(request),
-          method: request_method(request),
-          query: request_params(request),
+        endpoint = auth.api.endpoints.fetch(:get_session)
+        endpoint_context = BetterAuth::Endpoint::Context.new(
+          path: endpoint.path,
+          method: "GET",
+          query: {"disableRefresh" => "true"},
           body: {},
           params: {},
-          headers: {"cookie" => request_cookie(request)},
+          headers: request_headers(request),
           context: auth.context,
           request: request
         )
-        BetterAuth::Session.find_current(context, disable_refresh: true)
+        result = auth.api.execute(endpoint, endpoint_context)
+        request_env(request)["better_auth.session_headers"] = result.headers || {}
+        session = result.response
+        return nil unless session
+        return nil if session.is_a?(BetterAuth::APIError)
+
+        {session: session["session"] || session[:session], user: session["user"] || session[:user]}
+      rescue BetterAuth::APIError
+        nil
+      ensure
+        auth.context.clear_runtime! if defined?(auth) && auth.context.respond_to?(:clear_runtime!)
       end
 
       def request_env(request)
@@ -71,6 +82,52 @@ module BetterAuth
 
         headers = request.respond_to?(:headers) ? request.headers : {}
         headers["cookie"] || headers["Cookie"]
+      end
+
+      def request_authorization(request)
+        return request.get_header("HTTP_AUTHORIZATION") if request.respond_to?(:get_header)
+
+        headers = request.respond_to?(:headers) ? request.headers : {}
+        headers["authorization"] || headers["Authorization"]
+      end
+
+      def request_headers(request)
+        headers = headers_from_env(request_env(request))
+        cookie = request_cookie(request)
+        authorization = request_authorization(request)
+        headers["cookie"] = cookie if cookie
+        headers["authorization"] = authorization if authorization
+        if request.respond_to?(:headers)
+          request.headers.each { |key, value| headers[key.to_s] ||= value }
+        end
+        headers
+      end
+
+      def headers_from_env(env)
+        env.each_with_object({}) do |(key, value), headers|
+          case key
+          when "CONTENT_TYPE"
+            headers["content-type"] = value if value
+          when "CONTENT_LENGTH"
+            headers["content-length"] = value if value
+          else
+            next unless key.start_with?("HTTP_")
+
+            headers[key.delete_prefix("HTTP_").downcase.tr("_", "-")] = value
+          end
+        end
+      end
+
+      def apply_better_auth_session_headers(request, response)
+        headers = request_env(request)["better_auth.session_headers"]
+        return unless headers && headers["set-cookie"]
+
+        if response.respond_to?(:headers) && response.headers.respond_to?(:[]=)
+          existing = response.headers["set-cookie"]
+          response.headers["set-cookie"] = [existing, headers["set-cookie"]].compact.join("\n")
+        elsif response.respond_to?(:[]=)
+          response["set-cookie"] = headers["set-cookie"]
+        end
       end
     end
   end

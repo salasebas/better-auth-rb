@@ -10,24 +10,26 @@ module BetterAuth
     class SequelAdapter < BetterAuth::Adapters::Base
       include BetterAuth::Adapters::JoinSupport
 
+      WHERE_OPERATORS = %w[eq ne gt gte lt lte in not_in contains starts_with ends_with].freeze
+
       attr_reader :connection
 
-      def self.from_hanami(options, container: nil)
+      def self.from_hanami(options, container: nil, allow_memory_fallback: false)
         if container.nil? && defined?(::Hanami) && ::Hanami.respond_to?(:app)
           container = ::Hanami.app
         end
-        return memory_fallback(options) unless container
+        return memory_fallback(options, allow_memory_fallback: allow_memory_fallback) unless container
 
-        from_container(container, options)
+        from_container(container, options, allow_memory_fallback: allow_memory_fallback)
       end
 
-      def self.from_container(container, options)
+      def self.from_container(container, options, allow_memory_fallback: false)
         gateway = if container.respond_to?(:key?) && container.key?("db.gateway")
           container["db.gateway"]
         elsif container.respond_to?(:[]) && safe_fetch(container, "db.gateway")
           container["db.gateway"]
         end
-        return memory_fallback(options) unless gateway
+        return memory_fallback(options, allow_memory_fallback: allow_memory_fallback) unless gateway
 
         connection = gateway.respond_to?(:connection) ? gateway.connection : gateway
         new(options, connection: connection)
@@ -39,7 +41,11 @@ module BetterAuth
         nil
       end
 
-      def self.memory_fallback(options)
+      def self.memory_fallback(options, allow_memory_fallback: false)
+        if options.respond_to?(:production?) && options.production? && !allow_memory_fallback
+          raise Error, "Hanami db.gateway is required in production. Set config.allow_memory_fallback = true to use volatile memory storage intentionally."
+        end
+
         Kernel.warn(
           "[better_auth-hanami] SequelAdapter: using BetterAuth::Adapters::Memory " \
           "(no Hanami container or db.gateway). Persisted auth data will not survive process restart."
@@ -67,13 +73,18 @@ module BetterAuth
         model = model.to_s
         dataset = table_dataset(model)
         dataset = apply_where(model, dataset, where || [])
-        dataset = apply_select(model, dataset, select) if select
+        join_config = normalized_join(model, join)
+        requested_select = select ? Array(select).map { |field| storage_key(field) } : nil
+        effective_select = select_fields_for_join(requested_select, join_config)
+        dataset = apply_select(model, dataset, effective_select) if effective_select
         dataset = apply_order(model, dataset, sort_by) if sort_by
-        dataset = dataset.limit(Integer(limit)) if limit
-        dataset = dataset.offset(Integer(offset)) if offset
+        dataset = dataset.limit(coerce_pagination(limit, "limit")) if limit
+        dataset = dataset.offset(coerce_pagination(offset, "offset")) if offset
 
         records = dataset.all.map { |row| normalize_record(model, row) }
-        attach_joins(model, records, join)
+        records = attach_joins(model, records, join_config)
+        trim_unrequested_select_fields(records, requested_select, join_config) if requested_select
+        records
       end
 
       def update(model:, where:, update:)
@@ -136,22 +147,34 @@ module BetterAuth
         column = storage_field(model, field)
         identifier = Sequel[column.to_sym]
         operator = (fetch_key(clause, :operator) || "eq").to_s
+        raise APIError.new("BAD_REQUEST", message: "Invalid operator #{operator}") unless WHERE_OPERATORS.include?(operator)
+
+        mode = (fetch_key(clause, :mode) || "sensitive").to_s
         attributes = schema_for(model).fetch(:fields).fetch(field)
         raw_value = fetch_key(clause, :value)
         value = coerce_where_value(raw_value, attributes)
+        insensitive = insensitive_string_mode?(mode, attributes)
+        comparable = insensitive ? Sequel.function(:lower, identifier) : identifier
+        compare_value = insensitive ? downcase_where_value(value) : value
 
         case operator
-        when "in" then {column.to_sym => Array(raw_value).map { |entry| coerce_where_value(entry, attributes) }}
-        when "not_in" then Sequel.~(column.to_sym => Array(raw_value).map { |entry| coerce_where_value(entry, attributes) })
-        when "ne" then Sequel.~(column.to_sym => value)
-        when "gt" then identifier > value
-        when "gte" then identifier >= value
-        when "lt" then identifier < value
-        when "lte" then identifier <= value
-        when "contains" then Sequel.like(identifier, "%#{escape_like(value)}%", escape: "\\")
-        when "starts_with" then Sequel.like(identifier, "#{escape_like(value)}%", escape: "\\")
-        when "ends_with" then Sequel.like(identifier, "%#{escape_like(value)}", escape: "\\")
-        else {column.to_sym => value}
+        when "in"
+          values = Array(raw_value).map { |entry| coerce_where_value(entry, attributes) }
+          values = downcase_where_value(values) if insensitive
+          insensitive ? Sequel.expr(comparable => values) : {column.to_sym => values}
+        when "not_in"
+          values = Array(raw_value).map { |entry| coerce_where_value(entry, attributes) }
+          values = downcase_where_value(values) if insensitive
+          Sequel.~(insensitive ? Sequel.expr(comparable => values) : {column.to_sym => values})
+        when "ne" then insensitive ? Sequel.~(Sequel.expr(comparable => compare_value)) : Sequel.~(column.to_sym => value)
+        when "gt" then comparable > compare_value
+        when "gte" then comparable >= compare_value
+        when "lt" then comparable < compare_value
+        when "lte" then comparable <= compare_value
+        when "contains" then Sequel.like(comparable, "%#{escape_like(compare_value)}%", escape: "\\")
+        when "starts_with" then Sequel.like(comparable, "#{escape_like(compare_value)}%", escape: "\\")
+        when "ends_with" then Sequel.like(comparable, "%#{escape_like(compare_value)}", escape: "\\")
+        else insensitive ? Sequel.expr(comparable => compare_value) : {column.to_sym => value}
         end
       end
 
@@ -165,27 +188,50 @@ module BetterAuth
         dataset.order(direction)
       end
 
-      def attach_joins(model, records, join)
-        return records unless join
+      def attach_joins(_model, records, join_config)
+        return records if join_config.empty? || records.empty?
 
-        join_config = normalized_join(model, join)
         records.each do |record|
           join_config.each do |join_model, config|
-            record[join_model] = joined_records(record, join_model, config)
+            record[join_model] = one_to_one_join?(config) ? nil : []
           end
         end
+        join_config.each do |join_model, config|
+          attach_join(model_records: records, join_model: join_model, config: config)
+        end
         records
+      end
+
+      def attach_join(model_records:, join_model:, config:)
+        values = model_records.map { |record| record[config.fetch(:from)] }.compact.uniq
+        return if values.empty?
+
+        joined = if one_to_one_join?(config)
+          find_many(model: join_model, where: [{field: config.fetch(:to), operator: "in", value: values}])
+        else
+          values.flat_map do |value|
+            find_many(model: join_model, where: [{field: config.fetch(:to), value: value}], limit: join_limit(config))
+          end
+        end
+        grouped = joined.group_by { |record| record[config.fetch(:to)] }
+        model_records.each do |record|
+          records = grouped.fetch(record[config.fetch(:from)], [])
+          record[join_model] = if one_to_one_join?(config)
+            records.first
+          else
+            records.first(join_limit(config))
+          end
+        end
       end
 
       def joined_records(record, join_model, config)
         local_value = record[config.fetch(:from)]
         where = [{field: config.fetch(:to), value: local_value}]
-
         if one_to_one_join?(config)
           find_one(model: join_model, where: where)
         else
           records = find_many(model: join_model, where: where)
-          config[:limit] ? records.first(Integer(config[:limit])) : records
+          records.first(join_limit(config))
         end
       end
 
@@ -213,9 +259,9 @@ module BetterAuth
         reference = attributes.fetch(:references)
         if forward_join
           unique = attributes[:unique] == true
-          {from: reference.fetch(:field).to_s, to: foreign_key, relation: unique ? "one-to-one" : "one-to-many", unique: unique}
+          {from: reference.fetch(:field).to_s, to: foreign_key, relation: unique ? "one-to-one" : "one-to-many", unique: unique, limit: unique ? 1 : default_find_many_limit}
         else
-          {from: foreign_key, to: reference.fetch(:field).to_s, relation: "one-to-one", unique: true}
+          {from: foreign_key, to: reference.fetch(:field).to_s, relation: "one-to-one", unique: true, limit: 1}
         end
       end
 
@@ -233,7 +279,7 @@ module BetterAuth
             raise APIError.new("BAD_REQUEST", message: "#{field} is not allowed to be set")
           end
 
-          if !value_provided && action == "create" && attributes.key?(:default_value)
+          if action == "create" && attributes.key?(:default_value) && (!value_provided || (attributes[:required] && value.nil?))
             value = resolve_default(attributes[:default_value])
             value_provided = true
           elsif !value_provided && action == "update" && attributes[:on_update]
@@ -271,10 +317,16 @@ module BetterAuth
 
       def schema_for(model)
         BetterAuth::Schema.auth_tables(options).fetch(model.to_s)
+      rescue KeyError
+        raise APIError.new("BAD_REQUEST", message: "Invalid model #{model}")
       end
 
       def storage_field(model, field)
-        schema_for(model).fetch(:fields).fetch(field.to_s).fetch(:field_name, physical_name(field))
+        fields = schema_for(model).fetch(:fields)
+        attributes = fields[field.to_s]
+        raise APIError.new("BAD_REQUEST", message: "Invalid field #{field} for model #{model}") unless attributes
+
+        attributes.fetch(:field_name, physical_name(field))
       end
 
       def generated_id
@@ -291,7 +343,7 @@ module BetterAuth
 
       def coerce_value(value, attributes)
         return value if value.nil?
-        return Time.parse(value) if attributes[:type] == "date" && value.is_a?(String)
+        return parse_time_value(value) if attributes[:type] == "date" && value.is_a?(String)
         return JSON.generate(value) if json_like?(attributes) && !value.is_a?(String)
 
         value
@@ -316,7 +368,7 @@ module BetterAuth
         when "number"
           return coerce_number(value)
         when "date"
-          return Time.parse(value) if value.is_a?(String)
+          return parse_time_value(value) if value.is_a?(String)
         end
 
         coerce_value(value, attributes)
@@ -346,6 +398,57 @@ module BetterAuth
         return value.to_f if /\A-?\d+\.\d+\z/.match?(value)
 
         value
+      end
+
+      def coerce_pagination(value, label)
+        Integer(value).tap do |integer|
+          raise ArgumentError if integer.negative?
+        end
+      rescue ArgumentError, TypeError
+        raise APIError.new("BAD_REQUEST", message: "Invalid #{label}")
+      end
+
+      def select_fields_for_join(select, join_config)
+        return select unless select && !join_config.empty?
+
+        join_config.each_value.with_object(select.dup) do |config, fields|
+          from = storage_key(config.fetch(:from))
+          fields << from unless fields.include?(from)
+        end
+      end
+
+      def trim_unrequested_select_fields(records, requested_select, join_config)
+        hidden = join_config.each_value.map { |config| storage_key(config.fetch(:from)) } - requested_select
+        records.each { |record| hidden.each { |field| record.delete(field) } }
+      end
+
+      def insensitive_string_mode?(mode, attributes)
+        mode == "insensitive" && attributes[:type].to_s == "string"
+      end
+
+      def downcase_where_value(value)
+        return value.map { |entry| downcase_where_value(entry) } if value.is_a?(Array)
+        return value.downcase if value.is_a?(String)
+
+        value
+      end
+
+      def default_find_many_limit
+        database_options = options.advanced[:database] || {}
+        coerce_pagination(
+          database_options[:default_find_many_limit] || database_options[:defaultFindManyLimit] || 100,
+          "limit"
+        )
+      end
+
+      def join_limit(config)
+        coerce_pagination(config[:limit] || default_find_many_limit, "limit")
+      end
+
+      def parse_time_value(value)
+        Time.parse(value)
+      rescue ArgumentError
+        raise APIError.new("BAD_REQUEST", message: "Invalid date")
       end
 
       def escape_like(value)

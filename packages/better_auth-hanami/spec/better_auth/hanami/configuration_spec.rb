@@ -42,6 +42,25 @@ RSpec.describe BetterAuth::Hanami do
     expect(override_auth).not_to equal(default_auth)
   end
 
+  it "builds the default auth instance only once under concurrent access" do
+    build_count = 0
+    mutex = Mutex.new
+
+    described_class.configure do |config|
+      config.secret = secret
+      config.database = ->(_options) {
+        sleep 0.01
+        mutex.synchronize { build_count += 1 }
+        BetterAuth::Adapters::Memory.new(BetterAuth::Configuration.new(secret: secret, database: :memory))
+      }
+    end
+
+    auths = 8.times.map { Thread.new { described_class.auth } }.map(&:value)
+
+    expect(auths.uniq.length).to eq(1)
+    expect(build_count).to eq(1)
+  end
+
   def secret
     "test-secret-that-is-long-enough-for-validation"
   end

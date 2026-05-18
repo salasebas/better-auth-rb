@@ -127,6 +127,96 @@ RSpec.describe BetterAuth::Hanami::SequelAdapter do
     expect(joined_many).to eq([user.merge("oneToOneTable" => one_to_one, "session" => [session])])
   end
 
+  it "preserves selected join keys while returning only requested base fields" do
+    db = Sequel.sqlite
+    apply_migration(db, config)
+    adapter = described_class.new(config, connection: db)
+    user = adapter.create(model: "user", data: {id: "user-1", name: "Ada", email: "ada@example.com"}, force_allow_id: true)
+    adapter.create(model: "session", data: {id: "session-1", userId: user.fetch("id"), token: "token-1", expiresAt: Time.now + 3600}, force_allow_id: true)
+
+    joined = adapter.find_one(model: "user", where: [{field: "id", value: user.fetch("id")}], select: ["email"], join: {session: true})
+
+    expect(joined.keys).to contain_exactly("email", "session")
+    expect(joined.fetch("session").map { |session| session.fetch("token") }).to eq(["token-1"])
+  end
+
+  it "supports case-insensitive string predicates across find count update and delete operations" do
+    db = Sequel.sqlite
+    apply_migration(db, config)
+    adapter = described_class.new(config, connection: db)
+    adapter.create(model: "user", data: {id: "user-1", name: "Ada Lovelace", email: "Ada@Example.com"}, force_allow_id: true)
+
+    where = [{field: "email", operator: "eq", value: "ada@example.com", mode: "insensitive"}]
+    contains = [{field: "name", operator: "contains", value: "lovelace", mode: "insensitive"}]
+
+    expect(adapter.find_one(model: "user", where: where).fetch("id")).to eq("user-1")
+    expect(adapter.count(model: "user", where: contains)).to eq(1)
+    expect(adapter.update(model: "user", where: where, update: {name: "Updated"}).fetch("name")).to eq("Updated")
+    expect(adapter.delete_many(model: "user", where: [{field: "name", operator: "in", value: ["updated"], mode: "insensitive"}])).to eq(1)
+  end
+
+  it "applies defaults when required fields are explicitly nil on create" do
+    db = Sequel.sqlite
+    apply_migration(db, config)
+    adapter = described_class.new(config, connection: db)
+
+    user = adapter.create(model: "user", data: {id: "user-1", name: "Ada", email: "ada@example.com", emailVerified: nil}, force_allow_id: true)
+
+    expect(user.fetch("emailVerified")).to be(false)
+  end
+
+  it "raises controlled API errors for invalid query fields and pagination" do
+    db = Sequel.sqlite
+    apply_migration(db, config)
+    adapter = described_class.new(config, connection: db)
+
+    expect {
+      adapter.find_many(model: "user", where: [{field: "doesNotExist", value: "x"}])
+    }.to raise_error(BetterAuth::APIError, /Invalid field/)
+    expect {
+      adapter.find_many(model: "user", sort_by: {field: "doesNotExist"})
+    }.to raise_error(BetterAuth::APIError, /Invalid field/)
+    expect {
+      adapter.find_many(model: "user", limit: "nope")
+    }.to raise_error(BetterAuth::APIError, /Invalid limit/)
+    expect {
+      adapter.find_many(model: "user", where: [{field: "createdAt", value: "not-a-date"}])
+    }.to raise_error(BetterAuth::APIError, /Invalid date/)
+  end
+
+  it "uses configured default limits for inferred one-to-many joins" do
+    limited_config = BetterAuth::Configuration.new(secret: secret, database: :memory, experimental: {joins: true}, advanced: {database: {default_find_many_limit: 2}})
+    db = Sequel.sqlite
+    apply_migration(db, limited_config)
+    adapter = described_class.new(limited_config, connection: db)
+    user = adapter.create(model: "user", data: {id: "user-1", name: "Ada", email: "ada@example.com"}, force_allow_id: true)
+    3.times do |index|
+      adapter.create(model: "session", data: {id: "session-#{index}", userId: user.fetch("id"), token: "token-#{index}", expiresAt: Time.now + 3600}, force_allow_id: true)
+    end
+
+    joined = adapter.find_one(model: "user", where: [{field: "id", value: user.fetch("id")}], join: {session: true})
+
+    expect(joined.fetch("session").length).to eq(2)
+  end
+
+  it "applies configured join limits per parent for multi-parent collection joins" do
+    limited_config = BetterAuth::Configuration.new(secret: secret, database: :memory, experimental: {joins: true}, advanced: {database: {default_find_many_limit: 2}})
+    db = Sequel.sqlite
+    apply_migration(db, limited_config)
+    adapter = described_class.new(limited_config, connection: db)
+    users = 2.times.map do |user_index|
+      user = adapter.create(model: "user", data: {id: "user-#{user_index}", name: "User #{user_index}", email: "user-#{user_index}@example.com"}, force_allow_id: true)
+      3.times do |session_index|
+        adapter.create(model: "session", data: {id: "session-#{user_index}-#{session_index}", userId: user.fetch("id"), token: "token-#{user_index}-#{session_index}", expiresAt: Time.now + 3600}, force_allow_id: true)
+      end
+      user
+    end
+
+    joined = adapter.find_many(model: "user", where: [{field: "id", operator: "in", value: users.map { |user| user.fetch("id") }}], sort_by: {field: "email"}, join: {session: true})
+
+    expect(joined.map { |user| user.fetch("session").length }).to eq([2, 2])
+  end
+
   it "treats LIKE wildcard characters literally in string predicates" do
     db = Sequel.sqlite
     apply_migration(db, config)
@@ -149,6 +239,17 @@ RSpec.describe BetterAuth::Hanami::SequelAdapter do
       adapter = described_class.from_hanami(config, container: false)
 
       expect(adapter).to be_a(BetterAuth::Adapters::Memory)
+    end
+
+    it "raises in production when memory fallback is not explicitly allowed" do
+      previous = ENV["APP_ENV"]
+      ENV["APP_ENV"] = "production"
+
+      expect {
+        described_class.from_hanami(config, container: false)
+      }.to raise_error(BetterAuth::Error, /db.gateway/)
+    ensure
+      ENV["APP_ENV"] = previous
     end
   end
 

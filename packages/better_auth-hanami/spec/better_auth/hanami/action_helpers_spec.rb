@@ -66,6 +66,80 @@ RSpec.describe BetterAuth::Hanami::ActionHelpers do
     expect(response.status).to eq(401)
   end
 
+  it "resolves sessions from bearer authorization headers" do
+    BetterAuth::Hanami.configure do |config|
+      config.secret = secret
+      config.database = :memory
+      config.base_url = "http://localhost:2300"
+      config.email_and_password = {enabled: true}
+      config.plugins = [BetterAuth::Plugins.bearer]
+    end
+    signup_status, _headers, signup_body = BetterAuth::Hanami.auth.call(
+      rack_env("POST", "/api/auth/sign-up/email", body: JSON.generate(email: "bearer@example.com", password: "password123", name: "Bearer"))
+    )
+    token = JSON.parse(signup_body.join).fetch("token")
+
+    request = fake_request({}, authorization: "Bearer #{token}")
+
+    expect(signup_status).to eq(200)
+    expect(action.current_user(request)).to include("email" => "bearer@example.com")
+  end
+
+  it "passes the Hanami request object through auth hooks while resolving helper sessions" do
+    observed_request = nil
+    BetterAuth::Hanami.configure do |config|
+      config.secret = secret
+      config.database = :memory
+      config.base_url = "http://localhost:2300"
+      config.email_and_password = {enabled: true}
+      config.hooks = {
+        before: ->(ctx) {
+          observed_request = ctx.request if ctx.path == "/get-session"
+          nil
+        }
+      }
+    end
+    signup_headers = sign_up_headers
+    request = fake_request({}, cookie: cookie_header(signup_headers.fetch("set-cookie")))
+
+    action.current_user(request)
+
+    expect(observed_request).to equal(request)
+  end
+
+  it "resolves helper sessions on protected POST actions with the internal get-session endpoint as GET" do
+    BetterAuth::Hanami.configure do |config|
+      config.secret = secret
+      config.database = :memory
+      config.base_url = "http://localhost:2300"
+      config.email_and_password = {enabled: true}
+    end
+    signup_headers = sign_up_headers
+    request = fake_request({}, cookie: cookie_header(signup_headers.fetch("set-cookie")), method: "POST")
+
+    expect(action.current_user(request)).to include("email" => "ada@example.com")
+  end
+
+  it "copies stale session cleanup cookies to the response when authentication is required" do
+    BetterAuth::Hanami.configure do |config|
+      config.secret = secret
+      config.database = :memory
+      config.base_url = "http://localhost:2300"
+      config.email_and_password = {enabled: true}
+    end
+    signup_headers = sign_up_headers
+    cookie = cookie_header(signup_headers.fetch("set-cookie"))
+    BetterAuth::Hanami.auth.context.internal_adapter.delete_session(JSON.parse(signup_headers.fetch("set-auth-token", "null"))["token"]) if signup_headers.key?("set-auth-token")
+    token = BetterAuth::Cookies.parse_cookies(cookie).fetch("better-auth.session_token").split(".").first
+    BetterAuth::Hanami.auth.context.internal_adapter.delete_session(token)
+    request = fake_request({}, cookie: cookie)
+    response = fake_response
+
+    expect(action.require_authentication(request, response)).to be(false)
+    expect(response.headers.fetch("set-cookie")).to include("better-auth.session_token=")
+    expect(response.headers.fetch("set-cookie")).to include("Max-Age=0")
+  end
+
   def sign_up_headers
     status, headers, = BetterAuth::Hanami.auth.call(
       rack_env("POST", "/api/auth/sign-up/email", body: JSON.generate(email: "ada@example.com", password: "password123", name: "Ada"))
@@ -74,14 +148,23 @@ RSpec.describe BetterAuth::Hanami::ActionHelpers do
     headers
   end
 
-  def fake_request(env, cookie: nil)
+  def fake_request(env, cookie: nil, authorization: nil, method: "GET")
     Struct.new(:env, :path, :request_method, :params, :headers) do
       def get_header(name)
         return headers["cookie"] if name == "HTTP_COOKIE"
+        return headers["authorization"] if name == "HTTP_AUTHORIZATION"
 
         nil
       end
-    end.new(env, "/dashboard", "GET", {}, {"cookie" => cookie})
+    end.new(env, "/dashboard", method, {}, {"cookie" => cookie, "authorization" => authorization}.compact)
+  end
+
+  def fake_response
+    Struct.new(:status, :headers) do
+      def initialize
+        super(nil, {})
+      end
+    end.new
   end
 
   def rack_env(method, path, body:, content_type: "application/json", extra_headers: {})
