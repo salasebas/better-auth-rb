@@ -94,7 +94,9 @@ class PublisherTest < Minitest::Test
       publisher.publish(type: "ping", payload: {})
     end
 
-    expected = Telemetry.project_id("https://example.com")
+    expected = CurrentOptions.with_app_name("MyProject") do
+      Telemetry.project_id("https://example.com")
+    end
     assert_equal expected, track.events.first[:anonymousId]
   end
 

@@ -149,13 +149,13 @@ class TelemetryResetProjectIdTest < Minitest::Test
 
     BetterAuth::Telemetry.reset_project_id!
 
-    assert_nil BetterAuth::Telemetry.instance_variable_get(:@project_id_cache)
+    assert_equal({}, BetterAuth::Telemetry.instance_variable_get(:@project_id_cache))
   end
 
   def test_reset_project_id_is_idempotent
     BetterAuth::Telemetry.reset_project_id!
     BetterAuth::Telemetry.reset_project_id!
 
-    assert_nil BetterAuth::Telemetry.instance_variable_get(:@project_id_cache)
+    assert_equal({}, BetterAuth::Telemetry.instance_variable_get(:@project_id_cache))
   end
 end

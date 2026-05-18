@@ -109,6 +109,56 @@ class CreateDecisionTest < Minitest::Test
     end
   end
 
+  def test_test_env_var_truthy_skips_telemetry_without_override
+    recorder = RecordingTrack.new
+
+    EnvHelpers.with_env(
+      "BETTER_AUTH_TELEMETRY_ENDPOINT" => nil,
+      "OPEN_AUTH_TELEMETRY_ENDPOINT" => nil,
+      "BETTER_AUTH_TELEMETRY" => nil,
+      "OPEN_AUTH_TELEMETRY" => nil,
+      "TEST" => "true",
+      "RACK_ENV" => nil,
+      "RAILS_ENV" => nil,
+      "APP_ENV" => nil
+    ) do
+      publisher = Telemetry.create(
+        {telemetry: {enabled: true}},
+        {custom_track: recorder, skip_test_check: false}
+      )
+
+      assert_kind_of NoopPublisher, publisher
+      assert_empty recorder.events
+      publisher.publish(type: "ping", payload: {})
+      assert_empty recorder.events
+    end
+  end
+
+  def test_disabled_path_does_not_call_custom_track
+    recorder = RecordingTrack.new
+
+    EnvHelpers.with_env(
+      "BETTER_AUTH_TELEMETRY_ENDPOINT" => nil,
+      "OPEN_AUTH_TELEMETRY_ENDPOINT" => nil,
+      "BETTER_AUTH_TELEMETRY" => nil,
+      "OPEN_AUTH_TELEMETRY" => nil,
+      "TEST" => nil,
+      "RACK_ENV" => nil,
+      "RAILS_ENV" => nil,
+      "APP_ENV" => nil
+    ) do
+      publisher = Telemetry.create(
+        {telemetry: {enabled: false}},
+        {custom_track: recorder, skip_test_check: true}
+      )
+
+      assert_kind_of NoopPublisher, publisher
+      assert_empty recorder.events
+      publisher.publish(type: "ping", payload: {})
+      assert_empty recorder.events
+    end
+  end
+
   private
 
   def each_outer_cell(options_enabled:)
@@ -126,18 +176,19 @@ class CreateDecisionTest < Minitest::Test
   # short-circuit does not interfere with the assertion.
   def assert_decision(options_enabled:, env_truthy:, in_test:, skip_test_check:)
     overrides = {
-      "BETTER_AUTH_TELEMETRY_ENDPOINT" => ENDPOINT,
+      "BETTER_AUTH_TELEMETRY_ENDPOINT" => nil,
       "OPEN_AUTH_TELEMETRY_ENDPOINT" => nil,
       "BETTER_AUTH_TELEMETRY" => env_truthy ? "1" : nil,
       "OPEN_AUTH_TELEMETRY" => nil,
       "RACK_ENV" => in_test ? "test" : nil,
       "RAILS_ENV" => nil,
-      "APP_ENV" => nil
+      "APP_ENV" => nil,
+      "TEST" => nil
     }
 
     EnvHelpers.with_env(overrides) do
       options = build_options(options_enabled)
-      context = {skip_test_check: skip_test_check}
+      context = {skip_test_check: skip_test_check, custom_track: RecordingTrack.new}
 
       publisher = Telemetry.create(options, context)
       expected = expected_enabled?(

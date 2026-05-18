@@ -71,8 +71,9 @@ export BETTER_AUTH_TELEMETRY_ENDPOINT=https://telemetry.example.com/ingest
 
 ## Test environment skip
 
-When `RACK_ENV`, `RAILS_ENV`, or `APP_ENV` equals `"test"`, telemetry is skipped
-even if it is otherwise opted in. Bypass this skip by setting
+When `RACK_ENV`, `RAILS_ENV`, or `APP_ENV` equals `"test"`, or `TEST` is set to
+a truthy value, telemetry is skipped even if it is otherwise opted in. Bypass
+this skip by setting
 `context[:skip_test_check] = true`. `skip_test_check` only bypasses the test
 gate; it does not opt telemetry in on its own.
 
@@ -100,11 +101,13 @@ auth = BetterAuth.auth(
 ```
 
 When neither debug mode nor `custom_track` is configured and an endpoint is
-set, the publisher starts a short-lived background thread that POSTs JSON
-events to the endpoint via `Net::HTTP` with a 5-second open + read timeout.
-HTTP telemetry is fire-and-forget, so constructing `BetterAuth.auth` is not
-blocked by a slow or unavailable endpoint. Any `StandardError` raised during
-HTTP delivery is rescued and logged at error level rather than propagated.
+set, the publisher enqueues events into a bounded in-process dispatcher. A
+single short-lived worker POSTs JSON events to the endpoint via `Net::HTTP` with
+5-second open, read, and write timeouts. HTTP telemetry is fire-and-forget, so
+constructing `BetterAuth.auth` and request-time `#publish` calls are not blocked
+by a slow or unavailable endpoint. If the queue is full, the event is dropped
+and a payload-free error is logged. Any `StandardError` raised during HTTP
+delivery is rescued and logged at error level rather than propagated.
 
 ## The `custom_track` injection seam
 
@@ -174,10 +177,16 @@ The intentional Ruby-specific deviations are:
   to `Gem.loaded_specs` for `sequel`, `pg`, `mysql2`, `sqlite3`,
   `activerecord`, `mongoid`, `mongo`, `rom-sql` (in that order) when no
   context override or `BetterAuth::Adapters::*` adapter class match is found.
-- **Standard library only HTTP.** HTTP delivery uses `Net::HTTP` with a
-  5-second open + read timeout inside a short-lived background thread. No
+- **Standard library only HTTP.** HTTP delivery uses `Net::HTTP` with 5-second
+  open, read, and write timeouts behind a bounded single-worker dispatcher. No
   external HTTP-client gem is required at runtime, and HTTP delivery does not
-  block `BetterAuth.auth` construction.
+  block `BetterAuth.auth` construction or request-time `#publish` calls.
+- **Safer Ruby telemetry redaction.** Ruby object values that JavaScript would
+  omit or stringify unsafely are reduced before delivery. Field maps,
+  additional-field maps, trusted-provider lists, custom cookie/header lists,
+  `advanced.database.generateId`, `onAPIError.errorURL`, and unknown namespaced
+  adapter class names are emitted as counts, booleans, or the generic
+  `"adapter"` marker instead of raw app-specific values.
 - **Explicit false is a strong opt-out.** `telemetry: { enabled: false }`
   disables telemetry even when `BETTER_AUTH_TELEMETRY` or `OPEN_AUTH_TELEMETRY`
   is truthy. This is intentionally stricter than upstream so application
@@ -191,6 +200,10 @@ The intentional Ruby-specific deviations are:
   `BetterAuth::Telemetry.project_id` to derive the `anonymousId` but is
   intentionally not emitted as a payload field, since it can be
   user-identifying.
+- **Project IDs are keyed by derivation input.** A process hosting multiple
+  auth instances can derive distinct anonymous IDs for distinct
+  `app_name`/`base_url` pairs. When no app name is configured, the Ruby fallback
+  uses the Bundler root directory name rather than the first locked dependency.
 - **Public `BetterAuth::Telemetry.reset_project_id!` testing helper.** A
   module-level helper is exposed for resetting the memoized
   `anonymous_id` between tests. It has no effect on production behavior and

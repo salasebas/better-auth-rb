@@ -60,6 +60,10 @@ module BetterAuth
       # Bounded `read_timeout` for `Net::HTTP.start`. See Requirement 5.8.
       READ_TIMEOUT_SECONDS = 5
 
+      # Bounded `write_timeout` for request-body writes when supported by
+      # the active Ruby runtime.
+      WRITE_TIMEOUT_SECONDS = 5
+
       # Issue a synchronous JSON `POST` to `url`. Always returns `nil` and
       # never raises a `StandardError`.
       #
@@ -84,9 +88,15 @@ module BetterAuth
           uri.port,
           use_ssl: uri.scheme == "https",
           open_timeout: OPEN_TIMEOUT_SECONDS,
-          read_timeout: READ_TIMEOUT_SECONDS
+          read_timeout: READ_TIMEOUT_SECONDS,
+          write_timeout: WRITE_TIMEOUT_SECONDS
         ) do |http|
-          http.request(request)
+          response = http.request(request)
+          unless response.is_a?(Net::HTTPSuccess)
+            logger.error(
+              "[better-auth.telemetry] http delivery failed: HTTP #{response.code} #{response.message}"
+            )
+          end
         end
 
         nil

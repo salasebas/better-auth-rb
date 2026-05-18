@@ -4,6 +4,7 @@ require "json"
 
 require_relative "env"
 require_relative "http_client"
+require_relative "http_dispatcher"
 require_relative "noop_publisher"
 require_relative "options"
 require_relative "project_id"
@@ -161,7 +162,7 @@ module BetterAuth
 
     # @api private
     def self.in_test_env?
-      TEST_ENV_VARS.any? { |k| ENV[k] == "test" }
+      TEST_ENV_VARS.any? { |k| ENV[k] == "test" } || Env.truthy?(ENV["TEST"])
     end
 
     # Decide whether debug mode is active. The option-layer flag wins
@@ -184,9 +185,9 @@ module BetterAuth
     #    requiring `BETTER_AUTH_TELEMETRY_ENDPOINT` to be set.
     # 2. Debug mode active — log the JSON-pretty event via
     #    `logger.info(...)` and skip HTTP entirely (Requirement 5.9).
-    # 3. Default — fire-and-forget JSON `POST` through a short-lived
-    #    background thread calling {HttpClient.post_json}, which
-    #    already swallows transport errors.
+    # 3. Default — fire-and-forget JSON `POST` through a bounded
+    #    {HttpDispatcher}, which calls {HttpClient.post_json} from a
+    #    single short-lived worker.
     #
     # Every branch wraps its dispatch in a `rescue StandardError` that
     # routes the failure through `logger.error(...)`, so callable /
@@ -217,12 +218,9 @@ module BetterAuth
           nil
         end
       else
+        dispatcher = HttpDispatcher.new(endpoint: endpoint, logger: logger)
         lambda do |event|
-          Thread.new do
-            HttpClient.post_json(endpoint, event, logger: logger)
-          rescue => e
-            logger.error("[better-auth.telemetry] http dispatch failed: #{e.class}: #{e.message}")
-          end
+          dispatcher.call(event)
           nil
         rescue => e
           logger.error("[better-auth.telemetry] http dispatch failed: #{e.class}: #{e.message}")

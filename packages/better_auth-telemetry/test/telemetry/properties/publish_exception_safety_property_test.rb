@@ -142,7 +142,10 @@ module BetterAuth
         OK_TRACK = ->(_event) {}
         RAISING_TRACK = ->(_event) { raise StandardError, "harness custom_track raises" }
 
-        attr_accessor :_custom_track_kind
+        def initialize(custom_track_kind:, **options)
+          @_custom_track_kind = custom_track_kind
+          super(**options)
+        end
 
         private
 
@@ -154,6 +157,12 @@ module BetterAuth
           else base
           end
         end
+      end
+
+      class SilentLogger
+        def info(_message) = nil
+
+        def error(_message) = nil
       end
 
       # ---------------------------------------------------------------------
@@ -269,11 +278,16 @@ module BetterAuth
         with_env(overrides) do
           auth = nil
           begin
-            auth = klass.new(secret: SECRET, base_url: BASE_URL, database: :memory)
+            auth = klass.new(
+              secret: SECRET,
+              base_url: BASE_URL,
+              database: :memory,
+              logger: SilentLogger.new,
+              custom_track_kind: custom_track_kind
+            )
           rescue => e
             flunk("#{label}: Auth.new raised #{e.class}: #{e.message}")
           end
-          auth._custom_track_kind = custom_track_kind
 
           # The publisher returned from `auth.telemetry` is one of:
           #   - a real `BetterAuth::Telemetry::Publisher` (gem
@@ -334,6 +348,7 @@ module BetterAuth
           "RACK_ENV" => nil,
           "RAILS_ENV" => nil,
           "APP_ENV" => nil,
+          "TEST" => nil,
           "BASE_URL" => nil,
           "BETTER_AUTH_URL" => nil
         }

@@ -76,28 +76,17 @@ class ProjectIdDerivationTest < Minitest::Test
     end
   end
 
-  # Memoization (Requirement 14.6): once derived, the cache wins
-  # regardless of the `base_url` argument passed on later calls.
-  def test_memoizes_across_mixed_base_url_arguments
-    first = nil
-
-    CurrentOptions.with_app_name("MyProject") do
-      first = Telemetry.project_id("https://a.example")
-
-      assert_equal first, Telemetry.project_id("https://b.example")
-      assert_equal first, Telemetry.project_id(nil)
-      assert_equal first, Telemetry.project_id("")
-      assert_equal first, Telemetry.project_id("https://a.example")
-    end
-  end
-
-  # Even after the app_name scope ends, the cached value persists.
-  def test_memoization_persists_after_app_name_scope_exits
+  def test_memoizes_by_derivation_input_instead_of_first_process_value
     first = CurrentOptions.with_app_name("MyProject") do
       Telemetry.project_id("https://a.example")
     end
 
-    assert_equal first, Telemetry.project_id("https://b.example")
+    second = CurrentOptions.with_app_name("OtherProject") do
+      Telemetry.project_id("https://b.example")
+    end
+
+    assert_equal first, CurrentOptions.with_app_name("MyProject") { Telemetry.project_id("https://a.example") }
+    refute_equal first, second
   end
 
   def test_reset_project_id_re_runs_derivation
@@ -158,14 +147,24 @@ class ProjectIdDerivationTest < Minitest::Test
     fallback = "fallback-project"
 
     ProjectId.stub(:from_locked_gems, fallback) do
-      CurrentOptions.with_app_name(ProjectId::DEFAULT_APP_NAME) do
-        # When app_name == "Better Auth", from_app_name returns nil and
-        # the chain falls through to from_locked_gems → "fallback-project".
-        expected_with_bundler = Telemetry.project_id("https://example.com")
+      ProjectId.stub(:from_bundler_root, fallback) do
+        CurrentOptions.with_app_name(ProjectId::DEFAULT_APP_NAME) do
+          expected_with_bundler = Telemetry.project_id("https://example.com")
+        end
       end
     end
 
     assert_equal base64_sha256("https://example.com" + fallback), expected_with_bundler
+  end
+
+  def test_project_id_uses_bundler_root_fallback_not_first_locked_gem
+    ProjectId.stub(:from_app_name, nil) do
+      ProjectId.stub(:from_locked_gems, "rake") do
+        ProjectId.stub(:from_bundler_root, "my_app") do
+          assert_equal base64_sha256("https://example.com" + "my_app"), Telemetry.project_id("https://example.com")
+        end
+      end
+    end
   end
 
   private
@@ -233,7 +232,7 @@ class ProjectIdResolveProjectNameTest < Minitest::Test
     ProjectId.stub(:from_app_name, nil) do
       ProjectId.stub(:from_locked_gems, "second") do
         ProjectId.stub(:from_bundler_root, "third") do
-          assert_equal "second", ProjectId.resolve_project_name
+          assert_equal "third", ProjectId.resolve_project_name
         end
       end
     end

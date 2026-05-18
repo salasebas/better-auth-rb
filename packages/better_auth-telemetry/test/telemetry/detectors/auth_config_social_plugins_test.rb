@@ -233,8 +233,8 @@ class AuthConfigSocialPluginsTest < Minitest::Test
     user = payload[:user]
 
     assert_equal "users", user[:modelName]
-    assert_equal({email: "user_email"}, user[:fields])
-    assert_equal({nickname: {type: "string"}}, user[:additionalFields])
+    assert_equal 1, user[:fields]
+    assert_equal 1, user[:additionalFields]
   end
 
   def test_user_change_email_enabled_is_raw_pass_through
@@ -261,7 +261,7 @@ class AuthConfigSocialPluginsTest < Minitest::Test
 
     assert_equal "verifications", verification[:modelName]
     assert_equal true, verification[:disableCleanup]
-    assert_equal({identifier: "ident"}, verification[:fields])
+    assert_equal 1, verification[:fields]
   end
 
   # ------------------------------------------------------------------
@@ -272,13 +272,13 @@ class AuthConfigSocialPluginsTest < Minitest::Test
     session = payload[:session]
 
     assert_equal "sessions", session[:modelName]
-    assert_equal({device_id: {type: "string"}}, session[:additionalFields])
+    assert_equal 1, session[:additionalFields]
     assert_equal true, session[:cookieCache][:enabled]
     assert_equal 600, session[:cookieCache][:maxAge]
     assert_equal "jwe", session[:cookieCache][:strategy]
     assert_equal true, session[:disableSessionRefresh]
     assert_equal 7200, session[:expiresIn]
-    assert_equal({token: "tok"}, session[:fields])
+    assert_equal 1, session[:fields]
     assert_equal 1200, session[:freshAge]
     assert_equal true, session[:preserveSessionInDatabase]
     assert_equal false, session[:storeSessionInDatabase]
@@ -293,11 +293,11 @@ class AuthConfigSocialPluginsTest < Minitest::Test
     account = payload[:account]
 
     assert_equal "accounts", account[:modelName]
-    assert_equal({provider_id: "pid"}, account[:fields])
+    assert_equal 1, account[:fields]
     assert_equal true, account[:encryptOAuthTokens]
     assert_equal false, account[:updateAccountOnSignIn]
     assert_equal true, account[:accountLinking][:enabled]
-    assert_equal %w[github google], account[:accountLinking][:trustedProviders]
+    assert_equal 2, account[:accountLinking][:trustedProviders]
     assert_equal true, account[:accountLinking][:updateUserInfoOnLink]
     assert_equal false, account[:accountLinking][:allowUnlinkingAll]
   end

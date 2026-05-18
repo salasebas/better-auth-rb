@@ -16,7 +16,7 @@ module BetterAuth
     # `BetterAuth::Telemetry.create` sets `app_name` for the duration of
     # an init flow via {.with_app_name}; outside of that scope the reader
     # returns `nil` and the project-name resolver falls through to the
-    # next rule in the chain (Bundler.locked_gems → Bundler.root).
+    # Bundler root directory name.
     #
     # The store is per-thread so concurrent `create` calls in different
     # threads don't clobber each other.
@@ -59,10 +59,8 @@ module BetterAuth
     #
     # 1. {CurrentOptions.app_name} — when set and not the default
     #    `"Better Auth"`.
-    # 2. The first entry of `Bundler.locked_gems.specs` — the
-    #    Gemfile.lock-pinned name of the current project.
-    # 3. `File.basename(Bundler.root)` — the directory name of the
-    #    Gemfile root, used when the lockfile yields nothing useful.
+    # 2. `File.basename(Bundler.root)` — the directory name of the
+    #    Gemfile root.
     #
     # Every fallback is wrapped in `rescue StandardError; nil` so that a
     # missing Bundler load, an unreadable lockfile, or any unrelated
@@ -78,7 +76,7 @@ module BetterAuth
       # @return [String, nil] the resolved project name, or `nil` when
       #   no rule produced a non-empty string.
       def resolve_project_name
-        from_app_name || from_locked_gems || from_bundler_root
+        from_app_name || from_bundler_root
       rescue
         nil
       end
@@ -100,10 +98,9 @@ module BetterAuth
         nil
       end
 
-      # First gemspec in `Bundler.locked_gems.specs`. Mirrors the
-      # upstream `package.json#name` lookup. Returns `nil` when Bundler
-      # is not loaded, no lockfile is locatable, or the spec list is
-      # empty.
+      # Legacy helper retained as a test seam for older specs. The
+      # resolver no longer uses the first locked dependency as project
+      # identity because that can collide across unrelated apps.
       #
       # @return [String, nil]
       def from_locked_gems
@@ -142,15 +139,14 @@ module BetterAuth
       end
     end
 
-    @project_id_cache = nil
+    @project_id_cache = {}
     @project_id_mutex = Mutex.new
 
     # Resolve a stable, anonymous project id for telemetry.
     #
-    # The id is derived once per process and memoized; subsequent calls
-    # — regardless of the `base_url` they pass — return the cached
-    # value (Requirement 14.6). This mirrors the upstream
-    # `projectIdCached` module-scope variable.
+    # The id is memoized by normalized `(base_url, project_name)` input
+    # so multi-app Ruby processes do not collapse every auth instance
+    # into the first derived anonymous id.
     #
     # ## Derivation chain (Requirements 14.2 – 14.5)
     #
@@ -163,22 +159,26 @@ module BetterAuth
     # 4. Otherwise: a random 32-character `[a-zA-Z0-9]` id from
     #    `SecureRandom`, matching upstream `generateId(32)`.
     #
-    # The Bundler/lockfile probes inside {ProjectId.resolve_project_name}
-    # never raise out of this method (Requirement 14.8); a failed probe
-    # collapses to "no project name" and the chain continues at rule 3
-    # or rule 4.
+    # The Bundler probe inside {ProjectId.resolve_project_name} never
+    # raises out of this method; a failed probe collapses to "no project
+    # name" and the chain continues at rule 3 or rule 4.
     #
     # @param base_url [String, nil] the host's configured base URL.
     # @return [String] the memoized anonymous project id.
     def self.project_id(base_url)
-      cached = @project_id_cache
+      url = normalize_base_url(base_url)
+      name = ProjectId.resolve_project_name
+      name = nil if name.is_a?(String) && name.empty?
+      cache_key = [url, name]
+
+      cached = @project_id_cache[cache_key]
       return cached if cached
 
       @project_id_mutex.synchronize do
-        cached = @project_id_cache
+        cached = @project_id_cache[cache_key]
         return cached if cached
 
-        @project_id_cache = derive_project_id(base_url)
+        @project_id_cache[cache_key] = derive_project_id(url, name)
       end
     end
 
@@ -192,19 +192,13 @@ module BetterAuth
     # @return [nil]
     def self.reset_project_id!
       @project_id_mutex.synchronize do
-        @project_id_cache = nil
+        @project_id_cache = {}
       end
       nil
     end
 
     # @api private
-    def self.derive_project_id(base_url)
-      url = base_url.is_a?(String) ? base_url : nil
-      url = nil if url && url.empty?
-
-      name = ProjectId.resolve_project_name
-      name = nil if name.is_a?(String) && name.empty?
-
+    def self.derive_project_id(url, name)
       if name && url
         hash_to_base64(url + name)
       elsif name
@@ -214,6 +208,12 @@ module BetterAuth
       else
         random_id_32
       end
+    end
+
+    # @api private
+    def self.normalize_base_url(base_url)
+      url = base_url.is_a?(String) ? base_url : nil
+      (url && url.empty?) ? nil : url
     end
 
     # @api private

@@ -253,40 +253,30 @@ module BetterAuth
         end
       end
 
-      # Core property assertion: mint `v_1`, then assert every
-      # subsequent call in the sequence returns `==` to `v_1`.
-      # The sequence is guaranteed to have at least 2 elements
-      # (`MIN_SEQUENCE_LENGTH`), so there is always at least one
-      # post-cache call to check.
+      # Core property assertion: every derivation input is idempotent
+      # for repeated calls. Different base URLs may intentionally
+      # produce different ids; the cache is keyed by derivation input.
       def assert_sequence_idempotent(sample, label:)
-        first_url = sample.base_urls.first
-        v1 = Telemetry.project_id(first_url)
-
-        # `v_1` should always be a non-empty `String`. A `nil`
-        # cache value would mean the cache never primed and every
-        # call would re-derive — that is itself a memoization
-        # violation, so we surface it with a focused message.
-        assert_kind_of String, v1,
-          "Telemetry.project_id returned a non-String for #{label} " \
-          "(name_axis=#{sample.name_axis.inspect}, " \
-          "project_name_arg=#{sample.project_name_arg.inspect}, " \
-          "first base_url=#{first_url.inspect}): got #{v1.inspect}"
-        refute_empty v1,
-          "Telemetry.project_id returned an empty String for #{label} " \
-          "(name_axis=#{sample.name_axis.inspect}, " \
-          "first base_url=#{first_url.inspect})"
-
         sample.base_urls.each_with_index do |b_i, i|
-          next if i.zero? # `v_1` is the reference; nothing to compare it to.
+          first = Telemetry.project_id(b_i)
+          second = Telemetry.project_id(b_i)
 
-          actual = Telemetry.project_id(b_i)
-          assert_equal v1, actual,
+          assert_kind_of String, first,
+            "Telemetry.project_id returned a non-String for #{label} " \
+            "(name_axis=#{sample.name_axis.inspect}, " \
+            "project_name_arg=#{sample.project_name_arg.inspect}, " \
+            "call #{i} base_url=#{b_i.inspect}): got #{first.inspect}"
+          refute_empty first,
+            "Telemetry.project_id returned an empty String for #{label} " \
+            "(name_axis=#{sample.name_axis.inspect}, " \
+            "call #{i} base_url=#{b_i.inspect})"
+
+          assert_equal first, second,
             "Telemetry.project_id violated Property 14 for #{label} " \
             "(name_axis=#{sample.name_axis.inspect}, " \
             "project_name_arg=#{sample.project_name_arg.inspect}, " \
-            "first base_url=#{first_url.inspect}, " \
             "call #{i} base_url=#{b_i.inspect}): " \
-            "expected #{v1.inspect}, got #{actual.inspect}"
+            "expected #{first.inspect}, got #{second.inspect}"
         end
       end
     end

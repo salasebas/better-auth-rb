@@ -65,11 +65,14 @@ module BetterAuth
 
         # Boot the server. Returns immediately once the listening socket
         # is bound and the acceptor thread is running.
-        def initialize
+        def initialize(status: 204, body: "")
+          @status = status
+          @response_body = body.to_s
           @server = TCPServer.new("127.0.0.1", 0)
           @port = @server.addr[1]
           @mutex = Mutex.new
           @captured = nil
+          @captures = []
           @stopped = false
           @thread = Thread.new { accept_loop }
           @thread.report_on_exception = false if @thread.respond_to?(:report_on_exception=)
@@ -85,6 +88,10 @@ module BetterAuth
         #   request, or `nil` if no POST has been received yet.
         def captured
           @mutex.synchronize { @captured }
+        end
+
+        def captures
+          @mutex.synchronize { @captures.dup }
         end
 
         # Stop the server: close the listening socket and join (or kill)
@@ -174,14 +181,17 @@ module BetterAuth
             )
             @mutex.synchronize do
               @captured ||= captured
+              @captures << captured
             end
           end
 
+          status_text = (@status.to_i == 204) ? "No Content" : "Error"
           socket.write(
-            "HTTP/1.1 204 No Content\r\n" \
-            "Content-Length: 0\r\n" \
+            "HTTP/1.1 #{@status.to_i} #{status_text}\r\n" \
+            "Content-Length: #{@response_body.bytesize}\r\n" \
             "Connection: close\r\n" \
-            "\r\n"
+            "\r\n" \
+            "#{@response_body}"
           )
         end
       end
