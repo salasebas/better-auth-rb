@@ -71,10 +71,10 @@ class BetterAuthSSORubySAMLTest < Minitest::Test
     response = signed_response(email: "replay@example.com", assertion_id: "_replay_assertion")
 
     complete_saml(auth, response)
-    status, _headers, body = complete_saml(auth, response)
+    status, headers, _body = complete_saml(auth, response)
 
-    assert_equal 400, status
-    assert_includes body.join, "SAML response has already been used"
+    assert_equal 302, status
+    assert_equal "/dashboard?error=replay_detected&error_description=SAML+assertion+has+already+been+used", headers.fetch("location")
   end
 
   def test_algorithm_policy_rejects_deprecated_sha1_signatures

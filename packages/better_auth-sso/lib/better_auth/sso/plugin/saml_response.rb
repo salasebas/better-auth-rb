@@ -5,7 +5,7 @@ module BetterAuth
     module_function
 
     def sso_handle_saml_response(ctx, config = {})
-      provider = sso_find_provider!(ctx, sso_fetch(ctx.params, :provider_id))
+      provider = sso_find_saml_provider!(ctx, sso_fetch(ctx.params, :provider_id), config)
       relay_state = sso_fetch(ctx.body, :relay_state) || sso_fetch(ctx.query, :relay_state)
       state = sso_parse_saml_relay_state(ctx, relay_state) || {}
       raw_response = sso_fetch(ctx.body, :saml_response) || sso_fetch(ctx.query, :saml_response)
@@ -21,19 +21,23 @@ module BetterAuth
       if raw_response.to_s.bytesize > max_response_size
         raise APIError.new("BAD_REQUEST", message: "SAML response exceeds maximum allowed size (#{max_response_size} bytes)")
       end
-      in_response_to_error = sso_validate_saml_in_response_to(ctx, config, provider, raw_response, state)
-      return in_response_to_error if in_response_to_error
+      in_response_to_result = sso_validate_saml_in_response_to(ctx, config, provider, raw_response, state)
+      return in_response_to_result if in_response_to_result.is_a?(Array)
 
       assertion = sso_parse_saml_response(raw_response, config, provider, ctx)
       assertion[:email_verified] = false unless config[:trust_email_verified]
       sso_validate_saml_timestamp!(sso_saml_timestamp_conditions(assertion), config)
       sso_validate_saml_response!(config, assertion, provider, ctx)
-      assertion_id = assertion[:id] || assertion["id"] || assertion[:email]
-      replay_key = "#{SSO_SAML_USED_ASSERTION_KEY_PREFIX}#{assertion_id}"
-      if ctx.context.internal_adapter.find_verification_value(replay_key)
-        raise APIError.new("BAD_REQUEST", message: SSO_ERROR_CODES.fetch("SAML_RESPONSE_REPLAYED"))
+      sso_consume_saml_in_response_to(ctx, in_response_to_result)
+      assertion_id = assertion[:id] || assertion["id"]
+      unless assertion_id.to_s.empty?
+        replay_key = "#{SSO_SAML_USED_ASSERTION_KEY_PREFIX}#{assertion_id}"
+        if ctx.context.internal_adapter.find_verification_value(replay_key)
+          callback_url = sso_safe_saml_callback_url(ctx, state["callbackURL"] || sso_saml_callback_url(provider) || "/", provider.fetch("providerId"))
+          return sso_redirect(ctx, sso_append_error(callback_url, "replay_detected", "SAML assertion has already been used"))
+        end
+        ctx.context.internal_adapter.create_verification_value(identifier: replay_key, value: "used", expiresAt: sso_saml_assertion_replay_expires_at(assertion, config))
       end
-      ctx.context.internal_adapter.create_verification_value(identifier: replay_key, value: "used", expiresAt: sso_saml_assertion_replay_expires_at(assertion, config))
 
       callback_url = sso_safe_saml_callback_url(ctx, state["callbackURL"] || sso_saml_callback_url(provider) || "/", provider.fetch("providerId"))
       email = (assertion[:email] || assertion["email"]).to_s.downcase
@@ -77,6 +81,8 @@ module BetterAuth
         end
         if provider["samlConfig"]
           return {error: "account_not_linked"} unless already_linked_provider || sso_saml_trusted_provider?(ctx, provider, email)
+        elsif !already_linked_provider && !sso_oidc_trusted_provider?(ctx, provider, email)
+          return {error: "account_not_linked"}
         end
 
         user = found[:user]
@@ -122,6 +128,17 @@ module BetterAuth
 
       trusted = Array(linking[:trusted_providers]).map(&:to_s).include?(provider_id.to_s)
       trusted || (provider["domainVerified"] && sso_email_domain_matches?(email, provider["domain"]))
+    end
+
+    def sso_oidc_trusted_provider?(ctx, provider, email)
+      provider_id = provider.fetch("providerId")
+      linking = ctx.context.options.account[:account_linking] || {}
+      return false if linking[:enabled] == false
+
+      trusted_providers = Array(linking[:trusted_providers]).map(&:to_s)
+      trusted_providers.include?(provider_id.to_s) ||
+        trusted_providers.include?("sso:#{provider_id}") ||
+        (provider["domainVerified"] && sso_email_domain_matches?(email, provider["domain"]))
     end
 
     def sso_assign_organization_membership(ctx, provider, user, config)

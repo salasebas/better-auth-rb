@@ -29,11 +29,13 @@ module BetterAuth
 
         if provider["oidcConfig"] && provider_type != "saml"
           provider = sso_ensure_runtime_oidc_provider(ctx, provider, config)
+          pkce = sso_oidc_pkce_state(provider)
           state = BetterAuth::Crypto.sign_jwt(
-            state_data.merge({nonce: BetterAuth::Crypto.random_string(32)}).merge(sso_oidc_pkce_state(provider)),
+            state_data.merge({nonce: BetterAuth::Crypto.random_string(32)}).merge(pkce.except(:codeVerifier)),
             ctx.context.secret,
             expires_in: 600
           )
+          sso_store_oidc_pkce_verifier(ctx, state, pkce[:codeVerifier]) if pkce[:codeVerifier]
           url = sso_oidc_authorization_url(provider, ctx, state, config, body)
         elsif provider["samlConfig"]
           relay_state = sso_generate_saml_relay_state(ctx, state_data)
@@ -88,7 +90,8 @@ module BetterAuth
       oidc_config[:issuer] ||= provider["issuer"]
       return sso_redirect(ctx, sso_append_error(error_url, "invalid_provider", "provider not found")) if oidc_config.empty?
 
-      tokens = sso_oidc_tokens(ctx, provider, oidc_config, state, config)
+      raw_state = ctx.query[:state] || ctx.query["state"]
+      tokens = sso_oidc_tokens(ctx, provider, oidc_config, state, config, raw_state: raw_state)
       unless tokens
         return sso_redirect(ctx, sso_append_error(error_url, "invalid_provider", "token_response_not_found"))
       end
@@ -113,6 +116,8 @@ module BetterAuth
       end
 
       result = sso_find_or_create_user_result(ctx, provider, user_info, config)
+      return sso_redirect(ctx, sso_append_error(callback_url, result.fetch(:error))) if result[:error]
+
       if config[:provision_user].respond_to?(:call) && (result.fetch(:created) || config[:provision_user_on_every_login])
         config[:provision_user].call(user: result.fetch(:user), userInfo: user_info, token: tokens, provider: provider)
       end

@@ -36,6 +36,18 @@ module BetterAuth
       provider
     end
 
+    def sso_find_saml_provider!(ctx, provider_id, config = {})
+      if config[:default_sso]
+        provider = sso_default_provider(config, provider_id: provider_id.to_s, domain: "")
+        return provider if provider && provider["samlConfig"]
+      end
+
+      provider = ctx.context.adapter.find_one(model: "ssoProvider", where: [{field: "providerId", value: provider_id.to_s}])
+      raise APIError.new("NOT_FOUND", message: "Provider not found", code: "PROVIDER_NOT_FOUND") unless provider && provider["samlConfig"]
+
+      provider
+    end
+
     def sso_provider_access?(provider, user_id, ctx)
       organization_id = provider["organizationId"]
       return provider["userId"] == user_id if organization_id.to_s.empty?

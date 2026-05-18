@@ -66,7 +66,7 @@ module BetterAuth
           name = [given_name, family_name].compact.join(" ").strip
           name = mapped_attribute(attributes, mapping[:name]) || first_attribute(attributes, attribute_map.fetch(:name)) if name.empty?
           extra_fields = mapped_extra_fields(attributes, mapping)
-          email_verified = mapping[:email_verified] ? mapped_attribute(attributes, mapping[:email_verified]) : true
+          email_verified = mapping[:email_verified] ? mapped_attribute(attributes, mapping[:email_verified]) : false
           extra_fields.merge(
             email: email.to_s.downcase,
             name: name.to_s.empty? ? email.to_s : name.to_s,
