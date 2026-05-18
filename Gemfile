@@ -23,6 +23,7 @@ gem "better_auth-telemetry", path: "packages/better_auth-telemetry"
 gem "better_auth-rails", path: "packages/better_auth-rails"
 gem "better_auth-sinatra", path: "packages/better_auth-sinatra"
 gem "better_auth-hanami", path: "packages/better_auth-hanami"
+gem "better_auth-grape", path: "packages/better_auth-grape"
 gem "openauth", path: "packages/openauth"
 gem "openauth-redis-storage", path: "packages/openauth-redis-storage"
 gem "openauth-api-key", path: "packages/openauth-api-key"
@@ -36,6 +37,7 @@ gem "openauth-telemetry", path: "packages/openauth-telemetry"
 gem "openauth-rails", path: "packages/openauth-rails"
 gem "openauth-sinatra", path: "packages/openauth-sinatra"
 gem "openauth-hanami", path: "packages/openauth-hanami"
+gem "openauth-grape", path: "packages/openauth-grape"
 
 # Workspace development dependencies.
 group :development, :test do
@@ -51,6 +53,7 @@ group :development, :test do
   gem "sequel", "~> 5.83"
   gem "hanami", ">= 2.3", "< 2.4"
   gem "hanami-router", ">= 2.3", "< 3"
+  gem "grape", ">= 3.0", "< 4"
   gem "rom-sql", ">= 3.7", "< 4"
   gem "tiny_tds", "~> 2.1"
 

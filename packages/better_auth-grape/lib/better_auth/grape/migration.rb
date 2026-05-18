@@ -3,12 +3,11 @@
 require "better_auth/sql_migration"
 
 module BetterAuth
-  module Sinatra
+  module Grape
     module Migration
       DEFAULT_MIGRATIONS_PATH = BetterAuth::SQLMigration::DEFAULT_MIGRATIONS_PATH
-      MISSING_MIGRATIONS_TABLE_MESSAGES = BetterAuth::SQLMigration::MISSING_MIGRATIONS_TABLE_MESSAGES
       UnsupportedAdapterError = BetterAuth::SQLMigration::UnsupportedAdapterError
-      GENERATOR = "better_auth-sinatra"
+      GENERATOR = "better_auth-grape"
 
       module_function
 
@@ -30,36 +29,8 @@ module BetterAuth
         BetterAuth::SQLMigration.migrate(auth_or_options, migrations_path: migrations_path)
       end
 
-      def configuration_for(options)
-        BetterAuth::SQLMigration.configuration_for(options)
-      end
-
-      def auth_for(value)
-        BetterAuth::SQLMigration.auth_for(value)
-      end
-
-      def ensure_schema_migrations!(connection, dialect)
-        BetterAuth::SQLMigration.ensure_schema_migrations!(connection, dialect)
-      end
-
-      def applied_migrations(connection, dialect)
-        BetterAuth::SQLMigration.applied_migrations(connection, dialect)
-      end
-
-      def record_migration(connection, dialect, version)
-        BetterAuth::SQLMigration.record_migration(connection, dialect, version)
-      end
-
-      def execute_sql(connection, sql)
-        BetterAuth::SQLMigration.execute_sql(connection, sql)
-      end
-
       def statements(sql)
         BetterAuth::SQLMigration.statements(sql)
-      end
-
-      def split_sql_statements(sql)
-        BetterAuth::SQLMigration.split_sql_statements(sql)
       end
 
       def normalize_dialect(value)

@@ -5,7 +5,7 @@ A modern authentication framework for Ruby, inspired by Better Auth.
 > This project is independent and is not affiliated with, maintained by, or endorsed by the Better Auth project.
 
 Ruby server packages for [Better Auth](https://github.com/better-auth/better-auth).
-The core is Rack-first, with adapters for Rails, Sinatra, and Hanami, plus
+The core is Rack-first, with adapters for Rails, Sinatra, Hanami, and Grape, plus
 Ruby packages for selected Better Auth plugins.
 
 [Documentation](https://better-auth-rb.vercel.app/) -
@@ -96,6 +96,32 @@ bundle exec rake better_auth:init
 bin/hanami db migrate
 ```
 
+### Grape
+
+```ruby
+# Gemfile
+gem "better_auth-grape"
+```
+
+```ruby
+require "grape"
+require "better_auth/grape"
+
+class API < Grape::API
+  include BetterAuth::Grape
+
+  format :json
+
+  better_auth at: "/api/auth" do |config|
+    config.secret = ENV.fetch("BETTER_AUTH_SECRET")
+    config.base_url = ENV.fetch("BETTER_AUTH_URL", "http://localhost:9292")
+    config.database = ->(options) {
+      BetterAuth::Adapters::Postgres.new(options, url: ENV.fetch("DATABASE_URL"))
+    }
+  end
+end
+```
+
 ## Supported Features
 
 See the docs page for the current support inventory:
@@ -106,7 +132,7 @@ See the docs page for the current support inventory:
 
 Short version:
 
-- Rack core, Rails, Sinatra, and Hanami integration packages exist.
+- Rack core, Rails, Sinatra, Hanami, and Grape integration packages exist.
 - Email/password, sessions, social OAuth, database adapters, and many server
   plugins are implemented with Ruby tests.
 - Payment docs and navigation only list Stripe. Other upstream payment plugins
@@ -124,6 +150,8 @@ Short version:
   Rack mounting, helpers, and migration tasks.
 - [`better_auth-hanami`](packages/better_auth-hanami/): Hanami integration,
   action helpers, Sequel adapter, migrations, and generators.
+- [`better_auth-grape`](packages/better_auth-grape/): Grape integration,
+  Rack mounting, helpers, and SQL migration tasks.
 - [`better_auth-mongodb`](packages/better_auth-mongodb/): MongoDB
   database adapter.
 - [`better_auth-redis-storage`](packages/better_auth-redis-storage/): Redis
@@ -148,6 +176,7 @@ point back to the canonical documentation at https://better-auth-rb.vercel.app/.
 - [`openauth-rails`](packages/openauth-rails/): Alias for `better_auth-rails`.
 - [`openauth-sinatra`](packages/openauth-sinatra/): Alias for `better_auth-sinatra`.
 - [`openauth-hanami`](packages/openauth-hanami/): Alias for `better_auth-hanami`.
+- [`openauth-grape`](packages/openauth-grape/): Alias for `better_auth-grape`.
 - [`openauth-mongodb`](packages/openauth-mongodb/): Alias for
   `better_auth-mongodb`.
 - [`openauth-redis-storage`](packages/openauth-redis-storage/): Alias for

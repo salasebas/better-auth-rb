@@ -12,6 +12,7 @@ Each subfolder is a standalone example project wired to the local monorepo gems.
 | `rails-app/` | Integration with **Ruby on Rails** using the `better_auth-rails` adapter. |
 | `sinatra/` | Integration with **Sinatra** using the `better_auth-sinatra` adapter. |
 | `hanami_app/` | Integration with **Hanami** using the `better_auth-hanami` adapter. |
+| `grape/` | Integration with **Grape** using the `better_auth-grape` adapter. |
 
 ## How it works
 
@@ -63,6 +64,15 @@ cd examples/hanami_app
 bundle install
 bundle exec hanami server
 # open http://localhost:2300
+```
+
+### Grape
+
+```bash
+cd examples/grape
+bundle install
+bundle exec rackup
+# open http://localhost:9292
 ```
 
 ## Adding a New Example

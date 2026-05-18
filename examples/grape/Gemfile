@@ -1,0 +1,12 @@
+# frozen_string_literal: true
+
+source "https://rubygems.org"
+
+ruby file: "../../packages/better_auth/.ruby-version"
+
+gem "better_auth", path: "../../packages/better_auth"
+gem "better_auth-grape", path: "../../packages/better_auth-grape"
+
+gem "grape"
+gem "puma"
+gem "rackup"
