@@ -1,0 +1,76 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+require "socket"
+
+ROOT = File.expand_path("..", __dir__)
+
+APPS = {
+  "vanilla" => {
+    dir: "vanilla",
+    default_port: 9292,
+    command: ->(port) { ["bundle", "exec", "puma", "-p", port.to_s] }
+  },
+  "sinatra" => {
+    dir: "sinatra",
+    default_port: 4567,
+    command: ->(_port) { ["bundle", "exec", "ruby", "app.rb"] }
+  },
+  "rails" => {
+    dir: "rails-app",
+    default_port: 3000,
+    command: ->(port) { ["bin/rails", "server", "-p", port.to_s] }
+  },
+  "hanami" => {
+    dir: "hanami_app",
+    default_port: 2300,
+    command: ->(port) { ["bundle", "exec", "hanami", "server", "-p", port.to_s] }
+  },
+  "grape" => {
+    dir: "grape",
+    default_port: 9292,
+    command: ->(port) { ["bundle", "exec", "rackup", "-p", port.to_s] }
+  },
+  "roda" => {
+    dir: "roda",
+    default_port: 9293,
+    command: ->(port) { ["bundle", "exec", "rackup", "-p", port.to_s] }
+  }
+}.freeze
+
+app_name = ARGV.shift || "rails"
+app = APPS.fetch(app_name) do
+  warn "Unknown app #{app_name.inspect}. Use one of: #{APPS.keys.join(", ")}"
+  exit 1
+end
+
+def free_port(start)
+  port = Integer(ENV.fetch("PORT", start))
+  loop do
+    server = TCPServer.new("127.0.0.1", port)
+    server.close
+    return port
+  rescue Errno::EADDRINUSE
+    port += 1
+  end
+end
+
+def set_default_env(port)
+  ENV["PORT"] = port.to_s
+  ENV["BETTER_AUTH_URL"] ||= "http://localhost:#{port}"
+  ENV["BETTER_AUTH_EXAMPLE_REDIS_URL"] ||= "redis://127.0.0.1:16379/0"
+  ENV["BETTER_AUTH_EXAMPLE_POSTGRES_URL"] ||= "postgres://user:password@127.0.0.1:15432/better_auth"
+  ENV["BETTER_AUTH_EXAMPLE_MYSQL_URL"] ||= "mysql2://user:password@127.0.0.1:13306/better_auth"
+  ENV["BETTER_AUTH_EXAMPLE_MONGODB_URL"] ||= "mongodb://127.0.0.1:27018/better_auth?directConnection=true"
+  ENV["BETTER_AUTH_EXAMPLE_MSSQL_URL"] ||= "tinytds://sa:Password123!@127.0.0.1:11433/better_auth"
+end
+
+port = free_port(app.fetch(:default_port))
+set_default_env(port)
+
+Dir.chdir(File.join(ROOT, app.fetch(:dir))) do
+  command = app.fetch(:command).call(port)
+  warn "Starting #{app_name} on http://localhost:#{port}"
+  warn "BETTER_AUTH_URL=#{ENV.fetch("BETTER_AUTH_URL")}"
+  exec(*command)
+end

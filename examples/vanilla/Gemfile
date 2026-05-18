@@ -5,5 +5,15 @@ source "https://rubygems.org"
 ruby file: "../../packages/better_auth/.ruby-version"
 
 gem "better_auth", path: "../../packages/better_auth"
+gem "better_auth-mongodb", path: "../../packages/better_auth-mongodb"
+gem "better_auth-redis-storage", path: "../../packages/better_auth-redis-storage"
 
 gem "puma"
+
+gem "mongo"
+gem "mysql2", "~> 0.5"
+gem "pg", "~> 1.5"
+gem "redis"
+gem "sequel", "~> 5.83"
+gem "sqlite3", "~> 2.0"
+gem "tiny_tds", "~> 2.1"

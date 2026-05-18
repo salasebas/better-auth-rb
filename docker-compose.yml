@@ -75,6 +75,25 @@ services:
     volumes:
       - mongodb_data:/data/db
 
+  mongodb-init:
+    image: mongo:latest
+    container_name: mongodb-init
+    depends_on:
+      mongodb:
+        condition: service_healthy
+    restart: "no"
+    command:
+      - mongosh
+      - "mongodb://mongodb:27017/admin"
+      - "--quiet"
+      - "--eval"
+      - |
+        try {
+          rs.status().ok
+        } catch (error) {
+          rs.initiate({_id: "rs0", members: [{_id: 0, host: "mongodb:27017"}]})
+        }
+
   mssql:
     image: mcr.microsoft.com/mssql/server:2022-latest
     container_name: mssql
@@ -86,6 +105,29 @@ services:
       - "1433:1433"
     volumes:
       - mssql_data:/var/opt/mssql
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P Password123! -C -Q 'SELECT 1' || /opt/mssql-tools/bin/sqlcmd -S localhost -U sa -P Password123! -Q 'SELECT 1'"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 30s
+
+  mssql-init:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    container_name: mssql-init
+    depends_on:
+      mssql:
+        condition: service_healthy
+    restart: "no"
+    command:
+      - /bin/bash
+      - -lc
+      - |
+        if [ -x /opt/mssql-tools18/bin/sqlcmd ]; then
+          /opt/mssql-tools18/bin/sqlcmd -S mssql -U sa -P Password123! -C -Q "IF DB_ID('better_auth') IS NULL CREATE DATABASE better_auth"
+        else
+          /opt/mssql-tools/bin/sqlcmd -S mssql -U sa -P Password123! -Q "IF DB_ID('better_auth') IS NULL CREATE DATABASE better_auth"
+        fi
 
 volumes:
   redis_data:

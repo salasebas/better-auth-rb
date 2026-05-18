@@ -4,18 +4,22 @@ require "bundler/setup"
 require "grape"
 require "better_auth"
 require "better_auth/grape"
+require_relative "../shared/lib/better_auth_examples"
+
+REGISTRY = BetterAuthExamples.registry(
+  app_name: "Better Auth Grape Example",
+  base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:9292"),
+  root_path: __dir__
+)
+DYNAMIC_AUTH = BetterAuthExamples::DynamicAuth.new(REGISTRY)
+DASHBOARD = BetterAuthExamples::DashboardApp.new(REGISTRY, framework_name: "Grape")
 
 class API < Grape::API
   include BetterAuth::Grape
 
   format :json
 
-  better_auth at: "/api/auth" do |config|
-    config.secret = ENV.fetch("BETTER_AUTH_SECRET", "change-me-grape-secret-12345678901234567890")
-    config.base_url = ENV.fetch("BETTER_AUTH_URL", "http://localhost:9292")
-    config.database = :memory
-    config.email_and_password = {enabled: true}
-  end
+  better_auth at: "/api/auth", auth: DYNAMIC_AUTH
 
   get "/" do
     {message: "Hello from Grape + Better Auth"}
@@ -27,4 +31,4 @@ class API < Grape::API
   end
 end
 
-run API
+run BetterAuthExamples::CompositeApp.new(dashboard: DASHBOARD, auth: API, base_path: "/api/auth")

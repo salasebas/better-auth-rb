@@ -2,20 +2,14 @@
 
 require "bundler/setup"
 require "better_auth"
+require_relative "../shared/lib/better_auth_examples"
 
-class App
-  def call(env)
-    req = Rack::Request.new(env)
+registry = BetterAuthExamples.registry(
+  app_name: "Better Auth Vanilla Example",
+  base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:9292"),
+  root_path: __dir__
+)
+dynamic_auth = BetterAuthExamples::DynamicAuth.new(registry)
+dashboard = BetterAuthExamples::DashboardApp.new(registry, framework_name: "Vanilla Rack")
 
-    case req.path_info
-    when "/"
-      [200, {"Content-Type" => "text/plain"}, ["Hello from Vanilla Rack + Better Auth"]]
-    when "/health"
-      [200, {"Content-Type" => "text/plain"}, ["OK"]]
-    else
-      [404, {"Content-Type" => "text/plain"}, ["Not Found"]]
-    end
-  end
-end
-
-run App.new
+run BetterAuthExamples::CompositeApp.new(dashboard: dashboard, auth: dynamic_auth)

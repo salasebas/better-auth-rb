@@ -1,0 +1,139 @@
+# Isolated services for examples. Uses alternate host ports so it does not
+# collide with repository-level or openauth development containers.
+
+x-postgres-healthcheck: &postgres-healthcheck
+  healthcheck:
+    test: ["CMD-SHELL", "pg_isready -U user -d better_auth"]
+    interval: 1s
+    timeout: 5s
+    retries: 10
+
+x-mysql-healthcheck: &mysql-healthcheck
+  healthcheck:
+    test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-uuser", "-ppassword"]
+    interval: 1s
+    timeout: 5s
+    retries: 10
+    start_period: 30s
+
+x-mongodb-healthcheck: &mongodb-healthcheck
+  healthcheck:
+    test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+    interval: 2s
+    timeout: 5s
+    retries: 20
+    start_period: 10s
+
+services:
+  redis:
+    image: redis:latest
+    container_name: better-auth-examples-redis
+    ports:
+      - "16379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 1s
+      timeout: 5s
+      retries: 10
+
+  postgres:
+    <<: *postgres-healthcheck
+    image: postgres:latest
+    container_name: better-auth-examples-postgres
+    environment:
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: better_auth
+    ports:
+      - "15432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql
+
+  mysql:
+    <<: *mysql-healthcheck
+    image: mysql:latest
+    container_name: better-auth-examples-mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: root_password
+      MYSQL_DATABASE: better_auth
+      MYSQL_USER: user
+      MYSQL_PASSWORD: password
+    ports:
+      - "13306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+
+  mongodb:
+    <<: *mongodb-healthcheck
+    image: mongo:latest
+    container_name: better-auth-examples-mongodb
+    command: ["mongod", "--replSet", "rs0", "--bind_ip_all"]
+    ports:
+      - "27018:27017"
+    volumes:
+      - mongodb_data:/data/db
+
+  mongodb-init:
+    image: mongo:latest
+    container_name: better-auth-examples-mongodb-init
+    depends_on:
+      mongodb:
+        condition: service_healthy
+    restart: "no"
+    command:
+      - mongosh
+      - "mongodb://mongodb:27017/admin"
+      - "--quiet"
+      - "--eval"
+      - |
+        try {
+          rs.status().ok
+        } catch (error) {
+          rs.initiate({_id: "rs0", members: [{_id: 0, host: "mongodb:27017"}]})
+        }
+
+  mssql:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    container_name: better-auth-examples-mssql
+    platform: linux/amd64
+    environment:
+      ACCEPT_EULA: "Y"
+      MSSQL_SA_PASSWORD: Password123!
+      MSSQL_PID: Developer
+    ports:
+      - "11433:1433"
+    volumes:
+      - mssql_data:/var/opt/mssql
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P Password123! -C -Q 'SELECT 1' || /opt/mssql-tools/bin/sqlcmd -S localhost -U sa -P Password123! -Q 'SELECT 1'"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 30s
+
+  mssql-init:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    container_name: better-auth-examples-mssql-init
+    platform: linux/amd64
+    depends_on:
+      mssql:
+        condition: service_healthy
+    restart: "no"
+    command:
+      - /bin/bash
+      - -lc
+      - |
+        if [ -x /opt/mssql-tools18/bin/sqlcmd ]; then
+          /opt/mssql-tools18/bin/sqlcmd -S mssql -U sa -P Password123! -C -Q "IF DB_ID('better_auth') IS NULL CREATE DATABASE better_auth"
+        else
+          /opt/mssql-tools/bin/sqlcmd -S mssql -U sa -P Password123! -Q "IF DB_ID('better_auth') IS NULL CREATE DATABASE better_auth"
+        fi
+
+volumes:
+  redis_data:
+  postgres_data:
+  mysql_data:
+  mongodb_data:
+  mssql_data:
