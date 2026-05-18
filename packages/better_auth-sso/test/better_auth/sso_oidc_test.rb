@@ -33,7 +33,7 @@ class BetterAuthPluginsSSOOIDCTest < Minitest::Test
       )
     end
     assert_equal 400, error.status_code
-    assert_equal "Invalid OIDC discovery document", error.message
+    assert_equal "OIDC discovery document is missing required fields: authorization_endpoint, token_endpoint, jwks_uri", error.message
   end
 
   def test_oidc_discovery_hydrates_relative_urls_and_selects_auth_method
@@ -98,7 +98,7 @@ class BetterAuthPluginsSSOOIDCTest < Minitest::Test
     end
 
     assert_equal 400, error.status_code
-    assert_equal "OIDC discovery endpoint is not trusted", error.message
+    assert_equal "The authorization_endpoint \"https://evil.example.com/authorize\" is not trusted by your trusted origins configuration.", error.message
   end
 
   def test_oidc_sign_in_hydrates_partial_config_with_runtime_discovery
@@ -133,8 +133,7 @@ class BetterAuthPluginsSSOOIDCTest < Minitest::Test
         oidcConfig: {
           clientId: "client-id",
           clientSecret: "client-secret",
-          skipDiscovery: true,
-          jwksEndpoint: "https://custom.example.com/jwks"
+          skipDiscovery: true
         }
       }
     )
@@ -268,7 +267,7 @@ class BetterAuthPluginsSSOOIDCTest < Minitest::Test
   end
 
   def test_oidc_callback_overrides_existing_user_info_when_enabled_by_default
-    auth = build_auth(default_override_user_info: true)
+    auth = build_auth(default_override_user_info: true, account: {account_linking: {trusted_providers: ["sso:oidc"]}})
     _existing_status, _existing_headers, _existing_body = auth.api.sign_up_email(
       body: {email: "override@example.com", password: "password123", name: "Old Name"},
       as_response: true
@@ -292,7 +291,6 @@ class BetterAuthPluginsSSOOIDCTest < Minitest::Test
         }
       }
     )
-
     state = Rack::Utils.parse_query(URI.parse(auth.api.sign_in_sso(body: {providerId: "oidc", callbackURL: "/dashboard"})[:url]).query).fetch("state")
     auth.api.callback_sso(params: {providerId: "oidc"}, query: {code: "code", state: state}, as_response: true)
 
@@ -764,11 +762,13 @@ class BetterAuthPluginsSSOOIDCTest < Minitest::Test
   private
 
   def build_auth(options = {})
+    account = options.delete(:account) || {}
     BetterAuth.auth(
       base_url: "http://localhost:3000",
       secret: SECRET,
       database: :memory,
       email_and_password: {enabled: true},
+      account: account,
       plugins: [BetterAuth::Plugins.sso(options)]
     )
   end

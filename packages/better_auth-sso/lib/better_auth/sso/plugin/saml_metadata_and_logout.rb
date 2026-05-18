@@ -6,13 +6,16 @@ module BetterAuth
 
     def sso_validate_saml_config!(saml_config, plugin_config = {})
       metadata = saml_config[:idp_metadata] || saml_config[:metadata] || saml_config[:idp_metadata_xml]
+      idp_metadata = normalize_hash(saml_config[:idp_metadata] || {})
+      has_idp_metadata_xml = !idp_metadata[:metadata].to_s.empty? || !saml_config[:metadata].to_s.empty? || !saml_config[:idp_metadata_xml].to_s.empty?
+      has_idp_sso_service = !Array(idp_metadata[:single_sign_on_service] || saml_config[:single_sign_on_service]).empty?
       max_metadata_size = plugin_config.dig(:saml, :max_metadata_size) || SSO_DEFAULT_MAX_SAML_METADATA_SIZE
       if metadata.to_s.bytesize > max_metadata_size
         raise APIError.new("BAD_REQUEST", message: "IdP metadata exceeds maximum allowed size (#{max_metadata_size} bytes)")
       end
 
-      if saml_config[:entry_point].to_s.empty? && saml_config[:single_sign_on_service].to_s.empty? && metadata.to_s.empty?
-        raise APIError.new("BAD_REQUEST", message: "SAML config must include entryPoint, singleSignOnService, or IdP metadata")
+      if saml_config[:entry_point].to_s.empty? && !has_idp_sso_service && !has_idp_metadata_xml
+        raise APIError.new("BAD_REQUEST", message: "SAML configuration requires either idpMetadata.metadata, idpMetadata.singleSignOnService, or a valid entryPoint URL")
       end
       sso_validate_url!(saml_config[:entry_point], "SAML entryPoint must be a valid URL") unless saml_config[:entry_point].to_s.empty?
       unless saml_config[:single_sign_on_service].to_s.empty?
@@ -57,13 +60,15 @@ module BetterAuth
       acs_url = sso_saml_acs_url(ctx, provider)
       authn_requests_signed = !!saml_config[:authn_requests_signed]
       want_assertions_signed = saml_config.key?(:want_assertions_signed) ? !!saml_config[:want_assertions_signed] : true
-      name_id_format = saml_config[:identifier_format].to_s.empty? ? "" : "<NameIDFormat>#{saml_config[:identifier_format]}</NameIDFormat>"
+      escaped_entity_id = CGI.escapeHTML(entity_id.to_s)
+      escaped_acs_url = CGI.escapeHTML(acs_url.to_s)
+      name_id_format = saml_config[:identifier_format].to_s.empty? ? "" : "<NameIDFormat>#{CGI.escapeHTML(saml_config[:identifier_format].to_s)}</NameIDFormat>"
       slo = if config.dig(:saml, :enable_single_logout)
-        location = "#{ctx.context.base_url}/sso/saml2/sp/slo/#{URI.encode_www_form_component(provider_id)}"
+        location = CGI.escapeHTML("#{ctx.context.base_url}/sso/saml2/sp/slo/#{URI.encode_www_form_component(provider_id)}")
         "<SingleLogoutService Binding=\"urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST\" Location=\"#{location}\" /><SingleLogoutService Binding=\"urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect\" Location=\"#{location}\" />"
       end
 
-      "<EntityDescriptor entityID=\"#{entity_id}\"><SPSSODescriptor AuthnRequestsSigned=\"#{authn_requests_signed}\" WantAssertionsSigned=\"#{want_assertions_signed}\">#{slo}#{name_id_format}<AssertionConsumerService Binding=\"urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST\" Location=\"#{acs_url}\" index=\"0\" /></SPSSODescriptor></EntityDescriptor>"
+      "<EntityDescriptor entityID=\"#{escaped_entity_id}\"><SPSSODescriptor AuthnRequestsSigned=\"#{authn_requests_signed}\" WantAssertionsSigned=\"#{want_assertions_signed}\">#{slo}#{name_id_format}<AssertionConsumerService Binding=\"urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST\" Location=\"#{escaped_acs_url}\" index=\"0\" /></SPSSODescriptor></EntityDescriptor>"
     end
 
     def sso_saml_acs_url(ctx, provider)
@@ -250,7 +255,13 @@ module BetterAuth
     end
 
     def sso_validate_saml_slo_signature!(ctx, raw_message, error_message)
-      return true if !sso_fetch(ctx.body, :signature).to_s.empty? || !sso_fetch(ctx.query, :signature).to_s.empty?
+      signature = sso_fetch(ctx.body, :signature) || sso_fetch(ctx.query, :signature)
+      sig_alg = sso_fetch(ctx.body, :sig_alg) || sso_fetch(ctx.query, :sig_alg)
+      if !signature.to_s.empty? && !sig_alg.to_s.empty?
+        return true if sso_validate_saml_redirect_signature(ctx, raw_message, signature, sig_alg)
+
+        raise APIError.new("BAD_REQUEST", message: error_message)
+      end
 
       xml = Base64.decode64(raw_message.to_s.gsub(/\s+/, ""))
       return true if xml.include?("<Signature") || xml.include?(":Signature")
@@ -260,6 +271,21 @@ module BetterAuth
       raise
     rescue
       raise APIError.new("BAD_REQUEST", message: error_message)
+    end
+
+    def sso_validate_saml_redirect_signature(ctx, raw_message, signature, sig_alg)
+      provider = sso_find_provider!(ctx, sso_fetch(ctx.params, :provider_id))
+      cert = sso_saml_idp_metadata(provider)[:cert]
+      certificate = OpenSSL::X509::Certificate.new(cert.to_s)
+      has_saml_request = sso_fetch(ctx.body, :saml_request) || sso_fetch(ctx.query, :saml_request)
+      saml_param = has_saml_request ? "SAMLRequest" : "SAMLResponse"
+      relay_state = sso_fetch(ctx.body, :relay_state) || sso_fetch(ctx.query, :relay_state)
+      payload = [[saml_param, raw_message]]
+      payload << ["RelayState", relay_state] unless relay_state.to_s.empty?
+      payload << ["SigAlg", sig_alg]
+      certificate.public_key.verify(sso_saml_signature_digest(sig_alg), Base64.decode64(signature.to_s), URI.encode_www_form(payload))
+    rescue
+      false
     end
 
     def sso_parse_saml_logout_response(raw_response)

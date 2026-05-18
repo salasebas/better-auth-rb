@@ -1324,14 +1324,54 @@ class BetterAuthSSOSAMLMirrorTest < Minitest::Test
     )
     assert_equal 302, first[0]
 
-    replay = assert_raises(BetterAuth::APIError) do
-      auth.api.acs_endpoint(
-        params: {providerId: "replay-provider"},
-        body: {SAMLResponse: response, RelayState: "/dashboard"}
-      )
-    end
-    assert_equal 400, replay.status_code
-    assert_equal "SAML response has already been used", replay.message
+    replay_status, replay_headers, _replay_body = auth.api.acs_endpoint(
+      params: {providerId: "replay-provider"},
+      body: {SAMLResponse: response, RelayState: "/dashboard"},
+      as_response: true
+    )
+    assert_equal 302, replay_status
+    assert_equal "/dashboard?error=replay_detected&error_description=SAML+assertion+has+already+been+used", replay_headers.fetch("location")
+  end
+
+  def test_saml_default_provider_is_used_for_acs_callback
+    auth = build_auth_with_json_saml_parser(
+      plugin_options: {
+        defaultSSO: [
+          default_saml_provider(provider_id: "default-callback", domain: "default-callback.example.com")
+        ]
+      }
+    )
+    sign_in = sign_in_params(auth, providerId: "default-callback", callbackURL: "/dashboard")
+
+    status, headers, _body = auth.api.acs_endpoint(
+      params: {providerId: "default-callback"},
+      body: {SAMLResponse: saml_json_response(id: "default-callback-id", email: "default-callback@example.com"), RelayState: sign_in.fetch(:params).fetch("RelayState")},
+      as_response: true
+    )
+
+    assert_equal 302, status
+    assert_equal "/dashboard", headers.fetch("location")
+    assert auth.context.internal_adapter.find_user_by_email("default-callback@example.com")
+  end
+
+  def test_saml_replay_without_assertion_id_does_not_block_later_email_login
+    auth = build_auth_with_json_saml_parser
+    cookie = sign_up_cookie(auth)
+    register_saml_provider(auth, cookie, provider_id: "no-assertion-id")
+
+    first = auth.api.acs_endpoint(
+      params: {providerId: "no-assertion-id"},
+      body: {SAMLResponse: Base64.strict_encode64(JSON.generate({email: "no-id@example.com", name: "No ID One"})), RelayState: "/dashboard"},
+      as_response: true
+    )
+    second = auth.api.acs_endpoint(
+      params: {providerId: "no-assertion-id"},
+      body: {SAMLResponse: Base64.strict_encode64(JSON.generate({email: "no-id@example.com", name: "No ID Two"})), RelayState: "/dashboard"},
+      as_response: true
+    )
+
+    assert_equal 302, first[0]
+    assert_equal 302, second[0]
   end
 
   def test_saml_email_is_normalized_to_lowercase_and_existing_user_is_reused
@@ -1388,6 +1428,55 @@ class BetterAuthSSOSAMLMirrorTest < Minitest::Test
     assert_equal "Provider not found", error.message
   end
 
+  def test_slo_endpoint_rejects_missing_saml_payload
+    auth = build_auth_with_json_saml_parser(saml_options: {enableSingleLogout: true})
+    cookie = sign_up_cookie(auth)
+    register_saml_provider(auth, cookie, provider_id: "missing-slo-payload", saml_config: {singleLogoutService: "https://idp.example.com/slo"})
+
+    error = assert_raises(BetterAuth::APIError) do
+      auth.api.slo_endpoint(params: {providerId: "missing-slo-payload"}, body: {})
+    end
+
+    assert_equal 400, error.status_code
+    assert_equal "Invalid LogoutRequest", error.message
+  end
+
+  def test_slo_rejects_fake_logout_request_signature_and_keeps_session
+    auth = build_auth_with_json_saml_parser(
+      saml_options: {enableSingleLogout: true, wantLogoutRequestSigned: true},
+      saml_user_info: {
+        id: "assertion-fake-sig",
+        email: "fake-sig@example.com",
+        name: "Fake Sig",
+        name_id: "fake-sig-name-id",
+        session_index: "fake-sig-session"
+      }
+    )
+    cookie = sign_up_cookie(auth)
+    register_saml_provider(auth, cookie, provider_id: "fake-sig-slo", saml_config: {singleLogoutService: "https://idp.example.com/slo"})
+    _login_status, login_headers, _login_body = auth.api.acs_endpoint(
+      params: {providerId: "fake-sig-slo"},
+      body: {SAMLResponse: saml_xml_response(assertion_id: "assertion-fake-sig")},
+      as_response: true
+    )
+    session_token = login_headers.fetch("set-cookie")[/better-auth\.session_token=([^.;]+)/, 1]
+
+    error = assert_raises(BetterAuth::APIError) do
+      auth.api.slo_endpoint(
+        params: {providerId: "fake-sig-slo"},
+        body: {
+          SAMLRequest: saml_logout_request(name_id: "fake-sig-name-id", session_index: "fake-sig-session"),
+          SigAlg: "http://www.w3.org/2001/04/xmldsig-more#rsa-sha256",
+          Signature: "not-a-valid-signature"
+        }
+      )
+    end
+
+    assert_equal 400, error.status_code
+    assert_equal "Invalid LogoutRequest", error.message
+    assert auth.context.internal_adapter.find_session(session_token)
+  end
+
   def test_slo_post_from_external_idp_origin_bypasses_origin_check
     auth = build_auth_with_json_saml_parser(saml_options: {enableSingleLogout: true})
     cookie = sign_up_cookie(auth)
@@ -1426,6 +1515,46 @@ class BetterAuthSSOSAMLMirrorTest < Minitest::Test
 
     disabled_metadata = disabled.api.sp_metadata(query: {providerId: "slo-metadata-disabled", format: "json"}).fetch(:metadata)
     refute_includes disabled_metadata, "SingleLogoutService"
+  end
+
+  def test_register_saml_rejects_idp_metadata_without_metadata_or_sso_service
+    auth = build_auth_with_json_saml_parser
+    cookie = sign_up_cookie(auth)
+
+    error = assert_raises(BetterAuth::APIError) do
+      register_saml_provider(
+        auth,
+        cookie,
+        provider_id: "invalid-idp-metadata",
+        saml_config: {
+          entryPoint: nil,
+          idpMetadata: {entityID: "https://idp.example.com/entity"}
+        }
+      )
+    end
+
+    assert_equal 400, error.status_code
+    assert_match(/SAML configuration requires/, error.message)
+  end
+
+  def test_sp_metadata_escapes_configured_xml_values
+    auth = build_auth_with_json_saml_parser
+    cookie = sign_up_cookie(auth)
+    register_saml_provider(
+      auth,
+      cookie,
+      provider_id: "escaped-metadata",
+      saml_config: {
+        spMetadata: {entityId: "https://sp.example.com/metadata?x=1&y=<bad>"},
+        identifierFormat: "urn:test:nameid&format"
+      }
+    )
+
+    metadata = auth.api.sp_metadata(query: {providerId: "escaped-metadata", format: "json"}).fetch(:metadata)
+
+    assert_includes metadata, "x=1&amp;y=&lt;bad&gt;"
+    assert_includes metadata, "urn:test:nameid&amp;format"
+    REXML::Document.new(metadata)
   end
 
   def test_sp_initiated_slo_requires_idp_single_logout_service

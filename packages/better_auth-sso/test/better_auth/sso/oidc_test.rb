@@ -259,6 +259,102 @@ class BetterAuthSSOOIDCMirrorTest < Minitest::Test
     assert_equal user.fetch("id"), account.fetch("userId")
   end
 
+  def test_pkce_code_verifier_is_not_exposed_in_readable_state
+    auth = build_auth
+    cookie = sign_up_cookie(auth)
+    register_oidc_provider(
+      auth,
+      cookie,
+      provider_id: "pkce-state",
+      domain: "pkce-state.com",
+      oidc_config: {
+        clientId: "test",
+        clientSecret: "test-secret",
+        skipDiscovery: true,
+        pkce: true,
+        authorizationEndpoint: "https://idp.example.com/authorize",
+        tokenEndpoint: "https://idp.example.com/token",
+        jwksEndpoint: "https://idp.example.com/jwks",
+        getToken: ->(**_data) { {accessToken: "access-token"} },
+        getUserInfo: ->(_tokens) { {id: "pkce-sub", email: "pkce@example.com", name: "PKCE"} }
+      }
+    )
+
+    sign_in = oidc_sign_in_params(auth, providerId: "pkce-state", callbackURL: "/dashboard")
+    payload = JSON.parse(Base64.urlsafe_decode64(sign_in.fetch(:params).fetch("state").split(".")[1]))
+
+    refute payload.key?("codeVerifier")
+    assert sign_in.fetch(:params).fetch("code_challenge")
+  end
+
+  def test_oidc_existing_email_requires_trusted_or_matching_verified_domain
+    auth = build_auth
+    victim_cookie = sign_up_cookie(auth, "victim@example.com")
+    auth.api.sign_out(headers: {"cookie" => victim_cookie})
+    owner_cookie = sign_up_cookie(auth, "owner@example.com")
+    register_oidc_provider(
+      auth,
+      owner_cookie,
+      provider_id: "unsafe-link",
+      domain: "enterprise.test",
+      user_info: {id: "foreign-subject", email: "victim@example.com", name: "Victim"}
+    )
+
+    result = complete_oidc_callback(auth, provider_id: "unsafe-link", callback_url: "/dashboard")
+
+    assert_equal "/dashboard?error=account_not_linked", result.fetch(:location)
+    assert_nil auth.context.internal_adapter.find_account_by_provider_id("foreign-subject", "sso:unsafe-link")
+  end
+
+  def test_register_oidc_rejects_manual_endpoints_outside_trusted_origins
+    auth = build_auth(trusted_origins: ["https://idp.example.com"])
+    cookie = sign_up_cookie(auth)
+
+    error = assert_raises(BetterAuth::APIError) do
+      register_oidc_provider(
+        auth,
+        cookie,
+        provider_id: "untrusted-manual",
+        domain: "untrusted-manual.com",
+        oidc_config: {
+          clientId: "test",
+          clientSecret: "test-secret",
+          skipDiscovery: true,
+          authorizationEndpoint: "https://idp.example.com/authorize",
+          tokenEndpoint: "https://untrusted.example.com/token",
+          jwksEndpoint: "https://idp.example.com/jwks"
+        }
+      )
+    end
+
+    assert_equal 400, error.status_code
+    assert_match(/trusted/i, error.message)
+  end
+
+  def test_plugin_oidc_discovery_passes_timeout_to_fetcher
+    calls = []
+
+    BetterAuth::Plugins.sso_discover_oidc_config(
+      issuer: "https://idp.example.com",
+      timeout: 123,
+      trusted_origin: ->(_url) { true },
+      fetch: ->(url, timeout: nil) {
+        calls << [url, timeout]
+        {
+          data: {
+            issuer: "https://idp.example.com",
+            authorization_endpoint: "https://idp.example.com/authorize",
+            token_endpoint: "https://idp.example.com/token",
+            jwks_uri: "https://idp.example.com/jwks"
+          },
+          error: nil
+        }
+      }
+    )
+
+    assert_equal [["https://idp.example.com/.well-known/openid-configuration", 123]], calls
+  end
+
   private
 
   def build_auth(options = nil, plugins: nil, **kwargs)

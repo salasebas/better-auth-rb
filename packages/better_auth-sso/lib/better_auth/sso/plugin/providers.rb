@@ -28,6 +28,7 @@ module BetterAuth
 
         oidc_config = normalize_hash(body[:oidc_config] || {})
         oidc_config = sso_hydrate_oidc_config(body[:issuer], oidc_config, ctx) if oidc_config.any? && !oidc_config[:skip_discovery]
+        sso_validate_oidc_endpoint_origins!(ctx, oidc_config) if oidc_config.any?
         oidc_config[:override_user_info] = !!(body[:override_user_info] || config[:default_override_user_info]) if oidc_config.any?
         saml_config = normalize_hash(body[:saml_config] || {})
         sso_validate_saml_config!(saml_config, config) unless saml_config.empty?
@@ -102,6 +103,7 @@ module BetterAuth
 
           resolved_issuer = update[:issuer] || current[:issuer] || provider["issuer"]
           update[:oidcConfig] = current.merge(normalize_hash(body[:oidc_config])).merge(issuer: resolved_issuer).compact
+          sso_validate_oidc_endpoint_origins!(ctx, update[:oidcConfig])
         end
         if body.key?(:saml_config)
           current = sso_provider_config_hash(provider["samlConfig"])

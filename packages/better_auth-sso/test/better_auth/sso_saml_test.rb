@@ -142,11 +142,13 @@ class BetterAuthPluginsSSOSAMLTest < Minitest::Test
     assert_equal 302, status
     refute_includes headers.fetch("location"), "evil.example.com"
 
-    replay = assert_raises(BetterAuth::APIError) do
-      auth.api.acs_endpoint(params: {providerId: "saml"}, body: {SAMLResponse: response, RelayState: relay_state})
-    end
-    assert_equal 400, replay.status_code
-    assert_equal "SAML response has already been used", replay.message
+    replay_status, replay_headers, _replay_body = auth.api.acs_endpoint(
+      params: {providerId: "saml"},
+      body: {SAMLResponse: response, RelayState: relay_state},
+      as_response: true
+    )
+    assert_equal 302, replay_status
+    assert_equal "http://localhost:3000/api/auth?error=replay_detected&error_description=SAML+assertion+has+already+been+used", replay_headers.fetch("location")
   end
 
   def test_saml_respects_disable_implicit_signup_and_request_signup
@@ -1259,14 +1261,30 @@ class BetterAuthPluginsSSOSAMLTest < Minitest::Test
     assert_equal XMLSecurity::Document::RSA_SHA256, request_params.fetch("SigAlg")
     assert request_params.fetch("Signature")
 
+    response_auth = build_auth(plugins: [BetterAuth::Plugins.sso(saml: {enable_single_logout: true, want_logout_response_signed: true})])
+    response_cookie = sign_up_cookie(response_auth)
+    response_auth.api.register_sso_provider(
+      headers: {"cookie" => response_cookie},
+      body: {
+        providerId: "saml-signed-slo",
+        issuer: "https://idp.example.com",
+        domain: "example.com",
+        samlConfig: {
+          entryPoint: "https://idp.example.com/sso",
+          singleLogoutService: "https://idp.example.com/slo",
+          cert: "test-cert",
+          audience: "better-auth-ruby",
+          privateKey: private_key.to_pem
+        }
+      }
+    )
+
     logout_request = saml_logout_request(name_id: "name-id", session_index: "session-index")
-    status, response_headers, _body = auth.api.slo_endpoint(
+    status, response_headers, _body = response_auth.api.slo_endpoint(
       params: {providerId: "saml-signed-slo"},
       query: {
         SAMLRequest: logout_request,
-        RelayState: "/signed-out",
-        SigAlg: XMLSecurity::Document::RSA_SHA256,
-        Signature: "idp-signature"
+        RelayState: "/signed-out"
       },
       as_response: true
     )
@@ -1412,11 +1430,13 @@ class BetterAuthPluginsSSOSAMLTest < Minitest::Test
     response = Base64.strict_encode64(JSON.generate({ignored: true}))
     auth.api.acs_endpoint(params: {providerId: "saml-one"}, body: {SAMLResponse: response})
 
-    replay = assert_raises(BetterAuth::APIError) do
-      auth.api.acs_endpoint(params: {providerId: "saml-two"}, body: {SAMLResponse: response})
-    end
-    assert_equal 400, replay.status_code
-    assert_equal "SAML response has already been used", replay.message
+    replay_status, replay_headers, _replay_body = auth.api.acs_endpoint(
+      params: {providerId: "saml-two"},
+      body: {SAMLResponse: response},
+      as_response: true
+    )
+    assert_equal 302, replay_status
+    assert_equal "/?error=replay_detected&error_description=SAML+assertion+has+already+been+used", replay_headers.fetch("location")
     assert auth.context.internal_adapter.find_verification_value("saml-used-assertion:assertion-global")
   end
 

@@ -23,13 +23,14 @@ module BetterAuth
         scope: scopes.join(" "),
         state: state
       }.compact
-      nonce = sso_decode_state(state, ctx.context.secret)&.fetch("nonce", nil)
+      decoded_state = sso_decode_state(state, ctx.context.secret)
+      nonce = decoded_state&.fetch("nonce", nil)
       query[:nonce] = nonce if nonce && !nonce.to_s.empty?
       login_hint = body[:login_hint] || body[:email]
       query[:login_hint] = login_hint if login_hint
-      code_verifier = sso_decode_state(state, ctx.context.secret)&.fetch("codeVerifier", nil)
-      if code_verifier
-        query[:code_challenge] = sso_base64_urlsafe(OpenSSL::Digest::SHA256.digest(code_verifier))
+      code_challenge = decoded_state&.fetch("codeChallenge", nil)
+      if code_challenge
+        query[:code_challenge] = code_challenge
         query[:code_challenge_method] = "S256"
       end
       "#{endpoint}?#{URI.encode_www_form(query)}"
@@ -101,12 +102,17 @@ module BetterAuth
           return sso_redirect(ctx, sso_append_error(state["callbackURL"] || "/", "invalid_saml_response", "Provider mismatch"))
         end
 
-        ctx.context.internal_adapter.delete_verification_by_identifier(identifier)
+        return {identifier: identifier}
       elsif config.dig(:saml, :allow_idp_initiated) == false
         return sso_redirect(ctx, sso_append_error(state["callbackURL"] || "/", "unsolicited_response", "IdP-initiated SSO not allowed"))
       end
 
       nil
+    end
+
+    def sso_consume_saml_in_response_to(ctx, result)
+      identifier = result.is_a?(Hash) ? result[:identifier] : nil
+      ctx.context.internal_adapter.delete_verification_by_identifier(identifier) unless identifier.to_s.empty?
     end
 
     def sso_parse_saml_authn_request_record(value)
@@ -170,12 +176,13 @@ module BetterAuth
       ctx.context.adapter.find_one(model: "ssoProvider", where: [{field: "providerId", value: provider_id.to_s}])
     end
 
-    def sso_oidc_tokens(ctx, provider, oidc_config, state, plugin_config)
+    def sso_oidc_tokens(ctx, provider, oidc_config, state, plugin_config, raw_state: nil)
+      code_verifier = sso_oidc_code_verifier(ctx, raw_state || state["state"] || state[:state])
       token_callback = oidc_config[:get_token]
       if token_callback.respond_to?(:call)
         return normalize_hash(token_callback.call(
           code: ctx.query[:code] || ctx.query["code"],
-          codeVerifier: state["codeVerifier"],
+          codeVerifier: code_verifier,
           redirectURI: sso_oidc_redirect_uri(ctx.context, provider.fetch("providerId")),
           provider: provider,
           context: ctx
@@ -188,17 +195,19 @@ module BetterAuth
       sso_exchange_oidc_code(
         token_endpoint: token_endpoint,
         code: ctx.query[:code] || ctx.query["code"],
-        code_verifier: state["codeVerifier"],
+        code_verifier: code_verifier,
         redirect_uri: sso_oidc_redirect_uri(ctx.context, provider.fetch("providerId")),
         client_id: oidc_config[:client_id],
         client_secret: oidc_config[:client_secret],
-        authentication: oidc_config[:token_endpoint_authentication]
+        authentication: oidc_config[:token_endpoint_authentication],
+        timeout: plugin_config[:oidc_http_timeout],
+        max_body_size: plugin_config[:oidc_http_max_body_size]
       )
     rescue
       nil
     end
 
-    def sso_exchange_oidc_code(token_endpoint:, code:, code_verifier:, redirect_uri:, client_id:, client_secret:, authentication:)
+    def sso_exchange_oidc_code(token_endpoint:, code:, code_verifier:, redirect_uri:, client_id:, client_secret:, authentication:, timeout: nil, max_body_size: nil)
       uri = URI(token_endpoint.to_s)
       request = Net::HTTP::Post.new(uri)
       form = {
@@ -214,8 +223,15 @@ module BetterAuth
         request.basic_auth(client_id.to_s, client_secret.to_s)
       end
       request.set_form_data(form)
-      response = Net::HTTP.start(uri.hostname, uri.port, use_ssl: uri.scheme == "https") { |http| http.request(request) }
+      response = Net::HTTP.start(
+        uri.hostname,
+        uri.port,
+        use_ssl: uri.scheme == "https",
+        open_timeout: sso_oidc_http_timeout(timeout),
+        read_timeout: sso_oidc_http_timeout(timeout)
+      ) { |http| http.request(request) }
       return nil unless response.is_a?(Net::HTTPSuccess)
+      return nil if response.body.to_s.bytesize > sso_oidc_http_max_body_size(max_body_size)
 
       normalize_hash(JSON.parse(response.body))
     end
@@ -225,7 +241,7 @@ module BetterAuth
       raw = if user_callback.respond_to?(:call)
         user_callback.call(tokens)
       elsif oidc_config[:user_info_endpoint]
-        sso_fetch_oidc_user_info(oidc_config[:user_info_endpoint], tokens[:access_token])
+        sso_fetch_oidc_user_info(oidc_config[:user_info_endpoint], tokens[:access_token], timeout: plugin_config[:oidc_http_timeout], max_body_size: plugin_config[:oidc_http_max_body_size])
       elsif tokens[:id_token]
         return {_sso_error: "jwks_endpoint_not_found"} if oidc_config[:jwks_endpoint].to_s.empty?
 
@@ -256,12 +272,19 @@ module BetterAuth
       )
     end
 
-    def sso_fetch_oidc_user_info(endpoint, access_token)
+    def sso_fetch_oidc_user_info(endpoint, access_token, timeout: nil, max_body_size: nil)
       uri = URI(endpoint.to_s)
       request = Net::HTTP::Get.new(uri)
       request["authorization"] = "Bearer #{access_token}"
-      response = Net::HTTP.start(uri.hostname, uri.port, use_ssl: uri.scheme == "https") { |http| http.request(request) }
+      response = Net::HTTP.start(
+        uri.hostname,
+        uri.port,
+        use_ssl: uri.scheme == "https",
+        open_timeout: sso_oidc_http_timeout(timeout),
+        read_timeout: sso_oidc_http_timeout(timeout)
+      ) { |http| http.request(request) }
       return {} unless response.is_a?(Net::HTTPSuccess)
+      return {} if response.body.to_s.bytesize > sso_oidc_http_max_body_size(max_body_size)
 
       JSON.parse(response.body)
     rescue
@@ -297,8 +320,15 @@ module BetterAuth
       end
 
       uri = URI(jwks_endpoint.to_s)
-      response = Net::HTTP.get_response(uri)
+      response = Net::HTTP.start(
+        uri.hostname,
+        uri.port,
+        use_ssl: uri.scheme == "https",
+        open_timeout: SSO_DEFAULT_OIDC_HTTP_TIMEOUT,
+        read_timeout: SSO_DEFAULT_OIDC_HTTP_TIMEOUT
+      ) { |http| http.get(uri.request_uri) }
       return {} unless response.is_a?(Net::HTTPSuccess)
+      return {} if response.body.to_s.bytesize > SSO_DEFAULT_OIDC_HTTP_MAX_BODY_SIZE
 
       normalize_hash(JSON.parse(response.body))
     rescue
@@ -344,7 +374,38 @@ module BetterAuth
     def sso_oidc_pkce_state(provider)
       return {} unless normalize_hash(provider["oidcConfig"] || {})[:pkce]
 
-      {codeVerifier: BetterAuth::Crypto.random_string(128)}
+      verifier = BetterAuth::Crypto.random_string(128)
+      {
+        codeVerifier: verifier,
+        codeChallenge: sso_base64_urlsafe(OpenSSL::Digest::SHA256.digest(verifier))
+      }
+    end
+
+    def sso_store_oidc_pkce_verifier(ctx, state, verifier)
+      ctx.context.internal_adapter.create_verification_value(
+        identifier: "#{SSO_OIDC_PKCE_VERIFIER_KEY_PREFIX}#{state}",
+        value: verifier,
+        expiresAt: Time.now + 600
+      )
+    end
+
+    def sso_oidc_code_verifier(ctx, state)
+      return nil if state.to_s.empty?
+
+      identifier = "#{SSO_OIDC_PKCE_VERIFIER_KEY_PREFIX}#{state}"
+      verification = ctx.context.internal_adapter.find_verification_value(identifier)
+      ctx.context.internal_adapter.delete_verification_by_identifier(identifier) if verification
+      verification&.fetch("value", nil)
+    end
+
+    def sso_oidc_http_timeout(value)
+      timeout = value || SSO_DEFAULT_OIDC_HTTP_TIMEOUT
+      timeout.to_f.positive? ? timeout.to_f : SSO_DEFAULT_OIDC_HTTP_TIMEOUT
+    end
+
+    def sso_oidc_http_max_body_size(value)
+      size = value || SSO_DEFAULT_OIDC_HTTP_MAX_BODY_SIZE
+      size.to_i.positive? ? size.to_i : SSO_DEFAULT_OIDC_HTTP_MAX_BODY_SIZE
     end
 
     def sso_decode_state(state, secret)
@@ -392,7 +453,8 @@ module BetterAuth
         issuer: issuer,
         existing_config: existing,
         fetch: ctx.context.options.plugins.find { |plugin| plugin.id == "sso" }&.options&.fetch(:oidc_discovery_fetch, nil),
-        trusted_origin: ->(url) { ctx.context.trusted_origin?(url, allow_relative_paths: false) }
+        trusted_origin: ->(url) { ctx.context.trusted_origin?(url, allow_relative_paths: false) },
+        timeout: ctx.context.options.plugins.find { |plugin| plugin.id == "sso" }&.options&.fetch(:oidc_http_timeout, nil)
       )
       existing.merge(discovered)
     end
@@ -412,9 +474,29 @@ module BetterAuth
         issuer: provider.fetch("issuer"),
         existing_config: oidc_config.merge(issuer: provider.fetch("issuer")),
         fetch: plugin_config[:oidc_discovery_fetch],
-        trusted_origin: ->(url) { ctx.context.trusted_origin?(url, allow_relative_paths: false) }
+        trusted_origin: ->(url) { ctx.context.trusted_origin?(url, allow_relative_paths: false) },
+        timeout: plugin_config[:oidc_http_timeout]
       )
       provider.merge("oidcConfig" => oidc_config.merge(discovered))
+    end
+
+    def sso_validate_oidc_endpoint_origins!(ctx, oidc_config)
+      return unless sso_oidc_trusted_origin_enforced?(ctx)
+
+      config = normalize_hash(oidc_config || {})
+      %i[authorization_endpoint token_endpoint jwks_endpoint user_info_endpoint discovery_endpoint].each do |field|
+        url = config[field]
+        next if url.to_s.empty?
+
+        sso_validate_url!(url, "OIDC #{Schema.storage_key(field)} must be a valid URL")
+        next if ctx.context.trusted_origin?(url.to_s, allow_relative_paths: false)
+
+        raise APIError.new("BAD_REQUEST", message: "OIDC #{Schema.storage_key(field)} is not trusted")
+      end
+    end
+
+    def sso_oidc_trusted_origin_enforced?(ctx)
+      Array(ctx.context.trusted_origins).map(&:to_s).uniq.length > 1
     end
   end
 end

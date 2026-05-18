@@ -66,6 +66,9 @@ module BetterAuth
     SSO_SAML_LOGOUT_REQUEST_KEY_PREFIX = "saml-logout-request:"
     SSO_SAML_STATUS_SUCCESS = "urn:oasis:names:tc:SAML:2.0:status:Success"
     SSO_DEFAULT_LOGOUT_REQUEST_TTL_MS = 5 * 60 * 1000
+    SSO_DEFAULT_OIDC_HTTP_TIMEOUT = 10
+    SSO_DEFAULT_OIDC_HTTP_MAX_BODY_SIZE = 1024 * 1024
+    SSO_OIDC_PKCE_VERIFIER_KEY_PREFIX = "oidc-pkce-verifier:"
 
     def sso(options = {})
       config = normalize_hash(options)

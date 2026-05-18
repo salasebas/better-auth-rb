@@ -44,6 +44,8 @@ module BetterAuth
         end
 
         raw_request = sso_fetch(ctx.body, :saml_request) || sso_fetch(ctx.query, :saml_request)
+        raise APIError.new("BAD_REQUEST", message: "Invalid LogoutRequest") if raw_request.to_s.empty?
+
         sso_validate_saml_slo_signature!(ctx, raw_request, "Invalid LogoutRequest") if config.dig(:saml, :want_logout_request_signed)
         logout_request_data = sso_process_saml_logout_request(ctx, provider, raw_request)
         in_response_to = logout_request_data[:id].to_s.empty? ? "" : " InResponseTo=\"#{CGI.escapeHTML(logout_request_data[:id].to_s)}\""
