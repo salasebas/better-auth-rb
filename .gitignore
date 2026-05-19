@@ -18,3 +18,10 @@ coverage/
 # Ignore temp files
 tmp/
 *.log
+
+# Ignore example app local/runtime artifacts
+examples/*/.env
+examples/*/.github/
+examples/*/.kamal/
+examples/*/config/credentials.yml.enc
+examples/*/config/master.key
