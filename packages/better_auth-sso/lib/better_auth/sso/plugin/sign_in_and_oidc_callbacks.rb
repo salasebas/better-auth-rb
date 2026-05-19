@@ -5,7 +5,7 @@ module BetterAuth
     module_function
 
     def sso_sign_in_endpoint(config = {})
-      Endpoint.new(path: "/sign-in/sso", method: "POST") do |ctx|
+      Endpoint.new(path: "/sign-in/sso", method: "POST", metadata: sso_openapi_for(:sign_in)) do |ctx|
         body = normalize_hash(ctx.body)
         provider = sso_select_provider(ctx, body, config)
         provider_type = body[:provider_type].to_s

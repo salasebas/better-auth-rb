@@ -162,8 +162,8 @@ module BetterAuth
         schema.each do |raw_key, raw_table|
           key = storage_key(raw_key)
           table_data = symbolize_hash(raw_table || {})
-          existing = tables[key] || {model_name: table_data[:model_name] || physical_name(key), fields: {}}
-          existing[:model_name] = table_data[:model_name] || existing[:model_name] || physical_name(key)
+          existing = tables[key] || {model_name: table_data[:model_name] || physical_table_name(key), fields: {}}
+          existing[:model_name] = table_data[:model_name] || existing[:model_name] || physical_table_name(key)
           existing[:fields] = existing[:fields].merge(normalize_fields(table_data[:fields] || {}))
           tables[key] = existing
         end
@@ -268,6 +268,24 @@ module BetterAuth
 
     private_class_method def self.physical_name(value)
       underscore(value.to_s)
+    end
+
+    private_class_method def self.physical_table_name(value)
+      pluralize_table_name(physical_name(value))
+    end
+
+    private_class_method def self.pluralize_table_name(value)
+      special = {
+        "apikey" => "api_keys",
+        "api_key" => "api_keys",
+        "wallet_address" => "wallet_addresses"
+      }
+      return special.fetch(value) if special.key?(value)
+      return value if value.end_with?("s")
+      return "#{value[0...-1]}ies" if value.end_with?("y") && value.match?(/[^aeiou]y\z/)
+      return "#{value}es" if value.match?(/(s|x|z|ch|sh)\z/)
+
+      "#{value}s"
     end
 
     private_class_method def self.camelize_lower(value)

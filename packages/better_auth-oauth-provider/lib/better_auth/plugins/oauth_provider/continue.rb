@@ -5,7 +5,7 @@ module BetterAuth
     module_function
 
     def oauth_continue_endpoint(config)
-      Endpoint.new(path: "/oauth2/continue", method: "POST") do |ctx|
+      Endpoint.new(path: "/oauth2/continue", method: "POST", metadata: oauth_openapi_for(:continue)) do |ctx|
         Routes.current_session(ctx)
         body = OAuthProtocol.stringify_keys(ctx.body)
         action = if body["selected"] == true

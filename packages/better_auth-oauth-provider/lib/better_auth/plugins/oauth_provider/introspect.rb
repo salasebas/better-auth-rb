@@ -5,7 +5,7 @@ module BetterAuth
     module_function
 
     def oauth_introspect_endpoint(config)
-      Endpoint.new(path: "/oauth2/introspect", method: "POST", metadata: {allowed_media_types: ["application/x-www-form-urlencoded", "application/json"]}) do |ctx|
+      Endpoint.new(path: "/oauth2/introspect", method: "POST", metadata: oauth_openapi_for(:introspect).merge(allowed_media_types: ["application/x-www-form-urlencoded", "application/json"])) do |ctx|
         client = OAuthProtocol.authenticate_client!(ctx, "oauthClient", store_client_secret: config[:store_client_secret], prefix: config[:prefix], require_confidential: true)
         client_id = OAuthProtocol.stringify_keys(client)["clientId"]
         body = OAuthProtocol.stringify_keys(ctx.body)

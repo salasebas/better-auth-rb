@@ -47,6 +47,7 @@ module BetterAuth
           openapi: {
             operationId: "signInAnonymous",
             description: "Sign in anonymously",
+            requestBody: OpenAPI.empty_request_body,
             responses: {
               "200" => OpenAPI.json_response(
                 "Anonymous session created",
@@ -96,6 +97,7 @@ module BetterAuth
           openapi: {
             operationId: "deleteAnonymousUser",
             description: "Delete the current anonymous user",
+            requestBody: OpenAPI.empty_request_body,
             responses: {
               "200" => OpenAPI.json_response("Anonymous user deleted", OpenAPI.success_response_schema)
             }

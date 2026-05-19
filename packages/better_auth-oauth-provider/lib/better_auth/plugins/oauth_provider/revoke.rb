@@ -5,7 +5,7 @@ module BetterAuth
     module_function
 
     def oauth_revoke_endpoint(config)
-      Endpoint.new(path: "/oauth2/revoke", method: "POST", metadata: {allowed_media_types: ["application/x-www-form-urlencoded", "application/json"]}) do |ctx|
+      Endpoint.new(path: "/oauth2/revoke", method: "POST", metadata: oauth_openapi_for(:revoke).merge(allowed_media_types: ["application/x-www-form-urlencoded", "application/json"])) do |ctx|
         client = OAuthProtocol.authenticate_client!(ctx, "oauthClient", store_client_secret: config[:store_client_secret], prefix: config[:prefix], require_confidential: true)
         client_id = OAuthProtocol.stringify_keys(client)["clientId"]
         body = OAuthProtocol.stringify_keys(ctx.body)

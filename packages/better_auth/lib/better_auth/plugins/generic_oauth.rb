@@ -220,6 +220,7 @@ module BetterAuth
           openapi: {
             operationId: "signInOAuth2",
             description: "Sign in with OAuth2",
+            requestBody: OpenAPI.json_request_body(generic_oauth_start_body_schema),
             responses: {
               "200" => OpenAPI.json_response("Sign in with OAuth2", generic_oauth_url_response_schema)
             }
@@ -242,6 +243,7 @@ module BetterAuth
           openapi: {
             operationId: "linkOAuth2",
             description: "Link an OAuth2 account to the current user session",
+            requestBody: OpenAPI.json_request_body(generic_oauth_start_body_schema),
             responses: {
               "200" => OpenAPI.json_response("Authorization URL generated successfully for linking an OAuth2 account", generic_oauth_url_response_schema)
             }
@@ -349,6 +351,28 @@ module BetterAuth
           redirect: {type: "boolean"}
         },
         required: ["url", "redirect"]
+      )
+    end
+
+    def generic_oauth_start_body_schema
+      OpenAPI.object_schema(
+        {
+          providerId: {type: "string", description: "OAuth provider ID"},
+          provider_id: {type: "string", description: "OAuth provider ID"},
+          callbackURL: {type: "string", description: "URL to redirect to after success"},
+          callback_url: {type: "string", description: "URL to redirect to after success"},
+          errorCallbackURL: {type: "string", description: "URL to redirect to after error"},
+          error_callback_url: {type: "string", description: "URL to redirect to after error"},
+          newUserCallbackURL: {type: "string", description: "URL to redirect to for new users"},
+          new_user_callback_url: {type: "string", description: "URL to redirect to for new users"},
+          requestSignUp: {type: "boolean", description: "Whether this request is a sign-up flow"},
+          request_sign_up: {type: "boolean", description: "Whether this request is a sign-up flow"},
+          scopes: {type: "array", items: {type: "string"}, description: "Additional OAuth scopes"},
+          disableRedirect: {type: "boolean", description: "Return the URL instead of redirecting"},
+          disable_redirect: {type: "boolean", description: "Return the URL instead of redirecting"},
+          additionalData: {type: "object", additionalProperties: true},
+          additional_data: {type: "object", additionalProperties: true}
+        }
       )
     end
 

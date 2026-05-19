@@ -7,7 +7,7 @@ module BetterAuth
     module_function
 
     def scim_generate_token_endpoint(config)
-      Endpoint.new(path: "/scim/generate-token", method: "POST", metadata: scim_openapi_metadata("Generates a new SCIM token for the given provider")) do |ctx|
+      Endpoint.new(path: "/scim/generate-token", method: "POST", metadata: scim_generate_token_openapi_metadata) do |ctx|
         session = Routes.current_session(ctx)
         body = normalize_hash(ctx.body)
         raw_provider_id = body[:provider_id]
@@ -81,7 +81,7 @@ module BetterAuth
     end
 
     def scim_delete_provider_connection_endpoint(config)
-      Endpoint.new(path: "/scim/delete-provider-connection", method: "POST", metadata: scim_openapi_metadata("Delete SCIM provider connection.")) do |ctx|
+      Endpoint.new(path: "/scim/delete-provider-connection", method: "POST", metadata: scim_delete_provider_openapi_metadata) do |ctx|
         session = Routes.current_session(ctx)
         body = normalize_hash(ctx.body)
         provider = scim_provider_by_provider_id!(ctx, body[:provider_id])

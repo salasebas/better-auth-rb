@@ -436,6 +436,7 @@ module BetterAuth
           openapi: {
             operationId: "stopImpersonating",
             description: "Stop impersonating a user",
+            requestBody: OpenAPI.empty_request_body,
             responses: {
               "200" => OpenAPI.json_response("Impersonation stopped", OpenAPI.session_response_schema_pair)
             }

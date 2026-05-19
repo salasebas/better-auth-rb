@@ -7,7 +7,7 @@ module BetterAuth
     def oauth_provider_schema
       {
         oauthClient: {
-          modelName: "oauthClient",
+          model_name: "oauth_clients",
           fields: {
             clientId: {type: "string", unique: true, required: true},
             clientSecret: {type: "string", required: false},
@@ -56,7 +56,7 @@ module BetterAuth
           }
         },
         oauthAccessToken: {
-          modelName: "oauthAccessToken",
+          model_name: "oauth_access_tokens",
           fields: {
             token: {type: "string", unique: true, required: true},
             expiresAt: {type: "date", required: true},
@@ -73,7 +73,7 @@ module BetterAuth
           }
         },
         oauthConsent: {
-          modelName: "oauthConsent",
+          model_name: "oauth_consents",
           fields: {
             clientId: {type: "string", required: true, index: true},
             userId: {type: "string", required: false, index: true},

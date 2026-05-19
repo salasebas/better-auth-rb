@@ -54,6 +54,14 @@ module BetterAuth
           openapi: {
             operationId: "requestDeviceCode",
             description: "Request a device and user code",
+            requestBody: OpenAPI.json_request_body(
+              OpenAPI.object_schema(
+                {
+                  client_id: {type: "string", description: "OAuth client ID"},
+                  scope: {type: "string", description: "Requested scopes"}
+                }
+              )
+            ),
             responses: {
               "200" => OpenAPI.json_response("Success", device_code_response_schema)
             }
@@ -106,6 +114,16 @@ module BetterAuth
           openapi: {
             operationId: "exchangeDeviceToken",
             description: "Exchange device code for access token",
+            requestBody: OpenAPI.json_request_body(
+              OpenAPI.object_schema(
+                {
+                  grant_type: {type: "string", enum: [OAuthProtocol::DEVICE_CODE_GRANT]},
+                  device_code: {type: "string"},
+                  client_id: {type: "string"}
+                },
+                required: ["grant_type", "device_code"]
+              )
+            ),
             responses: {
               "200" => OpenAPI.json_response("Success", device_token_response_schema)
             }
@@ -197,6 +215,14 @@ module BetterAuth
           openapi: {
             operationId: "approveDevice",
             description: "Approve a device authorization request",
+            requestBody: OpenAPI.json_request_body(
+              OpenAPI.object_schema(
+                {
+                  user_code: {type: "string", description: "User code shown on the device"},
+                  userCode: {type: "string", description: "User code shown on the device"}
+                }
+              )
+            ),
             responses: {
               "200" => OpenAPI.json_response("Success", OpenAPI.success_response_schema)
             }
@@ -218,6 +244,14 @@ module BetterAuth
           openapi: {
             operationId: "denyDevice",
             description: "Deny a device authorization request",
+            requestBody: OpenAPI.json_request_body(
+              OpenAPI.object_schema(
+                {
+                  user_code: {type: "string", description: "User code shown on the device"},
+                  userCode: {type: "string", description: "User code shown on the device"}
+                }
+              )
+            ),
             responses: {
               "200" => OpenAPI.json_response("Success", OpenAPI.success_response_schema)
             }

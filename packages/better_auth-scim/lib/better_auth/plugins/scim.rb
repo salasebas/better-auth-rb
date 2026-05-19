@@ -61,6 +61,7 @@ module BetterAuth
 
       {
         scimProvider: {
+          model_name: "scim_providers",
           fields: scim_provider_fields
         }
       }

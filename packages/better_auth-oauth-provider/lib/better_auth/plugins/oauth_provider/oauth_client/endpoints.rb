@@ -5,7 +5,7 @@ module BetterAuth
     module_function
 
     def oauth_create_client_endpoint(config)
-      Endpoint.new(path: "/oauth2/create-client", method: "POST") do |ctx|
+      Endpoint.new(path: "/oauth2/create-client", method: "POST", metadata: oauth_openapi_for(:create_client)) do |ctx|
         session = Routes.current_session(ctx)
         oauth_assert_client_privilege!(ctx, config, session, "create")
         body = OAuthProtocol.stringify_keys(ctx.body)
@@ -54,7 +54,7 @@ module BetterAuth
     end
 
     def oauth_get_client_public_prelogin_endpoint(config)
-      Endpoint.new(path: "/oauth2/public-client-prelogin", method: "POST") do |ctx|
+      Endpoint.new(path: "/oauth2/public-client-prelogin", method: "POST", metadata: oauth_openapi_for(:public_client_prelogin)) do |ctx|
         input = OAuthProtocol.stringify_keys(ctx.body).merge(OAuthProtocol.stringify_keys(ctx.query))
         unless config[:allow_public_client_prelogin] || config[:allowPublicClientPrelogin]
           raise APIError.new("BAD_REQUEST")
@@ -86,7 +86,7 @@ module BetterAuth
     end
 
     def oauth_delete_client_endpoint(config)
-      Endpoint.new(path: "/oauth2/delete-client", method: "POST") do |ctx|
+      Endpoint.new(path: "/oauth2/delete-client", method: "POST", metadata: oauth_openapi_for(:delete_client)) do |ctx|
         session = Routes.current_session(ctx)
         oauth_assert_client_privilege!(ctx, config, session, "delete")
         body = OAuthProtocol.stringify_keys(ctx.body)
@@ -99,7 +99,7 @@ module BetterAuth
     end
 
     def oauth_update_client_endpoint(config)
-      Endpoint.new(path: "/oauth2/update-client", method: "POST") do |ctx|
+      Endpoint.new(path: "/oauth2/update-client", method: "POST", metadata: oauth_openapi_for(:update_client)) do |ctx|
         session = Routes.current_session(ctx)
         oauth_assert_client_privilege!(ctx, config, session, "update")
         body = OAuthProtocol.stringify_keys(ctx.body)
@@ -159,7 +159,7 @@ module BetterAuth
     end
 
     def oauth_rotate_client_secret_endpoint(config)
-      Endpoint.new(path: "/oauth2/client/rotate-secret", method: "POST") do |ctx|
+      Endpoint.new(path: "/oauth2/client/rotate-secret", method: "POST", metadata: oauth_openapi_for(:rotate_client_secret)) do |ctx|
         session = Routes.current_session(ctx)
         oauth_assert_client_privilege!(ctx, config, session, "rotate")
         body = OAuthProtocol.stringify_keys(ctx.body)
@@ -210,7 +210,7 @@ module BetterAuth
     end
 
     def oauth_legacy_update_client_endpoint(config)
-      Endpoint.new(path: "/oauth2/client", method: "PATCH") do |ctx|
+      Endpoint.new(path: "/oauth2/client", method: "PATCH", metadata: oauth_openapi_for(:update_client)) do |ctx|
         session = Routes.current_session(ctx)
         oauth_assert_client_privilege!(ctx, config, session, "update")
         body = OAuthProtocol.stringify_keys(ctx.body)

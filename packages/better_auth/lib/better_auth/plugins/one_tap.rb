@@ -32,6 +32,14 @@ module BetterAuth
             operationId: "oneTapCallback",
             summary: "One tap callback",
             description: "Use this endpoint to authenticate with Google One Tap",
+            requestBody: OpenAPI.json_request_body(
+              OpenAPI.object_schema(
+                {
+                  id_token: {type: "string", description: "Google One Tap ID token"}
+                },
+                required: ["id_token"]
+              )
+            ),
             responses: {
               "200" => OpenAPI.json_response("Success", OpenAPI.session_response_schema_pair)
             }

@@ -5,7 +5,7 @@ module BetterAuth
     module_function
 
     def oauth_register_client_endpoint(config)
-      Endpoint.new(path: "/oauth2/register", method: "POST") do |ctx|
+      Endpoint.new(path: "/oauth2/register", method: "POST", metadata: oauth_openapi_for(:register_client)) do |ctx|
         session = Routes.current_session(ctx, allow_nil: true)
         body = OAuthProtocol.stringify_keys(ctx.body)
         unless config[:allow_dynamic_client_registration]

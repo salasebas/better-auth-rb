@@ -10,7 +10,7 @@ module BetterAuth
         module_function
 
         def generate_passkey_registration_options_endpoint(config)
-          Endpoint.new(path: "/passkey/generate-register-options", method: "GET") do |ctx|
+          Endpoint.new(path: "/passkey/generate-register-options", method: "GET", metadata: Routes.openapi_for(:generate_registration_options)) do |ctx|
             query = Utils.normalize_hash(ctx.query)
             Utils.validate_authenticator_attachment!(query[:authenticator_attachment])
             user = Utils.resolve_registration_user(config, ctx, query)
@@ -40,7 +40,7 @@ module BetterAuth
         end
 
         def verify_passkey_registration_endpoint(config)
-          Endpoint.new(path: "/passkey/verify-registration", method: "POST") do |ctx|
+          Endpoint.new(path: "/passkey/verify-registration", method: "POST", metadata: Routes.openapi_for(:verify_registration)) do |ctx|
             body = Utils.normalize_hash(ctx.body)
             Utils.require_key!(body, :response)
             require_session = config.dig(:registration, :require_session) != false

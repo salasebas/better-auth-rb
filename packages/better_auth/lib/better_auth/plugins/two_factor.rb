@@ -300,11 +300,32 @@ module BetterAuth
         openapi: {
           operationId: operation_id,
           description: description,
+          requestBody: two_factor_request_body(operation_id),
           responses: {
             "200" => OpenAPI.json_response("Success", response_schema)
           }
         }
       }
+    end
+
+    def two_factor_request_body(operation_id)
+      schema = case operation_id
+      when "enableTwoFactor"
+        OpenAPI.object_schema({password: {type: "string"}, issuer: {type: "string"}})
+      when "disableTwoFactor", "getTOTPURI", "generateBackupCodes"
+        OpenAPI.object_schema({password: {type: "string"}})
+      when "generateTOTP"
+        OpenAPI.object_schema({secret: {type: "string"}}, required: ["secret"])
+      when "verifyTOTP", "verifyTwoFactorOTP"
+        OpenAPI.object_schema({code: {type: "string"}, trustDevice: {type: "boolean"}, trust_device: {type: "boolean"}}, required: ["code"])
+      when "verifyBackupCode"
+        OpenAPI.object_schema({code: {type: "string"}, disableSession: {type: "boolean"}, disable_session: {type: "boolean"}, trustDevice: {type: "boolean"}, trust_device: {type: "boolean"}}, required: ["code"])
+      when "sendTwoFactorOTP"
+        OpenAPI.empty_request_body.dig(:content, "application/json", :schema)
+      else
+        {type: "object", properties: {}}
+      end
+      OpenAPI.json_request_body(schema)
     end
 
     def two_factor_enable_response_schema

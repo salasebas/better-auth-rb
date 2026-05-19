@@ -5,7 +5,7 @@ module BetterAuth
     module_function
 
     def oauth_end_session_endpoint
-      Endpoint.new(path: "/oauth2/end-session", method: ["GET", "POST"], metadata: {allowed_media_types: ["application/x-www-form-urlencoded", "application/json"]}) do |ctx|
+      Endpoint.new(path: "/oauth2/end-session", method: ["GET", "POST"], metadata: oauth_openapi_for(:end_session).merge(allowed_media_types: ["application/x-www-form-urlencoded", "application/json"])) do |ctx|
         input = OAuthProtocol.stringify_keys((ctx.method == "GET") ? ctx.query : ctx.body)
         id_token_hint = input["id_token_hint"].to_s
         raise APIError.new("UNAUTHORIZED", message: "invalid id token") if id_token_hint.empty?

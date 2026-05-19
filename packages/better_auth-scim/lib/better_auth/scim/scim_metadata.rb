@@ -29,6 +29,48 @@ module BetterAuth
       }
     end
 
+    def scim_generate_token_openapi_metadata
+      {
+        openapi: {
+          summary: "Generates a new SCIM token for the given provider",
+          requestBody: OpenAPI.json_request_body(
+            OpenAPI.object_schema(
+              {
+                provider_id: {type: "string", description: "SCIM provider identifier"},
+                organization_id: {type: "string", description: "Organization ID to restrict the SCIM token to"}
+              },
+              required: ["provider_id"]
+            )
+          ),
+          responses: scim_openapi_responses.merge(
+            "201" => OpenAPI.json_response(
+              "SCIM token generated",
+              OpenAPI.object_schema({scimToken: {type: "string"}}, required: ["scimToken"])
+            )
+          )
+        }
+      }
+    end
+
+    def scim_delete_provider_openapi_metadata
+      {
+        openapi: {
+          summary: "Delete SCIM provider connection.",
+          requestBody: OpenAPI.json_request_body(
+            OpenAPI.object_schema(
+              {
+                provider_id: {type: "string", description: "SCIM provider identifier"}
+              },
+              required: ["provider_id"]
+            )
+          ),
+          responses: scim_openapi_responses.merge(
+            "200" => OpenAPI.json_response("SCIM provider connection deleted", OpenAPI.success_response_schema)
+          )
+        }
+      }
+    end
+
     def scim_openapi_responses
       {
         "200" => {description: "Success"},

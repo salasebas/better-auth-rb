@@ -38,6 +38,14 @@ module BetterAuth
           openapi: {
             operationId: "dubLink",
             description: "Link a Dub OAuth account",
+            requestBody: OpenAPI.json_request_body(
+              OpenAPI.object_schema(
+                {
+                  callbackURL: {type: "string", description: "The URL to redirect to after linking"},
+                  callback_url: {type: "string", description: "The URL to redirect to after linking"}
+                }
+              )
+            ),
             responses: {
               "200" => OpenAPI.json_response(
                 "Authorization URL generated successfully for linking a Dub account",

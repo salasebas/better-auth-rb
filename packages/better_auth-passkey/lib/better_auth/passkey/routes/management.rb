@@ -7,7 +7,7 @@ module BetterAuth
         module_function
 
         def list_passkeys_endpoint
-          Endpoint.new(path: "/passkey/list-user-passkeys", method: "GET") do |ctx|
+          Endpoint.new(path: "/passkey/list-user-passkeys", method: "GET", metadata: Routes.openapi_for(:list_passkeys)) do |ctx|
             session = BetterAuth::Routes.current_session(ctx)
             passkeys = ctx.context.adapter.find_many(model: "passkey", where: [{field: "userId", value: session.fetch(:user).fetch("id")}])
             ctx.json(passkeys.map { |passkey| Credentials.wire(passkey) })
@@ -15,7 +15,7 @@ module BetterAuth
         end
 
         def delete_passkey_endpoint
-          Endpoint.new(path: "/passkey/delete-passkey", method: "POST") do |ctx|
+          Endpoint.new(path: "/passkey/delete-passkey", method: "POST", metadata: Routes.openapi_for(:delete_passkey)) do |ctx|
             session = BetterAuth::Routes.current_session(ctx)
             body = Utils.normalize_hash(ctx.body)
             Utils.require_string!(body, :id)
@@ -34,7 +34,7 @@ module BetterAuth
         end
 
         def update_passkey_endpoint
-          Endpoint.new(path: "/passkey/update-passkey", method: "POST") do |ctx|
+          Endpoint.new(path: "/passkey/update-passkey", method: "POST", metadata: Routes.openapi_for(:update_passkey)) do |ctx|
             session = BetterAuth::Routes.current_session(ctx)
             body = Utils.normalize_hash(ctx.body)
             Utils.require_string!(body, :id)

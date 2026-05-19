@@ -130,5 +130,419 @@ module BetterAuth
         o_auth2_end_session: oauth_end_session_endpoint
       }
     end
+
+    def oauth_openapi_for(route)
+      {
+        register_client: oauth_client_registration_openapi("Register a new OAuth2 client", include_secret: true),
+        create_client: oauth_client_registration_openapi("Create a new OAuth2 client", include_secret: true),
+        public_client_prelogin: oauth_public_client_prelogin_openapi,
+        delete_client: oauth_delete_client_openapi,
+        update_client: oauth_update_client_openapi,
+        rotate_client_secret: oauth_rotate_client_secret_openapi,
+        update_consent: oauth_update_consent_openapi,
+        delete_consent: oauth_delete_consent_openapi,
+        continue: oauth_continue_openapi,
+        consent: oauth_consent_openapi,
+        token: oauth_token_openapi,
+        introspect: oauth_introspect_openapi,
+        revoke: oauth_revoke_openapi,
+        end_session: oauth_end_session_openapi
+      }.fetch(route)
+    end
+
+    def oauth_client_registration_openapi(description, include_secret:)
+      {
+        openapi: {
+          description: description,
+          requestBody: OpenAPI.json_request_body(oauth_client_registration_schema),
+          responses: {
+            "201" => OpenAPI.json_response("OAuth2 client created successfully", oauth_client_response_schema(include_secret: include_secret))
+          }
+        }
+      }
+    end
+
+    def oauth_public_client_prelogin_openapi
+      {
+        openapi: {
+          description: "Get public OAuth2 client metadata before login",
+          requestBody: OpenAPI.json_request_body(
+            OpenAPI.object_schema(
+              {
+                client_id: {type: "string", description: "OAuth2 client ID"},
+                oauth_query: {type: "string", description: "Signed OAuth query string"}
+              },
+              required: ["client_id", "oauth_query"]
+            )
+          ),
+          responses: {
+            "200" => OpenAPI.json_response("Public OAuth2 client metadata", oauth_public_client_schema)
+          }
+        }
+      }
+    end
+
+    def oauth_delete_client_openapi
+      {
+        openapi: {
+          description: "Delete an OAuth2 client",
+          requestBody: OpenAPI.json_request_body(oauth_client_id_body_schema),
+          responses: {
+            "200" => OpenAPI.json_response("OAuth2 client deleted", OpenAPI.object_schema({deleted: {type: "boolean"}}, required: ["deleted"]))
+          }
+        }
+      }
+    end
+
+    def oauth_update_client_openapi
+      {
+        openapi: {
+          description: "Update an OAuth2 client",
+          requestBody: OpenAPI.json_request_body(
+            OpenAPI.object_schema(
+              {
+                client_id: {type: "string", description: "OAuth2 client ID"},
+                update: oauth_client_registration_schema.merge(description: "Client metadata to update")
+              },
+              required: ["client_id", "update"]
+            )
+          ),
+          responses: {
+            "200" => OpenAPI.json_response("OAuth2 client updated", oauth_client_response_schema(include_secret: false))
+          }
+        }
+      }
+    end
+
+    def oauth_rotate_client_secret_openapi
+      {
+        openapi: {
+          description: "Rotate an OAuth2 client secret",
+          requestBody: OpenAPI.json_request_body(oauth_client_id_body_schema),
+          responses: {
+            "200" => OpenAPI.json_response("OAuth2 client secret rotated", oauth_client_response_schema(include_secret: true))
+          }
+        }
+      }
+    end
+
+    def oauth_update_consent_openapi
+      {
+        openapi: {
+          description: "Update OAuth2 consent scopes",
+          requestBody: OpenAPI.json_request_body(oauth_consent_mutation_schema(required_update: false)),
+          responses: {
+            "200" => OpenAPI.json_response("OAuth2 consent updated", oauth_consent_response_schema)
+          }
+        }
+      }
+    end
+
+    def oauth_delete_consent_openapi
+      {
+        openapi: {
+          description: "Delete OAuth2 consent",
+          requestBody: OpenAPI.json_request_body(oauth_consent_identifier_schema),
+          responses: {
+            "200" => OpenAPI.json_response("OAuth2 consent deleted", OpenAPI.object_schema({deleted: {type: "boolean"}}, required: ["deleted"]))
+          }
+        }
+      }
+    end
+
+    def oauth_continue_openapi
+      {
+        openapi: {
+          description: "Continue an OAuth2 authorization interaction",
+          requestBody: OpenAPI.json_request_body(
+            OpenAPI.object_schema(
+              {
+                oauth_query: {type: "string", description: "Signed OAuth query string"},
+                selected: {type: "boolean", description: "Continue after account selection"},
+                created: {type: "boolean", description: "Continue after account creation"},
+                postLogin: {type: "boolean", description: "Continue after post-login flow"},
+                post_login: {type: "boolean", description: "Continue after post-login flow"}
+              },
+              required: ["oauth_query"]
+            )
+          ),
+          responses: {
+            "200" => OpenAPI.json_response("OAuth2 authorization redirect", oauth_redirect_response_schema)
+          }
+        }
+      }
+    end
+
+    def oauth_consent_openapi
+      {
+        openapi: {
+          description: "Submit an OAuth2 consent decision",
+          requestBody: OpenAPI.json_request_body(
+            OpenAPI.object_schema(
+              {
+                consent_code: {type: "string", description: "Consent code issued by the authorization flow"},
+                accept: {type: "boolean", description: "Whether the user accepted the consent request"},
+                scope: {type: "string", description: "Granted scopes as a space-delimited string"},
+                scopes: {type: "array", items: {type: "string"}, description: "Granted scopes"}
+              },
+              required: ["consent_code"]
+            )
+          ),
+          responses: {
+            "200" => OpenAPI.json_response("OAuth2 consent redirect", OpenAPI.object_schema({redirectURI: {type: "string"}}, required: ["redirectURI"]))
+          }
+        }
+      }
+    end
+
+    def oauth_token_openapi
+      {
+        openapi: {
+          description: "Exchange an OAuth2 grant for tokens",
+          requestBody: OpenAPI.json_request_body(
+            OpenAPI.object_schema(
+              {
+                grant_type: {type: "string", enum: [OAuthProtocol::AUTH_CODE_GRANT, OAuthProtocol::CLIENT_CREDENTIALS_GRANT, OAuthProtocol::REFRESH_GRANT]},
+                code: {type: "string", description: "Authorization code"},
+                redirect_uri: {type: "string", format: "uri"},
+                code_verifier: {type: "string"},
+                client_id: {type: "string"},
+                client_secret: {type: "string"},
+                refresh_token: {type: "string"},
+                scope: {type: "string"},
+                resource: {oneOf: [{type: "string"}, {type: "array", items: {type: "string"}}]}
+              },
+              required: ["grant_type"]
+            )
+          ),
+          responses: {
+            "200" => OpenAPI.json_response("OAuth2 tokens issued", oauth_token_response_schema)
+          }
+        }
+      }
+    end
+
+    def oauth_introspect_openapi
+      {
+        openapi: {
+          description: "Introspect an OAuth2 token",
+          requestBody: OpenAPI.json_request_body(
+            OpenAPI.object_schema(
+              {
+                token: {type: "string", description: "Token to introspect"},
+                token_type_hint: {type: "string", enum: ["access_token", "refresh_token"]}
+              },
+              required: ["token"]
+            )
+          ),
+          responses: {
+            "200" => OpenAPI.json_response("OAuth2 token introspection result", oauth_introspection_response_schema)
+          }
+        }
+      }
+    end
+
+    def oauth_revoke_openapi
+      {
+        openapi: {
+          description: "Revoke an OAuth2 token",
+          requestBody: OpenAPI.json_request_body(
+            OpenAPI.object_schema(
+              {
+                token: {type: "string", description: "Token to revoke"},
+                token_type_hint: {type: "string", enum: ["access_token", "refresh_token"]}
+              },
+              required: ["token"]
+            )
+          ),
+          responses: {
+            "200" => OpenAPI.json_response("OAuth2 token revoked", OpenAPI.object_schema({revoked: {type: "boolean"}}, required: ["revoked"]))
+          }
+        }
+      }
+    end
+
+    def oauth_end_session_openapi
+      {
+        openapi: {
+          description: "End an OpenID Connect session",
+          parameters: oauth_end_session_parameters,
+          requestBody: OpenAPI.json_request_body(oauth_end_session_body_schema, required: false),
+          responses: {
+            "200" => OpenAPI.json_response("OpenID Connect session ended", OpenAPI.status_response_schema)
+          }
+        }
+      }
+    end
+
+    def oauth_client_registration_schema
+      OpenAPI.object_schema(
+        {
+          redirect_uris: {type: "array", items: {type: "string", format: "uri"}, description: "Allowed redirect URIs"},
+          post_logout_redirect_uris: {type: "array", items: {type: "string", format: "uri"}, description: "Allowed post logout redirect URIs"},
+          client_name: {type: "string", description: "OAuth2 client name"},
+          client_uri: {type: "string", format: "uri"},
+          logo_uri: {type: "string", format: "uri"},
+          contacts: {type: "array", items: {type: "string"}},
+          tos_uri: {type: "string", format: "uri"},
+          policy_uri: {type: "string", format: "uri"},
+          software_id: {type: "string"},
+          software_version: {type: "string"},
+          software_statement: {type: "string"},
+          token_endpoint_auth_method: {type: "string", enum: ["client_secret_basic", "client_secret_post", "none"]},
+          grant_types: {type: "array", items: {type: "string", enum: [OAuthProtocol::AUTH_CODE_GRANT, OAuthProtocol::CLIENT_CREDENTIALS_GRANT, OAuthProtocol::REFRESH_GRANT]}},
+          response_types: {type: "array", items: {type: "string", enum: ["code"]}},
+          scope: {type: "string"},
+          scopes: {type: "array", items: {type: "string"}},
+          type: {type: "string", enum: ["web", "native", "user-agent-based"]},
+          require_pkce: {type: "boolean"},
+          requirePKCE: {type: "boolean"},
+          subject_type: {type: "string", enum: ["public", "pairwise"]},
+          subjectType: {type: "string", enum: ["public", "pairwise"]},
+          enable_end_session: {type: "boolean"},
+          enableEndSession: {type: "boolean"},
+          skip_consent: {type: "boolean"},
+          skipConsent: {type: "boolean"},
+          metadata: {type: "object", additionalProperties: true}
+        },
+        required: ["redirect_uris"]
+      )
+    end
+
+    def oauth_client_id_body_schema
+      OpenAPI.object_schema(
+        {
+          client_id: {type: "string", description: "OAuth2 client ID"}
+        },
+        required: ["client_id"]
+      )
+    end
+
+    def oauth_client_response_schema(include_secret:)
+      properties = oauth_public_client_schema[:properties].merge(
+        redirect_uris: {type: "array", items: {type: "string", format: "uri"}},
+        post_logout_redirect_uris: {type: "array", items: {type: "string", format: "uri"}},
+        token_endpoint_auth_method: {type: "string"},
+        grant_types: {type: "array", items: {type: "string"}},
+        response_types: {type: "array", items: {type: "string"}},
+        scope: {type: "string"},
+        public: {type: "boolean"},
+        type: {type: ["string", "null"]},
+        user_id: {type: ["string", "null"]},
+        reference_id: {type: ["string", "null"]},
+        require_pkce: {type: ["boolean", "null"]},
+        subject_type: {type: ["string", "null"]},
+        metadata: {type: "object", additionalProperties: true},
+        client_id_issued_at: {type: "number"},
+        client_secret_expires_at: {type: "number"}
+      )
+      properties[:client_secret] = {type: "string", description: "OAuth2 client secret"} if include_secret
+      OpenAPI.object_schema(properties)
+    end
+
+    def oauth_public_client_schema
+      OpenAPI.object_schema(
+        {
+          client_id: {type: "string"},
+          client_name: {type: "string"},
+          client_uri: {type: ["string", "null"], format: "uri"},
+          logo_uri: {type: ["string", "null"], format: "uri"},
+          contacts: {type: "array", items: {type: "string"}},
+          tos_uri: {type: ["string", "null"], format: "uri"},
+          policy_uri: {type: ["string", "null"], format: "uri"}
+        }
+      )
+    end
+
+    def oauth_consent_identifier_schema
+      OpenAPI.object_schema(
+        {
+          id: {type: "string", description: "OAuth2 consent ID"},
+          client_id: {type: "string", description: "OAuth2 client ID"}
+        }
+      )
+    end
+
+    def oauth_consent_mutation_schema(required_update:)
+      OpenAPI.object_schema(
+        oauth_consent_identifier_schema[:properties].merge(
+          update: OpenAPI.object_schema({scopes: {type: "array", items: {type: "string"}}}),
+          scope: {type: "string"},
+          scopes: {type: "array", items: {type: "string"}}
+        ),
+        required: required_update ? ["update"] : []
+      )
+    end
+
+    def oauth_consent_response_schema
+      OpenAPI.object_schema(
+        {
+          id: {type: "string"},
+          clientId: {type: "string"},
+          userId: {type: "string"},
+          scopes: {type: "array", items: {type: "string"}},
+          createdAt: {type: "string", format: "date-time"},
+          updatedAt: {type: "string", format: "date-time"}
+        }
+      )
+    end
+
+    def oauth_redirect_response_schema
+      OpenAPI.object_schema(
+        {
+          redirect: {type: "boolean", enum: [true]},
+          url: {type: "string", format: "uri"}
+        },
+        required: ["redirect", "url"]
+      )
+    end
+
+    def oauth_token_response_schema
+      OpenAPI.object_schema(
+        {
+          access_token: {type: "string"},
+          token_type: {type: "string"},
+          expires_in: {type: "number"},
+          refresh_token: {type: "string"},
+          scope: {type: "string"},
+          id_token: {type: "string"}
+        },
+        required: ["access_token", "token_type"]
+      )
+    end
+
+    def oauth_introspection_response_schema
+      OpenAPI.object_schema(
+        {
+          active: {type: "boolean"},
+          client_id: {type: "string"},
+          scope: {type: "string"},
+          sub: {type: "string"},
+          iss: {type: "string"},
+          iat: {type: "number"},
+          exp: {type: "number"},
+          sid: {type: "string"},
+          aud: {oneOf: [{type: "string"}, {type: "array", items: {type: "string"}}]}
+        },
+        required: ["active"]
+      )
+    end
+
+    def oauth_end_session_parameters
+      oauth_end_session_body_schema[:properties].keys.map do |name|
+        OpenAPI.query_parameter(name.to_s, required: false, schema: oauth_end_session_body_schema[:properties][name])
+      end
+    end
+
+    def oauth_end_session_body_schema
+      OpenAPI.object_schema(
+        {
+          id_token_hint: {type: "string"},
+          client_id: {type: "string"},
+          post_logout_redirect_uri: {type: "string", format: "uri"},
+          state: {type: "string"}
+        }
+      )
+    end
   end
 end

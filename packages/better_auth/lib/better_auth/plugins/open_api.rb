@@ -128,6 +128,21 @@ module BetterAuth
       }
     end
 
+    def default_request_body
+      {
+        required: true,
+        content: {
+          "application/json" => {
+            schema: {
+              type: "object",
+              properties: {},
+              additionalProperties: true
+            }
+          }
+        }
+      }
+    end
+
     def responses(responses = nil)
       {"200" => success_response}.merge(default_error_responses).merge(responses || {})
     end
@@ -138,6 +153,17 @@ module BetterAuth
         {
           type: "object",
           properties: {}
+        }
+      )
+    end
+
+    def default_success_response
+      json_response(
+        "Success",
+        {
+          type: "object",
+          properties: {},
+          additionalProperties: true
         }
       )
     end
@@ -168,10 +194,16 @@ module BetterAuth
 
     def default_metadata(path, methods)
       method = Array(methods).reject { |value| value.to_s == "*" }.first.to_s.upcase
-      {
+      metadata = {
         operationId: operation_id(path, method),
-        description: "#{method} #{path}"
+        description: "Execute the #{operation_id(path, method)} endpoint.",
+        parameters: default_path_parameters(path),
+        responses: {
+          "200" => default_success_response
+        }
       }
+      metadata[:requestBody] = default_request_body if %w[POST PUT PATCH].include?(method)
+      metadata
     end
 
     def operation_id(path, method)
@@ -182,6 +214,14 @@ module BetterAuth
       return method.downcase if base.empty?
 
       "#{method.to_s.downcase}#{base}"
+    end
+
+    def default_path_parameters(path)
+      path.to_s.split("/").filter_map do |part|
+        next unless part.start_with?(":")
+
+        path_parameter(part.delete_prefix(":"))
+      end
     end
   end
 

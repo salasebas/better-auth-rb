@@ -171,7 +171,7 @@ class BetterAuthSchemaTest < Minitest::Test
     assert_equal true, full_schema["organizationRole"][:fields]["role"][:index]
   end
 
-  def test_plugin_schema_defaults_physical_table_names_to_snake_case
+  def test_plugin_schema_defaults_physical_table_names_to_plural_snake_case
     config = BetterAuth::Configuration.new(
       secret: SECRET,
       database: :memory,
@@ -192,9 +192,48 @@ class BetterAuthSchemaTest < Minitest::Test
 
     schema = BetterAuth::Schema.auth_tables(config)
 
-    assert_equal "api_key", schema["apiKey"][:model_name]
+    assert_equal "api_keys", schema["apiKey"][:model_name]
     assert_equal "user_id", schema["apiKey"][:fields]["userId"][:field_name]
     assert_equal "last_request", schema["apiKey"][:fields]["lastRequest"][:field_name]
+  end
+
+  def test_plugin_schema_pluralizes_common_default_table_names
+    config = BetterAuth::Configuration.new(
+      secret: SECRET,
+      database: :memory,
+      plugins: [
+        {
+          id: "table-normalization",
+          schema: {
+            apikey: {fields: {id: {type: "string", required: true}}},
+            oauthClient: {fields: {id: {type: "string", required: true}}},
+            oauthRefreshToken: {fields: {id: {type: "string", required: true}}},
+            oauthAccessToken: {fields: {id: {type: "string", required: true}}},
+            oauthConsent: {fields: {id: {type: "string", required: true}}},
+            scimProvider: {fields: {id: {type: "string", required: true}}},
+            ssoProvider: {fields: {id: {type: "string", required: true}}},
+            subscription: {fields: {id: {type: "string", required: true}}},
+            deviceCode: {fields: {id: {type: "string", required: true}}},
+            twoFactor: {fields: {id: {type: "string", required: true}}},
+            walletAddress: {fields: {id: {type: "string", required: true}}}
+          }
+        }
+      ]
+    )
+
+    schema = BetterAuth::Schema.auth_tables(config)
+
+    assert_equal "api_keys", schema["apikey"][:model_name]
+    assert_equal "oauth_clients", schema["oauthClient"][:model_name]
+    assert_equal "oauth_refresh_tokens", schema["oauthRefreshToken"][:model_name]
+    assert_equal "oauth_access_tokens", schema["oauthAccessToken"][:model_name]
+    assert_equal "oauth_consents", schema["oauthConsent"][:model_name]
+    assert_equal "scim_providers", schema["scimProvider"][:model_name]
+    assert_equal "sso_providers", schema["ssoProvider"][:model_name]
+    assert_equal "subscriptions", schema["subscription"][:model_name]
+    assert_equal "device_codes", schema["deviceCode"][:model_name]
+    assert_equal "two_factors", schema["twoFactor"][:model_name]
+    assert_equal "wallet_addresses", schema["walletAddress"][:model_name]
   end
 
   def test_plugin_foreign_keys_default_to_cascade_delete

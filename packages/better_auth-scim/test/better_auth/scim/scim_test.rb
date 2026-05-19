@@ -24,6 +24,18 @@ class BetterAuthPluginsScimTest < Minitest::Test
     refute paths.key?("/scim/v2/ServiceProviderConfig")
   end
 
+  def test_visible_endpoints_have_complete_open_api_metadata
+    plugin = BetterAuth::Plugins.scim
+    missing = plugin.endpoints.filter_map do |key, endpoint|
+      next unless endpoint.path
+      next if endpoint.metadata[:hide] || endpoint.metadata[:SERVER_ONLY] || endpoint.metadata[:server_only]
+
+      "#{plugin.id}.#{key}" unless rich_openapi?(endpoint)
+    end
+
+    assert_empty missing
+  end
+
   def test_scim_sql_schema_declares_global_provider_uniqueness
     auth = build_auth
     postgres = BetterAuth::Schema::SQL.create_statements(auth.context.options, dialect: :postgres).grep(/scim_provider/).join("\n")
@@ -35,10 +47,10 @@ class BetterAuthPluginsScimTest < Minitest::Test
     assert_includes postgres, 'UNIQUE ("scim_token")'
     assert_includes sqlite, 'UNIQUE ("provider_id")'
     assert_includes sqlite, 'UNIQUE ("scim_token")'
-    assert_includes mysql, "UNIQUE KEY `uniq_scim_provider_provider_id` (`provider_id`)"
-    assert_includes mysql, "UNIQUE KEY `uniq_scim_provider_scim_token` (`scim_token`)"
-    assert_includes mssql, "CONSTRAINT [uniq_scim_provider_provider_id] UNIQUE ([provider_id])"
-    assert_includes mssql, "CONSTRAINT [uniq_scim_provider_scim_token] UNIQUE ([scim_token])"
+    assert_includes mysql, "UNIQUE KEY `uniq_scim_providers_provider_id` (`provider_id`)"
+    assert_includes mysql, "UNIQUE KEY `uniq_scim_providers_scim_token` (`scim_token`)"
+    assert_includes mssql, "CONSTRAINT [uniq_scim_providers_provider_id] UNIQUE ([provider_id])"
+    assert_includes mssql, "CONSTRAINT [uniq_scim_providers_scim_token] UNIQUE ([scim_token])"
   end
 
   def test_scim_metadata_endpoints_match_scim_v2_shapes
@@ -383,5 +395,20 @@ class BetterAuthPluginsScimTest < Minitest::Test
         location: "#{base_url}/scim/v2/Schemas/urn:ietf:params:scim:schemas:core:2.0:User"
       }
     }
+  end
+
+  def rich_openapi?(endpoint)
+    openapi = endpoint.metadata[:openapi]
+    return false unless openapi.is_a?(Hash)
+    return false if openapi[:operationId].to_s.empty?
+    return false if endpoint.methods.any? { |method| openapi[:description].to_s == "#{method} #{endpoint.path}" }
+    return false unless openapi[:responses].is_a?(Hash) && openapi[:responses].any?
+    return false if endpoint.methods.any? { |method| %w[POST PUT PATCH].include?(method) } && !meaningful_schema?(openapi.dig(:requestBody, :content, "application/json", :schema))
+
+    true
+  end
+
+  def meaningful_schema?(schema)
+    schema.is_a?(Hash) && (schema[:additionalProperties] || schema[:$ref] || schema[:items] || schema[:properties]&.any?)
   end
 end

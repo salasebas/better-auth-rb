@@ -7,6 +7,18 @@ require_relative "../test_helper"
 class BetterAuthPluginsSSOTest < Minitest::Test
   SECRET = "phase-twelve-secret-with-enough-entropy-123"
 
+  def test_visible_endpoints_have_complete_open_api_metadata
+    plugin = BetterAuth::Plugins.sso
+    missing = plugin.endpoints.filter_map do |key, endpoint|
+      next unless endpoint.path
+      next if endpoint.metadata[:hide] || endpoint.metadata[:SERVER_ONLY] || endpoint.metadata[:server_only]
+
+      "#{plugin.id}.#{key}" unless rich_openapi?(endpoint)
+    end
+
+    assert_empty missing
+  end
+
   def test_registers_sso_schema_and_provider_crud_routes
     auth = build_auth
     cookie = sign_up_cookie(auth)
@@ -478,5 +490,21 @@ class BetterAuthPluginsSSOTest < Minitest::Test
 
   def cookie_header(set_cookie)
     set_cookie.to_s.lines.map { |line| line.split(";").first }.join("; ")
+  end
+
+  def rich_openapi?(endpoint)
+    openapi = endpoint.metadata[:openapi]
+    return false unless openapi.is_a?(Hash)
+    return false if openapi[:operationId].to_s.empty?
+    return false if endpoint.methods.any? { |method| openapi[:description].to_s == "#{method} #{endpoint.path}" }
+    return false unless openapi[:responses].is_a?(Hash) && openapi[:responses].any?
+    return false if endpoint.methods.any? { |method| %w[POST PUT PATCH].include?(method) } && !meaningful_schema?(openapi.dig(:requestBody, :content, "application/json", :schema))
+    return false if endpoint.path.to_s.include?(":") && !Array(openapi[:parameters]).any? { |parameter| parameter[:in] == "path" }
+
+    true
+  end
+
+  def meaningful_schema?(schema)
+    schema.is_a?(Hash) && (schema[:additionalProperties] || schema[:$ref] || schema[:items] || schema[:properties]&.any?)
   end
 end

@@ -306,7 +306,9 @@ class BetterAuthPluginsOpenAPITest < Minitest::Test
     metadata = endpoint.metadata.fetch(:openapi)
 
     assert_equal "postCustomPluginRoute", metadata.fetch(:operationId)
-    assert_equal "POST /custom-plugin-route", metadata.fetch(:description)
+    assert_equal "Execute the postCustomPluginRoute endpoint.", metadata.fetch(:description)
+    assert_equal BetterAuth::OpenAPI.default_request_body, metadata.fetch(:requestBody)
+    assert meaningful_responses?(metadata.fetch(:responses))
   end
 
   def test_admin_and_multi_session_route_open_api_metadata_lives_on_endpoints
@@ -641,7 +643,13 @@ class BetterAuthPluginsOpenAPITest < Minitest::Test
 
         openapi = endpoint.metadata[:openapi]
         responses = openapi && openapi[:responses]
-        next if openapi && openapi[:operationId].to_s != "" && openapi[:description].to_s != "" && meaningful_responses?(responses)
+        request_body = openapi && openapi[:requestBody]
+        default_descriptions = endpoint.methods.reject { |method| method == "*" }.map { |method| "#{method} #{endpoint.path}" }
+        next if openapi &&
+          openapi[:operationId].to_s != "" &&
+          !default_descriptions.include?(openapi[:description].to_s) &&
+          meaningful_responses?(responses) &&
+          (!request_body_method?(endpoint) || meaningful_request_body?(request_body))
 
         "#{plugin.id}.#{key}"
       end
@@ -676,5 +684,17 @@ class BetterAuthPluginsOpenAPITest < Minitest::Test
       schema = response.dig(:content, "application/json", :schema)
       meaningful_schema?(schema) || (status.to_s.start_with?("3") && response[:description].to_s != "")
     end
+  end
+
+  def request_body_method?(endpoint)
+    endpoint.methods.any? { |method| %w[POST PUT PATCH].include?(method) }
+  end
+
+  def meaningful_request_body?(request_body)
+    schema = request_body&.dig(:content, "application/json", :schema)
+    return false unless schema.is_a?(Hash)
+    return false if schema[:additionalProperties] == true && schema[:properties] == {}
+
+    meaningful_schema?(schema) || schema.key?(:properties)
   end
 end

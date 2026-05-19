@@ -8,6 +8,7 @@ module BetterAuth
       def schema(config, custom_schema = nil)
         base = {
           apikey: {
+            model_name: "api_keys",
             fields: {
               configId: {type: "string", required: true, default_value: "default", index: true},
               name: {type: "string", required: false},

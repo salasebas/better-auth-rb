@@ -129,7 +129,7 @@ class BetterAuthSSORoutesSchemasTest < Minitest::Test
     schema = SCHEMAS.plugin_schema(domainVerification: {enabled: true})
     fields = schema.fetch(:ssoProvider).fetch(:fields)
 
-    assert_equal "ssoProviders", schema.fetch(:ssoProvider).fetch(:model_name)
+    assert_equal "sso_providers", schema.fetch(:ssoProvider).fetch(:model_name)
     assert_equal({type: "boolean", required: false, default_value: false}, fields.fetch(:domainVerified))
   end
 end

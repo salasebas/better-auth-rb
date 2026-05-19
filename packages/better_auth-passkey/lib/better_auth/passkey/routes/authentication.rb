@@ -10,7 +10,7 @@ module BetterAuth
         module_function
 
         def generate_passkey_authentication_options_endpoint(config)
-          Endpoint.new(path: "/passkey/generate-authenticate-options", method: "GET") do |ctx|
+          Endpoint.new(path: "/passkey/generate-authenticate-options", method: "GET", metadata: Routes.openapi_for(:generate_authentication_options)) do |ctx|
             session = BetterAuth::Routes.current_session(ctx, allow_nil: true)
             relying_party = Utils.relying_party(config, ctx)
             passkeys = if session
@@ -39,7 +39,7 @@ module BetterAuth
         end
 
         def verify_passkey_authentication_endpoint(config)
-          Endpoint.new(path: "/passkey/verify-authentication", method: "POST") do |ctx|
+          Endpoint.new(path: "/passkey/verify-authentication", method: "POST", metadata: Routes.openapi_for(:verify_authentication)) do |ctx|
             body = Utils.normalize_hash(ctx.body)
             Utils.require_key!(body, :response)
             origin = Utils.origin(config, ctx)

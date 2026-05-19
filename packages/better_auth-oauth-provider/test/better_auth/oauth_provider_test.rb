@@ -27,6 +27,18 @@ class BetterAuthPluginsOAuthProviderTest < Minitest::Test
     refute schema.key?("oauthApplication")
   end
 
+  def test_visible_endpoints_have_complete_open_api_metadata
+    plugin = BetterAuth::Plugins.oauth_provider
+    missing = plugin.endpoints.filter_map do |key, endpoint|
+      next unless endpoint.path
+      next if endpoint.metadata[:hide] || endpoint.metadata[:SERVER_ONLY] || endpoint.metadata[:server_only]
+
+      "#{plugin.id}.#{key}" unless rich_openapi?(endpoint)
+    end
+
+    assert_empty missing
+  end
+
   def test_plugin_exposes_upstream_rate_limit_rules
     plugin = BetterAuth::Plugins.oauth_provider(
       rate_limit: {
@@ -1888,5 +1900,21 @@ class BetterAuthPluginsOAuthProviderTest < Minitest::Test
       "CONTENT_TYPE" => "application/json",
       :input => body ? JSON.generate(body) : nil
     )
+  end
+
+  def rich_openapi?(endpoint)
+    openapi = endpoint.metadata[:openapi]
+    return false unless openapi.is_a?(Hash)
+    return false if openapi[:operationId].to_s.empty?
+    return false if endpoint.methods.any? { |method| openapi[:description].to_s == "#{method} #{endpoint.path}" }
+    return false unless openapi[:responses].is_a?(Hash) && openapi[:responses].any?
+    return false if endpoint.methods.any? { |method| %w[POST PUT PATCH].include?(method) } && !meaningful_schema?(openapi.dig(:requestBody, :content, "application/json", :schema))
+    return false if endpoint.path.to_s.include?(":") && !Array(openapi[:parameters]).any? { |parameter| parameter[:in] == "path" }
+
+    true
+  end
+
+  def meaningful_schema?(schema)
+    schema.is_a?(Hash) && (schema[:additionalProperties] || schema[:$ref] || schema[:items] || schema[:properties]&.any?)
   end
 end

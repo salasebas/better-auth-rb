@@ -9,7 +9,7 @@ module BetterAuth
         module_function
 
         def endpoint(config)
-          BetterAuth::Endpoint.new(path: "/api-key/update", method: "POST") do |ctx|
+          BetterAuth::Endpoint.new(path: "/api-key/update", method: "POST", metadata: Routes.openapi_for(:update_api_key)) do |ctx|
             body = BetterAuth::Plugins.api_key_normalize_body(ctx.body)
             resolved_config = BetterAuth::Plugins.api_key_resolve_config(ctx.context, config, body[:config_id])
             session = BetterAuth::Routes.current_session(ctx, allow_nil: true)

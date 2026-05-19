@@ -30,7 +30,7 @@ module BetterAuth
     end
 
     def oauth_update_consent_endpoint
-      Endpoint.new(path: "/oauth2/update-consent", method: "POST") do |ctx|
+      Endpoint.new(path: "/oauth2/update-consent", method: "POST", metadata: oauth_openapi_for(:update_consent)) do |ctx|
         session = Routes.current_session(ctx)
         body = OAuthProtocol.stringify_keys(ctx.body)
         id = body["id"]
@@ -61,7 +61,7 @@ module BetterAuth
     end
 
     def oauth_delete_consent_endpoint
-      Endpoint.new(path: "/oauth2/delete-consent", method: "POST") do |ctx|
+      Endpoint.new(path: "/oauth2/delete-consent", method: "POST", metadata: oauth_openapi_for(:delete_consent)) do |ctx|
         session = Routes.current_session(ctx)
         body = OAuthProtocol.stringify_keys(ctx.body)
         id = body["id"]
@@ -98,7 +98,7 @@ module BetterAuth
     end
 
     def oauth_legacy_update_consent_endpoint
-      Endpoint.new(path: "/oauth2/consent", method: "PATCH") do |ctx|
+      Endpoint.new(path: "/oauth2/consent", method: "PATCH", metadata: oauth_openapi_for(:update_consent)) do |ctx|
         session = Routes.current_session(ctx)
         body = OAuthProtocol.stringify_keys(ctx.body)
         consent = oauth_find_user_consent(ctx, session, body["client_id"])

@@ -8,9 +8,9 @@ class OAuthProviderOauthTest < Minitest::Test
     schema_models = plugin.schema.values.filter_map { |table| table[:model_name] || table[:modelName] }
 
     assert_equal "oauth-provider", plugin.id
-    assert_includes schema_models, "oauthClient"
-    assert_includes schema_models, "oauthAccessToken"
-    assert_includes schema_models, "oauthConsent"
+    assert_includes schema_models, "oauth_clients"
+    assert_includes schema_models, "oauth_access_tokens"
+    assert_includes schema_models, "oauth_consents"
     assert_includes plugin.schema.keys.map(&:to_s), "oauth_refresh_token"
     refute_includes schema_models, "oidcProvider"
     refute_includes schema_models, "oauthApplication"

@@ -5,8 +5,10 @@ require_relative "test_support"
 class BetterAuthAPIKeySchemaTest < Minitest::Test
   def test_schema_matches_upstream_reference_id_shape
     schema = BetterAuth::Plugins.api_key(rate_limit: {time_window: 1234, max_requests: 99}).schema
-    fields = schema.fetch(:apikey).fetch(:fields)
+    table = schema.fetch(:apikey)
+    fields = table.fetch(:fields)
 
+    assert_equal "api_keys", table.fetch(:model_name)
     assert_equal %i[
       config_id
       created_at

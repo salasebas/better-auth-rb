@@ -10,6 +10,18 @@ class BetterAuthPluginsPasskeyTest < Minitest::Test
   SECRET = "phase-eight-secret-with-enough-entropy-123"
   ORIGIN = "http://localhost:3000"
 
+  def test_visible_endpoints_have_complete_open_api_metadata
+    plugin = BetterAuth::Plugins.passkey
+    missing = plugin.endpoints.filter_map do |key, endpoint|
+      next unless endpoint.path
+      next if endpoint.metadata[:hide] || endpoint.metadata[:SERVER_ONLY] || endpoint.metadata[:server_only]
+
+      "#{plugin.id}.#{key}" unless rich_openapi?(endpoint)
+    end
+
+    assert_empty missing
+  end
+
   def test_generate_passkey_registration_options_returns_upstream_shape_and_cookie
     auth = build_auth
     cookie = sign_up_cookie(auth, email: "register-shape@example.com")
@@ -782,6 +794,25 @@ class BetterAuthPluginsPasskeyTest < Minitest::Test
       database: :memory,
       plugins: [BetterAuth::Plugins.passkey]
     }.merge(options).merge(email_and_password: email_and_password))
+  end
+
+  def rich_openapi?(endpoint)
+    openapi = endpoint.metadata[:openapi]
+    return false unless openapi.is_a?(Hash)
+    return false if openapi[:operationId].to_s.empty?
+    return false if endpoint.methods.any? { |method| openapi[:description].to_s == "#{method} #{endpoint.path}" }
+    return false unless openapi[:responses].is_a?(Hash) && openapi[:responses].any?
+    return false if request_body_method?(endpoint) && !meaningful_schema?(openapi.dig(:requestBody, :content, "application/json", :schema))
+
+    true
+  end
+
+  def request_body_method?(endpoint)
+    endpoint.methods.any? { |method| %w[POST PUT PATCH].include?(method) }
+  end
+
+  def meaningful_schema?(schema)
+    schema.is_a?(Hash) && (schema[:additionalProperties] || schema[:$ref] || schema[:items] || schema[:properties]&.any?)
   end
 
   def build_passkey_ctx(base_url:)

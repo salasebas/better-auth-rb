@@ -9,7 +9,7 @@ module BetterAuth
         module_function
 
         def endpoint(config)
-          BetterAuth::Endpoint.new(path: "/api-key/get", method: "GET") do |ctx|
+          BetterAuth::Endpoint.new(path: "/api-key/get", method: "GET", metadata: Routes.openapi_for(:get_api_key)) do |ctx|
             session = BetterAuth::Routes.current_session(ctx)
             query = BetterAuth::Plugins.normalize_hash(ctx.query)
             resolved_config = BetterAuth::Plugins.api_key_resolve_config(ctx.context, config, query[:config_id])

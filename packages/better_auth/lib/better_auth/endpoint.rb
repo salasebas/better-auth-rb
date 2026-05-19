@@ -24,6 +24,7 @@ module BetterAuth
       @headers_schema = headers_schema
       @metadata = metadata || {}
       apply_default_open_api_metadata!
+      apply_open_api_defaults!
       apply_open_api_schemas!
       @options = endpoint_options
       @use = Array(use)
@@ -70,6 +71,41 @@ module BetterAuth
       return unless defined?(BetterAuth::OpenAPI)
 
       metadata[:openapi] = BetterAuth::OpenAPI.default_metadata(path, methods)
+    end
+
+    def apply_open_api_defaults!
+      return unless path
+      return unless defined?(BetterAuth::OpenAPI)
+
+      openapi = fetch_key(metadata, :openapi)
+      return unless openapi.is_a?(Hash)
+
+      defaults = BetterAuth::OpenAPI.default_metadata(path, methods)
+      openapi[:operationId] = defaults[:operationId] if fetch_key(openapi, :operationId).to_s.empty?
+      openapi[:description] = defaults[:description] if default_open_api_description?(fetch_key(openapi, :description))
+      openapi[:parameters] = merge_open_api_parameters(defaults[:parameters], fetch_key(openapi, :parameters))
+      openapi[:responses] = defaults[:responses].merge(fetch_key(openapi, :responses) || {})
+      if request_body_method? && !fetch_key(openapi, :requestBody).is_a?(Hash)
+        openapi[:requestBody] = defaults[:requestBody] || BetterAuth::OpenAPI.default_request_body
+      end
+    end
+
+    def default_open_api_description?(description)
+      methods.any? { |method| description.to_s == "#{method} #{path}" }
+    end
+
+    def request_body_method?
+      methods.any? { |method| %w[POST PUT PATCH].include?(method) }
+    end
+
+    def merge_open_api_parameters(default_parameters, custom_parameters)
+      merged = Array(custom_parameters).dup
+      Array(default_parameters).each do |parameter|
+        next if merged.any? { |entry| fetch_key(entry, :name).to_s == fetch_key(parameter, :name).to_s && fetch_key(entry, :in).to_s == fetch_key(parameter, :in).to_s }
+
+        merged << parameter
+      end
+      merged
     end
 
     def apply_open_api_schemas!

@@ -59,7 +59,7 @@ module BetterAuth
           end
           {
             ssoProvider: {
-              model_name: normalized[:model_name] || "ssoProviders",
+              model_name: normalized[:model_name] || "sso_providers",
               fields: fields
             }
           }

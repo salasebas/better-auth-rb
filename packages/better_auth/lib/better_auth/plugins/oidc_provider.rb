@@ -441,6 +441,8 @@ module BetterAuth
           openapi: {
             operationId: "oauth2EndSession",
             description: "RP-Initiated Logout endpoint",
+            parameters: oidc_end_session_schema[:properties].keys.map { |name| OpenAPI.query_parameter(name.to_s, schema: oidc_end_session_schema[:properties][name]) },
+            requestBody: OpenAPI.json_request_body(oidc_end_session_schema, required: false),
             responses: {
               "302" => {description: "Redirects after clearing the session cookie"}
             }
@@ -470,11 +472,68 @@ module BetterAuth
         openapi: {
           operationId: operation_id,
           description: description,
+          requestBody: oidc_request_body_for(operation_id),
           responses: {
             "200" => OpenAPI.json_response(response_description, response_schema)
           }
         }
       }
+    end
+
+    def oidc_request_body_for(operation_id)
+      schema = case operation_id
+      when "registerOAuthApplication", "updateOAuthApplication"
+        oidc_client_registration_schema
+      when "rotateOAuthApplicationSecret"
+        OpenAPI.empty_request_body.dig(:content, "application/json", :schema)
+      when "oauth2Consent"
+        OpenAPI.object_schema({consent_code: {type: "string"}, accept: {type: "boolean"}}, required: ["consent_code"])
+      when "oauth2Token"
+        OpenAPI.object_schema(
+          {
+            grant_type: {type: "string", enum: [OAuthProtocol::AUTH_CODE_GRANT, OAuthProtocol::REFRESH_GRANT]},
+            code: {type: "string"},
+            redirect_uri: {type: "string", format: "uri"},
+            code_verifier: {type: "string"},
+            client_id: {type: "string"},
+            client_secret: {type: "string"},
+            refresh_token: {type: "string"},
+            scope: {type: "string"}
+          },
+          required: ["grant_type"]
+        )
+      when "oauth2Introspect", "oauth2Revoke"
+        OpenAPI.object_schema({token: {type: "string"}, token_type_hint: {type: "string", enum: ["access_token", "refresh_token"]}}, required: ["token"])
+      end
+      schema ? OpenAPI.json_request_body(schema) : nil
+    end
+
+    def oidc_client_registration_schema
+      OpenAPI.object_schema(
+        {
+          redirect_uris: {type: "array", items: {type: "string", format: "uri"}},
+          post_logout_redirect_uris: {type: "array", items: {type: "string", format: "uri"}},
+          client_name: {type: "string"},
+          client_uri: {type: "string", format: "uri"},
+          logo_uri: {type: "string", format: "uri"},
+          grant_types: {type: "array", items: {type: "string"}},
+          response_types: {type: "array", items: {type: "string"}},
+          scope: {type: "string"},
+          scopes: {type: "array", items: {type: "string"}},
+          metadata: {type: "object", additionalProperties: true}
+        }
+      )
+    end
+
+    def oidc_end_session_schema
+      OpenAPI.object_schema(
+        {
+          id_token_hint: {type: "string"},
+          client_id: {type: "string"},
+          post_logout_redirect_uri: {type: "string", format: "uri"},
+          state: {type: "string"}
+        }
+      )
     end
 
     def oidc_client_schema
@@ -541,7 +600,7 @@ module BetterAuth
     def oidc_provider_schema
       {
         oauthApplication: {
-          modelName: "oauthApplication",
+          model_name: "oauth_applications",
           fields: {
             name: {type: "string"},
             icon: {type: "string", required: false},
@@ -565,7 +624,7 @@ module BetterAuth
           }
         },
         oauthAccessToken: {
-          modelName: "oauthAccessToken",
+          model_name: "oauth_access_tokens",
           fields: {
             accessToken: {type: "string", unique: true, required: false},
             token: {type: "string", unique: true, required: false},
@@ -583,7 +642,7 @@ module BetterAuth
           }
         },
         oauthConsent: {
-          modelName: "oauthConsent",
+          model_name: "oauth_consents",
           fields: {
             clientId: {type: "string", required: true},
             userId: {type: "string", required: true},

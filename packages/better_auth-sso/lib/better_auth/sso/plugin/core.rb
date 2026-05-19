@@ -138,5 +138,185 @@ module BetterAuth
     def sso_schema(config = {})
       BetterAuth::SSO::Routes::Schemas.plugin_schema(config)
     end
+
+    def sso_openapi_for(route)
+      {
+        register_provider: sso_register_provider_openapi,
+        sign_in: sso_sign_in_openapi,
+        saml_callback: sso_saml_callback_openapi,
+        saml_acs: sso_saml_acs_openapi,
+        saml_slo: sso_saml_slo_openapi,
+        initiate_slo: sso_initiate_slo_openapi,
+        update_provider: sso_update_provider_openapi,
+        delete_provider: sso_delete_provider_openapi
+      }.fetch(route)
+    end
+
+    def sso_register_provider_openapi
+      {
+        openapi: {
+          description: "Register an SSO provider",
+          requestBody: OpenAPI.json_request_body(sso_provider_body_schema(required_fields: ["provider_id", "issuer", "domain"])),
+          responses: {
+            "200" => OpenAPI.json_response("SSO provider registered", sso_provider_response_schema)
+          }
+        }
+      }
+    end
+
+    def sso_sign_in_openapi
+      {
+        openapi: {
+          description: "Start an SSO sign-in flow",
+          requestBody: OpenAPI.json_request_body(
+            OpenAPI.object_schema(
+              {
+                provider_id: {type: "string", description: "SSO provider ID"},
+                domain: {type: "string", description: "Email domain used to select a provider"},
+                provider_type: {type: "string", enum: ["oidc", "saml"], description: "Preferred provider protocol"},
+                callback_url: {type: "string", description: "URL to redirect to after successful sign-in"},
+                error_callback_url: {type: "string", description: "URL to redirect to on sign-in error"},
+                new_user_callback_url: {type: "string", description: "URL to redirect to for new users"},
+                request_sign_up: {type: "boolean", description: "Whether the flow is requesting sign-up"}
+              }
+            )
+          ),
+          responses: {
+            "200" => OpenAPI.json_response("SSO sign-in URL", OpenAPI.object_schema({url: {type: "string"}, redirect: {type: "boolean"}}, required: ["url", "redirect"]))
+          }
+        }
+      }
+    end
+
+    def sso_saml_callback_openapi
+      {
+        openapi: {
+          description: "Handle a SAML identity provider callback",
+          requestBody: OpenAPI.json_request_body(sso_saml_message_schema, required: false),
+          responses: {
+            "200" => OpenAPI.json_response("SAML callback handled", {type: "object", additionalProperties: true})
+          }
+        }
+      }
+    end
+
+    def sso_saml_acs_openapi
+      {
+        openapi: {
+          description: "Handle a SAML assertion consumer service response",
+          requestBody: OpenAPI.json_request_body(sso_saml_message_schema, required: false),
+          responses: {
+            "200" => OpenAPI.json_response("SAML response handled", {type: "object", additionalProperties: true})
+          }
+        }
+      }
+    end
+
+    def sso_saml_slo_openapi
+      {
+        openapi: {
+          description: "Handle SAML single logout",
+          requestBody: OpenAPI.json_request_body(sso_saml_message_schema, required: false),
+          responses: {
+            "200" => OpenAPI.json_response("SAML single logout handled", {type: "object", additionalProperties: true})
+          }
+        }
+      }
+    end
+
+    def sso_initiate_slo_openapi
+      {
+        openapi: {
+          description: "Initiate SAML single logout",
+          requestBody: OpenAPI.json_request_body(
+            OpenAPI.object_schema(
+              {
+                callback_url: {type: "string", description: "URL to return to after logout"}
+              }
+            ),
+            required: false
+          ),
+          responses: {
+            "200" => OpenAPI.json_response("SAML logout initiated", {type: "object", additionalProperties: true})
+          }
+        }
+      }
+    end
+
+    def sso_update_provider_openapi
+      {
+        openapi: {
+          description: "Update an SSO provider",
+          requestBody: OpenAPI.json_request_body(sso_provider_body_schema(required_fields: [])),
+          responses: {
+            "200" => OpenAPI.json_response("SSO provider updated", sso_provider_response_schema)
+          }
+        }
+      }
+    end
+
+    def sso_delete_provider_openapi
+      {
+        openapi: {
+          description: "Delete an SSO provider",
+          requestBody: OpenAPI.json_request_body(
+            OpenAPI.object_schema(
+              {
+                provider_id: {type: "string", description: "SSO provider ID"}
+              }
+            )
+          ),
+          responses: {
+            "200" => OpenAPI.json_response("SSO provider deleted", OpenAPI.success_response_schema)
+          }
+        }
+      }
+    end
+
+    def sso_provider_body_schema(required_fields:)
+      OpenAPI.object_schema(
+        {
+          provider_id: {type: "string", description: "SSO provider ID"},
+          issuer: {type: "string", description: "SSO provider issuer URL"},
+          domain: {type: "string", description: "Email domain for the provider"},
+          oidc_config: {type: "object", additionalProperties: true, description: "OIDC provider configuration"},
+          saml_config: {type: "object", additionalProperties: true, description: "SAML provider configuration"},
+          organization_id: {type: "string", description: "Organization ID for this provider"},
+          override_user_info: {type: "boolean", description: "Whether to override OIDC user info with ID token claims"}
+        },
+        required: required_fields
+      )
+    end
+
+    def sso_provider_response_schema
+      OpenAPI.object_schema(
+        {
+          id: {type: "string"},
+          providerId: {type: "string"},
+          issuer: {type: "string"},
+          domain: {type: "string"},
+          oidcConfig: {type: ["object", "null"], additionalProperties: true},
+          samlConfig: {type: ["object", "null"], additionalProperties: true},
+          userId: {type: "string"},
+          organizationId: {type: ["string", "null"]},
+          domainVerified: {type: "boolean"},
+          redirectURI: {type: "string"},
+          domainVerificationToken: {type: "string"}
+        }
+      )
+    end
+
+    def sso_saml_message_schema
+      OpenAPI.object_schema(
+        {
+          SAMLResponse: {type: "string", description: "SAML response"},
+          SAMLRequest: {type: "string", description: "SAML logout request"},
+          RelayState: {type: "string", description: "SAML relay state"},
+          saml_response: {type: "string", description: "SAML response"},
+          saml_request: {type: "string", description: "SAML logout request"},
+          relay_state: {type: "string", description: "SAML relay state"}
+        }
+      )
+    end
   end
 end

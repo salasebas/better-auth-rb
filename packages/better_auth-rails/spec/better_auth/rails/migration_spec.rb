@@ -29,6 +29,23 @@ RSpec.describe BetterAuth::Rails::Migration do
     expect(migration).to include("t.string :user_id, null: false")
   end
 
+  it "renders string fields with defaults as bounded strings" do
+    default_config = BetterAuth::Configuration.new(
+      secret: "test-secret-that-is-long-enough-for-validation",
+      database: :memory,
+      user: {
+        additional_fields: {
+          role: {type: "string", required: false, default_value: "member"}
+        }
+      }
+    )
+
+    migration = described_class.render(default_config)
+
+    expect(migration).to include("t.string :role, default: \"member\"")
+    expect(migration).not_to include("t.text :role, default: \"member\"")
+  end
+
   it "renders database rate-limit tables without synthetic primary keys" do
     rate_limit_config = BetterAuth::Configuration.new(
       secret: "test-secret-that-is-long-enough-for-validation",
@@ -76,6 +93,44 @@ RSpec.describe BetterAuth::Rails::Migration do
     expect(migration).to include("add_index :audit_logs, :user_id")
     expect(migration).to include("add_index :audit_logs, :action, unique: true")
     expect(migration).to include("add_foreign_key :audit_logs, :users, column: :user_id, on_delete: :cascade")
+  end
+
+  it "renders default plugin table names as plural snake case" do
+    plugin = BetterAuth::Plugin.new(
+      id: "table-normalization",
+      schema: {
+        apikey: {fields: {id: {type: "string", required: true}}},
+        oauthClient: {fields: {id: {type: "string", required: true}}},
+        oauthRefreshToken: {fields: {id: {type: "string", required: true}}},
+        oauthAccessToken: {fields: {id: {type: "string", required: true}}},
+        oauthConsent: {fields: {id: {type: "string", required: true}}},
+        scimProvider: {fields: {id: {type: "string", required: true}}},
+        ssoProvider: {fields: {id: {type: "string", required: true}}},
+        subscription: {fields: {id: {type: "string", required: true}}},
+        deviceCode: {fields: {id: {type: "string", required: true}}},
+        twoFactor: {fields: {id: {type: "string", required: true}}},
+        walletAddress: {fields: {id: {type: "string", required: true}}}
+      }
+    )
+    plugin_config = BetterAuth::Configuration.new(
+      secret: "test-secret-that-is-long-enough-for-validation",
+      database: :memory,
+      plugins: [plugin]
+    )
+
+    migration = described_class.render(plugin_config)
+
+    expect(migration).to include("create_table :api_keys, id: false")
+    expect(migration).to include("create_table :oauth_clients, id: false")
+    expect(migration).to include("create_table :oauth_refresh_tokens, id: false")
+    expect(migration).to include("create_table :oauth_access_tokens, id: false")
+    expect(migration).to include("create_table :oauth_consents, id: false")
+    expect(migration).to include("create_table :scim_providers, id: false")
+    expect(migration).to include("create_table :sso_providers, id: false")
+    expect(migration).to include("create_table :subscriptions, id: false")
+    expect(migration).to include("create_table :device_codes, id: false")
+    expect(migration).to include("create_table :two_factors, id: false")
+    expect(migration).to include("create_table :wallet_addresses, id: false")
   end
 
   it "renders json and array schema field types" do

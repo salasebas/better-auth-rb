@@ -5,13 +5,13 @@ module BetterAuth
     module_function
 
     def sso_saml_callback_endpoint(config)
-      Endpoint.new(path: "/sso/saml2/callback/:providerId", method: ["GET", "POST"], metadata: {allowed_media_types: ["application/json", "application/x-www-form-urlencoded"]}) do |ctx|
+      Endpoint.new(path: "/sso/saml2/callback/:providerId", method: ["GET", "POST"], metadata: sso_openapi_for(:saml_callback).merge(allowed_media_types: ["application/json", "application/x-www-form-urlencoded"])) do |ctx|
         sso_handle_saml_response(ctx, config)
       end
     end
 
     def sso_saml_acs_endpoint(config)
-      Endpoint.new(path: "/sso/saml2/sp/acs/:providerId", method: "POST", metadata: {allowed_media_types: ["application/json", "application/x-www-form-urlencoded"]}) do |ctx|
+      Endpoint.new(path: "/sso/saml2/sp/acs/:providerId", method: "POST", metadata: sso_openapi_for(:saml_acs).merge(allowed_media_types: ["application/json", "application/x-www-form-urlencoded"])) do |ctx|
         sso_handle_saml_response(ctx, config)
       end
     end
@@ -30,7 +30,7 @@ module BetterAuth
     end
 
     def sso_saml_slo_endpoint(config = {})
-      Endpoint.new(path: "/sso/saml2/sp/slo/:providerId", method: ["GET", "POST"], metadata: {allowed_media_types: ["application/json", "application/x-www-form-urlencoded"]}) do |ctx|
+      Endpoint.new(path: "/sso/saml2/sp/slo/:providerId", method: ["GET", "POST"], metadata: sso_openapi_for(:saml_slo).merge(allowed_media_types: ["application/json", "application/x-www-form-urlencoded"])) do |ctx|
         raise APIError.new("BAD_REQUEST", message: "Single Logout is not enabled") unless config.dig(:saml, :enable_single_logout)
 
         provider = sso_find_provider!(ctx, sso_fetch(ctx.params, :provider_id))
@@ -61,7 +61,7 @@ module BetterAuth
     end
 
     def sso_initiate_slo_endpoint(config = {})
-      Endpoint.new(path: "/sso/saml2/logout/:providerId", method: "POST") do |ctx|
+      Endpoint.new(path: "/sso/saml2/logout/:providerId", method: "POST", metadata: sso_openapi_for(:initiate_slo)) do |ctx|
         raise APIError.new("BAD_REQUEST", message: "Single Logout is not enabled") unless config.dig(:saml, :enable_single_logout)
 
         session = Routes.current_session(ctx)

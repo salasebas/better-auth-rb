@@ -768,6 +768,7 @@ module BetterAuth
     end
 
     def organization_openapi(operation_id, description, response:, response_description: "Success", request: nil, required: [], parameters: nil)
+      request ||= organization_request_schema(operation_id)
       openapi = {
         operationId: operation_id,
         description: description,
@@ -779,6 +780,68 @@ module BetterAuth
       openapi[:parameters] = parameters if parameters
 
       {openapi: openapi}
+    end
+
+    def organization_request_schema(operation_id)
+      string = {type: "string"}
+      boolean = {type: "boolean"}
+      array = ->(items = string) { {type: "array", items: items} }
+      object = {type: "object", additionalProperties: true}
+      {
+        "createOrganization" => {
+          name: string,
+          slug: string,
+          logo: string,
+          metadata: object,
+          userId: string,
+          user_id: string,
+          keepCurrentActiveOrganization: boolean,
+          keep_current_active_organization: boolean
+        },
+        "checkOrganizationSlug" => {slug: string},
+        "updateOrganization" => {
+          organizationId: string,
+          organization_id: string,
+          organizationSlug: string,
+          organization_slug: string,
+          data: object,
+          name: string,
+          slug: string,
+          logo: string,
+          metadata: object
+        },
+        "deleteOrganization" => {organizationId: string, organization_id: string, organizationSlug: string, organization_slug: string},
+        "setActiveOrganization" => {organizationId: string, organization_id: string, organizationSlug: string, organization_slug: string},
+        "createOrganizationInvitation" => {
+          organizationId: string,
+          organization_id: string,
+          organizationSlug: string,
+          organization_slug: string,
+          email: {type: "string", format: "email"},
+          role: {oneOf: [string, array.call]},
+          teamId: string,
+          team_id: string,
+          teamIds: array.call,
+          team_ids: array.call
+        },
+        "acceptOrganizationInvitation" => {invitationId: string, invitation_id: string, id: string},
+        "rejectOrganizationInvitation" => {invitationId: string, invitation_id: string},
+        "cancelOrganizationInvitation" => {invitationId: string, invitation_id: string},
+        "addOrganizationMember" => {organizationId: string, organization_id: string, userId: string, user_id: string, role: {oneOf: [string, array.call]}},
+        "removeOrganizationMember" => {memberId: string, member_id: string, userId: string, user_id: string, organizationId: string, organization_id: string},
+        "updateOrganizationMemberRole" => {memberId: string, member_id: string, userId: string, user_id: string, organizationId: string, organization_id: string, role: {oneOf: [string, array.call]}},
+        "leaveOrganization" => {organizationId: string, organization_id: string},
+        "hasOrganizationPermission" => {organizationId: string, organization_id: string, permission: object, permissions: object},
+        "createOrganizationTeam" => {organizationId: string, organization_id: string, name: string},
+        "updateOrganizationTeam" => {teamId: string, team_id: string, name: string},
+        "removeOrganizationTeam" => {teamId: string, team_id: string},
+        "setActiveOrganizationTeam" => {teamId: string, team_id: string},
+        "addTeamMember" => {teamId: string, team_id: string, userId: string, user_id: string},
+        "removeTeamMember" => {teamId: string, team_id: string, userId: string, user_id: string},
+        "createOrganizationRole" => {organizationId: string, organization_id: string, role: string, roleName: string, role_name: string, permission: object, permissions: object},
+        "updateOrganizationRole" => {organizationId: string, organization_id: string, roleId: string, role_id: string, role: string, roleName: string, role_name: string, permission: object, permissions: object, data: object},
+        "deleteOrganizationRole" => {organizationId: string, organization_id: string, roleId: string, role_id: string, role: string, roleName: string, role_name: string}
+      }[operation_id]
     end
 
     def organization_ref_schema(name)

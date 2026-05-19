@@ -9,7 +9,7 @@ module BetterAuth
         module_function
 
         def endpoint(config)
-          BetterAuth::Endpoint.new(path: "/api-key/delete", method: "POST") do |ctx|
+          BetterAuth::Endpoint.new(path: "/api-key/delete", method: "POST", metadata: Routes.openapi_for(:delete_api_key)) do |ctx|
             session = BetterAuth::Routes.current_session(ctx)
             raise BetterAuth::APIError.new("UNAUTHORIZED", message: BetterAuth::Plugins::API_KEY_ERROR_CODES["USER_BANNED"]) if session[:user]["banned"] == true
 

@@ -33,6 +33,52 @@ class BetterAuthAPIKeyPluginTest < Minitest::Test
     assert_equal 12, plugin.options[:default_key_length]
   end
 
+  def test_visible_endpoints_have_complete_open_api_metadata
+    missing = BetterAuth::Plugins.api_key.endpoints.filter_map do |key, endpoint|
+      next unless endpoint.path
+      next if endpoint.metadata[:hide] || endpoint.metadata[:SERVER_ONLY] || endpoint.metadata[:server_only]
+
+      "#{BetterAuth::Plugins.api_key.id}.#{key}" unless rich_openapi?(endpoint)
+    end
+
+    assert_empty missing
+  end
+
+  def test_api_key_open_api_request_fields_match_upstream_contract
+    endpoints = BetterAuth::Plugins.api_key.endpoints
+
+    create_properties = request_body_properties(endpoints.fetch(:create_api_key))
+    assert_equal %i[
+      configId
+      expiresIn
+      metadata
+      name
+      organizationId
+      permissions
+      prefix
+      rateLimitEnabled
+      rateLimitMax
+      rateLimitTimeWindow
+      refillAmount
+      refillInterval
+      remaining
+      userId
+    ].sort, create_properties.keys.sort
+
+    update_schema = request_body_schema(endpoints.fetch(:update_api_key))
+    assert_includes update_schema[:required], "keyId"
+    assert_includes update_schema[:properties].keys, :enabled
+
+    delete_schema = request_body_schema(endpoints.fetch(:delete_api_key))
+    assert_equal ["keyId"], delete_schema[:required]
+
+    verify_schema = request_body_schema(endpoints.fetch(:verify_api_key))
+    assert_equal ["key"], verify_schema[:required]
+
+    get_params = endpoints.fetch(:get_api_key).metadata.dig(:openapi, :parameters)
+    assert get_params.any? { |parameter| parameter[:name] == "id" && parameter[:required] == true }
+  end
+
   def test_default_key_hasher_matches_sha256_base64url_contract
     assert_equal BetterAuth::Crypto.sha256("api-key-value", encoding: :base64url),
       BetterAuth::Plugins.default_api_key_hasher("api-key-value")
@@ -47,5 +93,37 @@ class BetterAuthAPIKeyPluginTest < Minitest::Test
 
     session = auth.api.get_session(headers: {"x-custom-api-key" => created[:key]})
     assert_equal "plugin-session-key@example.com", session[:user]["email"]
+  end
+
+  private
+
+  def rich_openapi?(endpoint)
+    openapi = endpoint.metadata[:openapi]
+    return false unless openapi.is_a?(Hash)
+    return false if openapi[:operationId].to_s.empty?
+    return false if endpoint.methods.any? { |method| openapi[:description].to_s == "#{method} #{endpoint.path}" }
+    return false unless openapi[:responses].is_a?(Hash) && openapi[:responses].any?
+    return false if request_body_method?(endpoint) && !meaningful_schema?(openapi.dig(:requestBody, :content, "application/json", :schema))
+
+    true
+  end
+
+  def request_body_method?(endpoint)
+    endpoint.methods.any? { |method| %w[POST PUT PATCH].include?(method) }
+  end
+
+  def meaningful_schema?(schema)
+    return false unless schema.is_a?(Hash)
+    return false if schema[:additionalProperties] == true && schema[:properties] == {}
+
+    schema[:$ref] || schema[:items] || schema.key?(:properties) || schema[:additionalProperties]
+  end
+
+  def request_body_schema(endpoint)
+    endpoint.metadata.dig(:openapi, :requestBody, :content, "application/json", :schema)
+  end
+
+  def request_body_properties(endpoint)
+    request_body_schema(endpoint).fetch(:properties)
   end
 end

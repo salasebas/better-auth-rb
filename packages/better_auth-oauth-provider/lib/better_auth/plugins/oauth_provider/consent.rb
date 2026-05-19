@@ -5,7 +5,7 @@ module BetterAuth
     module_function
 
     def oauth_consent_endpoint(config)
-      Endpoint.new(path: "/oauth2/consent", method: "POST") do |ctx|
+      Endpoint.new(path: "/oauth2/consent", method: "POST", metadata: oauth_openapi_for(:consent)) do |ctx|
         current_session = Routes.current_session(ctx, allow_nil: true)
         body = OAuthProtocol.stringify_keys(ctx.body)
         consent = config[:store][:consents].delete(body["consent_code"].to_s)

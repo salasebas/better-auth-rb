@@ -144,11 +144,52 @@ module BetterAuth
         openapi: {
           operationId: operation_id,
           description: description,
+          requestBody: mcp_request_body_for(operation_id),
           responses: {
             "200" => OpenAPI.json_response(response_description, response_schema)
           }
         }
       }
+    end
+
+    def mcp_request_body_for(operation_id)
+      schema = case operation_id
+      when "registerMcpClient", "legacyRegisterMcpClient"
+        OpenAPI.object_schema(
+          {
+            redirect_uris: {type: "array", items: {type: "string", format: "uri"}},
+            client_name: {type: "string"},
+            client_uri: {type: "string", format: "uri"},
+            logo_uri: {type: "string", format: "uri"},
+            grant_types: {type: "array", items: {type: "string"}},
+            response_types: {type: "array", items: {type: "string"}},
+            scope: {type: "string"},
+            contacts: {type: "array", items: {type: "string"}},
+            metadata: {type: "object", additionalProperties: true}
+          },
+          required: ["redirect_uris"]
+        )
+      when "mcpOAuthConsent"
+        OpenAPI.object_schema({consent_code: {type: "string"}, accept: {type: "boolean"}, scope: {type: "string"}, scopes: {type: "array", items: {type: "string"}}}, required: ["consent_code"])
+      when "mcpOAuthToken", "legacyMcpOAuthToken"
+        OpenAPI.object_schema(
+          {
+            grant_type: {type: "string", enum: [OAuthProtocol::AUTH_CODE_GRANT, OAuthProtocol::REFRESH_GRANT]},
+            code: {type: "string"},
+            redirect_uri: {type: "string", format: "uri"},
+            code_verifier: {type: "string"},
+            client_id: {type: "string"},
+            client_secret: {type: "string"},
+            refresh_token: {type: "string"},
+            scope: {type: "string"},
+            resource: {oneOf: [{type: "string"}, {type: "array", items: {type: "string"}}]}
+          },
+          required: ["grant_type"]
+        )
+      when "mcpOAuthIntrospect", "mcpOAuthRevoke"
+        OpenAPI.object_schema({token: {type: "string"}, token_type_hint: {type: "string", enum: ["access_token", "refresh_token"]}}, required: ["token"])
+      end
+      schema ? OpenAPI.json_request_body(schema) : nil
     end
 
     def mcp_client_schema

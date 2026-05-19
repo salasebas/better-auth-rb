@@ -5,7 +5,7 @@ module BetterAuth
     module_function
 
     def sso_register_provider_endpoint(config = {})
-      Endpoint.new(path: "/sso/register", method: "POST") do |ctx|
+      Endpoint.new(path: "/sso/register", method: "POST", metadata: sso_openapi_for(:register_provider)) do |ctx|
         session = Routes.current_session(ctx)
         body = normalize_hash(ctx.body)
         provider_id = body[:provider_id].to_s
@@ -83,7 +83,7 @@ module BetterAuth
     end
 
     def sso_update_provider_endpoint(config = {})
-      Endpoint.new(path: "/sso/update-provider", method: "POST") do |ctx|
+      Endpoint.new(path: "/sso/update-provider", method: "POST", metadata: sso_openapi_for(:update_provider)) do |ctx|
         session = Routes.current_session(ctx)
         body = normalize_hash(ctx.body)
         provider = sso_find_provider!(ctx, sso_fetch(body, :provider_id) || sso_fetch(ctx.params, :provider_id))
@@ -120,7 +120,7 @@ module BetterAuth
     end
 
     def sso_delete_provider_endpoint
-      Endpoint.new(path: "/sso/delete-provider", method: "POST") do |ctx|
+      Endpoint.new(path: "/sso/delete-provider", method: "POST", metadata: sso_openapi_for(:delete_provider)) do |ctx|
         session = Routes.current_session(ctx)
         provider = sso_find_provider!(ctx, sso_fetch(ctx.body, :provider_id) || sso_fetch(ctx.params, :provider_id))
         raise APIError.new("FORBIDDEN", message: "You don't have access to this provider") unless sso_provider_access?(provider, session.fetch(:user).fetch("id"), ctx)

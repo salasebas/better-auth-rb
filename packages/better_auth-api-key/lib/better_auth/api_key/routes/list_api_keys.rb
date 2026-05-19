@@ -9,7 +9,7 @@ module BetterAuth
         module_function
 
         def endpoint(config)
-          BetterAuth::Endpoint.new(path: "/api-key/list", method: "GET") do |ctx|
+          BetterAuth::Endpoint.new(path: "/api-key/list", method: "GET", metadata: Routes.openapi_for(:list_api_keys)) do |ctx|
             session = BetterAuth::Routes.current_session(ctx)
             query = BetterAuth::Plugins.normalize_hash(ctx.query)
             BetterAuth::Plugins.api_key_validate_list_query!(query)
