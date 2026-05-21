@@ -16,15 +16,18 @@ end
 class BetterAuthRodaFakeSQLConnection
   attr_reader :executed_statements, :applied_versions
 
-  def initialize
+  def initialize(select_error: nil)
     @executed_statements = []
     @applied_versions = []
+    @select_error = select_error
   end
 
   def exec(statement)
     @executed_statements << statement
 
     if statement.match?(/SELECT .*better_auth_schema_migrations/i)
+      raise @select_error if @select_error
+
       applied_versions.map { |version| {"version" => version} }
     elsif (match = statement.match(/VALUES \('([^']+)'\)/))
       @applied_versions << match[1]
@@ -32,6 +35,19 @@ class BetterAuthRodaFakeSQLConnection
     else
       []
     end
+  end
+end
+
+class BetterAuthRodaFakeQueryConnection
+  attr_reader :queries
+
+  def initialize
+    @queries = []
+  end
+
+  def query(statement)
+    @queries << statement
+    []
   end
 end
 
@@ -63,6 +79,37 @@ RSpec.describe BetterAuth::Roda::Migration do
     expect(sql).to include('CREATE TABLE IF NOT EXISTS "api_keys"')
   end
 
+  it "renders SQL migrations for each core SQL dialect" do
+    config = BetterAuth::Configuration.new(secret: secret, database: :memory)
+
+    rendered = %i[postgres mysql sqlite mssql].to_h do |dialect|
+      [dialect, described_class.render(config, dialect: dialect)]
+    end
+
+    expect(rendered[:postgres]).to include("-- Dialect: postgres", 'CREATE TABLE IF NOT EXISTS "users"')
+    expect(rendered[:mysql]).to include("-- Dialect: mysql", "CREATE TABLE IF NOT EXISTS `users`")
+    expect(rendered[:sqlite]).to include("-- Dialect: sqlite", 'CREATE TABLE IF NOT EXISTS "users"')
+    expect(rendered[:mssql]).to include("-- Dialect: mssql", "IF OBJECT_ID(N'[users]'")
+  end
+
+  it "renders database rate limit schema through the Roda migration wrapper" do
+    config = BetterAuth::Configuration.new(secret: secret, database: :memory, rate_limit: {storage: "database"})
+
+    sql = described_class.render(config, dialect: :postgres)
+
+    expect(sql).to include('CREATE TABLE IF NOT EXISTS "rate_limits"')
+    expect(sql).to include('"key" text NOT NULL')
+    expect(sql).to include('"last_request" bigint NOT NULL')
+  end
+
+  it "rejects migration execution for adapters without SQL dialect support" do
+    auth = BetterAuth.auth(secret: secret, database: :memory)
+
+    expect {
+      described_class.migrate(auth, migrations_path: "db/better_auth/migrate")
+    }.to raise_error(BetterAuth::Roda::Migration::UnsupportedAdapterError, /SQL adapters/)
+  end
+
   it "executes every statement in pending SQL migrations only once" do
     Dir.mktmpdir("better-auth-roda-migrate") do |dir|
       migrations_path = File.join(dir, "db/better_auth/migrate")
@@ -84,6 +131,55 @@ RSpec.describe BetterAuth::Roda::Migration do
       expect(connection.executed_statements.count("CREATE INDEX index_users_on_email ON users (email)")).to eq(1)
       expect(connection.applied_versions).to eq(["20260427000000_create_better_auth_tables.sql"])
     end
+  end
+
+  it "treats a missing schema migrations table as no applied migrations" do
+    connection = BetterAuthRodaFakeSQLConnection.new(select_error: RuntimeError.new("relation \"better_auth_schema_migrations\" does not exist"))
+
+    expect(described_class.applied_migrations(connection, :postgres)).to eq([])
+  end
+
+  it "raises when applied migration lookup fails for a real database error" do
+    connection = BetterAuthRodaFakeSQLConnection.new(select_error: RuntimeError.new("permission denied for table better_auth_schema_migrations"))
+
+    expect {
+      described_class.applied_migrations(connection, :postgres)
+    }.to raise_error(RuntimeError, /permission denied/)
+  end
+
+  it "splits multiple SQL statements on one line" do
+    sql = "CREATE TABLE users (id text PRIMARY KEY); CREATE INDEX idx_users_on_id ON users (id);"
+
+    statements = described_class.statements(sql)
+
+    expect(statements).to eq([
+      "CREATE TABLE users (id text PRIMARY KEY)",
+      "CREATE INDEX idx_users_on_id ON users (id)"
+    ])
+  end
+
+  it "does not split semicolons inside quoted SQL strings or dollar-quoted blocks" do
+    sql = <<~SQL
+      INSERT INTO notes (body) VALUES ('a;b');
+      DO $$
+      BEGIN
+        RAISE NOTICE 'a;b';
+      END
+      $$;
+    SQL
+
+    expect(described_class.statements(sql)).to eq([
+      "INSERT INTO notes (body) VALUES ('a;b')",
+      "DO $$\nBEGIN\n  RAISE NOTICE 'a;b';\nEND\n$$"
+    ])
+  end
+
+  it "supports SQL connections that expose query instead of exec or execute" do
+    connection = BetterAuthRodaFakeQueryConnection.new
+
+    described_class.execute_sql(connection, "CREATE TABLE users (id text PRIMARY KEY);")
+
+    expect(connection.queries).to eq(["CREATE TABLE users (id text PRIMARY KEY)"])
   end
 
   it "installs config and generates a SQL migration through Rake tasks" do

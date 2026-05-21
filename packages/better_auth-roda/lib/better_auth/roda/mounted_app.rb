@@ -15,6 +15,7 @@ module BetterAuth
 
         path_info = normalize_path(env["PATH_INFO"], trim: true)
         return true if path_info == @mount_path || path_info.start_with?("#{@mount_path}/")
+        return true if script_mount_matches?(normalize_path(env["SCRIPT_NAME"], trim: true))
 
         full = full_request_path(env)
         full == @mount_path || full.start_with?("#{@mount_path}/")
@@ -49,10 +50,16 @@ module BetterAuth
         return path_info if comparable_path == @mount_path || comparable_path.start_with?("#{@mount_path}/")
 
         script_name = normalize_path(env["SCRIPT_NAME"], trim: true)
+        return normalize_path("#{@mount_path}/#{path_info.delete_prefix("/")}", trim: false) if script_mount_matches?(script_name)
+
         prefix = (script_name == "/") ? @mount_path : script_name
         return path_info if comparable_path == prefix || comparable_path.start_with?("#{prefix}/")
 
         normalize_path("#{prefix}/#{path_info.delete_prefix("/")}", trim: false)
+      end
+
+      def script_mount_matches?(script_name)
+        script_name == @mount_path || script_name.end_with?(@mount_path)
       end
 
       def shared_mount_rewrite?(env, rewritten_path)

@@ -2,6 +2,48 @@
 
 require_relative "../../spec_helper"
 
+class BetterAuthRodaRateLimitStorage
+  attr_reader :data
+
+  def initialize
+    @data = {}
+  end
+
+  def get(key)
+    data[key]
+  end
+
+  def set(key, value, ttl: nil, update: false)
+    data[key] = value.merge(ttl: ttl, update: update)
+  end
+
+  def keys
+    data.keys
+  end
+end
+
+class BetterAuthRodaSecondaryStorage
+  attr_reader :data, :ttls
+
+  def initialize
+    @data = {}
+    @ttls = {}
+  end
+
+  def get(key)
+    data[key]
+  end
+
+  def set(key, value, ttl)
+    data[key] = value
+    ttls[key] = ttl
+  end
+
+  def keys
+    data.keys
+  end
+end
+
 RSpec.describe "BetterAuth::Roda plugin" do
   include Rack::Test::Methods
 
@@ -51,6 +93,15 @@ RSpec.describe "BetterAuth::Roda plugin" do
     self.app = build_app(mount_path: "/api/auth")
 
     get "/ok", {}, {"SCRIPT_NAME" => "/api/auth", "PATH_INFO" => "/ok"}
+
+    expect(last_response.status).to eq(200)
+    expect(JSON.parse(last_response.body)).to eq("ok" => true)
+  end
+
+  it "dispatches auth when nested SCRIPT_NAME includes the mount prefix" do
+    self.app = build_app(mount_path: "/api/auth")
+
+    get "/ok", {}, {"SCRIPT_NAME" => "/tenant/api/auth", "PATH_INFO" => "/ok"}
 
     expect(last_response.status).to eq(200)
     expect(JSON.parse(last_response.body)).to eq("ok" => true)
@@ -161,6 +212,119 @@ RSpec.describe "BetterAuth::Roda plugin" do
     expect(JSON.parse(last_response.body)).to eq("code" => "FORBIDDEN", "message" => "Invalid callbackURL")
   end
 
+  it "keeps mounted origin checks active for callback URLs and fetch metadata" do
+    self.app = build_app(plugins: [origin_probe_plugin])
+
+    post "/api/auth/post", JSON.generate(callbackURL: "https://evil.example"), "CONTENT_TYPE" => "application/json"
+    expect(last_response.status).to eq(403)
+
+    post "/api/auth/post", "{}", {
+      "CONTENT_TYPE" => "application/json",
+      "HTTP_ORIGIN" => "https://evil.example",
+      "HTTP_COOKIE" => "better-auth.session_token=stale-token"
+    }
+    expect(last_response.status).to eq(403)
+
+    post "/api/auth/post", "{}", {
+      "CONTENT_TYPE" => "application/json",
+      "HTTP_ORIGIN" => "https://evil.example"
+    }
+    expect(last_response.status).to eq(403)
+
+    post "/api/auth/post", "{}", {
+      "CONTENT_TYPE" => "application/json",
+      "HTTP_ORIGIN" => "https://evil.example",
+      "HTTP_SEC_FETCH_SITE" => "cross-site",
+      "HTTP_SEC_FETCH_MODE" => "navigate",
+      "HTTP_SEC_FETCH_DEST" => "document"
+    }
+    expect(last_response.status).to eq(403)
+    expect(JSON.parse(last_response.body).fetch("message")).to eq("Invalid origin")
+  end
+
+  it "rejects null or malformed mounted origins when cookies are present" do
+    self.app = build_app(plugins: [origin_probe_plugin])
+
+    post "/api/auth/post", "{}", {
+      "CONTENT_TYPE" => "application/json",
+      "HTTP_ORIGIN" => "null",
+      "HTTP_COOKIE" => "better-auth.session_token=stale-token"
+    }
+    expect(last_response.status).to eq(403)
+
+    post "/api/auth/post", "{}", {
+      "CONTENT_TYPE" => "application/json",
+      "HTTP_ORIGIN" => "malicious.com",
+      "HTTP_COOKIE" => "better-auth.session_token=stale-token"
+    }
+    expect(last_response.status).to eq(403)
+  end
+
+  it "rate limits mounted requests with memory storage after Roda path rewriting" do
+    self.app = build_app(
+      plugins: [limited_plugin("/memory-limited")],
+      overrides: {rate_limit: {enabled: true, window: 60, max: 1}}
+    )
+
+    get "/api/auth/memory-limited"
+    expect(last_response.status).to eq(200)
+
+    get "/api/auth/memory-limited"
+    expect(last_response.status).to eq(429)
+    expect(last_response["x-retry-after"]).to match(/\A\d+\z/)
+  end
+
+  it "rate limits mounted requests with custom storage after Roda path rewriting" do
+    storage = BetterAuthRodaRateLimitStorage.new
+    self.app = build_app(
+      plugins: [limited_plugin("/custom-limited")],
+      overrides: {rate_limit: {enabled: true, window: 60, max: 1, custom_storage: storage}}
+    )
+
+    get "/api/auth/custom-limited"
+    expect(last_response.status).to eq(200)
+    get "/api/auth/custom-limited"
+
+    expect(last_response.status).to eq(429)
+    expect(storage.keys).to eq(["127.0.0.1|/custom-limited"])
+  end
+
+  it "rate limits mounted requests with secondary storage after Roda path rewriting" do
+    storage = BetterAuthRodaSecondaryStorage.new
+    self.app = build_app(
+      plugins: [limited_plugin("/secondary-limited")],
+      overrides: {
+        secondary_storage: storage,
+        rate_limit: {enabled: true, window: 60, max: 1, storage: "secondary-storage"}
+      }
+    )
+
+    get "/api/auth/secondary-limited"
+    expect(last_response.status).to eq(200)
+    get "/api/auth/secondary-limited"
+
+    expect(last_response.status).to eq(429)
+    expect(storage.keys).to eq(["127.0.0.1|/secondary-limited"])
+    expect(storage.ttls.fetch("127.0.0.1|/secondary-limited")).to eq(60)
+  end
+
+  it "rate limits mounted requests with database storage after Roda path rewriting" do
+    auth = nil
+    self.app = build_app(
+      plugins: [limited_plugin("/database-limited")],
+      overrides: {rate_limit: {enabled: true, window: 60, max: 1, storage: "database"}},
+      capture_auth: ->(instance) { auth = instance }
+    )
+
+    get "/api/auth/database-limited"
+    expect(last_response.status).to eq(200)
+    stored = auth.context.adapter.find_one(model: "rateLimit", where: [{field: "key", value: "127.0.0.1|/database-limited"}])
+    expect(stored.fetch("count")).to eq(1)
+
+    get "/api/auth/database-limited"
+    expect(last_response.status).to eq(429)
+  end
+
   it "converts unexpected mounted endpoint errors into Better Auth JSON errors" do
     plugin = BetterAuth::Plugin.new(
       id: "raising",
@@ -252,6 +416,56 @@ RSpec.describe "BetterAuth::Roda plugin" do
     expect(JSON.parse(last_response.body).fetch("authenticated")).to eq(false)
     expect(last_response["set-cookie"]).to include("better-auth.session_token=")
     expect(last_response["set-cookie"].downcase).to include("max-age=0")
+  end
+
+  it "passes the original Rack request to helper session lookup hooks" do
+    captured = []
+    self.app = build_app(
+      hooks: {
+        before: lambda do |ctx|
+          next unless ctx.path == "/get-session"
+
+          captured << {
+            request_class: ctx.request&.class&.name,
+            method: ctx.method,
+            script_name: ctx.request&.script_name,
+            path_info: ctx.request&.path_info,
+            path: ctx.request&.path
+          }
+          nil
+        end
+      }
+    )
+    sign_up_email("ada@example.com")
+
+    get "/dashboard", {}, {
+      "SCRIPT_NAME" => "",
+      "PATH_INFO" => "/dashboard",
+      "HTTP_COOKIE" => cookie_header(last_response["set-cookie"])
+    }
+
+    expect(last_response.status).to eq(200)
+    expect(captured.last).to include(
+      request_class: "Rack::Request",
+      method: "GET",
+      script_name: "",
+      path_info: "/dashboard",
+      path: "/dashboard"
+    )
+  end
+
+  it "raises Better Auth API errors from helper session lookup" do
+    self.app = build_app(
+      hooks: {
+        before: lambda do |ctx|
+          raise BetterAuth::APIError.new("INTERNAL_SERVER_ERROR", message: "session lookup failed") if ctx.path == "/get-session"
+        end
+      }
+    )
+
+    expect {
+      get "/dashboard"
+    }.to raise_error(BetterAuth::APIError, /session lookup failed/)
   end
 
   it "preserves app cookies when helper lookup appends Better Auth cookies" do
@@ -409,7 +623,7 @@ RSpec.describe "BetterAuth::Roda plugin" do
     }.to raise_error(ArgumentError, /better_auth is already configured/)
   end
 
-  def build_app(mount_path: "/api/auth", plugins: [], trusted_origins: nil, on_api_error: nil, overrides: {})
+  def build_app(mount_path: "/api/auth", plugins: [], trusted_origins: nil, on_api_error: nil, hooks: nil, overrides: {}, capture_auth: nil)
     secret = "roda-secret-that-is-long-enough-for-validation"
 
     Class.new(::Roda) do
@@ -423,7 +637,9 @@ RSpec.describe "BetterAuth::Roda plugin" do
         config.plugins = plugins
         config.trusted_origins = trusted_origins if trusted_origins
         config.on_api_error = on_api_error if on_api_error
+        config.hooks = hooks if hooks
       end
+      capture_auth&.call(opts[:better_auth_auth])
 
       route do |r|
         r.better_auth
@@ -463,5 +679,23 @@ RSpec.describe "BetterAuth::Roda plugin" do
 
   def secret
     "roda-secret-that-is-long-enough-for-validation"
+  end
+
+  def origin_probe_plugin
+    BetterAuth::Plugin.new(
+      id: "roda-origin-probe",
+      endpoints: {
+        post: BetterAuth::Endpoint.new(path: "/post", method: "POST") { {ok: true} }
+      }
+    )
+  end
+
+  def limited_plugin(path)
+    BetterAuth::Plugin.new(
+      id: "roda-limited-#{path.delete_prefix("/").tr("/", "-")}",
+      endpoints: {
+        limited: BetterAuth::Endpoint.new(path: path, method: "GET") { {ok: true} }
+      }
+    )
   end
 end
