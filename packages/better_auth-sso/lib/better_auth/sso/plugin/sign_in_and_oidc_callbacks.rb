@@ -67,8 +67,8 @@ module BetterAuth
       state ||= sso_verify_state(ctx.query[:state] || ctx.query["state"], ctx.context.secret)
       return ctx.redirect("#{ctx.context.base_url}/error?error=invalid_state") unless state
 
-      callback_url = state["callbackURL"] || "/"
-      error_url = state["errorURL"] || callback_url
+      callback_url = sso_safe_oidc_redirect_url(ctx, state["callbackURL"] || "/")
+      error_url = sso_safe_oidc_redirect_url(ctx, state["errorURL"] || callback_url)
       if ctx.query[:error] || ctx.query["error"]
         error = ctx.query[:error] || ctx.query["error"]
         description = ctx.query[:error_description] || ctx.query["error_description"]
@@ -86,7 +86,7 @@ module BetterAuth
       end
 
       provider = sso_ensure_runtime_oidc_provider(ctx, provider, config)
-      oidc_config = normalize_hash(provider["oidcConfig"] || {})
+      oidc_config = sso_provider_config_hash(provider["oidcConfig"])
       oidc_config[:issuer] ||= provider["issuer"]
       return sso_redirect(ctx, sso_append_error(error_url, "invalid_provider", "provider not found")) if oidc_config.empty?
 
@@ -98,7 +98,7 @@ module BetterAuth
       if oidc_config[:user_info_endpoint].to_s.empty? && tokens[:id_token] && oidc_config[:jwks_endpoint].to_s.empty?
         begin
           provider = sso_ensure_runtime_oidc_provider(ctx, provider, config, require_jwks: true)
-          oidc_config = normalize_hash(provider["oidcConfig"] || {})
+          oidc_config = sso_provider_config_hash(provider["oidcConfig"])
           oidc_config[:issuer] ||= provider["issuer"]
         rescue APIError
           # Fall through to the upstream callback error when JWKS is still unavailable.
@@ -123,7 +123,7 @@ module BetterAuth
       end
       session = ctx.context.internal_adapter.create_session(result.fetch(:user).fetch("id"))
       Cookies.set_session_cookie(ctx, {session: session, user: result.fetch(:user)})
-      redirect_to = (result.fetch(:created) && state["newUserURL"].to_s != "") ? state["newUserURL"] : callback_url
+      redirect_to = (result.fetch(:created) && state["newUserURL"].to_s != "") ? sso_safe_oidc_redirect_url(ctx, state["newUserURL"]) : callback_url
       sso_redirect(ctx, redirect_to || "/")
     end
   end

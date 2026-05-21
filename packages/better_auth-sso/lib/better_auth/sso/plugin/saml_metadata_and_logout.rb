@@ -52,7 +52,7 @@ module BetterAuth
 
     def sso_sp_metadata_xml(ctx, provider, config = {})
       provider_id = provider.fetch("providerId")
-      saml_config = normalize_hash(provider["samlConfig"] || {})
+      saml_config = sso_provider_config_hash(provider["samlConfig"])
       explicit_metadata = saml_config.dig(:sp_metadata, :metadata)
       return explicit_metadata unless explicit_metadata.to_s.empty?
 
@@ -74,7 +74,7 @@ module BetterAuth
     def sso_saml_acs_url(ctx, provider)
       provider_id = provider.fetch("providerId")
       base_url = ctx.context.base_url
-      configured = normalize_hash(provider["samlConfig"] || {})[:callback_url].to_s
+      configured = sso_provider_config_hash(provider["samlConfig"])[:callback_url].to_s
       return configured if sso_saml_acs_url?(configured)
 
       "#{base_url}/sso/saml2/sp/acs/#{URI.encode_www_form_component(provider_id)}"
@@ -159,12 +159,12 @@ module BetterAuth
     end
 
     def sso_saml_callback_url(provider)
-      saml_config = normalize_hash(provider["samlConfig"] || {})
+      saml_config = sso_provider_config_hash(provider["samlConfig"])
       saml_config[:callback_url]
     end
 
     def sso_saml_logout_destination(provider)
-      saml_config = normalize_hash(provider["samlConfig"] || {})
+      saml_config = sso_provider_config_hash(provider["samlConfig"])
       direct = saml_config[:single_logout_service] ||
         saml_config[:single_logout_service_url] ||
         saml_config[:idp_slo_service_url] ||
@@ -344,7 +344,7 @@ module BetterAuth
     end
 
     def sso_signed_saml_redirect_query(provider, query)
-      saml_config = normalize_hash(provider["samlConfig"] || {})
+      saml_config = sso_provider_config_hash(provider["samlConfig"])
       private_key = saml_config.dig(:sp_metadata, :private_key) || saml_config[:private_key] || saml_config[:sp_private_key]
       raise APIError.new("BAD_REQUEST", message: "SAML Redirect signing requires privateKey") if private_key.to_s.empty?
 

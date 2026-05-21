@@ -14,9 +14,9 @@ module BetterAuth
         return "#{context.base_url}#{path}"
       end
 
-      "#{context.base_url}/sso/callback/#{provider_id}"
+      "#{context.base_url}/sso/callback/#{URI.encode_www_form_component(provider_id.to_s)}"
     rescue URI::InvalidURIError
-      "#{context.base_url}/sso/callback/#{provider_id}"
+      "#{context.base_url}/sso/callback/#{URI.encode_www_form_component(provider_id.to_s)}"
     end
 
     def sso_email_domain_matches?(email_domain, provider_domain)
@@ -223,6 +223,19 @@ module BetterAuth
 
     def sso_redirect(ctx, location)
       [302, ctx.response_headers.merge("location" => location), [""]]
+    end
+
+    def sso_safe_oidc_redirect_url(ctx, url)
+      app_origin = ctx.context.base_url
+      value = url.to_s
+      return app_origin if value.empty?
+
+      return value if value.start_with?("/") && !value.start_with?("//")
+      return app_origin unless ctx.context.trusted_origin?(value, allow_relative_paths: false)
+
+      value
+    rescue
+      app_origin
     end
   end
 end
