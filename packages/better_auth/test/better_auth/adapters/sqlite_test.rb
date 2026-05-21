@@ -258,7 +258,7 @@ class BetterAuthSQLiteAdapterTest < Minitest::Test
     skip "sqlite3 gem is not installed"
   end
 
-  def test_sqlite_adapter_persists_database_rate_limit_table_without_id_column
+  def test_sqlite_adapter_persists_database_rate_limit_table_with_generated_id_column
     require "sqlite3"
 
     Tempfile.create(["better-auth-rate-limit", ".sqlite3"]) do |file|
@@ -276,7 +276,7 @@ class BetterAuthSQLiteAdapterTest < Minitest::Test
       updated = adapter.update(model: "rateLimit", where: [{field: "key", value: "ip:127.0.0.1"}], update: {count: 2})
 
       assert_equal "ip:127.0.0.1", record.fetch("key")
-      refute record.key?("id")
+      assert record.fetch("id")
       assert_equal 2, updated.fetch("count")
     ensure
       connection&.close
