@@ -165,7 +165,7 @@ RSpec.describe BetterAuth::Hanami::SequelAdapter do
     expect(user.fetch("emailVerified")).to be(false)
   end
 
-  it "creates and updates database rate limit rows without an id field" do
+  it "creates and updates database rate limit rows with generated id fields" do
     rate_limit_config = BetterAuth::Configuration.new(
       secret: secret,
       database: :memory,
@@ -179,7 +179,7 @@ RSpec.describe BetterAuth::Hanami::SequelAdapter do
     updated = adapter.update(model: "rateLimit", where: [{field: "key", value: "ip:127.0.0.1"}], update: {count: 2})
 
     expect(record).to include("key" => "ip:127.0.0.1", "count" => 1)
-    expect(record).not_to have_key("id")
+    expect(record.fetch("id")).to be_a(String)
     expect(updated).to include("key" => "ip:127.0.0.1", "count" => 2)
   end
 

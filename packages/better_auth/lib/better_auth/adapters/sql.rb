@@ -275,27 +275,32 @@ module BetterAuth
           insensitive = insensitive_string_predicate?(clause, attributes)
           predicate_column = insensitive ? "LOWER(#{column})" : column
 
-          expression = case operator
-          when "in", "not_in"
-            values = Array(value).map { |entry| insensitive ? entry.to_s.downcase : coerce_where_value(entry, attributes) }
-            placeholders = values.map do |entry|
-              params << entry
-              placeholder(params.length)
-            end.join(", ")
-            sql_operator = (operator == "not_in") ? "NOT IN" : "IN"
-            "#{predicate_column} #{sql_operator} (#{placeholders})"
-          when "contains", "starts_with", "ends_with"
-            escaped = escape_like(insensitive ? value.to_s.downcase : value)
-            pattern = case operator
-            when "starts_with" then "#{escaped}%"
-            when "ends_with" then "%#{escaped}"
-            else "%#{escaped}%"
-            end
-            params << pattern
-            "#{predicate_column} LIKE #{placeholder(params.length)} ESCAPE #{escape_literal}"
+          expression = if value.nil? && %w[eq ne].include?(operator)
+            null_operator = (operator == "ne") ? "IS NOT NULL" : "IS NULL"
+            "#{column} #{null_operator}"
           else
-            params << (insensitive ? value.to_s.downcase : coerce_where_value(value, attributes))
-            "#{predicate_column} #{sql_operator(operator)} #{placeholder(params.length)}"
+            case operator
+            when "in", "not_in"
+              values = Array(value).map { |entry| insensitive ? entry.to_s.downcase : coerce_where_value(entry, attributes) }
+              placeholders = values.map do |entry|
+                params << entry
+                placeholder(params.length)
+              end.join(", ")
+              sql_operator = (operator == "not_in") ? "NOT IN" : "IN"
+              "#{predicate_column} #{sql_operator} (#{placeholders})"
+            when "contains", "starts_with", "ends_with"
+              escaped = escape_like(insensitive ? value.to_s.downcase : value)
+              pattern = case operator
+              when "starts_with" then "#{escaped}%"
+              when "ends_with" then "%#{escaped}"
+              else "%#{escaped}%"
+              end
+              params << pattern
+              "#{predicate_column} LIKE #{placeholder(params.length)} ESCAPE #{escape_literal}"
+            else
+              params << (insensitive ? value.to_s.downcase : coerce_where_value(value, attributes))
+              "#{predicate_column} #{sql_operator(operator)} #{placeholder(params.length)}"
+            end
           end
 
           connector = (index.positive? && fetch_key(clause, :connector).to_s.upcase == "OR") ? "OR" : "AND"

@@ -26,7 +26,14 @@ module BetterAuth
           end
         end.flatten)
         statements.concat(plan.to_index.map do |change|
-          index_statement(change.table_name, change.field_name, change.name, plan.dialect, unique: change.unique)
+          index_statement(
+            change.table_name,
+            change.field_name,
+            change.name,
+            plan.dialect,
+            unique: change.unique,
+            where_not_null: filtered_unique_index?(change.field, plan.dialect)
+          )
         end)
       end
 
@@ -92,7 +99,7 @@ module BetterAuth
           column = attributes[:field_name] || Schema.physical_name(logical_field)
           unique = attributes[:unique] && dialect == :mssql
           name = unique ? "uniq_#{table_name}_#{column}" : "index_#{table_name}_on_#{column}"
-          index_statement(table_name, column, name, dialect, unique: unique, where_not_null: unique)
+          index_statement(table_name, column, name, dialect, unique: unique, where_not_null: filtered_unique_index?(attributes, dialect))
         end
       end
 
@@ -123,6 +130,10 @@ module BetterAuth
           filter = where_not_null ? " WHERE #{quote(column, dialect)} IS NOT NULL" : ""
           %(#{mssql_required_set_options}\nIF NOT EXISTS (SELECT name FROM sys.indexes WHERE name = '#{name.gsub("'", "''")}' AND object_id = OBJECT_ID(N'#{quote(table_name, dialect)}')) CREATE #{unique_prefix}INDEX #{quote(name, dialect)} ON #{quote(table_name, dialect)} (#{quote(column, dialect)})#{filter};)
         end
+      end
+
+      def filtered_unique_index?(attributes, dialect)
+        dialect == :mssql && attributes[:unique] && !attributes[:required]
       end
 
       def mssql_required_set_options
