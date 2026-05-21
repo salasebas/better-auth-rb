@@ -93,7 +93,7 @@ module BetterAuth
             userId: user.fetch("id")
           )
         end
-        oidc_config = normalize_hash(provider["oidcConfig"] || {})
+        oidc_config = sso_provider_config_hash(provider["oidcConfig"])
         if oidc_config[:override_user_info] || config[:default_override_user_info]
           update = {}
           update[:name] = user_info[:name] if user_info.key?(:name)

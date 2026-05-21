@@ -11,7 +11,7 @@ module BetterAuth
     end
 
     def sso_oidc_authorization_url(provider, ctx, state, plugin_config = {}, body = {})
-      config = normalize_hash(provider["oidcConfig"] || {})
+      config = sso_provider_config_hash(provider["oidcConfig"])
       endpoint = config[:authorization_endpoint] || config[:authorization_url]
       raise APIError.new("BAD_REQUEST", message: "Invalid OIDC configuration. Authorization URL not found.") if endpoint.to_s.empty?
 
@@ -42,7 +42,7 @@ module BetterAuth
         return auth_request_url.call(provider: provider, relay_state: relay_state, context: ctx)
       end
 
-      config = normalize_hash(provider["samlConfig"] || {})
+      config = sso_provider_config_hash(provider["samlConfig"])
       metadata = sso_saml_idp_metadata(config)
       entry_point = config[:entry_point] || normalize_hash(sso_saml_preferred_service(metadata[:single_sign_on_service]) || {})[:location]
       query = {
@@ -372,7 +372,7 @@ module BetterAuth
     end
 
     def sso_oidc_pkce_state(provider)
-      return {} unless normalize_hash(provider["oidcConfig"] || {})[:pkce]
+      return {} unless sso_provider_config_hash(provider["oidcConfig"])[:pkce]
 
       verifier = BetterAuth::Crypto.random_string(128)
       {
@@ -466,7 +466,7 @@ module BetterAuth
     end
 
     def sso_ensure_runtime_oidc_provider(ctx, provider, plugin_config, require_jwks: false)
-      oidc_config = normalize_hash(provider["oidcConfig"] || {})
+      oidc_config = sso_provider_config_hash(provider["oidcConfig"])
       needs_discovery = sso_oidc_needs_runtime_discovery?(oidc_config) || (require_jwks && oidc_config[:jwks_endpoint].to_s.empty?)
       return provider if !needs_discovery
 
