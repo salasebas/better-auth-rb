@@ -21,8 +21,12 @@ tmp/
 *.gem
 
 # Ignore example app local/runtime artifacts
+examples/.env
 examples/*/.env
 examples/*/.github/
 examples/*/.kamal/
 examples/*/config/credentials.yml.enc
 examples/*/config/master.key
+
+# Ignore local browser verification artifacts
+.playwright-mcp/
