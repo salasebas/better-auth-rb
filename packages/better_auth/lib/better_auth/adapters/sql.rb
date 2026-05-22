@@ -94,11 +94,11 @@ module BetterAuth
         sql << " SET "
         sql << assignments.join(", ")
         sql << " WHERE #{where_sql}" unless where_sql.empty?
-        sql << " RETURNING *" if dialect == :postgres
-        rows = execute(sql, params).map { |row| normalize_record(model, row) }
-        return rows if returning || dialect == :postgres
+        sql << " RETURNING *" if dialect == :postgres && returning
+        result = execute(sql, params, affected_rows_result: !returning)
+        return result.map { |row| normalize_record(model, row) } if returning
 
-        affected_rows(rows)
+        affected_rows(result)
       end
 
       def delete(model:, where:)
@@ -113,7 +113,7 @@ module BetterAuth
         sql = +"DELETE FROM "
         sql << quote(table_for(model))
         sql << " WHERE #{where_sql}" unless where_sql.empty?
-        result = execute(sql, params)
+        result = execute(sql, params, affected_rows_result: true)
         affected_rows(result)
       end
 
@@ -343,10 +343,11 @@ module BetterAuth
         fetch_key(clause, :mode).to_s == "insensitive" && attributes[:type] == "string"
       end
 
-      def execute(sql, params)
+      def execute(sql, params, affected_rows_result: false)
         @connection_lock.synchronize do
           if connection.respond_to?(:exec_params)
             result = connection.exec_params(sql, params)
+            return affected_rows_result ? result : [] if result.respond_to?(:fields) && result.fields.empty?
             return result.to_a if result.respond_to?(:to_a)
 
             result
@@ -361,6 +362,12 @@ module BetterAuth
             result = nil
             begin
               result = statement.execute(*params)
+              if result.nil?
+                return [] unless affected_rows_result
+                return statement.affected_rows if statement.respond_to?(:affected_rows)
+                return connection.affected_rows if connection.respond_to?(:affected_rows)
+              end
+
               rows = result.respond_to?(:to_a) ? result.to_a : result
               rows
             ensure
@@ -382,9 +389,9 @@ module BetterAuth
       def affected_rows(result)
         return result.cmd_tuples if result.respond_to?(:cmd_tuples)
         return result.affected_rows if result.respond_to?(:affected_rows)
+        return result.to_i if result.respond_to?(:to_i)
         return connection.affected_rows if connection.respond_to?(:affected_rows)
         return connection.changes if connection.respond_to?(:changes)
-        return result.to_i if result.respond_to?(:to_i)
 
         0
       end
@@ -479,11 +486,11 @@ module BetterAuth
       end
 
       def escape_like(value)
-        value.to_s.gsub(/[\\%_]/) { |match| "\\#{match}" }
+        value.to_s.gsub(/[!%_]/) { |match| "!#{match}" }
       end
 
       def escape_literal
-        (dialect == :postgres) ? "'\\\\'" : "'\\'"
+        "'!'"
       end
 
       def resolve_default(default)
@@ -520,6 +527,7 @@ module BetterAuth
       def coerce_output_value(value, attributes)
         return value if value.nil?
         return coerce_boolean(value) if attributes[:type] == "boolean"
+        return coerce_number(value) if attributes[:type] == "number"
         return Time.parse(value) if attributes[:type] == "date" && value.is_a?(String)
         return parse_json_value(value) if json_like?(attributes) && value.is_a?(String)
 

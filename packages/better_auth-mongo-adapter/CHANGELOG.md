@@ -2,8 +2,11 @@
 
 ## Unreleased
 
+## 0.10.0 - 2026-05-21
+
 - Deprecated this package in favor of `better_auth-mongodb`.
 - Kept `require "better_auth/mongo_adapter"` as a compatibility entrypoint.
+- Kept compatibility behavior aligned with the canonical MongoDB adapter.
 
 ## 0.7.0 - 2026-05-05
 

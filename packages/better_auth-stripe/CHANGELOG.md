@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+## [0.10.0] - 2026-05-21
+
+- Improved Stripe metadata, utility behavior, adapter coverage, and rate-limit coverage.
+
 ## [0.7.0] - 2026-05-05
 
 - Changed Stripe webhooks to reject requests when the configured Stripe client does not expose `webhooks.construct_event_async` or `webhooks.construct_event`, preventing unverified payload processing.

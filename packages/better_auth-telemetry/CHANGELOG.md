@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.10.0
+
+- Improved database detection, including MongoDB adapter metadata.
+- Updated telemetry docs for the current package set.
+
 ## 0.8.0
 
 - Initial release. Ports the upstream `@better-auth/telemetry` package

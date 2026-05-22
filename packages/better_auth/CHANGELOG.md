@@ -7,10 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.10.0] - 2026-05-21
+
 ### Fixed
 
 - Fixed organization owner counting to page through adapter results instead of
   relying on a single uncapped `find_many` call.
+- Improved SQL, memory, cookie, rate-limit, plugin schema, social login, and
+  auth response edge cases for more consistent behavior across adapters.
 
 ## [0.7.0] - 2026-05-05
 

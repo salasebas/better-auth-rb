@@ -2,7 +2,7 @@
 
 Gem::Specification.new do |spec|
   spec.name = "openauth-cli"
-  spec.version = "0.9.0"
+  spec.version = "0.10.0"
   spec.authors = ["Sebastian Sala"]
   spec.email = ["sebastian.sala.tech@gmail.com"]
 
@@ -22,7 +22,7 @@ Gem::Specification.new do |spec|
   spec.executables = spec.files.grep(%r{\Aexe/}) { |file| File.basename(file) }
   spec.require_paths = ["lib"]
 
-  spec.add_dependency "better_auth-cli", "0.9.0"
+  spec.add_dependency "better_auth-cli", "0.10.0"
   spec.add_development_dependency "minitest", "~> 5.25"
   spec.add_development_dependency "rake", "~> 13.2"
   spec.add_development_dependency "sqlite3", "~> 2.0"

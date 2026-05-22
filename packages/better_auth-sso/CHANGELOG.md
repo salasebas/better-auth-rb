@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## 0.10.0 - 2026-05-21
+
+- Hardened SSO redirect, OIDC, SAML metadata, logout, and response handling.
+- Expanded adapter, Rack edge-case, and rate-limit coverage.
+
 ## 0.7.0 - 2026-05-05
 
 - Fixed SAML config validation for `singleSignOnService` and added validation for `singleLogoutService`.

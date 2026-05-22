@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 0.10.0 - 2026-05-21
+
+- Released in sync with the full Better Auth package set.
+
 ## 0.7.0 - 2026-05-05
 
 - Validate `scan_count` as either `nil` or a positive `Integer`.

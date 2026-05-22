@@ -2,12 +2,15 @@
 
 ## Unreleased
 
+## 0.10.0 - 2026-05-21
+
 - Rename the canonical Ruby gem to `better_auth-mongodb` while keeping
   `better_auth-mongo-adapter` as a deprecated compatibility package.
 - Fixed `use_plural: true` so configured schema `model_name` values such as
   `people` and `api_keys` are used directly instead of being pluralized again.
 - Clarified MongoDB filter docs: `in` requires array values, while `not_in`
   accepts scalar values as a Ruby adapter-family compatibility behavior.
+- Improved MongoDB owner counting, nullable unique indexes, and adapter parity coverage.
 
 ## 0.7.0 - 2026-05-05
 

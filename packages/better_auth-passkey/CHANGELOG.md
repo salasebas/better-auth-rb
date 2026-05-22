@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+## [0.10.0] - 2026-05-21
+
+- Improved passkey challenge handling, management routes, rate limits, and adapter coverage.
+
 ## [0.7.0] - 2026-05-05
 
 - Require a fresh session for session-required passkey registration verification.

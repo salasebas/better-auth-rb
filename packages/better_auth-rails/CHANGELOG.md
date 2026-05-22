@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.10.0] - 2026-05-21
+
+### Fixed
+
+- Preserved mounted auth responses in Rails apps.
+- Improved migration generation, Active Record adapter behavior, routing, and database integration coverage.
+
 ## [0.7.0] - 2026-05-05
 
 ### Fixed

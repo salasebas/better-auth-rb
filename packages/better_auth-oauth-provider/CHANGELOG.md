@@ -2,10 +2,13 @@
 
 ## Unreleased
 
+## 0.10.0 - 2026-05-21
+
 - Changed OAuth provider defaults to hash stored client secrets and opaque OAuth tokens, with `store_tokens` support for custom token hashing.
 - Hardened token, introspection, and revocation client authentication to enforce the registered auth method and reject public-client introspection/revocation.
 - Aligned refresh-token issuance with upstream by requiring `offline_access`, and revoking descendant access tokens when a refresh token is revoked.
 - Added no-store token response headers, default JWKS discovery metadata, authorization-code session revalidation, prompt/request-uri validation, MCP verifier error normalization, and OAuth hot-path schema indexes.
+- Expanded adapter, authorization, registration, and rate-limit coverage for provider flows.
 
 ## 0.7.0 - 2026-05-05
 

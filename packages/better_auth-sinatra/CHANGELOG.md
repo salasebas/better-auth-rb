@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## 0.10.0 - 2026-05-21
+
+- Removed obsolete helper wiring and expanded mounted app, migration, and routing coverage.
+- Updated Sinatra docs for current mounting and integration behavior.
+
 ## 0.7.0 - 2026-05-05
 
 - Fixed auth dispatch when Rack splits mounted paths across `SCRIPT_NAME` and `PATH_INFO`.

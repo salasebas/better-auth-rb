@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## 0.10.0 - 2026-05-21
+
+- Improved SCIM route, adapter, user, and rate-limit coverage.
+- Clarified SCIM setup docs and runtime dependencies.
+
 ## 0.7.0 - 2026-05-05
 
 - Changed generated SCIM provider tokens to use hashed storage by default. Set `store_scim_token: "plain"` only when plaintext database storage is intentionally required.

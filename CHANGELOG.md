@@ -3,6 +3,16 @@
 This repository contains independently versioned Ruby packages. Package-specific
 release notes live in each package's `CHANGELOG.md`.
 
+## 2026-05-21
+
+### 0.10.0 release set
+
+- `better_auth` `0.10.0`: improves adapter consistency across SQL, memory, MongoDB, cookies, rate limits, plugin schemas, and organization edge cases.
+- Framework integrations `0.10.0`: hardens Rails, Sinatra, Hanami, Grape, and Roda mounting, migration, helper, cookie, and routing behavior.
+- Plugin and adapter gems `0.10.0`: improves API key, OAuth provider, passkey, SCIM, SSO, Stripe, MongoDB, Redis, and telemetry reliability with broader real-world coverage.
+- CLI and example apps `0.10.0`: improves CLI error handling and expands the example dashboard, plugin setup, provider setup, and local configuration flow.
+- OpenAuth alias gems `0.10.0`: keep alias package versions aligned with the matching Better Auth gems.
+
 ## 2026-05-05
 
 ### 0.7.0 release set

@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## 0.10.0 - 2026-05-21
+
+- Improved adapter coverage and Redis-backed storage behavior for API key flows.
+- Tightened API key listing behavior so responses stay consistent across supported adapters.
+
 ## 0.7.0 - 2026-05-05
 
 - Changed API-key-backed sessions to expose `tokenFingerprint` instead of storing the raw API key in `session["token"]`.
