@@ -51,6 +51,8 @@ module BetterAuth
       )
     end
 
+    SCIM_PLUGIN_IMPLEMENTATION = true
+
     def scim_schema(config = {})
       scim_provider_fields = {
         providerId: {type: "string", required: true, unique: true},

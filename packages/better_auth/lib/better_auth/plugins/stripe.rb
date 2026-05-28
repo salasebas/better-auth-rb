@@ -1,16 +1,13 @@
 # frozen_string_literal: true
 
+return if defined?(BetterAuth::Plugins::STRIPE_PLUGIN_IMPLEMENTATION)
+
 module BetterAuth
   module Plugins
     module_function
 
-    def stripe(*args)
-      Kernel.require "better_auth/stripe"
-      BetterAuth::Plugins.stripe(*args)
-    rescue LoadError => error
-      raise if error.path && error.path != "better_auth/stripe"
-
-      raise LoadError, "BetterAuth::Plugins.stripe requires the better_auth-stripe gem. Add `gem \"better_auth-stripe\"` and `require \"better_auth/stripe\"`."
+    def stripe(*args, &block)
+      call_external_plugin!(:stripe, *args, implementation_constant: :STRIPE_PLUGIN_IMPLEMENTATION, gem_name: "better_auth-stripe", entry: "lib/better_auth/stripe.rb", &block)
     end
   end
 end

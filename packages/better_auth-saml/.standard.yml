@@ -1,0 +1,9 @@
+# frozen_string_literal: true
+
+ignore:
+  - 'vendor/**/*'
+  - 'node_modules/**/*'
+  - 'tmp/**/*'
+  - 'coverage/**/*'
+  - 'doc/**/*'
+  - 'pkg/**/*'

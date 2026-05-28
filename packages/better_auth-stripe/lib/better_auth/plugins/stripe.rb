@@ -15,6 +15,8 @@ module BetterAuth
       BetterAuth::Stripe::PluginFactory.build(options)
     end
 
+    STRIPE_PLUGIN_IMPLEMENTATION = true
+
     def stripe_schema(config)
       BetterAuth::Stripe::Schema.schema(config)
     end

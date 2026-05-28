@@ -1,16 +1,13 @@
 # frozen_string_literal: true
 
+return if defined?(BetterAuth::Plugins::SCIM_PLUGIN_IMPLEMENTATION)
+
 module BetterAuth
   module Plugins
     module_function
 
-    def scim(*args)
-      Kernel.require "better_auth/scim"
-      BetterAuth::Plugins.scim(*args)
-    rescue LoadError => error
-      raise if error.path && error.path != "better_auth/scim"
-
-      raise LoadError, "BetterAuth::Plugins.scim requires the better_auth-scim gem. Add `gem \"better_auth-scim\"` and `require \"better_auth/scim\"`."
+    def scim(*args, &block)
+      call_external_plugin!(:scim, *args, implementation_constant: :SCIM_PLUGIN_IMPLEMENTATION, gem_name: "better_auth-scim", entry: "lib/better_auth/scim.rb", &block)
     end
   end
 end

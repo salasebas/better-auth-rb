@@ -5,9 +5,9 @@ module BetterAuth
     module OAuthProvider
       module Types
         module OAuth
-          AUTHORIZATION_CODE_GRANT = OAuthProtocol::AUTH_CODE_GRANT
-          REFRESH_TOKEN_GRANT = OAuthProtocol::REFRESH_GRANT
-          CLIENT_CREDENTIALS_GRANT = OAuthProtocol::CLIENT_CREDENTIALS_GRANT
+          AUTHORIZATION_CODE_GRANT = ::BetterAuth::Plugins::OAuthProtocol::AUTH_CODE_GRANT
+          REFRESH_TOKEN_GRANT = ::BetterAuth::Plugins::OAuthProtocol::REFRESH_GRANT
+          CLIENT_CREDENTIALS_GRANT = ::BetterAuth::Plugins::OAuthProtocol::CLIENT_CREDENTIALS_GRANT
 
           GRANT_TYPES = [
             AUTHORIZATION_CODE_GRANT,

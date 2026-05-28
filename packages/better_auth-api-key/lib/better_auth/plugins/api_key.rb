@@ -43,6 +43,8 @@ module BetterAuth
       BetterAuth::APIKey::PluginFactory.build(configurations, options)
     end
 
+    API_KEY_PLUGIN_IMPLEMENTATION = true
+
     def api_key_config(configurations, options = nil)
       BetterAuth::APIKey::Configuration.normalize(configurations, options)
     end

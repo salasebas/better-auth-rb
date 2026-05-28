@@ -38,6 +38,8 @@ module BetterAuth
       )
     end
 
+    PASSKEY_PLUGIN_IMPLEMENTATION = true
+
     def generate_passkey_registration_options_endpoint(config)
       BetterAuth::Passkey::Routes::Registration.generate_passkey_registration_options_endpoint(config)
     end

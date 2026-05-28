@@ -1,16 +1,13 @@
 # frozen_string_literal: true
 
+return if defined?(BetterAuth::Plugins::PASSKEY_PLUGIN_IMPLEMENTATION)
+
 module BetterAuth
   module Plugins
     module_function
 
-    def passkey(*args)
-      Kernel.require "better_auth/passkey"
-      BetterAuth::Plugins.passkey(*args)
-    rescue LoadError => error
-      raise if error.path && error.path != "better_auth/passkey"
-
-      raise LoadError, "BetterAuth::Plugins.passkey requires the better_auth-passkey gem. Add `gem \"better_auth-passkey\"` and `require \"better_auth/passkey\"`."
+    def passkey(*args, &block)
+      call_external_plugin!(:passkey, *args, implementation_constant: :PASSKEY_PLUGIN_IMPLEMENTATION, gem_name: "better_auth-passkey", entry: "lib/better_auth/passkey.rb", &block)
     end
   end
 end

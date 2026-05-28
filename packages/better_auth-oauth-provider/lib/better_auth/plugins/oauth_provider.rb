@@ -76,6 +76,8 @@ module BetterAuth
       )
     end
 
+    OAUTH_PROVIDER_PLUGIN_IMPLEMENTATION = true
+
     def oauth_provider_validate_config!(config, raw_options = {})
       provider_scopes = OAuthProtocol.parse_scopes(config[:scopes])
       [

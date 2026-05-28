@@ -1,16 +1,13 @@
 # frozen_string_literal: true
 
+return if defined?(BetterAuth::Plugins::OAUTH_PROVIDER_PLUGIN_IMPLEMENTATION)
+
 module BetterAuth
   module Plugins
     module_function
 
-    def oauth_provider(*args)
-      Kernel.require "better_auth/oauth_provider"
-      BetterAuth::Plugins.oauth_provider(*args)
-    rescue LoadError => error
-      raise if error.path && error.path != "better_auth/oauth_provider"
-
-      raise LoadError, "BetterAuth::Plugins.oauth_provider requires the better_auth-oauth-provider gem. Add `gem \"better_auth-oauth-provider\"` and `require \"better_auth/oauth_provider\"`."
+    def oauth_provider(*args, &block)
+      call_external_plugin!(:oauth_provider, *args, implementation_constant: :OAUTH_PROVIDER_PLUGIN_IMPLEMENTATION, gem_name: "better_auth-oauth-provider", entry: "lib/better_auth/oauth_provider.rb", &block)
     end
   end
 end

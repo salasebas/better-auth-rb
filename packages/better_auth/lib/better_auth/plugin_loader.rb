@@ -104,12 +104,54 @@ module BetterAuth
 
     @loaded_plugins = {}
 
+    EXTERNAL_PLUGIN_IMPLEMENTATIONS = {
+      sso: :SSO_PLUGIN_IMPLEMENTATION,
+      scim: :SCIM_PLUGIN_IMPLEMENTATION,
+      api_key: :API_KEY_PLUGIN_IMPLEMENTATION,
+      passkey: :PASSKEY_PLUGIN_IMPLEMENTATION,
+      stripe: :STRIPE_PLUGIN_IMPLEMENTATION,
+      oauth_provider: :OAUTH_PROVIDER_PLUGIN_IMPLEMENTATION
+    }.freeze
+
     module_function
+
+    def ensure_external_plugin_loaded!(gem_name:, entry:, implementation_constant:)
+      return if const_defined?(implementation_constant, false)
+
+      spec = Gem.loaded_specs[gem_name] || Gem::Specification.find_by_name(gem_name)
+      entry_path = File.join(spec.full_gem_path, entry)
+      load entry_path unless $LOADED_FEATURES.include?(entry_path)
+
+      return if const_defined?(implementation_constant, false)
+
+      raise LoadError,
+        "BetterAuth requires the #{gem_name} gem. Add it to your Gemfile and require its entrypoint."
+    rescue Gem::MissingSpecError
+      raise LoadError,
+        "BetterAuth requires the #{gem_name} gem. Add it to your Gemfile and require its entrypoint."
+    end
+
+    def call_external_plugin!(method_name, *args, implementation_constant:, gem_name:, entry:, &block)
+      loader = method(method_name)
+      ensure_external_plugin_loaded!(
+        gem_name: gem_name,
+        entry: entry,
+        implementation_constant: implementation_constant
+      )
+      resolved = method(method_name)
+      if resolved == loader
+        raise LoadError,
+          "BetterAuth::Plugins.#{method_name} requires the #{gem_name} gem. Add it to your Gemfile and require its entrypoint."
+      end
+
+      resolved.call(*args, &block)
+    end
 
     def load_plugin!(name)
       name = name.to_sym
       return true if @loaded_plugins[name]
-      if name == :sso && defined?(SSO_PLUGIN_IMPLEMENTATION)
+      implementation_constant = EXTERNAL_PLUGIN_IMPLEMENTATIONS[name]
+      if implementation_constant && const_defined?(implementation_constant, false)
         @loaded_plugins[name] = true
         return true
       end
