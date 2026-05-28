@@ -41,6 +41,16 @@ module BetterAuth
       data[key] || data[key.to_s] || data[Schema.storage_key(key)] || data[Schema.storage_key(key).to_sym] || data[normalize_key(key)]
     end
 
+    def deep_merge_hashes(base, override)
+      base.merge(override) do |_key, old_value, new_value|
+        if old_value.is_a?(Hash) && new_value.is_a?(Hash)
+          deep_merge_hashes(old_value, new_value)
+        else
+          new_value
+        end
+      end
+    end
+
     def cookie_header_from_set_cookie(set_cookie)
       set_cookie.to_s.lines.map { |line| line.split(";").first }.join("; ")
     end
