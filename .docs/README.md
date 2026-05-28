@@ -1,32 +1,20 @@
-# Documentation
+# Internal documentation
 
-This directory contains internal documentation for Better Auth Ruby development.
+Release and parity notes for Better Auth Ruby development.
 
-## Structure
+## Contents
 
-### `plans/`
-Long-running implementation plans. Plans use checkbox steps so agents can mark progress as phases, upstream parity discoveries, and Ruby-specific adaptations are completed.
+- `release-process.md` — gem release workflow
+- `release-checklist.md` — pre-release verification
+- `features/upstream-parity-matrix.md` — package-level upstream vs Ruby coverage
 
-### `features/`
-Documentation for implemented features and plugins. Feature notes are also where upstream parity decisions and known Ruby/Rails differences are recorded. Each file should explain:
-- Link to upstream TypeScript implementation
-- How it was adapted to Ruby/Rails
-- Key design decisions
-- Testing approach
-- Usage examples
+## Upstream reference
 
-### `backlog/`
-Cross-cutting product and upstream alignment notes. `upstream-product-alignment.md`
-is a parking lot for ideas that need product decisions, upstream coordination,
-or larger release planning before implementation.
+Behavioral reference for ports is the Better Auth TypeScript monorepo at the pin
+in `reference/upstream-better-auth/VERSION.md`. Fetch a local clone with:
 
-### `postmortems/`
-Documentation for bug fixes and issues. Each file should explain:
-- What went wrong
-- Root cause analysis
-- How it was fixed
-- How to prevent it in the future
+```bash
+./scripts/fetch-upstream-better-auth.sh
+```
 
-## Template
-
-See the example files in each directory for the recommended structure.
+Sources live under `reference/upstream-src/<version>/repository/` (gitignored).

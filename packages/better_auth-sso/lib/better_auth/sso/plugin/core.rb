@@ -36,6 +36,8 @@ module BetterAuth
       )
     end
 
+    SSO_PLUGIN_IMPLEMENTATION = true
+
     def sso_hooks(config = {})
       {
         before: [

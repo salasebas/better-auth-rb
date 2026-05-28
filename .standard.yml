@@ -11,7 +11,7 @@ ignore:
   - 'doc/**/*'
   - 'pkg/**/*'
   - 'docs/**/*'
-  - 'upstream/**/*'
+  - 'reference/upstream-src/**/*'
   - '.git/**/*'
   - '.claude/**/*'
   - '.agents/**/*'

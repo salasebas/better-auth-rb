@@ -13,7 +13,9 @@ Ruby packages for selected Better Auth plugins.
 [Upstream Better Auth](https://better-auth.com) -
 [Issues](https://github.com/sebasxsala/better-auth-rb/issues)
 
-Current upstream target: Better Auth `v1.6.9`.
+Current upstream target: Better Auth `v1.6.9` (see
+[`reference/upstream-better-auth/VERSION.md`](reference/upstream-better-auth/VERSION.md);
+fetch local sources with `./scripts/fetch-upstream-better-auth.sh`).
 
 This project is active work. The Ruby port implements a large server-side
 surface, but exact upstream parity is still being tightened across some routes,
@@ -253,7 +255,7 @@ docker compose up -d
 1. Branch from `canary`.
 2. Read [`AGENTS.md`](AGENTS.md) and the package-specific instructions before
    editing a package.
-3. Check upstream source and tests for behavior changes.
+3. Check upstream source and tests for behavior changes (`./scripts/fetch-upstream-better-auth.sh` if needed).
 4. Run the relevant package tests, or `make ci` for the full repo.
 5. Open a PR to `canary`.
 

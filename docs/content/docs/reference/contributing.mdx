@@ -11,7 +11,7 @@ Thanks for helping improve Better Auth Ruby. This port tracks upstream Better Au
 - Read the root `AGENTS.md` if you are using an AI coding assistant in this repository.
 - For core gem work, read `packages/better_auth/AGENTS.md`.
 - For Rails adapter work, read `packages/better_auth-rails/AGENTS.md`.
-- Inspect matching upstream source and tests in `upstream/` before porting behavior.
+- Inspect matching upstream source and tests under `reference/upstream-src/1.6.9/repository/` before porting behavior (see root `AGENTS.md`).
 
 ## Development Setup
 
@@ -44,16 +44,13 @@ pnpm install
 </Step>
 
 <Step>
-### 4. Initialize Upstream When Needed
+### 4. Fetch Upstream Reference When Needed
 
-The `upstream/` submodule is the behavior source of truth.
+Upstream TypeScript sources are not committed. Pin and version are documented in
+`reference/upstream-better-auth/VERSION.md`.
 
 ```bash title="Terminal"
-git submodule update --init --recursive upstream
-cd upstream
-git fetch --tags origin
-git checkout v1.6.9
-cd ..
+./scripts/fetch-upstream-better-auth.sh
 ```
 </Step>
 
@@ -90,7 +87,7 @@ pnpm build
 
 - Prefer real adapters or realistic in-memory behavior over mocks.
 - Test public behavior, not private implementation details.
-- Check upstream tests in `upstream/packages/better-auth/src/**/*.test.ts` for expected behavior and edge cases.
+- Check upstream tests in `reference/upstream-src/1.6.9/repository/packages/better-auth/src/**/*.test.ts` for expected behavior and edge cases.
 - Database tests are preferred when behavior depends on persistence, constraints, transactions, or adapter shape.
 - Include regression tests for bug fixes.
 

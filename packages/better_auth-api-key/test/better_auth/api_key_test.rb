@@ -1260,7 +1260,7 @@ class BetterAuthPluginsAPIKeyTest < Minitest::Test
     assert_equal 1, stored_after_task["remaining"]
   end
 
-  # Upstream: upstream/packages/api-key/src/api-key.test.ts:90
+  # Upstream: reference/upstream-src/1.6.9/repository/packages/api-key/src/api-key.test.ts:90
   def test_create_without_session_or_user_id_returns_unauthorized
     auth = build_auth(default_key_length: 12)
 
@@ -1271,7 +1271,7 @@ class BetterAuthPluginsAPIKeyTest < Minitest::Test
     assert_equal "UNAUTHORIZED", error.status
   end
 
-  # Upstream: upstream/packages/api-key/src/api-key.test.ts:171
+  # Upstream: reference/upstream-src/1.6.9/repository/packages/api-key/src/api-key.test.ts:171
   def test_create_defaults_rate_limit_enabled_true_when_omitted
     auth = build_auth(default_key_length: 12)
     cookie = sign_up_cookie(auth, email: "rate-default-key@example.com")
@@ -1282,7 +1282,7 @@ class BetterAuthPluginsAPIKeyTest < Minitest::Test
     assert_equal true, created[:rateLimitEnabled]
   end
 
-  # Upstream: upstream/packages/api-key/src/api-key.test.ts:370
+  # Upstream: reference/upstream-src/1.6.9/repository/packages/api-key/src/api-key.test.ts:370
   def test_create_sets_custom_expires_at_from_expires_in
     auth = build_auth(default_key_length: 12)
     cookie = sign_up_cookie(auth, email: "custom-expiration-create-key@example.com")
@@ -1295,7 +1295,7 @@ class BetterAuthPluginsAPIKeyTest < Minitest::Test
     assert_operator created[:expiresAt], :>=, before + (60 * 60 * 24 * 7) - 1
   end
 
-  # Upstream: upstream/packages/api-key/src/api-key.test.ts:443
+  # Upstream: reference/upstream-src/1.6.9/repository/packages/api-key/src/api-key.test.ts:443
   def test_create_rejects_custom_expires_in_when_custom_expiration_is_disabled
     auth = build_auth(default_key_length: 12, key_expiration: {disable_custom_expires_time: true})
     cookie = sign_up_cookie(auth, email: "disabled-create-expiration-key@example.com")
@@ -1309,7 +1309,7 @@ class BetterAuthPluginsAPIKeyTest < Minitest::Test
     assert_equal BetterAuth::Plugins::API_KEY_ERROR_CODES["KEY_DISABLED_EXPIRATION"], error.message
   end
 
-  # Upstream: upstream/packages/api-key/src/api-key.test.ts:921
+  # Upstream: reference/upstream-src/1.6.9/repository/packages/api-key/src/api-key.test.ts:921
   def test_create_accepts_server_side_custom_rate_limit_fields
     auth = build_auth(default_key_length: 12)
     cookie = sign_up_cookie(auth, email: "server-rate-fields-key@example.com")
@@ -1323,7 +1323,7 @@ class BetterAuthPluginsAPIKeyTest < Minitest::Test
     assert_equal 1000, created[:rateLimitTimeWindow]
   end
 
-  # Upstream: upstream/packages/api-key/src/api-key.test.ts:985
+  # Upstream: reference/upstream-src/1.6.9/repository/packages/api-key/src/api-key.test.ts:985
   def test_verify_default_rate_limit_allows_first_ten_and_limits_afterward
     auth = build_auth(default_key_length: 12, rate_limit: {enabled: true, time_window: 60_000, max_requests: 10})
     cookie = sign_up_cookie(auth, email: "default-rate-limit-key@example.com")
@@ -1341,7 +1341,7 @@ class BetterAuthPluginsAPIKeyTest < Minitest::Test
     assert_equal "RATE_LIMITED", limited[:error][:code]
   end
 
-  # Upstream: upstream/packages/api-key/src/api-key.test.ts:1007
+  # Upstream: reference/upstream-src/1.6.9/repository/packages/api-key/src/api-key.test.ts:1007
   def test_verify_allows_requests_after_rate_limit_window_passes
     auth = build_auth(default_key_length: 12, rate_limit: {enabled: true, time_window: 1000, max_requests: 1})
     cookie = sign_up_cookie(auth, email: "rate-window-reset-key@example.com")
@@ -1361,7 +1361,7 @@ class BetterAuthPluginsAPIKeyTest < Minitest::Test
     assert_nil reset[:error]
   end
 
-  # Upstream: upstream/packages/api-key/src/api-key.test.ts:1020
+  # Upstream: reference/upstream-src/1.6.9/repository/packages/api-key/src/api-key.test.ts:1020
   def test_verify_decrements_remaining_count_on_each_successful_use
     auth = build_auth(default_key_length: 12, rate_limit: {enabled: false})
     cookie = sign_up_cookie(auth, email: "remaining-decrement-key@example.com")
@@ -1377,7 +1377,7 @@ class BetterAuthPluginsAPIKeyTest < Minitest::Test
     assert_equal 8, second[:key][:remaining]
   end
 
-  # Upstream: upstream/packages/api-key/src/api-key.test.ts:1224
+  # Upstream: reference/upstream-src/1.6.9/repository/packages/api-key/src/api-key.test.ts:1224
   def test_update_rejects_custom_expires_in_when_custom_expiration_is_disabled
     auth = build_auth(default_key_length: 12, key_expiration: {disable_custom_expires_time: true})
     cookie = sign_up_cookie(auth, email: "disabled-update-expiration-key@example.com")
@@ -1392,7 +1392,7 @@ class BetterAuthPluginsAPIKeyTest < Minitest::Test
     assert_equal BetterAuth::Plugins::API_KEY_ERROR_CODES["KEY_DISABLED_EXPIRATION"], error.message
   end
 
-  # Upstream: upstream/packages/api-key/src/api-key.test.ts:1271
+  # Upstream: reference/upstream-src/1.6.9/repository/packages/api-key/src/api-key.test.ts:1271
   def test_update_rejects_expires_in_below_minimum
     auth = build_auth(default_key_length: 12, key_expiration: {min_expires_in: 1})
     cookie = sign_up_cookie(auth, email: "update-min-expiration-key@example.com")
@@ -1407,7 +1407,7 @@ class BetterAuthPluginsAPIKeyTest < Minitest::Test
     assert_equal BetterAuth::Plugins::API_KEY_ERROR_CODES["EXPIRES_IN_IS_TOO_SMALL"], error.message
   end
 
-  # Upstream: upstream/packages/api-key/src/api-key.test.ts:1318
+  # Upstream: reference/upstream-src/1.6.9/repository/packages/api-key/src/api-key.test.ts:1318
   def test_update_rejects_expires_in_above_maximum
     auth = build_auth(default_key_length: 12, key_expiration: {max_expires_in: 1})
     cookie = sign_up_cookie(auth, email: "update-max-expiration-key@example.com")
@@ -1422,7 +1422,7 @@ class BetterAuthPluginsAPIKeyTest < Minitest::Test
     assert_equal BetterAuth::Plugins::API_KEY_ERROR_CODES["EXPIRES_IN_IS_TOO_LARGE"], error.message
   end
 
-  # Upstream: upstream/packages/api-key/src/api-key.test.ts:2007
+  # Upstream: reference/upstream-src/1.6.9/repository/packages/api-key/src/api-key.test.ts:2007
   def test_delete_without_session_or_user_id_returns_unauthorized
     auth = build_auth(default_key_length: 12)
     cookie = sign_up_cookie(auth, email: "delete-unauthorized-key@example.com")
@@ -1436,7 +1436,7 @@ class BetterAuthPluginsAPIKeyTest < Minitest::Test
     assert_equal "UNAUTHORIZED", error.status
   end
 
-  # Upstream: upstream/packages/api-key/src/api-key.test.ts:1772
+  # Upstream: reference/upstream-src/1.6.9/repository/packages/api-key/src/api-key.test.ts:1772
   def test_list_pagination_pages_do_not_overlap
     auth = build_auth(default_key_length: 12)
     cookie = sign_up_cookie(auth, email: "pagination-overlap-key@example.com")
@@ -1451,7 +1451,7 @@ class BetterAuthPluginsAPIKeyTest < Minitest::Test
     assert_empty page_one[:apiKeys].map { |key| key[:id] } & page_two[:apiKeys].map { |key| key[:id] }
   end
 
-  # Upstream: upstream/packages/api-key/src/api-key.test.ts:1810
+  # Upstream: reference/upstream-src/1.6.9/repository/packages/api-key/src/api-key.test.ts:1810
   def test_list_sorts_by_created_at_descending
     auth = build_auth(default_key_length: 12)
     cookie = sign_up_cookie(auth, email: "created-desc-key@example.com")
@@ -1468,7 +1468,7 @@ class BetterAuthPluginsAPIKeyTest < Minitest::Test
     end
   end
 
-  # Upstream: upstream/packages/api-key/src/api-key.test.ts:1857
+  # Upstream: reference/upstream-src/1.6.9/repository/packages/api-key/src/api-key.test.ts:1857
   def test_list_combines_created_at_sorting_with_pagination
     auth = build_auth(default_key_length: 12)
     cookie = sign_up_cookie(auth, email: "created-pagination-key@example.com")
@@ -1487,7 +1487,7 @@ class BetterAuthPluginsAPIKeyTest < Minitest::Test
     end
   end
 
-  # Upstream: upstream/packages/api-key/src/api-key.test.ts:2763
+  # Upstream: reference/upstream-src/1.6.9/repository/packages/api-key/src/api-key.test.ts:2763
   def test_secondary_storage_expired_key_returns_key_expired
     storage = MemoryStorage.new
     auth = build_auth(storage: "secondary-storage", secondary_storage: storage, default_key_length: 12)
@@ -1506,7 +1506,7 @@ class BetterAuthPluginsAPIKeyTest < Minitest::Test
     assert_equal "KEY_EXPIRED", result[:error][:code]
   end
 
-  # Upstream: upstream/packages/api-key/src/api-key.test.ts:2792
+  # Upstream: reference/upstream-src/1.6.9/repository/packages/api-key/src/api-key.test.ts:2792
   def test_secondary_storage_reference_list_removes_deleted_key
     storage = MemoryStorage.new
     auth = build_auth(storage: "secondary-storage", secondary_storage: storage, default_key_length: 12)
@@ -1526,7 +1526,7 @@ class BetterAuthPluginsAPIKeyTest < Minitest::Test
     refute_includes ref_ids, second[:id]
   end
 
-  # Upstream: upstream/packages/api-key/src/api-key.test.ts:2879
+  # Upstream: reference/upstream-src/1.6.9/repository/packages/api-key/src/api-key.test.ts:2879
   def test_secondary_storage_fallback_reads_cache_before_database
     storage = MemoryStorage.new
     auth = build_auth(storage: "secondary-storage", secondary_storage: storage, fallback_to_database: true, default_key_length: 12)
@@ -1540,7 +1540,7 @@ class BetterAuthPluginsAPIKeyTest < Minitest::Test
     assert_includes storage.get_calls, "api-key:by-id:#{created[:id]}"
   end
 
-  # Upstream: upstream/packages/api-key/src/api-key.test.ts:2898
+  # Upstream: reference/upstream-src/1.6.9/repository/packages/api-key/src/api-key.test.ts:2898
   def test_secondary_storage_fallback_verify_persists_quota_updates_to_database
     storage = MemoryStorage.new
     auth = build_auth(storage: "secondary-storage", secondary_storage: storage, fallback_to_database: true, default_key_length: 12, rate_limit: {enabled: false})
@@ -1560,7 +1560,7 @@ class BetterAuthPluginsAPIKeyTest < Minitest::Test
     assert_equal "USAGE_EXCEEDED", second[:error][:code]
   end
 
-  # Upstream: upstream/packages/api-key/src/api-key.test.ts:2990
+  # Upstream: reference/upstream-src/1.6.9/repository/packages/api-key/src/api-key.test.ts:2990
   def test_secondary_storage_fallback_list_populates_all_cache_keys_from_database
     storage = MemoryStorage.new
     auth = build_auth(storage: "secondary-storage", secondary_storage: storage, fallback_to_database: true, default_key_length: 12)
@@ -1580,7 +1580,7 @@ class BetterAuthPluginsAPIKeyTest < Minitest::Test
     assert_equal [first["id"], second["id"]].sort, JSON.parse(storage.get("api-key:by-ref:#{user_id}")).sort
   end
 
-  # Upstream: upstream/packages/api-key/src/api-key.test.ts:3135
+  # Upstream: reference/upstream-src/1.6.9/repository/packages/api-key/src/api-key.test.ts:3135
   def test_secondary_storage_fallback_population_touches_ref_list_once
     storage = MemoryStorage.new
     auth = build_auth(storage: "secondary-storage", secondary_storage: storage, fallback_to_database: true, default_key_length: 12)
@@ -1596,7 +1596,7 @@ class BetterAuthPluginsAPIKeyTest < Minitest::Test
     assert_equal 1, storage.set_calls.count { |(key, _value, _ttl)| key == ref_key }
   end
 
-  # Upstream: upstream/packages/api-key/src/api-key.test.ts:3243
+  # Upstream: reference/upstream-src/1.6.9/repository/packages/api-key/src/api-key.test.ts:3243
   def test_secondary_storage_pure_mode_does_not_write_database
     storage = MemoryStorage.new
     auth = build_auth(storage: "secondary-storage", secondary_storage: storage, default_key_length: 12)
@@ -1608,7 +1608,7 @@ class BetterAuthPluginsAPIKeyTest < Minitest::Test
     assert_nil auth.context.adapter.find_one(model: "apikey", where: [{field: "id", value: created[:id]}])
   end
 
-  # Upstream: upstream/packages/api-key/src/api-key.test.ts:3254
+  # Upstream: reference/upstream-src/1.6.9/repository/packages/api-key/src/api-key.test.ts:3254
   def test_secondary_storage_fallback_create_writes_database_and_cache
     storage = MemoryStorage.new
     auth = build_auth(storage: "secondary-storage", secondary_storage: storage, fallback_to_database: true, default_key_length: 12)
@@ -1622,7 +1622,7 @@ class BetterAuthPluginsAPIKeyTest < Minitest::Test
     assert_equal "fallback-create", stored["name"]
   end
 
-  # Upstream: upstream/packages/api-key/src/api-key.test.ts:3276
+  # Upstream: reference/upstream-src/1.6.9/repository/packages/api-key/src/api-key.test.ts:3276
   def test_secondary_storage_fallback_update_writes_database_and_cache
     storage = MemoryStorage.new
     auth = build_auth(storage: "secondary-storage", secondary_storage: storage, fallback_to_database: true, default_key_length: 12)
@@ -1638,7 +1638,7 @@ class BetterAuthPluginsAPIKeyTest < Minitest::Test
     assert_equal "updated", stored["name"]
   end
 
-  # Upstream: upstream/packages/api-key/src/api-key.test.ts:3311
+  # Upstream: reference/upstream-src/1.6.9/repository/packages/api-key/src/api-key.test.ts:3311
   def test_secondary_storage_fallback_delete_removes_database_and_cache
     storage = MemoryStorage.new
     auth = build_auth(storage: "secondary-storage", secondary_storage: storage, fallback_to_database: true, default_key_length: 12)
@@ -1652,7 +1652,7 @@ class BetterAuthPluginsAPIKeyTest < Minitest::Test
     assert_nil auth.context.adapter.find_one(model: "apikey", where: [{field: "id", value: created[:id]}])
   end
 
-  # Upstream: upstream/packages/api-key/src/api-key.test.ts:3395
+  # Upstream: reference/upstream-src/1.6.9/repository/packages/api-key/src/api-key.test.ts:3395
   def test_defer_updates_still_enforces_rate_limits
     deferred = []
     auth = build_auth(
@@ -1680,7 +1680,7 @@ class BetterAuthPluginsAPIKeyTest < Minitest::Test
     assert third[:error][:details][:tryAgainIn]
   end
 
-  # Upstream: upstream/packages/api-key/src/api-key.test.ts:3443
+  # Upstream: reference/upstream-src/1.6.9/repository/packages/api-key/src/api-key.test.ts:3443
   def test_defer_updates_persists_remaining_count_after_background_task
     deferred = []
     auth = build_auth(
@@ -1701,7 +1701,7 @@ class BetterAuthPluginsAPIKeyTest < Minitest::Test
     assert_equal 9, updated[:remaining]
   end
 
-  # Upstream: upstream/packages/api-key/src/api-key.test.ts:3483
+  # Upstream: reference/upstream-src/1.6.9/repository/packages/api-key/src/api-key.test.ts:3483
   def test_defer_updates_without_background_handler_runs_synchronously
     auth = build_auth(default_key_length: 12, defer_updates: true)
     cookie = sign_up_cookie(auth, email: "defer-no-handler-key@example.com")
@@ -1715,7 +1715,7 @@ class BetterAuthPluginsAPIKeyTest < Minitest::Test
     assert updated[:lastRequest]
   end
 
-  # Upstream: upstream/packages/api-key/src/api-key.test.ts:3678
+  # Upstream: reference/upstream-src/1.6.9/repository/packages/api-key/src/api-key.test.ts:3678
   def test_list_api_keys_migrates_double_stringified_metadata
     auth = build_auth(enable_metadata: true)
     cookie = sign_up_cookie(auth, email: "metadata-list-migration-key@example.com")
@@ -1736,7 +1736,7 @@ class BetterAuthPluginsAPIKeyTest < Minitest::Test
     assert_equal({"plan" => "legacy-2"}, JSON.parse(migrated_second["metadata"]))
   end
 
-  # Upstream: upstream/packages/api-key/src/api-key.test.ts:3747
+  # Upstream: reference/upstream-src/1.6.9/repository/packages/api-key/src/api-key.test.ts:3747
   def test_update_api_key_migrates_double_stringified_metadata
     auth = build_auth(enable_metadata: true)
     cookie = sign_up_cookie(auth, email: "metadata-update-migration-key@example.com")
@@ -1751,7 +1751,7 @@ class BetterAuthPluginsAPIKeyTest < Minitest::Test
     assert_equal({"tier" => "legacy-tier"}, JSON.parse(migrated["metadata"]))
   end
 
-  # Upstream: upstream/packages/api-key/src/api-key.test.ts:3827
+  # Upstream: reference/upstream-src/1.6.9/repository/packages/api-key/src/api-key.test.ts:3827
   def test_metadata_migration_leaves_properly_formatted_metadata_unchanged
     auth = build_auth(enable_metadata: true)
     cookie = sign_up_cookie(auth, email: "metadata-unchanged-key@example.com")
@@ -1762,7 +1762,7 @@ class BetterAuthPluginsAPIKeyTest < Minitest::Test
     assert_equal({"alreadyCorrect" => true, "value" => 123}, fetched[:metadata])
   end
 
-  # Upstream: upstream/packages/api-key/src/api-key.test.ts:3848
+  # Upstream: reference/upstream-src/1.6.9/repository/packages/api-key/src/api-key.test.ts:3848
   def test_metadata_migration_handles_null_metadata
     auth = build_auth(enable_metadata: true)
     cookie = sign_up_cookie(auth, email: "metadata-null-key@example.com")
@@ -1773,7 +1773,7 @@ class BetterAuthPluginsAPIKeyTest < Minitest::Test
     assert_nil fetched[:metadata]
   end
 
-  # Upstream: upstream/packages/api-key/src/api-key.test.ts:4173
+  # Upstream: reference/upstream-src/1.6.9/repository/packages/api-key/src/api-key.test.ts:4173
   def test_org_key_create_requires_organization_id
     auth = build_user_and_org_key_auth
     cookie = sign_up_cookie(auth, email: "org-id-required-key@example.com")
@@ -1787,7 +1787,7 @@ class BetterAuthPluginsAPIKeyTest < Minitest::Test
     assert_equal BetterAuth::Plugins::API_KEY_ERROR_CODES["ORGANIZATION_ID_REQUIRED"], error.message
   end
 
-  # Upstream: upstream/packages/api-key/src/api-key.test.ts:4217
+  # Upstream: reference/upstream-src/1.6.9/repository/packages/api-key/src/api-key.test.ts:4217
   def test_list_without_organization_id_returns_only_user_owned_keys
     auth = build_user_and_org_key_auth
     cookie = sign_up_cookie(auth, email: "list-user-owned-key@example.com")
@@ -1804,7 +1804,7 @@ class BetterAuthPluginsAPIKeyTest < Minitest::Test
     assert listed[:apiKeys].all? { |key| key[:configId] == "user-keys" && key[:referenceId] == user_id }
   end
 
-  # Upstream: upstream/packages/api-key/src/api-key.test.ts:4248
+  # Upstream: reference/upstream-src/1.6.9/repository/packages/api-key/src/api-key.test.ts:4248
   def test_list_with_organization_id_returns_only_org_owned_keys
     auth = build_user_and_org_key_auth
     cookie = sign_up_cookie(auth, email: "list-org-owned-key@example.com")
@@ -1822,7 +1822,7 @@ class BetterAuthPluginsAPIKeyTest < Minitest::Test
     assert listed[:apiKeys].all? { |key| key[:configId] == "org-keys" && key[:referenceId] == organization.fetch("id") }
   end
 
-  # Upstream: upstream/packages/api-key/src/api-key.test.ts:4300
+  # Upstream: reference/upstream-src/1.6.9/repository/packages/api-key/src/api-key.test.ts:4300
   def test_list_org_keys_filters_by_config_id
     auth = BetterAuth.auth(
       secret: SECRET,
@@ -1846,7 +1846,7 @@ class BetterAuthPluginsAPIKeyTest < Minitest::Test
     assert_equal "org-public", listed[:apiKeys].first[:configId]
   end
 
-  # Upstream: upstream/packages/api-key/src/api-key.test.ts:4413
+  # Upstream: reference/upstream-src/1.6.9/repository/packages/api-key/src/api-key.test.ts:4413
   def test_org_owned_key_cannot_create_api_key_session
     auth = BetterAuth.auth(
       secret: SECRET,
@@ -1867,7 +1867,7 @@ class BetterAuthPluginsAPIKeyTest < Minitest::Test
     assert_equal "INVALID_REFERENCE_ID_FROM_API_KEY", error.code
   end
 
-  # Upstream: upstream/packages/api-key/src/api-key.test.ts:4469
+  # Upstream: reference/upstream-src/1.6.9/repository/packages/api-key/src/api-key.test.ts:4469
   def test_user_owned_key_can_create_api_key_session_with_org_plugin_installed
     auth = BetterAuth.auth(
       secret: SECRET,
@@ -1887,7 +1887,7 @@ class BetterAuthPluginsAPIKeyTest < Minitest::Test
     assert_equal user_id, session[:user]["id"]
   end
 
-  # Upstream: upstream/packages/api-key/src/api-key.test.ts:4514
+  # Upstream: reference/upstream-src/1.6.9/repository/packages/api-key/src/api-key.test.ts:4514
   def test_mixed_user_and_org_keys_verify_in_same_instance
     auth = build_user_and_org_key_auth
     cookie = sign_up_cookie(auth, email: "mixed-user-org-key@example.com")
@@ -1905,7 +1905,7 @@ class BetterAuthPluginsAPIKeyTest < Minitest::Test
     assert_equal organization.fetch("id"), org_result[:key][:referenceId]
   end
 
-  # Upstream: upstream/packages/api-key/src/api-key.test.ts:4547
+  # Upstream: reference/upstream-src/1.6.9/repository/packages/api-key/src/api-key.test.ts:4547
   def test_get_org_owned_key_by_id_from_server
     auth = build_user_and_org_key_auth
     cookie = sign_up_cookie(auth, email: "get-org-owned-key@example.com")
@@ -1920,7 +1920,7 @@ class BetterAuthPluginsAPIKeyTest < Minitest::Test
     assert_equal "my-org-key", fetched[:name]
   end
 
-  # Upstream: upstream/packages/api-key/src/api-key.test.ts:4577
+  # Upstream: reference/upstream-src/1.6.9/repository/packages/api-key/src/api-key.test.ts:4577
   def test_delete_org_owned_key_then_verify_fails
     auth = build_user_and_org_key_auth
     cookie = sign_up_cookie(auth, email: "delete-org-owned-key@example.com")
@@ -1934,7 +1934,7 @@ class BetterAuthPluginsAPIKeyTest < Minitest::Test
     assert_equal false, verified[:valid]
   end
 
-  # Upstream: upstream/packages/api-key/src/api-key.test.ts:4609
+  # Upstream: reference/upstream-src/1.6.9/repository/packages/api-key/src/api-key.test.ts:4609
   def test_update_org_owned_key_name_and_enabled_status
     auth = build_user_and_org_key_auth
     cookie = sign_up_cookie(auth, email: "update-org-owned-key@example.com")
@@ -1949,7 +1949,7 @@ class BetterAuthPluginsAPIKeyTest < Minitest::Test
     assert_equal organization.fetch("id"), updated[:referenceId]
   end
 
-  # Upstream: upstream/packages/api-key/src/org-api-key.test.ts:101
+  # Upstream: reference/upstream-src/1.6.9/repository/packages/api-key/src/org-api-key.test.ts:101
   def test_org_non_member_is_denied_full_api_key_crud
     auth = build_user_and_org_key_auth
     owner_cookie = sign_up_cookie(auth, email: "org-non-member-owner-key@example.com")
@@ -1960,7 +1960,7 @@ class BetterAuthPluginsAPIKeyTest < Minitest::Test
     assert_org_api_key_forbidden(auth, non_member_cookie, organization.fetch("id"), org_key[:id], "USER_NOT_MEMBER_OF_ORGANIZATION")
   end
 
-  # Upstream: upstream/packages/api-key/src/org-api-key.test.ts:173
+  # Upstream: reference/upstream-src/1.6.9/repository/packages/api-key/src/org-api-key.test.ts:173
   def test_org_default_member_without_api_key_permissions_is_denied
     auth = build_user_and_org_key_auth
     owner_cookie = sign_up_cookie(auth, email: "org-default-owner-key@example.com")
@@ -1977,7 +1977,7 @@ class BetterAuthPluginsAPIKeyTest < Minitest::Test
     assert_equal "INSUFFICIENT_API_KEY_PERMISSIONS", error.code
   end
 
-  # Upstream: upstream/packages/api-key/src/org-api-key.test.ts:416
+  # Upstream: reference/upstream-src/1.6.9/repository/packages/api-key/src/org-api-key.test.ts:416
   def test_org_read_only_member_can_read_but_cannot_create_update_or_delete
     auth = build_custom_org_api_key_auth
     owner_cookie = sign_up_cookie(auth, email: "org-read-owner-key@example.com")
@@ -2008,7 +2008,7 @@ class BetterAuthPluginsAPIKeyTest < Minitest::Test
     end
   end
 
-  # Upstream: upstream/packages/api-key/src/org-api-key.test.ts:478
+  # Upstream: reference/upstream-src/1.6.9/repository/packages/api-key/src/org-api-key.test.ts:478
   def test_org_restricted_member_is_denied_full_api_key_crud
     auth = build_custom_org_api_key_auth
     owner_cookie = sign_up_cookie(auth, email: "org-restricted-owner-key@example.com")

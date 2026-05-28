@@ -66,6 +66,35 @@ class ReleaseVersionManifestTest < Minitest::Test
     assert_includes workflow, "Build and publish openauth-cli"
   end
 
+  def test_release_workflow_includes_saml_and_oidc_packages
+    workflow = File.read(File.join(ROOT, ".github/workflows/release.yml"))
+
+    %w[
+      better_auth-saml-v*
+      better_auth-oidc-v*
+      openauth-saml-v*
+      openauth-oidc-v*
+      saml_version
+      oidc_version
+      openauth_saml_version
+      openauth_oidc_version
+      saml_releases
+      oidc_releases
+      openauth_saml_releases
+      openauth_oidc_releases
+      Test better_auth-saml
+      Test better_auth-oidc
+      Build and publish better_auth-saml
+      Build and publish better_auth-oidc
+      Build and publish openauth-saml
+      Build and publish openauth-oidc
+      "openauth-saml"
+      "openauth-oidc"
+    ].each do |needle|
+      assert_includes workflow, needle
+    end
+  end
+
   def test_release_workflow_includes_grape_package
     workflow = File.read(File.join(ROOT, ".github/workflows/release.yml"))
 

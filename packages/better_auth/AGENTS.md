@@ -11,8 +11,10 @@ belongs in adapter packages.
 This package maps to:
 
 ```text
-upstream/better-auth/1.6.9/packages/better-auth/
+reference/upstream-src/1.6.9/repository/packages/better-auth/
 ```
+
+Run `./scripts/fetch-upstream-better-auth.sh` if that tree is missing locally.
 
 Before changing upstream-backed behavior:
 

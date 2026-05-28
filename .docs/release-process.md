@@ -25,6 +25,8 @@ Do not create separate folders for supported Rails lines. Keep compatibility in 
    - `packages/better_auth-mongo-adapter/lib/better_auth/mongo_adapter/version.rb`
    - `packages/better_auth-scim/lib/better_auth/scim/version.rb`
    - `packages/better_auth-sso/lib/better_auth/sso/version.rb`
+   - `packages/better_auth-saml/lib/better_auth/saml/version.rb`
+   - `packages/better_auth-oidc/lib/better_auth/oidc/version.rb`
    - `packages/better_auth-stripe/lib/better_auth/stripe/version.rb`
 3. Let CI pass on `main`.
 4. Push a tag matching the package and version, for example:
@@ -47,6 +49,10 @@ The release workflow publishes only the gem named by the tag prefix:
 - `better_auth-mongo-adapter-v0.1.2` publishes `better_auth-mongo-adapter`.
 - `better_auth-scim-v0.1.2` publishes `better_auth-scim`.
 - `better_auth-sso-v0.1.2` publishes `better_auth-sso`.
+- `better_auth-saml-v0.1.2` publishes `better_auth-saml`.
+- `better_auth-oidc-v0.1.2` publishes `better_auth-oidc`.
+- `openauth-saml-v0.1.2` publishes `openauth-saml`.
+- `openauth-oidc-v0.1.2` publishes `openauth-oidc`.
 - `better_auth-stripe-v0.1.2` publishes `better_auth-stripe`.
 
 The target gem's version file must equal the tag version. Other gems may share that version number without being published.

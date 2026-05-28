@@ -1,7 +1,7 @@
 # Repository Guide
 
 This repository is a Ruby port of Better Auth. Keep behavior aligned with the
-vendored upstream Better Auth source unless a Ruby-specific adaptation is
+the upstream Better Auth reference sources unless a Ruby-specific adaptation is
 explicitly documented.
 
 ## Before Editing
@@ -15,19 +15,30 @@ explicitly documented.
 ## Upstream Source of Truth
 
 Target upstream version: Better Auth `v1.6.9`, fixed at commit
-`f484269228b7eb8df0e2325e7d264bb8d7796311`.
+`f484269228b7eb8df0e2325e7d264bb8d7796311` (see
+`reference/upstream-better-auth/VERSION.md`).
 
-The upstream source is vendored at:
+The upstream monorepo is **not** committed. Fetch a local shallow clone when you
+need TypeScript sources or tests:
 
-```text
-upstream/better-auth/1.6.9/
+```bash
+./scripts/fetch-upstream-better-auth.sh
 ```
 
-Common reference paths:
+Expected clone path:
 
-- `upstream/better-auth/1.6.9/packages/better-auth/src/` - core auth logic
-- `upstream/better-auth/1.6.9/packages/better-auth/src/plugins/` - plugins
-- `upstream/better-auth/1.6.9/**/*.test.ts` - upstream behavior tests
+```text
+reference/upstream-src/1.6.9/repository/
+```
+
+Common reference paths (after fetching):
+
+- `reference/upstream-src/1.6.9/repository/packages/better-auth/src/` - core auth logic
+- `reference/upstream-src/1.6.9/repository/packages/better-auth/src/plugins/` - plugins
+- `reference/upstream-src/1.6.9/repository/packages/better-auth/src/**/*.test.ts` - upstream behavior tests
+
+Do not commit files under `reference/upstream-src/<version>/`. Only
+`reference/upstream-better-auth/` attribution files are versioned.
 
 Adapt the behavior to idiomatic Ruby. Do not make a line-by-line TypeScript port
 when Ruby structure, naming, or error handling should differ.
@@ -67,11 +78,10 @@ Documentation lives in a few places:
 - `docs/content/blogs/` and `docs/content/changelogs/` - website blog and
   changelog content.
 - `examples/` - runnable examples that should match documented setup flows.
-- `.docs/` - internal project notes, plans, and agent-facing working documents.
+- `.docs/` - release notes and the upstream parity matrix.
 
 When changing public behavior, update the relevant package README and website
-docs if users need to know about the change. Keep internal notes in `.docs/`;
-do not put agent plans or scratch material in the public docs site.
+docs if users need to know about the change.
 
 ## Plans
 

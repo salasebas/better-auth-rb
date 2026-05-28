@@ -30,3 +30,7 @@ examples/*/config/master.key
 
 # Ignore local browser verification artifacts
 .playwright-mcp/
+
+# Better Auth upstream clone (local parity only)
+reference/upstream-src/*/
+!reference/upstream-src/README.md

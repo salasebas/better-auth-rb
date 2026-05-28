@@ -4,7 +4,7 @@ module BetterAuth
   module APIKey
     module Routes
       module UpdateAPIKey
-        UPSTREAM_SOURCE = "upstream/packages/api-key/src/routes/update-api-key.ts"
+        UPSTREAM_SOURCE = "reference/upstream-src/1.6.9/repository/packages/api-key/src/routes/update-api-key.ts"
 
         module_function
 

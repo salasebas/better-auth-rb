@@ -109,6 +109,10 @@ module BetterAuth
     def load_plugin!(name)
       name = name.to_sym
       return true if @loaded_plugins[name]
+      if name == :sso && defined?(SSO_PLUGIN_IMPLEMENTATION)
+        @loaded_plugins[name] = true
+        return true
+      end
 
       Array(PLUGIN_DEPENDENCIES[name]).each { |dependency| load_plugin!(dependency) }
 

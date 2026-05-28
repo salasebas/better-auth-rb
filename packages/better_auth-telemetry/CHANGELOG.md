@@ -8,7 +8,7 @@
 ## 0.8.0
 
 - Initial release. Ports the upstream `@better-auth/telemetry` package
-  (vendored at `upstream/better-auth/1.6.9/packages/telemetry/`) into the
+  (vendored at `reference/upstream-src/1.6.9/repository/packages/telemetry/`) into the
   Ruby monorepo as the canonical `better_auth-telemetry` gem with a paired
   `openauth-telemetry` alias.
 - Opt-in only. Telemetry is disabled by default and skipped under
@@ -27,4 +27,4 @@
   `runtime.engine` extra key, `cpuSpeed` omitted, `cpuModel` always `nil`,
   `packageManager` reflects Bundler, framework/database probe lists,
   `appName` not emitted) are documented in the README.
-- No file under `upstream/better-auth/1.6.9/` is modified.
+- No file under `reference/upstream-src/1.6.9/repository/` is modified.

@@ -14,18 +14,24 @@ This is a monorepo with two Ruby gems:
 packages/
   better_auth/            # Core auth library (Rack-based, framework-agnostic)
   better_auth-rails/      # Rails adapter (middleware, helpers, generators)
-upstream/                 # Git submodule: original TypeScript better-auth (read-only reference)
+reference/                # Upstream attribution + local clone instructions (see AGENTS.md)
 ```
 
 ## Getting Started
 
 1. Fork the repository to your GitHub account
 
-2. Clone your fork (with the submodule):
+2. Clone your fork:
 
    ```bash
-   git clone --recursive https://github.com/your-username/better-auth-rb.git
+   git clone https://github.com/your-username/better-auth-rb.git
    cd better-auth-rb
+   ```
+
+   Optional: fetch the upstream TypeScript reference tree for parity work:
+
+   ```bash
+   ./scripts/fetch-upstream-better-auth.sh
    ```
 
 3. Install Ruby 3.2+ (3.3 recommended). We recommend [rbenv](https://github.com/rbenv/rbenv) or [asdf](https://asdf-vm.com/).
@@ -134,15 +140,15 @@ end
 - **Avoid mocks** unless the real dependency is truly impractical
 - Test actual behavior, not implementation details
 - If you need database containers: `make db-up`
-- Check upstream tests (`upstream/packages/better-auth/src/**/*.test.ts`) for test case ideas
+- Check upstream tests (`reference/upstream-src/1.6.9/repository/packages/better-auth/src/**/*.test.ts`) for test case ideas
 
 ## Porting from Upstream
 
 If you're porting a feature from the TypeScript upstream:
 
-1. Read the upstream implementation in `upstream/packages/better-auth/src/`
+1. Read the upstream implementation in `reference/upstream-src/1.6.9/repository/packages/better-auth/src/` (run `./scripts/fetch-upstream-better-auth.sh` if missing)
 2. Translate to idiomatic Ruby (not a line-by-line copy)
-3. Port relevant test cases from `upstream/packages/better-auth/src/**/*.test.ts`
+3. Port relevant test cases from `reference/upstream-src/1.6.9/repository/packages/better-auth/src/**/*.test.ts`
 4. Reference the upstream PR/commit in your PR description
 
 ## Pull Request Process

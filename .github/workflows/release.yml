@@ -17,10 +17,14 @@ on:
       - 'better_auth-mongodb-v*'
       - 'better_auth-mongo-adapter-v*'
       - 'better_auth-scim-v*'
+      - 'better_auth-saml-v*'
+      - 'better_auth-oidc-v*'
       - 'better_auth-sso-v*'
       - 'better_auth-stripe-v*'
       - 'better_auth-telemetry-v*'
       - 'openauth-cli-v*'
+      - 'openauth-saml-v*'
+      - 'openauth-oidc-v*'
   workflow_dispatch:
     inputs:
       dry_run:
@@ -72,6 +76,10 @@ jobs:
       mongodb_version: ${{ steps.detect.outputs.mongodb_version }}
       mongo_adapter_version: ${{ steps.detect.outputs.mongo_adapter_version }}
       scim_version: ${{ steps.detect.outputs.scim_version }}
+      saml_version: ${{ steps.detect.outputs.saml_version }}
+      oidc_version: ${{ steps.detect.outputs.oidc_version }}
+      openauth_saml_version: ${{ steps.detect.outputs.openauth_saml_version }}
+      openauth_oidc_version: ${{ steps.detect.outputs.openauth_oidc_version }}
       sso_version: ${{ steps.detect.outputs.sso_version }}
       stripe_version: ${{ steps.detect.outputs.stripe_version }}
       telemetry_version: ${{ steps.detect.outputs.telemetry_version }}
@@ -92,6 +100,10 @@ jobs:
       mongodb_releases: ${{ steps.detect.outputs.mongodb_releases }}
       mongo_adapter_releases: ${{ steps.detect.outputs.mongo_adapter_releases }}
       scim_releases: ${{ steps.detect.outputs.scim_releases }}
+      saml_releases: ${{ steps.detect.outputs.saml_releases }}
+      oidc_releases: ${{ steps.detect.outputs.oidc_releases }}
+      openauth_saml_releases: ${{ steps.detect.outputs.openauth_saml_releases }}
+      openauth_oidc_releases: ${{ steps.detect.outputs.openauth_oidc_releases }}
       sso_releases: ${{ steps.detect.outputs.sso_releases }}
       stripe_releases: ${{ steps.detect.outputs.stripe_releases }}
       telemetry_releases: ${{ steps.detect.outputs.telemetry_releases }}
@@ -125,6 +137,10 @@ jobs:
           mongodb_file="packages/better_auth-mongodb/lib/better_auth/mongodb/version.rb"
           mongo_adapter_file="packages/better_auth-mongo-adapter/lib/better_auth/mongo_adapter/version.rb"
           scim_file="packages/better_auth-scim/lib/better_auth/scim/version.rb"
+          saml_file="packages/better_auth-saml/lib/better_auth/saml/version.rb"
+          oidc_file="packages/better_auth-oidc/lib/better_auth/oidc/version.rb"
+          openauth_saml_gemspec="packages/openauth-saml/openauth-saml.gemspec"
+          openauth_oidc_gemspec="packages/openauth-oidc/openauth-oidc.gemspec"
           sso_file="packages/better_auth-sso/lib/better_auth/sso/version.rb"
           stripe_file="packages/better_auth-stripe/lib/better_auth/stripe/version.rb"
           telemetry_file="packages/better_auth-telemetry/lib/better_auth/telemetry/version.rb"
@@ -144,6 +160,10 @@ jobs:
           mongodb_version=$(ruby -e 'print File.read(ARGV[0])[/VERSION\s*=\s*"([^"]+)"/, 1]' "$mongodb_file")
           mongo_adapter_version=$(ruby -e 'print File.read(ARGV[0])[/VERSION\s*=\s*"([^"]+)"/, 1]' "$mongo_adapter_file")
           scim_version=$(ruby -e 'print File.read(ARGV[0])[/VERSION\s*=\s*"([^"]+)"/, 1]' "$scim_file")
+          saml_version=$(ruby -e 'print File.read(ARGV[0])[/VERSION\s*=\s*"([^"]+)"/, 1]' "$saml_file")
+          oidc_version=$(ruby -e 'print File.read(ARGV[0])[/VERSION\s*=\s*"([^"]+)"/, 1]' "$oidc_file")
+          openauth_saml_version=$(ruby -e 'spec = Gem::Specification.load(ARGV.fetch(0)); print spec.version' "$openauth_saml_gemspec")
+          openauth_oidc_version=$(ruby -e 'spec = Gem::Specification.load(ARGV.fetch(0)); print spec.version' "$openauth_oidc_gemspec")
           sso_version=$(ruby -e 'print File.read(ARGV[0])[/VERSION\s*=\s*"([^"]+)"/, 1]' "$sso_file")
           stripe_version=$(ruby -e 'print File.read(ARGV[0])[/VERSION\s*=\s*"([^"]+)"/, 1]' "$stripe_file")
           telemetry_version=$(ruby -e 'print File.read(ARGV[0])[/VERSION\s*=\s*"([^"]+)"/, 1]' "$telemetry_file")
@@ -166,6 +186,10 @@ jobs:
           mongodb_releases=false
           mongo_adapter_releases=false
           scim_releases=false
+          saml_releases=false
+          oidc_releases=false
+          openauth_saml_releases=false
+          openauth_oidc_releases=false
           sso_releases=false
           stripe_releases=false
           telemetry_releases=false
@@ -260,6 +284,18 @@ jobs:
                 expected_version="$scim_version"
                 scim_releases=true
                 ;;
+              better_auth-saml-v*)
+                target_package="better_auth-saml"
+                tag_version="${tag_name#better_auth-saml-v}"
+                expected_version="$saml_version"
+                saml_releases=true
+                ;;
+              better_auth-oidc-v*)
+                target_package="better_auth-oidc"
+                tag_version="${tag_name#better_auth-oidc-v}"
+                expected_version="$oidc_version"
+                oidc_releases=true
+                ;;
               better_auth-sso-v*)
                 target_package="better_auth-sso"
                 tag_version="${tag_name#better_auth-sso-v}"
@@ -284,8 +320,20 @@ jobs:
                 expected_version="$openauth_cli_version"
                 openauth_cli_releases=true
                 ;;
+              openauth-saml-v*)
+                target_package="openauth-saml"
+                tag_version="${tag_name#openauth-saml-v}"
+                expected_version="$openauth_saml_version"
+                openauth_saml_releases=true
+                ;;
+              openauth-oidc-v*)
+                target_package="openauth-oidc"
+                tag_version="${tag_name#openauth-oidc-v}"
+                expected_version="$openauth_oidc_version"
+                openauth_oidc_releases=true
+                ;;
               *)
-                echo "::error ::Release tags must use a package prefix: better_auth-vX.Y.Z, better_auth-cli-vX.Y.Z, better_auth-rails-vX.Y.Z, better_auth-passkey-vX.Y.Z, better_auth-sinatra-vX.Y.Z, better_auth-hanami-vX.Y.Z, better_auth-grape-vX.Y.Z, better_auth-roda-vX.Y.Z, better_auth-api-key-vX.Y.Z, better_auth-oauth-provider-vX.Y.Z, better_auth-redis-storage-vX.Y.Z, better_auth-mongodb-vX.Y.Z, better_auth-mongo-adapter-vX.Y.Z, better_auth-scim-vX.Y.Z, better_auth-sso-vX.Y.Z, better_auth-stripe-vX.Y.Z, better_auth-telemetry-vX.Y.Z, or openauth-cli-vX.Y.Z."
+                echo "::error ::Release tags must use a package prefix: better_auth-vX.Y.Z, better_auth-cli-vX.Y.Z, better_auth-rails-vX.Y.Z, better_auth-passkey-vX.Y.Z, better_auth-sinatra-vX.Y.Z, better_auth-hanami-vX.Y.Z, better_auth-grape-vX.Y.Z, better_auth-roda-vX.Y.Z, better_auth-api-key-vX.Y.Z, better_auth-oauth-provider-vX.Y.Z, better_auth-redis-storage-vX.Y.Z, better_auth-mongodb-vX.Y.Z, better_auth-mongo-adapter-vX.Y.Z, better_auth-scim-vX.Y.Z, better_auth-saml-vX.Y.Z, better_auth-oidc-vX.Y.Z, better_auth-sso-vX.Y.Z, better_auth-stripe-vX.Y.Z, better_auth-telemetry-vX.Y.Z, openauth-cli-vX.Y.Z, openauth-saml-vX.Y.Z, or openauth-oidc-vX.Y.Z."
                 exit 1
                 ;;
             esac
@@ -346,6 +394,10 @@ jobs:
           echo "mongodb_version=$mongodb_version" >> "$GITHUB_OUTPUT"
           echo "mongo_adapter_version=$mongo_adapter_version" >> "$GITHUB_OUTPUT"
           echo "scim_version=$scim_version" >> "$GITHUB_OUTPUT"
+          echo "saml_version=$saml_version" >> "$GITHUB_OUTPUT"
+          echo "oidc_version=$oidc_version" >> "$GITHUB_OUTPUT"
+          echo "openauth_saml_version=$openauth_saml_version" >> "$GITHUB_OUTPUT"
+          echo "openauth_oidc_version=$openauth_oidc_version" >> "$GITHUB_OUTPUT"
           echo "sso_version=$sso_version" >> "$GITHUB_OUTPUT"
           echo "stripe_version=$stripe_version" >> "$GITHUB_OUTPUT"
           echo "telemetry_version=$telemetry_version" >> "$GITHUB_OUTPUT"
@@ -366,6 +418,10 @@ jobs:
           echo "mongodb_releases=$mongodb_releases" >> "$GITHUB_OUTPUT"
           echo "mongo_adapter_releases=$mongo_adapter_releases" >> "$GITHUB_OUTPUT"
           echo "scim_releases=$scim_releases" >> "$GITHUB_OUTPUT"
+          echo "saml_releases=$saml_releases" >> "$GITHUB_OUTPUT"
+          echo "oidc_releases=$oidc_releases" >> "$GITHUB_OUTPUT"
+          echo "openauth_saml_releases=$openauth_saml_releases" >> "$GITHUB_OUTPUT"
+          echo "openauth_oidc_releases=$openauth_oidc_releases" >> "$GITHUB_OUTPUT"
           echo "sso_releases=$sso_releases" >> "$GITHUB_OUTPUT"
           echo "stripe_releases=$stripe_releases" >> "$GITHUB_OUTPUT"
           echo "telemetry_releases=$telemetry_releases" >> "$GITHUB_OUTPUT"
@@ -388,6 +444,10 @@ jobs:
           echo "mongodb_version=$mongodb_version"
           echo "mongo_adapter_version=$mongo_adapter_version"
           echo "scim_version=$scim_version"
+          echo "saml_version=$saml_version"
+          echo "oidc_version=$oidc_version"
+          echo "openauth_saml_version=$openauth_saml_version"
+          echo "openauth_oidc_version=$openauth_oidc_version"
           echo "sso_version=$sso_version"
           echo "stripe_version=$stripe_version"
           echo "telemetry_version=$telemetry_version"
@@ -407,6 +467,10 @@ jobs:
           echo "mongodb_releases=$mongodb_releases"
           echo "mongo_adapter_releases=$mongo_adapter_releases"
           echo "scim_releases=$scim_releases"
+          echo "saml_releases=$saml_releases"
+          echo "oidc_releases=$oidc_releases"
+          echo "openauth_saml_releases=$openauth_saml_releases"
+          echo "openauth_oidc_releases=$openauth_oidc_releases"
           echo "sso_releases=$sso_releases"
           echo "stripe_releases=$stripe_releases"
           echo "telemetry_releases=$telemetry_releases"
@@ -889,6 +953,87 @@ jobs:
       - name: Run tests
         working-directory: packages/better_auth-scim
         run: bundle exec rake test
+
+
+  test-saml:
+    name: Test better_auth-saml (SAML SSO)
+    needs: [prepare-release]
+    if: needs.prepare-release.outputs.saml_releases == 'true' || needs.prepare-release.outputs.dry_run == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: .ruby-version
+          bundler-cache: true
+          working-directory: packages/better_auth-saml
+
+      - name: Run linter
+        working-directory: packages/better_auth-saml
+        run: bundle exec standardrb
+
+      - name: Run tests
+        working-directory: packages/better_auth-saml
+        run: bundle exec rake test
+
+  test-oidc:
+    name: Test better_auth-oidc (OIDC SSO)
+    needs: [prepare-release]
+    if: needs.prepare-release.outputs.oidc_releases == 'true' || needs.prepare-release.outputs.dry_run == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: .ruby-version
+          bundler-cache: true
+          working-directory: packages/better_auth-oidc
+
+      - name: Run linter
+        working-directory: packages/better_auth-oidc
+        run: bundle exec standardrb
+
+      - name: Run tests
+        working-directory: packages/better_auth-oidc
+        run: bundle exec rake test
+
+  test-openauth-saml:
+    name: Test openauth-saml
+    needs: [prepare-release]
+    if: needs.prepare-release.outputs.openauth_saml_releases == 'true' || needs.prepare-release.outputs.dry_run == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: .ruby-version
+
+      - name: Build openauth-saml gem
+        working-directory: packages/openauth-saml
+        run: gem build openauth-saml.gemspec
+
+  test-openauth-oidc:
+    name: Test openauth-oidc
+    needs: [prepare-release]
+    if: needs.prepare-release.outputs.openauth_oidc_releases == 'true' || needs.prepare-release.outputs.dry_run == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: .ruby-version
+
+      - name: Build openauth-oidc gem
+        working-directory: packages/openauth-oidc
+        run: gem build openauth-oidc.gemspec
 
   test-sso:
     name: Test better_auth-sso (SSO Plugin)
@@ -1775,6 +1920,202 @@ jobs:
 
           gem push better_auth-scim-*.gem
 
+
+  publish-saml:
+    name: Build and publish better_auth-saml
+    needs: [prepare-release, verify-ci, test-saml]
+    if: needs.prepare-release.outputs.saml_releases == 'true' || needs.prepare-release.outputs.dry_run == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: .ruby-version
+          bundler-cache: true
+          working-directory: packages/better_auth-saml
+
+      - name: Configure RubyGems credentials
+        if: needs.prepare-release.outputs.saml_releases == 'true' && needs.prepare-release.outputs.dry_run != 'true'
+        uses: rubygems/configure-rubygems-credentials@v1.0.0
+
+      - name: Build better_auth-saml gem
+        working-directory: packages/better_auth-saml
+        run: |
+          set -euo pipefail
+          rm -f better_auth-saml-*.gem
+          gem build better_auth-saml.gemspec
+
+      - name: Publish better_auth-saml gem
+        if: needs.prepare-release.outputs.saml_releases == 'true'
+        working-directory: packages/better_auth-saml
+        env:
+          TARGET_VERSION: ${{ needs.prepare-release.outputs.saml_version }}
+          DRY_RUN: ${{ needs.prepare-release.outputs.dry_run }}
+        run: |
+          set -euo pipefail
+          if [ "$DRY_RUN" = "true" ]; then
+            echo "Dry run enabled, skipping gem push for better_auth-saml"
+            exit 0
+          fi
+
+          already_exists=$(ruby -rjson -ropen-uri -e 'gem_name = "better_auth-saml"; version = ENV.fetch("TARGET_VERSION"); begin; body = URI.open("https://rubygems.org/api/v1/versions/#{gem_name}.json").read; versions = JSON.parse(body).map { |v| v["number"] }; print versions.include?(version) ? "true" : "false"; rescue StandardError; print "false"; end')
+
+          if [ "$already_exists" = "true" ]; then
+            echo "better_auth-saml $TARGET_VERSION already exists on RubyGems, skipping push"
+            exit 0
+          fi
+
+          gem push better_auth-saml-*.gem
+
+
+  publish-oidc:
+    name: Build and publish better_auth-oidc
+    needs: [prepare-release, verify-ci, test-oidc]
+    if: needs.prepare-release.outputs.oidc_releases == 'true' || needs.prepare-release.outputs.dry_run == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: .ruby-version
+          bundler-cache: true
+          working-directory: packages/better_auth-oidc
+
+      - name: Configure RubyGems credentials
+        if: needs.prepare-release.outputs.oidc_releases == 'true' && needs.prepare-release.outputs.dry_run != 'true'
+        uses: rubygems/configure-rubygems-credentials@v1.0.0
+
+      - name: Build better_auth-oidc gem
+        working-directory: packages/better_auth-oidc
+        run: |
+          set -euo pipefail
+          rm -f better_auth-oidc-*.gem
+          gem build better_auth-oidc.gemspec
+
+      - name: Publish better_auth-oidc gem
+        if: needs.prepare-release.outputs.oidc_releases == 'true'
+        working-directory: packages/better_auth-oidc
+        env:
+          TARGET_VERSION: ${{ needs.prepare-release.outputs.oidc_version }}
+          DRY_RUN: ${{ needs.prepare-release.outputs.dry_run }}
+        run: |
+          set -euo pipefail
+          if [ "$DRY_RUN" = "true" ]; then
+            echo "Dry run enabled, skipping gem push for better_auth-oidc"
+            exit 0
+          fi
+
+          already_exists=$(ruby -rjson -ropen-uri -e 'gem_name = "better_auth-oidc"; version = ENV.fetch("TARGET_VERSION"); begin; body = URI.open("https://rubygems.org/api/v1/versions/#{gem_name}.json").read; versions = JSON.parse(body).map { |v| v["number"] }; print versions.include?(version) ? "true" : "false"; rescue StandardError; print "false"; end')
+
+          if [ "$already_exists" = "true" ]; then
+            echo "better_auth-oidc $TARGET_VERSION already exists on RubyGems, skipping push"
+            exit 0
+          fi
+
+          gem push better_auth-oidc-*.gem
+
+
+  publish-openauth-saml:
+    name: Build and publish openauth-saml
+    needs: [prepare-release, verify-ci, test-openauth-saml]
+    if: needs.prepare-release.outputs.openauth_saml_releases == 'true' || needs.prepare-release.outputs.dry_run == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: .ruby-version
+          bundler-cache: true
+          working-directory: packages/openauth-saml
+
+      - name: Configure RubyGems credentials
+        if: needs.prepare-release.outputs.openauth_saml_releases == 'true' && needs.prepare-release.outputs.dry_run != 'true'
+        uses: rubygems/configure-rubygems-credentials@v1.0.0
+
+      - name: Build openauth-saml gem
+        working-directory: packages/openauth-saml
+        run: |
+          set -euo pipefail
+          rm -f openauth-saml-*.gem
+          gem build openauth-saml.gemspec
+
+      - name: Publish openauth-saml gem
+        if: needs.prepare-release.outputs.openauth_saml_releases == 'true'
+        working-directory: packages/openauth-saml
+        env:
+          TARGET_VERSION: ${{ needs.prepare-release.outputs.openauth_saml_version }}
+          DRY_RUN: ${{ needs.prepare-release.outputs.dry_run }}
+        run: |
+          set -euo pipefail
+          if [ "$DRY_RUN" = "true" ]; then
+            echo "Dry run enabled, skipping gem push for openauth-saml"
+            exit 0
+          fi
+
+          already_exists=$(ruby -rjson -ropen-uri -e 'gem_name = "openauth-saml"; version = ENV.fetch("TARGET_VERSION"); begin; body = URI.open("https://rubygems.org/api/v1/versions/#{gem_name}.json").read; versions = JSON.parse(body).map { |v| v["number"] }; print versions.include?(version) ? "true" : "false"; rescue StandardError; print "false"; end')
+
+          if [ "$already_exists" = "true" ]; then
+            echo "openauth-saml $TARGET_VERSION already exists on RubyGems, skipping push"
+            exit 0
+          fi
+
+          gem push openauth-saml-*.gem
+
+
+  publish-openauth-oidc:
+    name: Build and publish openauth-oidc
+    needs: [prepare-release, verify-ci, test-openauth-oidc]
+    if: needs.prepare-release.outputs.openauth_oidc_releases == 'true' || needs.prepare-release.outputs.dry_run == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: .ruby-version
+          bundler-cache: true
+          working-directory: packages/openauth-oidc
+
+      - name: Configure RubyGems credentials
+        if: needs.prepare-release.outputs.openauth_oidc_releases == 'true' && needs.prepare-release.outputs.dry_run != 'true'
+        uses: rubygems/configure-rubygems-credentials@v1.0.0
+
+      - name: Build openauth-oidc gem
+        working-directory: packages/openauth-oidc
+        run: |
+          set -euo pipefail
+          rm -f openauth-oidc-*.gem
+          gem build openauth-oidc.gemspec
+
+      - name: Publish openauth-oidc gem
+        if: needs.prepare-release.outputs.openauth_oidc_releases == 'true'
+        working-directory: packages/openauth-oidc
+        env:
+          TARGET_VERSION: ${{ needs.prepare-release.outputs.openauth_oidc_version }}
+          DRY_RUN: ${{ needs.prepare-release.outputs.dry_run }}
+        run: |
+          set -euo pipefail
+          if [ "$DRY_RUN" = "true" ]; then
+            echo "Dry run enabled, skipping gem push for openauth-oidc"
+            exit 0
+          fi
+
+          already_exists=$(ruby -rjson -ropen-uri -e 'gem_name = "openauth-oidc"; version = ENV.fetch("TARGET_VERSION"); begin; body = URI.open("https://rubygems.org/api/v1/versions/#{gem_name}.json").read; versions = JSON.parse(body).map { |v| v["number"] }; print versions.include?(version) ? "true" : "false"; rescue StandardError; print "false"; end')
+
+          if [ "$already_exists" = "true" ]; then
+            echo "openauth-oidc $TARGET_VERSION already exists on RubyGems, skipping push"
+            exit 0
+          fi
+
+          gem push openauth-oidc-*.gem
+
   publish-sso:
     name: Build and publish better_auth-sso
     needs: [prepare-release, verify-ci, test-sso]
@@ -1955,6 +2296,8 @@ jobs:
             "openauth-redis-storage"
             "openauth-roda"
             "openauth-scim"
+            "openauth-saml"
+            "openauth-oidc"
             "openauth-sinatra"
             "openauth-sso"
             "openauth-stripe"
@@ -2016,6 +2359,8 @@ jobs:
             "openauth-redis-storage"
             "openauth-roda"
             "openauth-scim"
+            "openauth-saml"
+            "openauth-oidc"
             "openauth-sinatra"
             "openauth-sso"
             "openauth-stripe"
@@ -2053,7 +2398,7 @@ jobs:
 
   create-release:
     name: Create GitHub release
-    needs: [prepare-release, publish-core, publish-cli, publish-openauth-cli, publish-passkey, publish-rails, publish-sinatra, publish-hanami, publish-grape, publish-roda, publish-api-key, publish-oauth-provider, publish-redis-storage, publish-mongodb, publish-mongo-adapter, publish-scim, publish-sso, publish-stripe, publish-telemetry]
+    needs: [prepare-release, publish-core, publish-cli, publish-openauth-cli, publish-passkey, publish-rails, publish-sinatra, publish-hanami, publish-grape, publish-roda, publish-api-key, publish-oauth-provider, publish-redis-storage, publish-mongodb, publish-mongo-adapter, publish-scim, publish-saml, publish-oidc, publish-openauth-saml, publish-openauth-oidc, publish-sso, publish-stripe, publish-telemetry]
     if: |
       always() &&
       needs.prepare-release.outputs.should_publish == 'true' &&
@@ -2074,6 +2419,10 @@ jobs:
         needs.publish-mongodb.result == 'success' ||
         needs.publish-mongo-adapter.result == 'success' ||
         needs.publish-scim.result == 'success' ||
+        needs.publish-saml.result == 'success' ||
+        needs.publish-oidc.result == 'success' ||
+        needs.publish-openauth-saml.result == 'success' ||
+        needs.publish-openauth-oidc.result == 'success' ||
         needs.publish-sso.result == 'success' ||
         needs.publish-stripe.result == 'success' ||
         needs.publish-telemetry.result == 'success'
@@ -2106,6 +2455,10 @@ jobs:
             - `better_auth-mongodb` version `${{ needs.prepare-release.outputs.mongodb_version }}` (released: `${{ needs.prepare-release.outputs.mongodb_releases }}`)
             - `better_auth-mongo-adapter` version `${{ needs.prepare-release.outputs.mongo_adapter_version }}` (released: `${{ needs.prepare-release.outputs.mongo_adapter_releases }}`)
             - `better_auth-scim` version `${{ needs.prepare-release.outputs.scim_version }}` (released: `${{ needs.prepare-release.outputs.scim_releases }}`)
+            - `better_auth-saml` version `${{ needs.prepare-release.outputs.saml_version }}` (released: `${{ needs.prepare-release.outputs.saml_releases }}`)
+            - `better_auth-oidc` version `${{ needs.prepare-release.outputs.oidc_version }}` (released: `${{ needs.prepare-release.outputs.oidc_releases }}`)
+            - `openauth-saml` version `${{ needs.prepare-release.outputs.openauth_saml_version }}` (released: `${{ needs.prepare-release.outputs.openauth_saml_releases }}`)
+            - `openauth-oidc` version `${{ needs.prepare-release.outputs.openauth_oidc_version }}` (released: `${{ needs.prepare-release.outputs.openauth_oidc_releases }}`)
             - `better_auth-sso` version `${{ needs.prepare-release.outputs.sso_version }}` (released: `${{ needs.prepare-release.outputs.sso_releases }}`)
             - `better_auth-stripe` version `${{ needs.prepare-release.outputs.stripe_version }}` (released: `${{ needs.prepare-release.outputs.stripe_releases }}`)
             - `better_auth-telemetry` version `${{ needs.prepare-release.outputs.telemetry_version }}` (released: `${{ needs.prepare-release.outputs.telemetry_releases }}`)

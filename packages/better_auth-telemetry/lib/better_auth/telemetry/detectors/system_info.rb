@@ -49,7 +49,7 @@ module BetterAuth
       module SystemInfo
         # Vendor table. The list and order mirror upstream's
         # `getVendor` short-circuit chain in
-        # `upstream/better-auth/1.6.9/packages/telemetry/src/detectors/detect-system-info.ts`.
+        # `reference/upstream-src/1.6.9/repository/packages/telemetry/src/detectors/detect-system-info.ts`.
         # First match wins; a missing match yields `nil`.
         #
         # Each entry is `[vendor_name, [marker_env_var, ...]]`. A
