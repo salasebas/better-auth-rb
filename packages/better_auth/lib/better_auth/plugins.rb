@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require_relative "plugin_loader"
+
 module BetterAuth
   module Plugins
     module_function
@@ -41,6 +43,28 @@ module BetterAuth
 
     def cookie_header_from_set_cookie(set_cookie)
       set_cookie.to_s.lines.map { |line| line.split(";").first }.join("; ")
+    end
+
+    def method_missing(name, ...)
+      if lazy_plugin_method?(name)
+        load_plugin!(name)
+        return public_send(name, ...) if respond_to?(name, true)
+
+        raise NoMethodError, "plugin file for #{name} did not define BetterAuth::Plugins.#{name}"
+      end
+
+      super
+    end
+
+    def respond_to_missing?(name, include_private = false)
+      lazy_plugin_method?(name) || super
+    end
+
+    def const_missing(name)
+      load_plugin_for_constant!(name)
+      return const_get(name) if const_defined?(name, false)
+
+      super
     end
   end
 end

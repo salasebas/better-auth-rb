@@ -38,48 +38,8 @@ require_relative "better_auth/context"
 require_relative "better_auth/plugin_context"
 require_relative "better_auth/plugin_registry"
 require_relative "better_auth/plugins"
-require_relative "better_auth/plugins/additional_fields"
-require_relative "better_auth/plugins/custom_session"
-require_relative "better_auth/plugins/multi_session"
-require_relative "better_auth/plugins/last_login_method"
-require_relative "better_auth/plugins/bearer"
-require_relative "better_auth/plugins/jwt"
-require_relative "better_auth/plugins/open_api"
-require_relative "better_auth/plugins/access"
-require_relative "better_auth/plugins/username"
-require_relative "better_auth/plugins/anonymous"
-require_relative "better_auth/plugins/magic_link"
-require_relative "better_auth/plugins/email_otp"
-require_relative "better_auth/plugins/phone_number"
-require_relative "better_auth/plugins/one_time_token"
-require_relative "better_auth/plugins/one_tap"
-require_relative "better_auth/plugins/siwe"
-require_relative "better_auth/plugins/generic_oauth"
-require_relative "better_auth/plugins/dub"
-require_relative "better_auth/plugins/oauth_proxy"
-require_relative "better_auth/plugins/passkey"
-require_relative "better_auth/plugins/organization/schema"
-require_relative "better_auth/plugins/organization"
-require_relative "better_auth/plugins/admin/schema"
-require_relative "better_auth/plugins/admin"
-require_relative "better_auth/plugins/oauth_protocol"
-require_relative "better_auth/plugins/oidc_provider"
-require_relative "better_auth/plugins/oauth_provider"
-require_relative "better_auth/plugins/device_authorization"
-require_relative "better_auth/plugins/mcp"
-require_relative "better_auth/plugins/two_factor"
-require_relative "better_auth/plugins/captcha"
-require_relative "better_auth/plugins/have_i_been_pwned"
-require_relative "better_auth/plugins/api_key"
-require_relative "better_auth/plugins/sso"
-require_relative "better_auth/plugins/scim"
+BetterAuth::Plugins.load_boot_plugins!
 require_relative "better_auth/social_providers"
-%w[
-  better_auth/plugins/stripe
-  better_auth/plugins/expo
-].each do |optional_plugin|
-  require_relative optional_plugin if File.file?(File.expand_path("#{optional_plugin}.rb", __dir__))
-end
 require_relative "better_auth/session_store"
 require_relative "better_auth/cookies"
 require_relative "better_auth/session"
@@ -106,5 +66,14 @@ require_relative "better_auth/auth"
 module BetterAuth
   def self.auth(options = {})
     Auth.new(options)
+  end
+
+  def self.const_missing(name)
+    if name == :OpenAPI
+      Plugins.load_plugin!(:open_api)
+      return const_get(:OpenAPI) if const_defined?(:OpenAPI, false)
+    end
+
+    super
   end
 end

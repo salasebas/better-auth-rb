@@ -368,7 +368,11 @@ module BetterAuth
     end
 
     def normalize_plugins(value)
-      Array(value).compact.reject { |plugin| plugin == false }.map { |plugin| Plugin.coerce(plugin) }
+      Array(value).compact.reject { |plugin| plugin == false }.map do |plugin|
+        coerced = Plugin.coerce(plugin)
+        Plugins.ensure_plugin_loaded_for!(coerced)
+        coerced
+      end
     end
 
     def normalize_social_providers(value)
