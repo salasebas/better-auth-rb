@@ -16,12 +16,12 @@ equivalent exists.
 | Plan | Title | Priority | Effort | Depends on | Status |
 | --- | --- | --- | --- | --- | --- |
 | 006 | Establish the server-side upstream parity inventory and shared Minitest harness | P1 | M | - | DONE |
-| 007 | Add server parity tests for context bootstrap, direct API, origin checks, and rate limiting | P1 | L | 006 | TODO |
-| 008 | Add server parity tests for cookies, session cache, and session routes | P1 | L | 006 | TODO |
-| 009 | Add server parity tests for core account, user, password, email verification, sign-in, sign-up, and sign-out routes | P1 | L | 006, 008 | TODO |
-| 010 | Complete server parity tests for the organization plugin | P1 | L | 006, 009 | TODO |
-| 011 | Complete server parity tests for email-otp, magic-link, and one-time-token plugins | P1 | L | 006, 008, 009 | TODO |
-| 012 | Complete remaining server plugin parity for anonymous, multi-session, bearer, captcha, HIBP, SIWE, last-login-method, custom-session, and additional-fields | P2 | L | 006, 008, 009, 011 | TODO |
+| 007 | Add server parity tests for context bootstrap, direct API, origin checks, and rate limiting | P1 | L | 006 | DONE |
+| 008 | Add server parity tests for cookies, session cache, and session routes | P1 | L | 006 | DONE |
+| 009 | Add server parity tests for core account, user, password, email verification, sign-in, sign-up, and sign-out routes | P1 | L | 006, 008 | DONE |
+| 010 | Complete server parity tests for the organization plugin | P1 | L | 006, 009 | DONE |
+| 011 | Complete server parity tests for email-otp, magic-link, and one-time-token plugins | P1 | L | 006, 008, 009 | DONE |
+| 012 | Complete remaining server plugin parity for anonymous, multi-session, bearer, captcha, HIBP, SIWE, last-login-method, custom-session, and additional-fields | P2 | L | 006, 008, 009, 011 | DONE |
 
 Status values: TODO | IN PROGRESS | DONE | BLOCKED (with one-line reason) |
 REJECTED (with one-line rationale).
@@ -50,7 +50,7 @@ service-backed integration tests from fast CI.
 | --- | --- | --- | --- | --- | --- |
 | 013 | Restore the full test baseline before optimizing suites | P1 | M | - | DONE |
 | 014 | Use explicit fast password callbacks in high-volume tests | P1 | M | 013 preferred | DONE |
-| 015 | Split service-backed integration tests into integration.yml | P1 | L | 013 | TODO |
+| 015 | Split service-backed integration tests into integration.yml | P1 | L | 013 | DONE |
 
 Dependency notes:
 
