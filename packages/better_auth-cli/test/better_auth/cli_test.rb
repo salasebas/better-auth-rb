@@ -4,6 +4,7 @@ $LOAD_PATH.unshift File.expand_path("../../lib", __dir__)
 $LOAD_PATH.unshift File.expand_path("../../../better_auth/lib", __dir__)
 
 require "better_auth/cli"
+require "json"
 require "minitest/autorun"
 require_relative "../support/cli_helpers"
 
@@ -241,11 +242,11 @@ class BetterAuthCLITest < Minitest::Test
 
     status, _stdout, stderr = run_cli("migrate")
     assert_equal 1, status
-    assert_includes stderr, "migrate --config PATH is required"
+    assert_includes stderr, "No Better Auth config found"
 
     status, _stdout, stderr = run_cli("doctor")
     assert_equal 1, status
-    assert_includes stderr, "doctor --config PATH is required"
+    assert_includes stderr, "No Better Auth config found"
   end
 
   def test_invalid_option_returns_error_status
@@ -852,6 +853,397 @@ class BetterAuthCLITest < Minitest::Test
     refute_includes spec.executables, "openauth"
   end
 
+  def test_generate_discovers_config_under_cwd
+    Dir.mktmpdir("better-auth-cli") do |dir|
+      write_sqlite_project_config(dir)
+      output = File.join(dir, "db", "auth.sql")
+
+      status, stdout, stderr = run_cli("generate", "--cwd", dir, "--dialect", "sqlite", "--output", "db/auth.sql")
+
+      assert_equal 0, status, stderr
+      assert_includes stdout, "generated #{output}"
+      assert_includes File.read(output), 'CREATE TABLE IF NOT EXISTS "users"'
+    end
+  end
+
+  def test_migrate_discovers_config_under_cwd
+    Dir.mktmpdir("better-auth-cli") do |dir|
+      write_sqlite_project_config(dir)
+
+      status, stdout, stderr = run_cli("migrate", "--cwd", dir, "--yes")
+
+      assert_equal 0, status, stderr
+      assert_includes stdout, "migration completed successfully."
+      assert_includes sqlite_tables(dir), "users"
+    end
+  end
+
+  def test_migrate_status_discovers_config_under_cwd
+    Dir.mktmpdir("better-auth-cli") do |dir|
+      write_sqlite_project_config(dir)
+
+      status, stdout, stderr = run_cli("migrate", "status", "--cwd", dir)
+
+      assert_equal 0, status, stderr
+      assert_includes stdout, "create table users"
+    end
+  end
+
+  def test_doctor_discovers_config_under_cwd
+    Dir.mktmpdir("better-auth-cli") do |dir|
+      write_sqlite_project_config(
+        dir,
+        secret: BetterAuth::Configuration::DEFAULT_SECRET,
+        base_url: "http://example.test"
+      )
+
+      status, stdout, stderr = run_cli("doctor", "--cwd", dir)
+
+      assert_equal 1, status
+      assert_includes stderr, "ERROR secret uses the default development value"
+      assert_includes stdout, "WARN base_url is not HTTPS"
+    end
+  end
+
+  def test_mongo_indexes_discovers_config_under_cwd
+    Dir.mktmpdir("better-auth-cli") do |dir|
+      write_mongo_project_config(
+        dir,
+        indexes: [{collection: "users", field: "email", unique: true}]
+      )
+
+      status, stdout, stderr = run_cli("mongo", "indexes", "--cwd", dir)
+
+      assert_equal 0, status, stderr
+      assert_includes stdout, "ensured unique index users.email"
+    end
+  end
+
+  def test_explicit_config_wins_over_discovered_config
+    Dir.mktmpdir("better-auth-cli") do |dir|
+      write_sqlite_project_config(dir, secret: "short")
+      explicit_config = write_hash_config(
+        dir,
+        secret: HARDENED_SECRET,
+        database: :memory,
+        filename: "explicit.rb"
+      )
+
+      status, stdout, stderr = run_cli(
+        "doctor",
+        "--cwd",
+        dir,
+        "--config",
+        explicit_config
+      )
+
+      assert_equal 0, status, stderr
+      assert_includes stdout, "OK config loaded"
+      refute_includes stderr, "at least 32 characters"
+    end
+  end
+
+  def test_relative_config_resolves_against_cwd
+    Dir.mktmpdir("better-auth-cli") do |dir|
+      write_sqlite_project_config(dir)
+      output = File.join(dir, "auth.sql")
+
+      status, _stdout, stderr = run_cli(
+        "generate",
+        "--cwd",
+        dir,
+        "--config",
+        "config/better_auth.rb",
+        "--dialect",
+        "sqlite",
+        "--output",
+        output
+      )
+
+      assert_equal 0, status, stderr
+      assert_includes File.read(output), 'CREATE TABLE IF NOT EXISTS "users"'
+    end
+  end
+
+  def test_relative_output_resolves_against_cwd
+    Dir.mktmpdir("better-auth-cli") do |dir|
+      config_path = write_sqlite_config(dir)
+      output = File.join(dir, "nested", "auth.sql")
+
+      status, stdout, stderr = run_cli(
+        "generate",
+        "--cwd",
+        dir,
+        "--config",
+        config_path,
+        "--dialect",
+        "sqlite",
+        "--output",
+        "nested/auth.sql"
+      )
+
+      assert_equal 0, status, stderr
+      assert_includes stdout, "generated #{output}"
+      assert_includes File.read(output), 'CREATE TABLE IF NOT EXISTS "users"'
+    end
+  end
+
+  def test_absolute_output_stays_absolute
+    Dir.mktmpdir("better-auth-cli") do |dir|
+      config_path = write_sqlite_config(dir)
+      output_dir = Dir.mktmpdir("better-auth-cli-output")
+      output = File.join(output_dir, "absolute.sql")
+
+      status, stdout, stderr = run_cli(
+        "generate",
+        "--cwd",
+        dir,
+        "--config",
+        config_path,
+        "--dialect",
+        "sqlite",
+        "--output",
+        output
+      )
+
+      assert_equal 0, status, stderr
+      assert_includes stdout, "generated #{output}"
+      assert_includes File.read(output), 'CREATE TABLE IF NOT EXISTS "users"'
+    end
+  end
+
+  def test_missing_cwd_directory_returns_error
+    status, _stdout, stderr = run_cli("doctor", "--cwd", "/tmp/better-auth-cli-missing-cwd-#{Process.pid}")
+
+    assert_equal 1, status
+    assert_includes stderr, "--cwd is not a directory"
+  end
+
+  def test_missing_discovered_config_lists_searched_paths
+    Dir.mktmpdir("better-auth-cli") do |dir|
+      status, _stdout, stderr = run_cli("doctor", "--cwd", dir)
+
+      assert_equal 1, status
+      assert_includes stderr, "No Better Auth config found"
+      assert_includes stderr, "config/better_auth.rb"
+      assert_includes stderr, "config/auth.rb"
+      assert_includes stderr, "Pass --config PATH"
+    end
+  end
+
+  def test_config_discovery_order_is_deterministic
+    Dir.mktmpdir("better-auth-cli") do |dir|
+      write_config(dir, "42", filename: "config/auth.rb")
+      write_sqlite_project_config(dir, secret: HARDENED_SECRET, base_url: "https://example.test")
+
+      status, _stdout, stderr = run_cli("migrate", "--cwd", dir, "--yes")
+      assert_equal 0, status, stderr
+
+      status, stdout, stderr = run_cli("doctor", "--cwd", dir)
+
+      assert_equal 0, status, stderr
+      assert_includes stdout, "OK database schema is up to date"
+    end
+  end
+
+  def test_missing_discovered_config_does_not_expose_config_contents
+    Dir.mktmpdir("better-auth-cli") do |dir|
+      write_config(dir, "secret: 'should-not-appear'", filename: "hidden/auth.rb")
+
+      status, _stdout, stderr = run_cli("doctor", "--cwd", dir)
+
+      assert_equal 1, status
+      assert_includes stderr, "No Better Auth config found"
+      refute_includes stderr, "should-not-appear"
+    end
+  end
+
+  def test_secret_prints_env_assignment_and_exits_zero
+    status, stdout, stderr = run_cli("secret")
+
+    assert_equal 0, status, stderr
+    assert_match(/\ABETTER_AUTH_SECRET=[0-9a-f]{64}\n\z/, stdout)
+  end
+
+  def test_secret_generates_unique_values
+    _status, first_stdout, _stderr = run_cli("secret")
+    _status, second_stdout, _stderr = run_cli("secret")
+
+    refute_equal first_stdout, second_stdout
+  end
+
+  def test_secret_raw_prints_only_hex_secret
+    status, stdout, stderr = run_cli("secret", "--raw")
+
+    assert_equal 0, status, stderr
+    assert_match(/\A[0-9a-f]{64}\n\z/, stdout)
+    refute_includes stdout, "BETTER_AUTH_SECRET="
+  end
+
+  def test_better_auth_executable_secret_succeeds
+    stdout, stderr, status = run_better_auth_executable("secret")
+
+    assert status.success?, stderr
+    assert_match(/\ABETTER_AUTH_SECRET=[0-9a-f]{64}\n\z/, stdout)
+  end
+
+  def test_info_json_without_config_returns_loaded_false
+    Dir.mktmpdir("better-auth-cli") do |dir|
+      status, stdout, stderr = run_cli("info", "--json", "--cwd", dir)
+
+      assert_equal 0, status, stderr
+      payload = JSON.parse(stdout)
+      assert_equal RUBY_VERSION, payload.dig("ruby", "version")
+      assert_equal BetterAuth::VERSION, payload.dig("better_auth", "version")
+      assert_equal BetterAuth::CLI::VERSION, payload.dig("cli", "version")
+      assert_equal false, payload.dig("config", "loaded")
+      assert_includes payload.dig("config", "error"), "No Better Auth config found"
+    end
+  end
+
+  def test_info_json_with_config_returns_curated_summary_and_doctor
+    Dir.mktmpdir("better-auth-cli") do |dir|
+      config_path = write_sqlite_config(
+        dir,
+        secret: HARDENED_SECRET,
+        base_url: "https://example.test"
+      )
+
+      status, stdout, stderr = run_cli("info", "--json", "--config", config_path)
+
+      assert_equal 0, status, stderr
+      payload = JSON.parse(stdout)
+      config = payload.fetch("config")
+      assert_equal true, config["loaded"]
+      assert_equal config_path, config["path"]
+      assert_equal "https://example.test", config["base_url"]
+      assert_includes config["tables"], "users"
+      assert_operator config["endpoints_count"], :>, 0
+      assert_kind_of Array, config.dig("doctor", "ok")
+      assert_kind_of Array, config.dig("doctor", "warnings")
+      assert_kind_of Array, config.dig("doctor", "errors")
+    end
+  end
+
+  def test_info_json_includes_plugin_table_names_from_schema
+    Dir.mktmpdir("better-auth-cli") do |dir|
+      config_path = write_sqlite_config(dir, plugins_source: audit_plugin_source)
+
+      status, stdout, stderr = run_cli("info", "--json", "--config", config_path)
+
+      assert_equal 0, status, stderr
+      payload = JSON.parse(stdout)
+      assert_includes payload.dig("config", "tables"), "audit_logs"
+    end
+  end
+
+  def test_info_json_does_not_leak_sensitive_config_values
+    sensitive_values = {
+      secret: "my-production-secret-that-should-not-leak",
+      password: "user-password-value",
+      token: "bearer-token-value",
+      api_key: "api-key-value",
+      client_secret: "github-client-secret-value"
+    }
+
+    Dir.mktmpdir("better-auth-cli") do |dir|
+      config_path = write_config(
+        dir,
+        <<~RUBY
+          {
+            secret: #{sensitive_values[:secret].inspect},
+            database: :memory,
+            email_and_password: {enabled: true},
+            password: #{sensitive_values[:password].inspect},
+            token: #{sensitive_values[:token].inspect},
+            api_key: #{sensitive_values[:api_key].inspect},
+            social_providers: {
+              github: {
+                client_id: "github-client-id",
+                client_secret: #{sensitive_values[:client_secret].inspect}
+              }
+            }
+          }
+        RUBY
+      )
+
+      status, stdout, stderr = run_cli("info", "--json", "--config", config_path)
+
+      assert_equal 0, status, stderr
+      sensitive_values.each_value do |value|
+        refute_includes stdout, value
+      end
+      refute_includes stdout, "github-client-id"
+    end
+  end
+
+  def test_info_text_output_includes_versions_and_doctor_summary
+    Dir.mktmpdir("better-auth-cli") do |dir|
+      config_path = write_sqlite_config(
+        dir,
+        secret: BetterAuth::Configuration::DEFAULT_SECRET,
+        base_url: "http://example.test"
+      )
+
+      status, stdout, stderr = run_cli("info", "--config", config_path)
+
+      assert_equal 0, status, stderr
+      assert_includes stdout, "Ruby #{RUBY_VERSION}"
+      assert_includes stdout, "Better Auth #{BetterAuth::VERSION}"
+      assert_includes stdout, "CLI #{BetterAuth::CLI::VERSION}"
+      assert_includes stdout, "Config #{config_path}"
+      assert_includes stdout, "Doctor 1 errors"
+    end
+  end
+
+  def test_info_with_missing_explicit_config_returns_error
+    Dir.mktmpdir("better-auth-cli") do |dir|
+      status, _stdout, stderr = run_cli("info", "--config", File.join(dir, "missing.rb"))
+
+      assert_equal 1, status
+      assert_includes stderr, "Config file not found"
+    end
+  end
+
+  def test_doctor_json_returns_doctor_payload_and_preserves_exit_status
+    Dir.mktmpdir("better-auth-cli") do |dir|
+      config_path = write_sqlite_config(
+        dir,
+        secret: BetterAuth::Configuration::DEFAULT_SECRET,
+        base_url: "http://example.test"
+      )
+
+      status, stdout, stderr = run_cli("doctor", "--json", "--config", config_path)
+
+      assert_equal 1, status
+      assert_empty stderr
+      payload = JSON.parse(stdout)
+      assert_equal false, payload["success"]
+      assert payload["errors"].any? { |message| message.include?("default development value") }
+      assert payload["warnings"].any? { |message| message.include?("HTTPS") }
+    end
+  end
+
+  def test_doctor_json_success_matches_text_doctor_exit_status
+    Dir.mktmpdir("better-auth-cli") do |dir|
+      config_path = write_sqlite_config(
+        dir,
+        secret: HARDENED_SECRET,
+        base_url: "https://example.test",
+        rate_limit: {enabled: true, storage: "database"}
+      )
+      status, _stdout, stderr = run_cli("migrate", "--config", config_path, "--yes")
+      assert_equal 0, status, stderr
+
+      status, stdout, stderr = run_cli("doctor", "--json", "--config", config_path)
+
+      assert_equal 0, status, stderr
+      payload = JSON.parse(stdout)
+      assert_equal true, payload["success"]
+      assert_empty payload["errors"]
+    end
+  end
+
   private
 
   def assert_usage_lists_commands(usage)
@@ -859,6 +1251,10 @@ class BetterAuthCLITest < Minitest::Test
     assert_includes usage, "better-auth migrate"
     assert_includes usage, "migrate status"
     assert_includes usage, "better-auth doctor"
+    assert_includes usage, "better-auth info"
+    assert_includes usage, "better-auth secret"
     assert_includes usage, "mongo indexes"
+    assert_includes usage, "config/better_auth.rb"
+    assert_includes usage, "--cwd"
   end
 end

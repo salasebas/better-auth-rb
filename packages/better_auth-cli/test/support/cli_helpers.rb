@@ -95,19 +95,25 @@ module BetterAuthCLITestHelpers
     session_options_source: nil,
     account_options_source: nil,
     verification_options_source: nil,
-    advanced_source: nil
+    advanced_source: nil,
+    filename: "better_auth.rb"
   )
     db_path = File.join(dir, "auth.sqlite3")
     write_config(
       dir,
-      <<~RUBY
+      <<~RUBY,
         {
           secret: #{secret.inspect},
           database: ->(options) { BetterAuth::Adapters::SQLite.new(options, path: #{db_path.inspect}) },
           email_and_password: {enabled: true}#{option_line(:base_url, base_url)}#{option_line(:rate_limit, rate_limit)}#{source_line(:user, user_options_source)}#{source_line(:session, session_options_source)}#{source_line(:account, account_options_source)}#{source_line(:verification, verification_options_source)}#{source_line(:advanced, advanced_source)}#{plugins_line(plugins_source)}
         }
       RUBY
+      filename: filename
     )
+  end
+
+  def write_sqlite_project_config(dir, **options)
+    write_sqlite_config(dir, filename: "config/better_auth.rb", **options)
   end
 
   def write_fake_sql_config(
@@ -134,16 +140,21 @@ module BetterAuthCLITestHelpers
     )
   end
 
-  def write_mongo_config(dir, indexes:)
+  def write_mongo_config(dir, indexes:, filename: "better_auth.rb")
     write_config(
       dir,
-      <<~RUBY
+      <<~RUBY,
         {
           secret: #{SECRET.inspect},
           database: ->(options) { BetterAuthCLIFakeMongoAdapter.new(options, indexes: #{ruby_hash(indexes)}) }
         }
       RUBY
+      filename: filename
     )
+  end
+
+  def write_mongo_project_config(dir, indexes:)
+    write_mongo_config(dir, indexes: indexes, filename: "config/better_auth.rb")
   end
 
   def sqlite_tables(dir)

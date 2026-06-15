@@ -2,14 +2,25 @@
 
 require "better_auth"
 require "better_auth/cli/version"
+require "better_auth/cli/info"
 require "better_auth/doctor"
 require "better_auth/sql_migration"
 require "fileutils"
+require "json"
 require "optparse"
+require "pathname"
+require "securerandom"
 
 module BetterAuth
   class CLI
     class Error < StandardError; end
+
+    CONFIG_PATHS = [
+      "config/better_auth.rb",
+      "config/auth.rb",
+      "better_auth.rb",
+      "auth.rb"
+    ].freeze
 
     class << self
       attr_accessor :configuration
@@ -41,6 +52,10 @@ module BetterAuth
         migrate(argv)
       when "doctor"
         doctor(argv)
+      when "secret"
+        secret(argv)
+      when "info"
+        info(argv)
       when "mongo"
         mongo(argv)
       when "-h", "--help", "help", nil
@@ -95,7 +110,7 @@ module BetterAuth
     end
 
     def migration_status(args)
-      options = parse_config_options(args, "migrate status --config PATH is required")
+      options = parse_config_options(args)
       config = load_config(options.fetch(:config))
       adapter = required_sql_adapter_for(config)
       plan = BetterAuth::SQLMigration.plan(config, connection: adapter.connection, dialect: adapter.dialect)
@@ -112,9 +127,44 @@ module BetterAuth
     end
 
     def doctor(args)
-      options = parse_config_options(args, "doctor --config PATH is required")
+      options = parse_config_options(args) do |parser, opts|
+        parser.on("--json") { opts[:json] = true }
+      end
+      options[:json] ||= false
       config = load_config(options.fetch(:config))
-      BetterAuth::Doctor.print(BetterAuth::Doctor.check(config), stdout: stdout, stderr: stderr)
+      result = BetterAuth::Doctor.check(config)
+      if options[:json]
+        stdout.puts JSON.generate(BetterAuth::Doctor.as_json(result))
+        return result.success? ? 0 : 1
+      end
+
+      BetterAuth::Doctor.print(result, stdout: stdout, stderr: stderr)
+    end
+
+    def secret(args)
+      options = {raw: false}
+      OptionParser.new do |parser|
+        parser.on("--raw") { options[:raw] = true }
+      end.parse!(args)
+
+      value = SecureRandom.hex(32)
+      stdout.puts(options[:raw] ? value : "BETTER_AUTH_SECRET=#{value}")
+      0
+    end
+
+    def info(args)
+      options = parse_info_options(args)
+      resolution = resolve_config_for_info(options)
+      unless resolution[:loaded]
+        payload = Info.build(resolution)
+        render_info(payload, json: options[:json])
+        return 0
+      end
+
+      resolution[:auth] = auth_for(resolution.fetch(:config))
+      payload = Info.build(resolution)
+      render_info(payload, json: options[:json])
+      0
     end
 
     def mongo(args)
@@ -128,7 +178,7 @@ module BetterAuth
     end
 
     def mongo_indexes(args)
-      options = parse_config_options(args, "mongo indexes --config PATH is required")
+      options = parse_config_options(args)
       auth = auth_for(load_config(options.fetch(:config)))
       adapter = auth.context.adapter
       unless adapter.respond_to?(:ensure_indexes!)
@@ -149,34 +199,103 @@ module BetterAuth
     end
 
     def parse_generate_options(args)
-      options = {}
-      OptionParser.new do |parser|
-        parser.on("--config PATH") { |value| options[:config] = value }
-        parser.on("--dialect DIALECT") { |value| options[:dialect] = value }
-        parser.on("--output PATH") { |value| options[:output] = value }
-      end.parse!(args)
-      require_option!(options, :config, "generate --config PATH is required")
+      options = parse_with_cwd(args) do |parser, opts|
+        parser.on("--dialect DIALECT") { |value| opts[:dialect] = value }
+        parser.on("--output PATH") { |value| opts[:output] = value }
+      end
       require_option!(options, :output, "generate --output PATH is required")
+      options[:config] = resolve_config!(options)
+      options[:output] = resolve_path(options.fetch(:output), options[:cwd])
       options
     end
 
     def parse_migrate_options(args)
-      options = {yes: false}
-      OptionParser.new do |parser|
-        parser.on("--config PATH") { |value| options[:config] = value }
-        parser.on("--yes", "-y") { options[:yes] = true }
-      end.parse!(args)
-      require_option!(options, :config, "migrate --config PATH is required")
+      options = parse_with_cwd(args) do |parser, opts|
+        parser.on("--yes", "-y") { opts[:yes] = true }
+      end
+      options[:yes] ||= false
+      options[:config] = resolve_config!(options)
       options
     end
 
-    def parse_config_options(args, missing_message)
-      options = {}
-      OptionParser.new do |parser|
-        parser.on("--config PATH") { |value| options[:config] = value }
-      end.parse!(args)
-      require_option!(options, :config, missing_message)
+    def parse_config_options(args)
+      options = parse_with_cwd(args) do |parser, opts|
+        yield parser, opts if block_given?
+      end
+      options[:config] = resolve_config!(options)
       options
+    end
+
+    def parse_info_options(args)
+      options = parse_with_cwd(args) do |parser, opts|
+        parser.on("--json") { opts[:json] = true }
+      end
+      options[:json] ||= false
+      options
+    end
+
+    def resolve_config_for_info(options)
+      if options[:config]
+        path = resolve_path(options[:config], options[:cwd])
+        raise Error, "Config file not found: #{path}" unless File.exist?(path)
+
+        config = load_config(path)
+        return {loaded: true, path: path, config: config}
+      end
+
+      CONFIG_PATHS.each do |relative|
+        candidate = File.join(options[:cwd], relative)
+        next unless File.exist?(candidate)
+
+        config = load_config(candidate)
+        return {loaded: true, path: candidate, config: config}
+      end
+
+      searched = CONFIG_PATHS.map { |relative| File.join(options[:cwd], relative) }.join(", ")
+      {loaded: false, error: "No Better Auth config found. Searched: #{searched}. Pass --config PATH."}
+    end
+
+    def render_info(payload, json:)
+      if json
+        stdout.puts JSON.generate(payload)
+      else
+        Info.print(payload, stdout: stdout)
+      end
+    end
+
+    def parse_with_cwd(args)
+      options = {cwd: Dir.pwd}
+      OptionParser.new do |parser|
+        parser.on("--cwd PATH") { |value| options[:cwd] = File.expand_path(value) }
+        parser.on("--config PATH") { |value| options[:config] = value }
+        yield parser, options if block_given?
+      end.parse!(args)
+      validate_cwd!(options[:cwd])
+      options
+    end
+
+    def validate_cwd!(cwd)
+      raise Error, "--cwd is not a directory: #{cwd}" unless File.directory?(cwd)
+    end
+
+    def resolve_config!(options)
+      if options[:config]
+        return resolve_path(options[:config], options[:cwd])
+      end
+
+      CONFIG_PATHS.each do |relative|
+        candidate = File.join(options[:cwd], relative)
+        return candidate if File.exist?(candidate)
+      end
+
+      searched = CONFIG_PATHS.map { |relative| File.join(options[:cwd], relative) }.join(", ")
+      raise Error, "No Better Auth config found. Searched: #{searched}. Pass --config PATH."
+    end
+
+    def resolve_path(path, cwd)
+      return path if Pathname.new(path).absolute?
+
+      File.expand_path(path, cwd)
     end
 
     def require_option!(options, key, message)
@@ -233,11 +352,16 @@ module BetterAuth
     def usage
       <<~TEXT
         Usage:
-          better-auth generate --config PATH --dialect DIALECT --output PATH
-          better-auth migrate --config PATH --yes
-          better-auth migrate status --config PATH
-          better-auth doctor --config PATH
-          better-auth mongo indexes --config PATH
+          better-auth generate [--cwd PATH] [--config PATH] --dialect DIALECT --output PATH
+          better-auth migrate [--cwd PATH] [--config PATH] --yes
+          better-auth migrate status [--cwd PATH] [--config PATH]
+          better-auth doctor [--cwd PATH] [--config PATH] [--json]
+          better-auth info [--cwd PATH] [--config PATH] [--json]
+          better-auth secret [--raw]
+          better-auth mongo indexes [--cwd PATH] [--config PATH]
+
+        When --config is omitted, the CLI searches under --cwd (default: current directory):
+          #{CONFIG_PATHS.join(", ")}
       TEXT
     end
   end

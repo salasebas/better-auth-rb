@@ -10,6 +10,7 @@ require "open3"
 require "rbconfig"
 require "sqlite3"
 require "tmpdir"
+require "better_auth"
 
 class OpenAuthCLITest < Minitest::Test
   SECRET = "openauth-cli-secret-that-is-long-enough-for-validation"
@@ -61,6 +62,28 @@ class OpenAuthCLITest < Minitest::Test
     end
   end
 
+  def test_openauth_executable_discovers_config_with_cwd
+    Dir.mktmpdir("openauth-cli") do |dir|
+      write_sqlite_project_config(dir, secret: BetterAuth::Configuration::DEFAULT_SECRET)
+
+      _stdout, stderr, status = capture_openauth_executable(
+        "doctor",
+        "--cwd",
+        dir
+      )
+
+      assert_equal false, status.success?
+      assert_includes stderr, "ERROR secret uses the default development value"
+    end
+  end
+
+  def test_openauth_executable_secret_succeeds
+    stdout, stderr, status = capture_openauth_executable("secret")
+
+    assert status.success?, stderr
+    assert_match(/\ABETTER_AUTH_SECRET=[0-9a-f]{64}\n\z/, stdout)
+  end
+
   private
 
   def capture_openauth_executable(*argv)
@@ -88,6 +111,24 @@ class OpenAuthCLITest < Minitest::Test
       <<~RUBY
         {
           secret: #{SECRET.inspect},
+          database: ->(options) { BetterAuth::Adapters::SQLite.new(options, path: #{db_path.inspect}) },
+          email_and_password: {enabled: true}
+        }
+      RUBY
+    )
+    path
+  end
+
+  def write_sqlite_project_config(dir, secret: SECRET)
+    config_dir = File.join(dir, "config")
+    FileUtils.mkdir_p(config_dir)
+    db_path = File.join(dir, "auth.sqlite3")
+    path = File.join(config_dir, "better_auth.rb")
+    File.write(
+      path,
+      <<~RUBY
+        {
+          secret: #{secret.inspect},
           database: ->(options) { BetterAuth::Adapters::SQLite.new(options, path: #{db_path.inspect}) },
           email_and_password: {enabled: true}
         }

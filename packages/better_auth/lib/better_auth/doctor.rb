@@ -31,6 +31,15 @@ module BetterAuth
       result.success? ? 0 : 1
     end
 
+    def as_json(result)
+      {
+        "ok" => result.ok,
+        "warnings" => result.warnings,
+        "errors" => result.errors,
+        "success" => result.success?
+      }
+    end
+
     def check_secret(config, result)
       secret = config.secret.to_s
       if secret.empty?
