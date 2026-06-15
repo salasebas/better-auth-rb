@@ -13,7 +13,12 @@ module BetterAuth
 
       token_cookie = ctx.context.auth_cookies[:session_token]
       token = ctx.get_signed_cookie(token_cookie.name, ctx.context.secret)
-      return nil unless token
+      unless token
+        present = ctx.get_cookie(token_cookie.name)
+        return missing_session(ctx) if present && !present.empty?
+
+        return nil
+      end
 
       cached = cached_session(ctx, token, disable_cookie_cache: disable_cookie_cache, sensitive: sensitive)
       if cached
