@@ -4,7 +4,7 @@ module BetterAuth
   module Logger
     LEVELS = [:debug, :info, :success, :warn, :error].freeze
 
-    Internal = Struct.new(:level, :disabled, :handler, keyword_init: true) do
+    Internal = Struct.new(:level, :disabled, :handler) do
       LEVELS.each do |log_level|
         define_method(log_level) do |message, *args|
           return if disabled || !Logger.should_publish?(level, log_level)

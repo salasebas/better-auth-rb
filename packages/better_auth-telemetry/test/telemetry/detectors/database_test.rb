@@ -33,7 +33,7 @@ class DatabaseDetectorTest < Minitest::Test
   # Minimal stand-in for {NormalizedContext}. The detector reads
   # `#database` first and, when it is the generic "adapter" marker,
   # may refine the signal from `#adapter`.
-  StubContext = Struct.new(:database, :adapter, keyword_init: true)
+  StubContext = Struct.new(:database, :adapter)
 
   # Build a {BetterAuth::Configuration} with a specific `database`
   # value and the minimum other keys needed to instantiate it without

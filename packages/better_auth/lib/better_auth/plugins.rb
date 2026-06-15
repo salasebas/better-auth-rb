@@ -61,11 +61,11 @@ module BetterAuth
     }.freeze
 
     def method_missing(name, ...)
-      if lazy_plugin_method?(name)
-        load_plugin!(name)
+      if (loader = plugin_loader_for_method(name))
+        load_plugin!(loader)
         return public_send(name, ...) if respond_to?(name, true)
 
-        raise NoMethodError, "plugin file for #{name} did not define BetterAuth::Plugins.#{name}"
+        raise NoMethodError, "plugin file for #{loader} did not define BetterAuth::Plugins.#{name}"
       end
 
       if (loader = PLUGIN_FACTORY_LOADERS[name.to_sym])
@@ -79,7 +79,7 @@ module BetterAuth
     end
 
     def respond_to_missing?(name, include_private = false)
-      PLUGIN_FACTORY_LOADERS.key?(name.to_sym) || lazy_plugin_method?(name) || super
+      PLUGIN_FACTORY_LOADERS.key?(name.to_sym) || !plugin_loader_for_method(name).nil? || super
     end
 
     def const_missing(name)

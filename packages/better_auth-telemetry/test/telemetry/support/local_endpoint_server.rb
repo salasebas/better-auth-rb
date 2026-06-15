@@ -53,7 +53,7 @@ module BetterAuth
         # @!attribute [r] body
         #   @return [String] the raw request body (already read from the
         #     socket using `Content-Length`).
-        CapturedRequest = Struct.new(:url, :path, :headers, :body, keyword_init: true)
+        CapturedRequest = Struct.new(:url, :path, :headers, :body)
 
         # Path the helper advertises for posts. The captured `path` will
         # equal whatever the client actually requested, but {#url} always

@@ -4,8 +4,8 @@ require "tmpdir"
 require_relative "../../spec_helper"
 require "generators/better_auth/migration/migration_generator"
 
-BetterAuthRailsMigrationGeneratorColumn = Struct.new(:name, :sql_type, keyword_init: true)
-BetterAuthRailsMigrationGeneratorIndex = Struct.new(:name, :columns, :unique, keyword_init: true)
+BetterAuthRailsMigrationGeneratorColumn = Struct.new(:name, :sql_type)
+BetterAuthRailsMigrationGeneratorIndex = Struct.new(:name, :columns, :unique)
 
 class BetterAuthRailsMigrationGeneratorConnection
   def initialize(schema)

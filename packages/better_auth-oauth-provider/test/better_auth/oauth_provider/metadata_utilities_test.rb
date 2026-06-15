@@ -5,8 +5,8 @@ require_relative "../../test_helper"
 class OAuthProviderMetadataUtilitiesTest < Minitest::Test
   include OAuthProviderFlowHelpers
 
-  FakeContext = Struct.new(:secret, keyword_init: true)
-  FakeCtx = Struct.new(:context, keyword_init: true)
+  FakeContext = Struct.new(:secret)
+  FakeCtx = Struct.new(:context)
 
   def test_metadata_matches_upstream_core_fields_and_disable_jwt_plugin
     auth = build_auth(scopes: ["openid", "profile", "email", "offline_access"], disable_jwt_plugin: true)

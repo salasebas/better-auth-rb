@@ -6,7 +6,7 @@ module BetterAuth
     ESTIMATED_EMPTY_COOKIE_SIZE = 200
     CHUNK_SIZE = ALLOWED_COOKIE_SIZE - ESTIMATED_EMPTY_COOKIE_SIZE
 
-    CookieValue = Struct.new(:name, :value, :attributes, keyword_init: true)
+    CookieValue = Struct.new(:name, :value, :attributes)
 
     attr_reader :cookie_name, :cookie_options, :context, :chunks
 

@@ -172,6 +172,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Fetch upstream Better Auth sources
+        run: ./scripts/fetch-upstream-better-auth.sh
+
       - name: Install database client headers
         run: |
           if [ -f /etc/apt/apt-mirrors.txt ]; then

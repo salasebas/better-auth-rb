@@ -5,8 +5,8 @@ require_relative "../../../test_helper"
 class OAuthProviderUtilsQuerySerializationTest < Minitest::Test
   include OAuthProviderFlowHelpers
 
-  FakeContext = Struct.new(:secret, keyword_init: true)
-  FakeCtx = Struct.new(:context, keyword_init: true)
+  FakeContext = Struct.new(:secret)
+  FakeCtx = Struct.new(:context)
 
   def test_client_parse_signed_query_stops_at_signature
     query = "?client_id=abc&resource=https%3A%2F%2Fapi.example&sig=one&after=ignored"

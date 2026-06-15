@@ -185,7 +185,18 @@ module BetterAuth
     end
 
     def lazy_plugin_method?(name)
-      LAZY_PLUGIN_METHODS.include?(name.to_sym)
+      !plugin_loader_for_method(name).nil?
+    end
+
+    def plugin_loader_for_method(name)
+      symbol = name.to_sym
+      return symbol if LAZY_PLUGIN_METHODS.include?(symbol)
+
+      PLUGIN_FILES.each_key do |plugin|
+        return plugin if name.to_s.start_with?("#{plugin}_")
+      end
+
+      nil
     end
 
     def load_plugin_for_constant!(name)

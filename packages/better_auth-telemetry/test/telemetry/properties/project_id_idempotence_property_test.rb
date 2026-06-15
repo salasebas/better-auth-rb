@@ -142,7 +142,7 @@ module BetterAuth
       # `project_name_arg` is the value to pass to `with_app_name`
       # (only meaningful when `name_axis != :unset`); `base_urls`
       # is the generated 2..10-long sequence.
-      Sample = Struct.new(:name_axis, :project_name_arg, :base_urls, keyword_init: true)
+      Sample = Struct.new(:name_axis, :project_name_arg, :base_urls)
 
       # Build a randomised `Sample`. Each axis is drawn
       # independently so iterations can mix any name branch with

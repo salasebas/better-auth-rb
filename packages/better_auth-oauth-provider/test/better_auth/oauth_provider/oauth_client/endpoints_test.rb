@@ -102,7 +102,7 @@ class OAuthProviderOauthClientEndpointsTest < Minitest::Test
   private
 
   def signed_oauth_query(auth, client)
-    ctx = Struct.new(:context, keyword_init: true).new(context: auth.context)
+    ctx = Struct.new(:context).new(context: auth.context)
     BetterAuth::Plugins.oauth_signed_query(
       ctx,
       {

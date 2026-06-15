@@ -129,8 +129,7 @@ module BetterAuth
       # `nil`, `"Better Auth"`, or a random non-empty `String`).
       Sample = Struct.new(
         :app_name_shape, :locked_shape, :root_shape,
-        :app_name, :locked_gems_first_name, :bundler_root_basename,
-        keyword_init: true
+        :app_name, :locked_gems_first_name, :bundler_root_basename
       )
 
       # Fixed boundary samples that pin every documented precedence

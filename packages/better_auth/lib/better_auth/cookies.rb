@@ -9,7 +9,7 @@ module BetterAuth
     SECURE_COOKIE_PREFIX = "__Secure-"
     HOST_COOKIE_PREFIX = "__Host-"
 
-    Cookie = Struct.new(:name, :attributes, keyword_init: true) do
+    Cookie = Struct.new(:name, :attributes) do
       alias_method :options, :attributes
     end
 

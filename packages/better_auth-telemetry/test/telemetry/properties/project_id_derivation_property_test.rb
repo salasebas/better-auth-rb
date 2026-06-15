@@ -136,8 +136,7 @@ module BetterAuth
       # `String`); `name_axis` and `url_axis` record which input
       # axis was selected, purely for readable failure messages.
       Sample = Struct.new(
-        :name_axis, :url_axis, :project_name, :base_url,
-        keyword_init: true
+        :name_axis, :url_axis, :project_name, :base_url
       )
 
       # Fixed boundary samples that pin every documented rule at

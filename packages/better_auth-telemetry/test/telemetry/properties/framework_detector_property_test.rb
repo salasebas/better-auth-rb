@@ -130,7 +130,7 @@ module BetterAuth
       # A single iteration tuple. `subset` is the chosen subset of
       # `Framework::GEMS`; `versions` is the per-gem version stamp;
       # `extras` is the noise drawn from `NON_FRAMEWORK_GEMS`.
-      Sample = Struct.new(:subset, :versions, :extras, keyword_init: true)
+      Sample = Struct.new(:subset, :versions, :extras)
 
       # Boundary samples that pin the documented behaviour for every
       # documented branch of the first-match-wins rule. The list is

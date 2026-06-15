@@ -6,7 +6,7 @@ require_relative "../../test_helper"
 class BetterAuthPluginsDubTest < Minitest::Test
   SECRET = "dub-plugin-secret-with-enough-entropy-123"
 
-  FakeDubTrack = Struct.new(:leads, :raise_on_lead, keyword_init: true) do
+  FakeDubTrack = Struct.new(:leads, :raise_on_lead) do
     def lead(payload)
       raise raise_on_lead if raise_on_lead
 
@@ -15,9 +15,9 @@ class BetterAuthPluginsDubTest < Minitest::Test
     end
   end
 
-  FakeDubClient = Struct.new(:track, keyword_init: true)
+  FakeDubClient = Struct.new(:track)
 
-  RubySdkTrack = Struct.new(:requests, keyword_init: true) do
+  RubySdkTrack = Struct.new(:requests) do
     def lead(request: nil, timeout_ms: nil)
       requests << {request: request, timeout_ms: timeout_ms}
       true

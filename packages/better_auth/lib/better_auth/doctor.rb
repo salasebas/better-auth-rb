@@ -4,7 +4,7 @@ require "better_auth/sql_migration"
 
 module BetterAuth
   module Doctor
-    Result = Struct.new(:ok, :warnings, :errors, keyword_init: true) do
+    Result = Struct.new(:ok, :warnings, :errors) do
       def success?
         errors.empty?
       end

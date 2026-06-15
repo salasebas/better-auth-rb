@@ -176,8 +176,7 @@ module BetterAuth
         :configuration_database,
         :loaded_gem_set,
         :context_shape,
-        :options_shape,
-        keyword_init: true
+        :options_shape
       )
 
       # Boundary samples that pin the documented behaviour for every

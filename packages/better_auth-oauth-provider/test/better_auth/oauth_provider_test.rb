@@ -1582,7 +1582,7 @@ class BetterAuthPluginsOAuthProviderTest < Minitest::Test
       }
     )
     signed_query = BetterAuth::Plugins.oauth_signed_query(
-      Struct.new(:context, keyword_init: true).new(context: auth.context),
+      Struct.new(:context).new(context: auth.context),
       {
         client_id: client[:client_id],
         redirect_uri: "https://resource.example/callback",
