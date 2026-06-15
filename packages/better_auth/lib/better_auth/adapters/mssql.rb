@@ -24,9 +24,12 @@ module BetterAuth
 
       private
 
-      def execute(sql, params)
+      def execute(sql, params, affected_rows_result: false)
         if connection.respond_to?(:fetch)
-          connection.fetch(sql, *params).all.map { |row| stringify_row(row) }
+          dataset = connection.fetch(sql, *params)
+          return dataset.delete if affected_rows_result
+
+          dataset.all.map { |row| stringify_row(row) }
         else
           super
         end
