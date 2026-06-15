@@ -495,6 +495,84 @@ class BetterAuthRoutesSessionTest < Minitest::Test
     assert_nil auth.api.get_session(headers: {"cookie" => cookie})
   end
 
+  def test_get_session_returns_nil_and_clears_cookie_when_database_session_is_missing
+    auth = build_auth(session: {cookie_cache: {enabled: false}})
+    cookie = sign_up_cookie(auth, email: "missing-db@example.com")
+    session = auth.api.get_session(headers: {"cookie" => cookie})
+    auth.context.internal_adapter.delete_session(session[:session]["token"])
+
+    status, headers, body = auth.api.get_session(headers: {"cookie" => cookie}, as_response: true)
+
+    assert_equal 200, status
+    assert_nil JSON.parse(body.join)
+    assert_includes headers.fetch("set-cookie"), "Max-Age=0"
+  end
+
+  def test_get_session_returns_nil_and_clears_cookie_for_tampered_signed_session_token
+    auth = build_auth(session: {cookie_cache: {enabled: false}})
+    cookie = sign_up_cookie(auth, email: "tampered-token@example.com")
+    tampered = cookie.sub(/(better-auth\.session_token=)([^;]+)/) { "#{$1}#{$2}tampered" }
+
+    status, headers, body = auth.api.get_session(headers: {"cookie" => tampered}, as_response: true)
+
+    assert_equal 200, status
+    assert_nil JSON.parse(body.join)
+    assert_includes headers.fetch("set-cookie"), "Max-Age=0"
+  end
+
+  def test_get_session_uses_cookie_cache_for_compact_jwt_and_jwe_strategies
+    %w[compact jwt jwe].each do |strategy|
+      auth = build_auth(session: {cookie_cache: {enabled: true, strategy: strategy, max_age: 300}})
+      cookie = sign_up_cookie(auth, email: "#{strategy}-cache@example.com")
+      session = auth.api.get_session(headers: {"cookie" => cookie})
+      auth.context.adapter.update(
+        model: "user",
+        where: [{field: "id", value: session[:user]["id"]}],
+        update: {name: "Database #{strategy}"}
+      )
+
+      cached = auth.api.get_session(headers: {"cookie" => cookie})
+      authoritative = auth.api.get_session(headers: {"cookie" => cookie}, query: {disableCookieCache: true})
+
+      refute_equal "Database #{strategy}", cached[:user]["name"]
+      assert_equal "Database #{strategy}", authoritative[:user]["name"]
+    end
+  end
+
+  def test_get_session_date_fields_are_parseable_strings
+    auth = build_auth(session: {cookie_cache: {enabled: true, strategy: "jwe", max_age: 300}})
+    cookie = sign_up_cookie(auth, email: "date-fields@example.com")
+    result = auth.api.get_session(headers: {"cookie" => cookie})
+
+    %w[createdAt updatedAt expiresAt].each do |field|
+      assert_kind_of String, result[:session][field]
+      assert Time.parse(result[:session][field])
+    end
+  end
+
+  def test_update_session_rejects_undeclared_fields_without_updating_session
+    auth = build_auth(
+      plugins: [
+        BetterAuth::Plugins.additional_fields(
+          session: {
+            deviceName: {type: "string", required: false}
+          }
+        )
+      ]
+    )
+    cookie = sign_up_cookie(auth, email: "undeclared-session-field@example.com")
+    original = auth.api.get_session(headers: {"cookie" => cookie})
+
+    error = assert_raises(BetterAuth::APIError) do
+      auth.api.update_session(headers: {"cookie" => cookie}, body: {unknownField: "ignored"})
+    end
+
+    assert_equal 400, error.status_code
+    assert_equal "No fields to update", error.message
+    refreshed = auth.api.get_session(headers: {"cookie" => cookie})
+    assert_equal original[:session], refreshed[:session]
+  end
+
   private
 
   def build_auth(options = {})

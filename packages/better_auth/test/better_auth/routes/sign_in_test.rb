@@ -292,6 +292,45 @@ class BetterAuthRoutesSignInTest < Minitest::Test
     assert_equal BetterAuth::BASE_ERROR_CODES["CROSS_SITE_NAVIGATION_LOGIN_BLOCKED"], data.fetch("message")
   end
 
+  def test_sign_in_email_sends_verification_when_send_on_sign_in_is_enabled
+    sent = []
+    auth = build_auth(
+      email_and_password: {enabled: true, require_email_verification: true},
+      email_verification: {
+        send_on_sign_in: true,
+        send_on_sign_up: false,
+        send_verification_email: ->(data, _request = nil) { sent << data }
+      }
+    )
+    auth.api.sign_up_email(body: {email: "sign-in-send@example.com", password: "password123", name: "Sign In Send"})
+
+    error = assert_raises(BetterAuth::APIError) do
+      auth.api.sign_in_email(body: {email: "sign-in-send@example.com", password: "password123"})
+    end
+
+    assert_equal 403, error.status_code
+    assert_equal BetterAuth::BASE_ERROR_CODES["EMAIL_NOT_VERIFIED"], error.message
+    assert_equal 1, sent.length
+    assert_equal "sign-in-send@example.com", sent.first[:user]["email"]
+  end
+
+  def test_sign_in_email_rejects_unsupported_content_type_for_rack_requests
+    auth = build_auth
+    auth.api.sign_up_email(body: {email: "unsupported-media@example.com", password: "password123", name: "Media"})
+
+    status, _headers, body = auth.call(
+      rack_env(
+        "POST",
+        "/api/auth/sign-in/email",
+        body: "email=unsupported-media%40example.com&password=password123",
+        content_type: "text/plain"
+      )
+    )
+
+    assert_equal 415, status
+    assert_equal({"error" => "Unsupported Media Type"}, JSON.parse(body.join))
+  end
+
   private
 
   def build_auth(options = {})

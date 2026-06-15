@@ -4,14 +4,7 @@ require_relative "../test_helper"
 require_relative "../support/upstream_server_parity"
 
 class BetterAuthUpstreamServerParityInventoryTest < Minitest::Test
-  HIGH_GAP_PLAN_EXPECTATIONS = {
-    "context/create-context.test.ts" => "007",
-    "cookies/cookies.test.ts" => "008",
-    "api/routes/session-api.test.ts" => "008",
-    "plugins/organization/organization.test.ts" => "010",
-    "plugins/email-otp/email-otp.test.ts" => "011",
-    "plugins/magic-link/magic-link.test.ts" => "011"
-  }.freeze
+  HIGH_GAP_PLAN_EXPECTATIONS = {}.freeze
 
   def test_every_upstream_test_file_is_classified
     upstream_tests = BetterAuth::TestSupport::UpstreamServerParity.upstream_test_paths

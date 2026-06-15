@@ -129,6 +129,49 @@ class BetterAuthPluginsHaveIBeenPwnedTest < Minitest::Test
     assert_equal "PASSWORD_COMPROMISED", error.code
   end
 
+  def test_range_lookup_receives_prefix_only_and_matches_case_insensitive_suffix
+    calls = []
+    auth = BetterAuth.auth(
+      secret: SECRET,
+      email_and_password: {enabled: true},
+      plugins: [
+        BetterAuth::Plugins.have_i_been_pwned(
+          range_lookup: ->(prefix) {
+            calls << prefix
+            "abc123:1\n#{suffix_for("123456789").downcase}:2"
+          }
+        )
+      ]
+    )
+
+    error = assert_raises(BetterAuth::APIError) do
+      auth.api.sign_up_email(body: {email: "prefix-only@example.com", password: "123456789", name: "HIBP"})
+    end
+
+    assert_equal 400, error.status_code
+    assert_equal 5, calls.first.length
+    refute_includes calls.first, "123456789"
+  end
+
+  def test_lookup_failure_returns_internal_error
+    auth = BetterAuth.auth(
+      secret: SECRET,
+      email_and_password: {enabled: true},
+      plugins: [
+        BetterAuth::Plugins.have_i_been_pwned(
+          range_lookup: ->(_prefix) { raise "lookup failed" }
+        )
+      ]
+    )
+
+    error = assert_raises(BetterAuth::APIError) do
+      auth.api.sign_up_email(body: {email: "lookup-fail@example.com", password: "safe-password123", name: "HIBP"})
+    end
+
+    assert_equal 500, error.status_code
+    assert_equal "Failed to check password. Please try again later.", error.message
+  end
+
   def build_auth(compromised_passwords:)
     compromised = compromised_passwords.map { |password| suffix_for(password) }.join("\n")
     BetterAuth.auth(

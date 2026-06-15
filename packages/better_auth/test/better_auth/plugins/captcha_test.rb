@@ -281,6 +281,20 @@ class BetterAuthPluginsCaptchaTest < Minitest::Test
     assert_equal "Something went wrong", error.fetch("message")
   end
 
+  def test_missing_secret_key_returns_unknown_error
+    auth = build_auth(provider: "cloudflare-turnstile", secret_key: "", verifier: ->(_params) { {success: true} })
+
+    status, _headers, body = auth.call(rack_env(
+      "POST",
+      "/api/auth/sign-in/email",
+      body: {email: "missing-secret@example.com", password: "password123"},
+      headers: {"HTTP_X_CAPTCHA_RESPONSE" => "token"}
+    ))
+
+    assert_equal 500, status
+    assert_equal "UNKNOWN_ERROR", JSON.parse(body.join).fetch("code")
+  end
+
   def build_auth(options)
     BetterAuth.auth(
       secret: SECRET,
@@ -289,7 +303,7 @@ class BetterAuthPluginsCaptchaTest < Minitest::Test
       plugins: [
         BetterAuth::Plugins.captcha(
           provider: options.fetch(:provider),
-          secret_key: "secret",
+          secret_key: options.fetch(:secret_key, "secret"),
           site_key: options[:site_key],
           min_score: options[:min_score],
           endpoints: options[:endpoints],

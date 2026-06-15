@@ -188,6 +188,37 @@ class BetterAuthPluginsSiweTest < Minitest::Test
     assert_equal "chain_id", table.dig(:fields, "chainId", :field_name)
   end
 
+  def test_missing_get_nonce_callback_returns_internal_error
+    auth = BetterAuth.auth(
+      base_url: "http://localhost:3000",
+      secret: SECRET,
+      database: :memory,
+      email_and_password: {enabled: true},
+      plugins: [BetterAuth::Plugins.siwe(domain: "example.com")]
+    )
+
+    error = assert_raises(BetterAuth::APIError) do
+      auth.api.get_siwe_nonce(body: {walletAddress: WALLET})
+    end
+
+    assert_equal 500, error.status_code
+    assert_equal "SIWE nonce callback is required", error.message
+  end
+
+  def test_verify_rejects_expired_nonce
+    auth = build_auth
+    auth.api.get_siwe_nonce(body: {walletAddress: WALLET, chainId: 1})
+    stored = auth.context.internal_adapter.find_verification_value("siwe:#{WALLET}:1")
+    auth.context.internal_adapter.update_verification_value(stored["id"], expiresAt: Time.now - 60)
+
+    error = assert_raises(BetterAuth::APIError) do
+      auth.api.verify_siwe_message(body: {message: "valid-message", signature: "valid-signature", walletAddress: WALLET, chainId: 1})
+    end
+
+    assert_equal 401, error.status_code
+    assert_equal "UNAUTHORIZED_INVALID_OR_EXPIRED_NONCE", error.status
+  end
+
   private
 
   def build_auth(options = {})

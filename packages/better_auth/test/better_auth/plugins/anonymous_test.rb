@@ -277,6 +277,56 @@ class BetterAuthPluginsAnonymousTest < Minitest::Test
     assert_equal "social-linked@example.com", auth.api.get_session(headers: {"cookie" => real_cookie})[:user]["email"]
   end
 
+  def test_magic_link_verify_links_and_deletes_previous_anonymous_user
+    sent = []
+    auth = build_auth(
+      plugins: [
+        BetterAuth::Plugins.anonymous,
+        BetterAuth::Plugins.magic_link(send_magic_link: ->(data, _ctx = nil) { sent << data })
+      ]
+    )
+    _status, anon_headers, _body = auth.api.sign_in_anonymous(as_response: true)
+    anon_cookie = cookie_header(anon_headers.fetch("set-cookie"))
+    anon_user_id = auth.api.get_session(headers: {"cookie" => anon_cookie})[:user]["id"]
+
+    auth.api.sign_in_magic_link(headers: {"cookie" => anon_cookie}, body: {email: "magic-linked@example.com", name: "Magic Linked"})
+    status, headers, _body = auth.api.magic_link_verify(
+      headers: {"cookie" => anon_cookie},
+      query: {token: sent.first[:token], callbackURL: "/dashboard"},
+      as_response: true
+    )
+    real_cookie = cookie_header(headers.fetch("set-cookie"))
+
+    assert_equal 302, status
+    assert_nil auth.context.internal_adapter.find_user_by_id(anon_user_id)
+    assert_equal "magic-linked@example.com", auth.api.get_session(headers: {"cookie" => real_cookie})[:user]["email"]
+  end
+
+  def test_sign_in_email_otp_links_and_deletes_previous_anonymous_user
+    sent = []
+    auth = build_auth(
+      plugins: [
+        BetterAuth::Plugins.anonymous,
+        BetterAuth::Plugins.email_otp(send_verification_otp: ->(data, _ctx = nil) { sent << data })
+      ]
+    )
+    _status, anon_headers, _body = auth.api.sign_in_anonymous(as_response: true)
+    anon_cookie = cookie_header(anon_headers.fetch("set-cookie"))
+    anon_user_id = auth.api.get_session(headers: {"cookie" => anon_cookie})[:user]["id"]
+
+    auth.api.send_verification_otp(body: {email: "otp-linked@example.com", type: "sign-in"})
+    result = auth.api.sign_in_email_otp(
+      headers: {"cookie" => anon_cookie},
+      body: {email: "otp-linked@example.com", otp: sent.last[:otp], name: "OTP Linked"},
+      return_headers: true
+    )
+    real_cookie = [anon_cookie, cookie_header(result.fetch(:headers).fetch("set-cookie"))].join("; ")
+
+    assert_nil auth.context.internal_adapter.find_user_by_id(anon_user_id)
+    assert_equal "otp-linked@example.com", auth.api.get_session(headers: {"cookie" => real_cookie})[:user]["email"]
+    assert_equal true, auth.api.get_session(headers: {"cookie" => real_cookie})[:user]["emailVerified"]
+  end
+
   private
 
   def build_auth(options = {})

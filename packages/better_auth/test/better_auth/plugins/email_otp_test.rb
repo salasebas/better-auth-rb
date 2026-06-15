@@ -516,6 +516,175 @@ class BetterAuthPluginsEmailOTPTest < Minitest::Test
     assert_equal "Invalid OTP type", error.message
   end
 
+  def test_check_verification_otp_does_not_consume_valid_otp
+    sent = []
+    auth = build_auth(
+      plugins: [
+        BetterAuth::Plugins.email_otp(send_verification_otp: ->(data, _ctx = nil) { sent << data })
+      ]
+    )
+    auth.api.sign_up_email(body: {email: "check-consume@example.com", password: "password123", name: "Check Consume"})
+    auth.api.send_verification_otp(body: {email: "check-consume@example.com", type: "email-verification"})
+
+    assert_equal({success: true}, auth.api.check_verification_otp(body: {email: "check-consume@example.com", type: "email-verification", otp: sent.last[:otp]}))
+    assert auth.context.internal_adapter.find_verification_value("email-verification-otp-check-consume@example.com")
+
+    result = auth.api.verify_email_otp(body: {email: "check-consume@example.com", otp: sent.last[:otp]})
+    assert_equal true, result[:status]
+    assert_equal true, result[:user]["emailVerified"]
+  end
+
+  def test_verify_email_otp_refreshes_current_session_user
+    sent = []
+    auth = build_auth(
+      plugins: [
+        BetterAuth::Plugins.email_otp(send_verification_otp: ->(data, _ctx = nil) { sent << data })
+      ]
+    )
+    cookie = sign_up_cookie(auth, email: "refresh-session@example.com")
+    auth.api.send_verification_otp(body: {email: "refresh-session@example.com", type: "email-verification"})
+
+    result = auth.api.verify_email_otp(headers: {"cookie" => cookie}, body: {email: "refresh-session@example.com", otp: sent.last[:otp]}, return_headers: true)
+    refreshed_cookie = [cookie, cookie_header(result.fetch(:headers).fetch("set-cookie"))].join("; ")
+    session = auth.api.get_session(headers: {"cookie" => refreshed_cookie})
+
+    assert_equal true, result.fetch(:response)[:user]["emailVerified"]
+    assert_equal true, session[:user]["emailVerified"]
+  end
+
+  def test_verify_email_otp_auto_signs_in_when_configured
+    sent = []
+    auth = build_auth(
+      email_verification: {auto_sign_in_after_verification: true},
+      plugins: [
+        BetterAuth::Plugins.email_otp(send_verification_otp: ->(data, _ctx = nil) { sent << data })
+      ]
+    )
+    auth.api.sign_up_email(body: {email: "auto-sign-in@example.com", password: "password123", name: "Auto Sign In"})
+    auth.api.send_verification_otp(body: {email: "auto-sign-in@example.com", type: "email-verification"})
+
+    result = auth.api.verify_email_otp(body: {email: "auto-sign-in@example.com", otp: sent.last[:otp]}, return_headers: true)
+
+    assert_match(/\A[0-9a-f]{32}\z/, result.fetch(:response)[:token])
+    assert_includes result.fetch(:headers).fetch("set-cookie"), "better-auth.session_token="
+  end
+
+  def test_change_email_with_verify_current_email_requires_current_otp
+    sent = []
+    auth = build_auth(
+      plugins: [
+        BetterAuth::Plugins.email_otp(
+          change_email: {enabled: true, verify_current_email: true},
+          send_verification_otp: ->(data, _ctx = nil) { sent << data }
+        )
+      ]
+    )
+    cookie = sign_up_cookie(auth, email: "verify-current@example.com")
+
+    missing = assert_raises(BetterAuth::APIError) do
+      auth.api.request_email_change_email_otp(headers: {"cookie" => cookie}, body: {newEmail: "new-verify-current@example.com"})
+    end
+    assert_equal 400, missing.status_code
+    assert_equal "OTP is required to verify current email", missing.message
+
+    auth.api.send_verification_otp(body: {email: "verify-current@example.com", type: "email-verification"})
+    assert_equal({success: true}, auth.api.request_email_change_email_otp(
+      headers: {"cookie" => cookie},
+      body: {newEmail: "new-verify-current@example.com", otp: sent.last[:otp]}
+    ))
+    assert_equal "change-email", sent.last[:type]
+  end
+
+  def test_change_email_target_exists_returns_enumeration_safe_success
+    sent = []
+    auth = build_auth(
+      plugins: [
+        BetterAuth::Plugins.email_otp(
+          change_email: {enabled: true},
+          send_verification_otp: ->(data, _ctx = nil) { sent << data }
+        )
+      ]
+    )
+    owner_cookie = sign_up_cookie(auth, email: "change-owner@example.com")
+    sign_up_cookie(auth, email: "existing-target@example.com")
+
+    assert_equal({success: true}, auth.api.request_email_change_email_otp(
+      headers: {"cookie" => owner_cookie},
+      body: {newEmail: "existing-target@example.com"}
+    ))
+    assert_empty sent
+    assert_nil auth.context.internal_adapter.find_verification_value("change-email-otp-change-owner@example.com-existing-target@example.com")
+  end
+
+  def test_send_verification_otp_without_sender_returns_error
+    auth = build_auth(plugins: [BetterAuth::Plugins.email_otp])
+
+    error = assert_raises(BetterAuth::APIError) do
+      auth.api.send_verification_otp(body: {email: "no-sender@example.com", type: "sign-in"})
+    end
+
+    assert_equal 400, error.status_code
+    assert_equal "send email verification is not implemented", error.message
+  end
+
+  def test_verified_email_otp_cannot_be_reused
+    sent = []
+    auth = build_auth(
+      plugins: [
+        BetterAuth::Plugins.email_otp(send_verification_otp: ->(data, _ctx = nil) { sent << data })
+      ]
+    )
+    auth.api.sign_up_email(body: {email: "reuse-verify@example.com", password: "password123", name: "Reuse Verify"})
+    auth.api.send_verification_otp(body: {email: "reuse-verify@example.com", type: "email-verification"})
+    otp = sent.last[:otp]
+
+    auth.api.verify_email_otp(body: {email: "reuse-verify@example.com", otp: otp})
+
+    reused = assert_raises(BetterAuth::APIError) do
+      auth.api.verify_email_otp(body: {email: "reuse-verify@example.com", otp: otp})
+    end
+    assert_equal 400, reused.status_code
+    assert_equal BetterAuth::Plugins::EMAIL_OTP_ERROR_CODES["INVALID_OTP"], reused.message
+  end
+
+  def test_generate_otp_receives_email_type_and_context
+    captured = []
+    auth = build_auth(
+      plugins: [
+        BetterAuth::Plugins.email_otp(
+          generate_otp: lambda { |data, ctx|
+            captured << {email: data[:email], type: data[:type], has_context: !ctx.nil?}
+            "424242"
+          },
+          send_verification_otp: ->(_data, _ctx = nil) {}
+        )
+      ]
+    )
+
+    auth.api.create_verification_otp(body: {email: "generate-context@example.com", type: "sign-in"})
+
+    assert_equal [{email: "generate-context@example.com", type: "sign-in", has_context: true}], captured
+    assert_match(/\A[0-9a-f]{32}\z/, auth.api.sign_in_email_otp(body: {email: "generate-context@example.com", otp: "424242"})[:token])
+  end
+
+  def test_store_otp_accepts_storeOTP_camel_case_alias
+    auth = build_auth(
+      plugins: [
+        BetterAuth::Plugins.email_otp(
+          storeOTP: "hashed",
+          generate_otp: ->(_data, _ctx = nil) { "998877" },
+          send_verification_otp: ->(_data, _ctx = nil) {}
+        )
+      ]
+    )
+
+    auth.api.create_verification_otp(body: {email: "camel-store@example.com", type: "sign-in"})
+    stored = auth.context.internal_adapter.find_verification_value("sign-in-otp-camel-store@example.com")
+
+    refute_equal "998877", stored["value"].split(":").first
+    assert_match(/\A[0-9a-f]{32}\z/, auth.api.sign_in_email_otp(body: {email: "camel-store@example.com", otp: "998877"})[:token])
+  end
+
   private
 
   def build_auth(options = {})

@@ -458,6 +458,37 @@ class BetterAuthRoutesSignUpTest < Minitest::Test
     assert_equal "Invalid callbackURL", error.message
   end
 
+  def test_sign_up_email_sends_verification_by_default_when_required
+    sent = []
+    auth = BetterAuth.auth(
+      base_url: "http://localhost:3000",
+      secret: SECRET,
+      email_and_password: {enabled: true, require_email_verification: true},
+      email_verification: {send_verification_email: ->(data, _request = nil) { sent << data }}
+    )
+
+    auth.api.sign_up_email(body: {email: "default-send@example.com", password: "password123", name: "Default Send"})
+
+    assert_equal 1, sent.length
+    assert_equal "default-send@example.com", sent.first[:user]["email"]
+  end
+
+  def test_sign_up_email_rejects_unsupported_content_type_for_rack_requests
+    auth = build_auth
+
+    status, _headers, body = auth.call(
+      rack_env(
+        "POST",
+        "/api/auth/sign-up/email",
+        body: "email=test%40example.com&password=password123&name=Test",
+        content_type: "text/plain"
+      )
+    )
+
+    assert_equal 415, status
+    assert_equal({"error" => "Unsupported Media Type"}, JSON.parse(body.join))
+  end
+
   private
 
   def build_auth(options = {})

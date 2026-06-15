@@ -234,7 +234,283 @@ class BetterAuthCookiesTest < Minitest::Test
     assert_equal "x" * 8_000, BetterAuth::SessionStore.get_chunked_cookie(request_ctx, "better-auth.session_data")
   end
 
+  def test_production_environment_enables_secure_cookies_from_rack_rails_and_app_env
+    %w[RACK_ENV RAILS_ENV APP_ENV].each do |env_key|
+      with_env("RACK_ENV" => nil, "RAILS_ENV" => nil, "APP_ENV" => nil, env_key => "production") do
+        config = BetterAuth::Configuration.new(secret: SECRET, base_url: "http://example.com", database: :memory)
+        cookie = BetterAuth::Cookies.create_cookie(config, "session_token")
+
+        assert_equal true, cookie.attributes[:secure], "expected secure cookies for #{env_key}=production"
+      end
+    end
+  end
+
+  def test_use_secure_cookies_false_overrides_production_and_https_defaults
+    with_env("RACK_ENV" => "production", "RAILS_ENV" => nil, "APP_ENV" => nil) do
+      config = BetterAuth::Configuration.new(
+        secret: SECRET,
+        base_url: "https://example.com",
+        database: :memory,
+        advanced: {use_secure_cookies: false}
+      )
+      cookie = BetterAuth::Cookies.create_cookie(config, "session_token")
+
+      assert_equal false, cookie.attributes[:secure]
+      refute cookie.name.start_with?(BetterAuth::Cookies::SECURE_COOKIE_PREFIX)
+    end
+  end
+
+  def test_cross_subdomain_cookies_derive_domain_from_base_url_and_require_base_url
+    config = BetterAuth::Configuration.new(
+      secret: SECRET,
+      base_url: "https://app.example.com",
+      database: :memory,
+      advanced: {cross_subdomain_cookies: {enabled: true}}
+    )
+    cookie = BetterAuth::Cookies.create_cookie(config, "session_token")
+
+    assert_equal "app.example.com", cookie.attributes[:domain]
+
+    static_config = BetterAuth::Configuration.new(
+      secret: SECRET,
+      database: :memory,
+      advanced: {cross_subdomain_cookies: {enabled: true}}
+    )
+    assert_raises(BetterAuth::Error, "base_url is required when cross_subdomain_cookies are enabled") do
+      BetterAuth::Cookies.create_cookie(static_config, "session_token")
+    end
+
+    dynamic_config = BetterAuth::Configuration.new(
+      secret: SECRET,
+      database: :memory,
+      base_url: {allowed_hosts: ["example.com"], fallback: "https://example.com"},
+      advanced: {cross_subdomain_cookies: {enabled: true}}
+    )
+    dynamic_cookie = BetterAuth::Cookies.create_cookie(dynamic_config, "session_token")
+
+    assert_equal "example.com", dynamic_cookie.attributes[:domain]
+  end
+
+  def test_default_cookie_attributes_merge_before_per_cookie_overrides
+    config = BetterAuth::Configuration.new(
+      secret: SECRET,
+      base_url: "https://example.com",
+      database: :memory,
+      advanced: {
+        default_cookie_attributes: {same_site: "none", path: "/app"},
+        cookies: {
+          session_token: {attributes: {path: "/auth", same_site: "strict"}}
+        }
+      }
+    )
+    cookie = BetterAuth::Cookies.create_cookie(config, "session_token")
+
+    assert_equal "/auth", cookie.attributes[:path]
+    assert_equal "strict", cookie.attributes[:same_site]
+    assert_equal true, cookie.attributes[:http_only]
+  end
+
+  def test_strip_secure_cookie_prefix_removes_secure_and_host_prefixes
+    assert_equal "better-auth.session_token", BetterAuth::Cookies.strip_secure_cookie_prefix("__Secure-better-auth.session_token")
+    assert_equal "better-auth.session_token", BetterAuth::Cookies.strip_secure_cookie_prefix("__Host-better-auth.session_token")
+    assert_equal "", BetterAuth::Cookies.strip_secure_cookie_prefix("")
+    assert_equal "", BetterAuth::Cookies.strip_secure_cookie_prefix(BetterAuth::Cookies::SECURE_COOKIE_PREFIX)
+    assert_equal "", BetterAuth::Cookies.strip_secure_cookie_prefix(BetterAuth::Cookies::HOST_COOKIE_PREFIX)
+  end
+
+  def test_parse_cookies_handles_empty_headers_duplicate_keys_and_padding
+    assert_empty BetterAuth::Cookies.parse_cookies("")
+    assert_empty BetterAuth::Cookies.parse_cookies(nil)
+
+    parsed = BetterAuth::Cookies.parse_cookies("first=1; second=2; first=last")
+    assert_equal "last", parsed.fetch("first")
+    assert_equal "2", parsed.fetch("second")
+
+    padded = BetterAuth::Cookies.parse_cookies("better-auth.session_token=token.signature=; better-auth.session_data=data.signature=")
+    assert_equal "token.signature=", padded.fetch("better-auth.session_token")
+    assert_equal "data.signature=", padded.fetch("better-auth.session_data")
+  end
+
+  def test_expire_cookie_emits_max_age_zero_and_preserves_attributes
+    auth = BetterAuth.auth(secret: SECRET)
+    ctx = endpoint_context(auth)
+    cookie = BetterAuth::Cookies::Cookie.new(
+      name: "better-auth.session_token",
+      attributes: {path: "/custom", domain: "example.com", http_only: true}
+    )
+
+    BetterAuth::Cookies.expire_cookie(ctx, cookie)
+    set_cookie = ctx.response_headers.fetch("set-cookie")
+
+    assert_includes set_cookie, "Max-Age=0"
+    assert_includes set_cookie, "Path=/custom"
+    assert_includes set_cookie, "Domain=example.com"
+    assert_includes set_cookie, "HttpOnly"
+  end
+
+  def test_endpoint_context_emits_multiline_set_cookie_headers
+    auth = BetterAuth.auth(secret: SECRET)
+    ctx = endpoint_context(auth)
+    ctx.set_cookie("better-auth.session_token", "token", path: "/")
+    ctx.set_cookie("better-auth.session_data", "cache", path: "/")
+
+    lines = ctx.response_headers.fetch("set-cookie").lines.map { |line| line.split(";").first }
+
+    assert_equal ["better-auth.session_token=token", "better-auth.session_data=cache"], lines
+  end
+
+  def test_compact_cookie_cache_rejects_expired_and_tampered_payloads
+    data = {
+      "session" => {"id" => "session-1", "token" => "token-1", "userId" => "user-1"},
+      "user" => {"id" => "user-1", "email" => "ada@example.com"}
+    }
+    expired = BetterAuth::Cookies.encode_cookie_cache(data, SECRET, strategy: "compact", max_age: -60)
+    valid = BetterAuth::Cookies.encode_cookie_cache(data, SECRET, strategy: "compact", max_age: 300)
+    payload = JSON.parse(BetterAuth::Crypto.base64url_decode(valid))
+    payload["signature"] = "bad-signature"
+    tampered = BetterAuth::Crypto.base64url_encode(JSON.generate(payload))
+
+    assert_nil BetterAuth::Cookies.decode_cookie_cache(expired, SECRET, strategy: "compact")
+    assert_nil BetterAuth::Cookies.decode_cookie_cache(tampered, SECRET, strategy: "compact")
+  end
+
+  def test_jwt_and_jwe_cookie_cache_reject_wrong_secrets
+    data = {
+      "session" => {"id" => "session-1", "token" => "token-1", "userId" => "user-1"},
+      "user" => {"id" => "user-1", "email" => "ada@example.com"}
+    }
+    signing_secret = "signing-secret-that-is-long-enough-123456"
+    other_secret = "other-secret-that-is-long-enough-1234567"
+    jwt_value = BetterAuth::Cookies.encode_cookie_cache(data, signing_secret, strategy: "jwt", max_age: 300)
+    jwe_value = BetterAuth::Cookies.encode_cookie_cache(
+      data,
+      [{version: 1, value: signing_secret}],
+      strategy: "jwe",
+      max_age: 300
+    )
+
+    assert_nil BetterAuth::Cookies.decode_cookie_cache(jwt_value, other_secret, strategy: "jwt")
+    assert_nil BetterAuth::Cookies.decode_cookie_cache(jwe_value, [{version: 1, value: other_secret}], strategy: "jwe")
+  end
+
+  def test_get_cookie_cache_supports_cookie_full_name_and_is_secure_options
+    auth = BetterAuth.auth(secret: SECRET, session: {cookie_cache: {enabled: true, strategy: "compact", version: "1"}})
+    ctx = endpoint_context(auth)
+    BetterAuth::Cookies.set_cookie_cache(ctx, {
+      session: {"id" => "session-1", "token" => "token-1", "userId" => "user-1"},
+      user: {"id" => "user-1", "email" => "ada@example.com"}
+    }, false)
+    cookie = ctx.response_headers.fetch("set-cookie").lines.find { |line| line.include?("session_data") }.split(";").first
+
+    parsed = BetterAuth::Cookies.get_cookie_cache(
+      cookie,
+      secret: SECRET,
+      strategy: "compact",
+      version: "1",
+      cookie_full_name: "better-auth.session_data"
+    )
+    secure_parsed = BetterAuth::Cookies.get_cookie_cache(
+      cookie,
+      secret: SECRET,
+      strategy: "compact",
+      version: "1",
+      is_secure: false
+    )
+
+    assert_equal "token-1", parsed.fetch("session").fetch("token")
+    assert_equal "token-1", secure_parsed.fetch("session").fetch("token")
+    assert_nil BetterAuth::Cookies.get_cookie_cache(
+      cookie,
+      secret: SECRET,
+      strategy: "compact",
+      version: "1",
+      is_secure: true
+    )
+  end
+
+  def test_cookie_cache_version_callback_receives_session_and_user
+    version = ->(session, user) { "#{session.fetch("token")}-#{user.fetch("id")}" }
+    auth = BetterAuth.auth(secret: SECRET, session: {cookie_cache: {enabled: true, strategy: "compact", version: version}})
+    ctx = endpoint_context(auth)
+    BetterAuth::Cookies.set_cookie_cache(ctx, {
+      session: {"id" => "session-1", "token" => "token-1", "userId" => "user-1"},
+      user: {"id" => "user-1", "email" => "ada@example.com"}
+    }, false)
+    cookie = ctx.response_headers.fetch("set-cookie").lines.find { |line| line.include?("session_data") }.split(";").first
+
+    parsed = BetterAuth::Cookies.get_cookie_cache(cookie, secret: SECRET, strategy: "compact", version: version)
+    mismatched = ->(_session, _user) { "other-version" }
+
+    assert_equal "token-1", parsed.fetch("session").fetch("token")
+    assert_nil BetterAuth::Cookies.get_cookie_cache(cookie, secret: SECRET, strategy: "compact", version: mismatched)
+  end
+
+  def test_cookie_cache_chunk_cleanup_and_numeric_ordering
+    auth = BetterAuth.auth(secret: SECRET, session: {cookie_cache: {enabled: true, strategy: "compact"}})
+    large_ctx = endpoint_context(auth)
+    BetterAuth::Cookies.set_cookie_cache(large_ctx, {
+      session: {"id" => "session-1", "token" => "token-1", "userId" => "user-1", "note" => "x" * 8_000},
+      user: {"id" => "user-1", "email" => "chunked@example.com"}
+    }, false)
+    chunked_header = large_ctx.response_headers.fetch("set-cookie").lines.map { |line| line.split(";").first }.join("; ")
+    refute_includes chunked_header, "better-auth.session_data="
+
+    request_ctx = endpoint_context(auth, cookie: chunked_header)
+    BetterAuth::Cookies.set_cookie_cache(request_ctx, {
+      session: {"id" => "session-1", "token" => "token-1", "userId" => "user-1"},
+      user: {"id" => "user-1", "email" => "chunked@example.com"}
+    }, false)
+    cleanup_header = request_ctx.response_headers.fetch("set-cookie")
+
+    assert cleanup_header.lines.any? { |line| line.include?("better-auth.session_data.") && line.include?("Max-Age=0") }
+    assert_includes cleanup_header, "better-auth.session_data="
+
+    ordered = BetterAuth::SessionStore.join_chunks({
+      "better-auth.session_data.10" => "bbb",
+      "better-auth.session_data.0" => "aaa",
+      "better-auth.session_data.1" => "ccc"
+    })
+    assert_equal "aaacccbbb", ordered
+  end
+
+  def test_account_cookie_chunking_mirrors_session_data_chunking
+    auth = BetterAuth.auth(secret: SECRET, account: {store_account_cookie: true})
+    ctx = endpoint_context(auth)
+    BetterAuth::Cookies.set_account_cookie(ctx, {"providerId" => "github", "accountId" => "a" * 8_000})
+
+    set_cookie = ctx.response_headers.fetch("set-cookie")
+    assert set_cookie.lines.count { |line| line.start_with?("better-auth.account_data.") } > 1
+
+    header = set_cookie.lines.map { |line| line.split(";").first }.join("; ")
+    request_ctx = endpoint_context(auth, cookie: header)
+    account = BetterAuth::Cookies.get_account_cookie(request_ctx)
+
+    assert_equal "github", account.fetch("providerId")
+    assert_equal "a" * 8_000, account.fetch("accountId")
+  end
+
   private
+
+  def with_env(overrides)
+    overrides = overrides.transform_keys(&:to_s)
+    original = overrides.each_key.to_h { |key| [key, ENV.key?(key) ? ENV.fetch(key) : :__missing__] }
+    overrides.each do |key, value|
+      if value.nil?
+        ENV.delete(key)
+      else
+        ENV[key] = value
+      end
+    end
+    yield
+  ensure
+    original&.each do |key, value|
+      if value == :__missing__
+        ENV.delete(key)
+      else
+        ENV[key] = value
+      end
+    end
+  end
 
   def endpoint_context(auth, cookie: nil)
     headers = {}

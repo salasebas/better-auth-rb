@@ -615,6 +615,124 @@ class BetterAuthRoutesAccountTest < Minitest::Test
     assert_equal "refreshed-refresh", stored["refreshToken"]
   end
 
+  def test_list_accounts_omits_sensitive_token_and_password_fields
+    auth = build_auth
+    cookie = sign_up_cookie(auth, email: "sensitive-fields@example.com")
+    user_id = auth.api.get_session(headers: {"cookie" => cookie})[:user]["id"]
+    auth.context.internal_adapter.create_account(
+      userId: user_id,
+      providerId: "github",
+      accountId: "gh-sensitive",
+      accessToken: "secret-access",
+      refreshToken: "secret-refresh",
+      password: "secret-password",
+      idToken: "secret-id"
+    )
+
+    accounts = auth.api.list_accounts(headers: {"cookie" => cookie})
+    github = accounts.find { |account| account["providerId"] == "github" }
+
+    refute github.key?("accessToken")
+    refute github.key?("refreshToken")
+    refute github.key?("password")
+    refute github.key?("idToken")
+  end
+
+  def test_unlink_account_requires_fresh_sensitive_session
+    auth = build_auth(session: {fresh_age: 60, expires_in: 3600, update_age: 3600})
+    cookie = sign_up_cookie(auth, email: "stale-unlink@example.com")
+    session = auth.api.get_session(headers: {"cookie" => cookie})[:session]
+    user_id = session["userId"]
+    auth.context.internal_adapter.update_session(
+      session["token"],
+      "createdAt" => Time.now - 120,
+      "updatedAt" => Time.now - 120
+    )
+    auth.context.internal_adapter.create_account(userId: user_id, providerId: "github", accountId: "gh-stale")
+
+    error = assert_raises(BetterAuth::APIError) do
+      auth.api.unlink_account(headers: {"cookie" => cookie}, body: {providerId: "github"})
+    end
+
+    assert_equal 403, error.status_code
+    assert_equal "SESSION_NOT_FRESH", error.code
+    assert auth.context.internal_adapter.find_account_by_provider_id("gh-stale", "github")
+  end
+
+  def test_unlink_account_allows_removing_last_account_when_allow_unlinking_all_is_enabled
+    auth = build_auth(account: {account_linking: {allow_unlinking_all: true}})
+    cookie = sign_up_cookie(auth, email: "unlink-last@example.com")
+
+    assert_equal({status: true}, auth.api.unlink_account(headers: {"cookie" => cookie}, body: {providerId: "credential"}))
+    assert_empty auth.context.internal_adapter.find_accounts(
+      auth.context.internal_adapter.find_user_by_email("unlink-last@example.com")[:user]["id"]
+    )
+  end
+
+  def test_get_access_token_sets_account_cookie_when_store_account_cookie_is_enabled
+    auth = build_auth(
+      account: {store_account_cookie: true},
+      social_providers: {
+        github: {
+          client_id: "id",
+          client_secret: "secret",
+          refresh_access_token: ->(_refresh_token) {
+            {accessToken: "fresh-access", refreshToken: "fresh-refresh", accessTokenExpiresAt: Time.now + 3600}
+          }
+        }
+      }
+    )
+    cookie = sign_up_cookie(auth, email: "account-cookie@example.com")
+    user_id = auth.api.get_session(headers: {"cookie" => cookie})[:user]["id"]
+    auth.context.internal_adapter.create_account(
+      userId: user_id,
+      providerId: "github",
+      accountId: "gh-account-cookie",
+      accessToken: "stored-access",
+      refreshToken: "stored-refresh",
+      accessTokenExpiresAt: Time.now - 60,
+      scope: "repo"
+    )
+
+    _status, headers, _body = auth.api.get_access_token(
+      headers: {"cookie" => cookie},
+      body: {providerId: "github", accountId: "gh-account-cookie"},
+      as_response: true
+    )
+
+    assert_includes headers.fetch("set-cookie"), "better-auth.account_data="
+  end
+
+  def test_refresh_token_errors_for_missing_account_and_missing_refresh_token
+    auth = build_auth(
+      social_providers: {
+        github: {
+          client_id: "id",
+          client_secret: "secret",
+          refresh_access_token: ->(_refresh_token) { {accessToken: "new-access", refreshToken: "new-refresh"} }
+        }
+      }
+    )
+    cookie = sign_up_cookie(auth, email: "refresh-errors@example.com")
+    user_id = auth.api.get_session(headers: {"cookie" => cookie})[:user]["id"]
+    auth.context.internal_adapter.create_account(
+      userId: user_id,
+      providerId: "github",
+      accountId: "gh-no-refresh",
+      accessToken: "stored-access"
+    )
+
+    missing_account = assert_raises(BetterAuth::APIError) do
+      auth.api.refresh_token(headers: {"cookie" => cookie}, body: {providerId: "github", accountId: "missing"})
+    end
+    missing_refresh = assert_raises(BetterAuth::APIError) do
+      auth.api.refresh_token(headers: {"cookie" => cookie}, body: {providerId: "github", accountId: "gh-no-refresh"})
+    end
+
+    assert_equal BetterAuth::BASE_ERROR_CODES["ACCOUNT_NOT_FOUND"], missing_account.message
+    assert_equal "Refresh token not found", missing_refresh.message
+  end
+
   private
 
   def build_auth(options = {})

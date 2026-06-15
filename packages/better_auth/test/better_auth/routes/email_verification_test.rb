@@ -157,6 +157,33 @@ class BetterAuthRoutesEmailVerificationTest < Minitest::Test
     assert_equal "new-verified@example.com", sent.first.fetch(:user).fetch("email")
   end
 
+  def test_send_verification_email_rejects_already_verified_authenticated_user
+    sent = []
+    auth = build_auth(email_verification: {send_verification_email: ->(data, _request = nil) { sent << data }})
+    cookie = sign_up_cookie(auth, email: "already-verified@example.com")
+    auth.context.internal_adapter.update_user_by_email("already-verified@example.com", emailVerified: true)
+
+    error = assert_raises(BetterAuth::APIError) do
+      auth.api.send_verification_email(headers: {"cookie" => cookie}, body: {email: "already-verified@example.com"})
+    end
+
+    assert_equal 400, error.status_code
+    assert_equal BetterAuth::BASE_ERROR_CODES["EMAIL_ALREADY_VERIFIED"], error.message
+    assert_empty sent
+  end
+
+  def test_verify_email_invalid_token_redirects_with_error_when_callback_is_present
+    auth = build_auth
+
+    error = assert_raises(BetterAuth::APIError) do
+      auth.api.verify_email(query: {token: "invalid-token", callbackURL: "/dashboard"})
+    end
+
+    assert_equal 302, error.status_code
+    assert_includes error.headers.fetch("location"), "/dashboard"
+    assert_includes error.headers.fetch("location"), "error=INVALID_TOKEN"
+  end
+
   def test_verify_email_auto_sign_in_stores_session_in_secondary_storage
     storage = StringStorage.new
     auth = build_auth(

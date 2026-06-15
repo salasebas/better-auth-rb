@@ -114,6 +114,29 @@ class BetterAuthPluginsAdditionalFieldsTest < Minitest::Test
     assert_equal "mobile", updated.fetch(:session).fetch("deviceName")
   end
 
+  def test_returned_false_user_fields_are_stored_but_not_exposed
+    auth = build_auth(
+      plugins: [
+        BetterAuth::Plugins.additional_fields(
+          user: {
+            publicCode: {type: "string", required: false},
+            secretCode: {type: "string", required: false, returned: false},
+            favoriteColor: {type: "string", required: false, default_value: "blue"}
+          }
+        )
+      ]
+    )
+
+    cookie = sign_up_cookie(auth, email: "returned-false@example.com", favorite_color: "green", secret_code: "hidden")
+    session = auth.api.get_session(headers: {"cookie" => cookie}, query: {disableCookieCache: true})
+
+    assert_equal "green", session[:user]["favoriteColor"]
+    refute session[:user].key?("secretCode")
+
+    stored = auth.context.internal_adapter.find_user_by_email("returned-false@example.com")[:user]
+    assert_equal "hidden", stored["secretCode"]
+  end
+
   private
 
   def build_auth(options = {})
@@ -121,9 +144,10 @@ class BetterAuthPluginsAdditionalFieldsTest < Minitest::Test
     BetterAuth.auth({base_url: "http://localhost:3000", secret: SECRET, database: :memory}.merge(options).merge(email_and_password: email_and_password))
   end
 
-  def sign_up_cookie(auth, email:, favorite_color: nil)
+  def sign_up_cookie(auth, email:, favorite_color: nil, secret_code: nil)
     body = {email: email, password: "password123", name: "Fields User"}
     body[:favoriteColor] = favorite_color if favorite_color
+    body[:secretCode] = secret_code if secret_code
     _status, headers, _body = auth.api.sign_up_email(
       body: body,
       as_response: true

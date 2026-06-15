@@ -257,6 +257,34 @@ class BetterAuthRoutesPasswordTest < Minitest::Test
     assert_equal 401, error.status_code
   end
 
+  def test_reset_password_creates_credential_account_for_passwordless_user
+    sent = []
+    auth = build_auth(email_and_password: {send_reset_password: ->(data, _request = nil) { sent << data }})
+    user = auth.context.internal_adapter.create_user(email: "passwordless-reset@example.com", name: "Passwordless", emailVerified: true)
+    auth.context.internal_adapter.create_account(userId: user["id"], providerId: "github", accountId: "gh-passwordless")
+
+    auth.api.request_password_reset(body: {email: "passwordless-reset@example.com"})
+    token = sent.first.fetch(:token)
+
+    assert_equal({status: true}, auth.api.reset_password(body: {token: token, newPassword: "new-password"}))
+    assert auth.api.sign_in_email(body: {email: "passwordless-reset@example.com", password: "new-password"})[:token]
+  end
+
+  def test_reset_password_rejects_password_too_long
+    sent = []
+    auth = build_auth(email_and_password: {send_reset_password: ->(data, _request = nil) { sent << data }})
+    auth.api.sign_up_email(body: {email: "long-password-reset@example.com", password: "old-password", name: "Reset"})
+    auth.api.request_password_reset(body: {email: "long-password-reset@example.com"})
+    token = sent.first.fetch(:token)
+
+    error = assert_raises(BetterAuth::APIError) do
+      auth.api.reset_password(body: {token: token, newPassword: "a" * 129})
+    end
+
+    assert_equal 400, error.status_code
+    assert_equal BetterAuth::BASE_ERROR_CODES["PASSWORD_TOO_LONG"], error.message
+  end
+
   private
 
   def build_auth(options = {})

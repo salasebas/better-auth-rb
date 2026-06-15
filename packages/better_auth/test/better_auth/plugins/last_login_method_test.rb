@@ -18,6 +18,17 @@ class BetterAuthPluginsLastLoginMethodTest < Minitest::Test
     assert_includes headers.fetch("set-cookie"), "better-auth.last_used_login_method=email"
   end
 
+  def test_last_login_method_sets_cookie_on_successful_email_sign_up
+    auth = build_auth(plugins: [BetterAuth::Plugins.last_login_method])
+
+    _status, headers, _body = auth.api.sign_up_email(
+      body: {email: "last-signup@example.com", password: "password123", name: "Last Signup"},
+      as_response: true
+    )
+
+    assert_includes headers.fetch("set-cookie"), "better-auth.last_used_login_method=email"
+  end
+
   def test_last_login_method_does_not_set_cookie_on_failed_sign_in
     auth = build_auth(plugins: [BetterAuth::Plugins.last_login_method])
     auth.api.sign_up_email(body: {email: "last-fail@example.com", password: "password123", name: "Last"})

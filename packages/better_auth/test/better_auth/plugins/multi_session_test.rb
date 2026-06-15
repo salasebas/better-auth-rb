@@ -120,6 +120,59 @@ class BetterAuthPluginsMultiSessionTest < Minitest::Test
     assert_includes headers.fetch("set-cookie"), "better-auth.session_token=;"
   end
 
+  def test_list_device_sessions_deduplicates_same_user_and_ignores_expired
+    auth = build_auth(plugins: [BetterAuth::Plugins.multi_session(maximum_sessions: 3)])
+    cookie = merge_cookie("", sign_up_response(auth, email: "dedupe@example.com"))
+    cookie = merge_cookie(cookie, sign_in_response(auth, email: "dedupe@example.com", cookie: cookie))
+    cookie = merge_cookie(cookie, sign_up_response(auth, email: "other@example.com"))
+    sessions = auth.api.list_device_sessions(headers: {"cookie" => cookie})
+    expired_token = sessions.find { |entry| entry[:user]["email"] == "other@example.com" }[:session]["token"]
+    auth.context.internal_adapter.update_session(expired_token, expiresAt: Time.now - 60)
+
+    listed = auth.api.list_device_sessions(headers: {"cookie" => cookie})
+
+    assert_equal ["dedupe@example.com"], listed.map { |entry| entry[:user]["email"] }.sort
+  end
+
+  def test_set_active_session_rejects_unknown_unsigned_and_expired_tokens
+    auth = build_auth(plugins: [BetterAuth::Plugins.multi_session(maximum_sessions: 3)])
+    cookie = merge_cookie("", sign_up_response(auth, email: "invalid-active@example.com"))
+    sessions = auth.api.list_device_sessions(headers: {"cookie" => cookie})
+    token = sessions.first[:session]["token"]
+
+    unknown = assert_raises(BetterAuth::APIError) do
+      auth.api.set_active_session(headers: {"cookie" => cookie}, body: {sessionToken: "missing-token"})
+    end
+    assert_equal 401, unknown.status_code
+
+    unsigned = assert_raises(BetterAuth::APIError) do
+      auth.api.set_active_session(headers: {"cookie" => "better-auth.session_token=fake"}, body: {sessionToken: token})
+    end
+    assert_equal 401, unsigned.status_code
+
+    auth.context.internal_adapter.update_session(token, expiresAt: Time.now - 60)
+    expired = assert_raises(BetterAuth::APIError) do
+      auth.api.set_active_session(headers: {"cookie" => cookie}, body: {sessionToken: token})
+    end
+    assert_equal 401, expired.status_code
+  end
+
+  def test_sign_out_clears_all_multi_session_cookies
+    auth = build_auth(plugins: [BetterAuth::Plugins.multi_session(maximum_sessions: 3)])
+    cookie = merge_cookie("", sign_up_response(auth, email: "signout-one@example.com"))
+    cookie = merge_cookie(cookie, sign_up_response(auth, email: "signout-two@example.com"))
+    sessions = auth.api.list_device_sessions(headers: {"cookie" => cookie})
+    multi_cookie_names = sessions.map { |entry| "better-auth.session_token_multi-#{entry[:session]["token"].downcase}" }
+
+    status, headers, _body = auth.api.sign_out(headers: {"cookie" => cookie}, as_response: true)
+
+    assert_equal 200, status
+    multi_cookie_names.each do |name|
+      assert_includes headers.fetch("set-cookie"), "#{name}=;"
+    end
+    assert_includes headers.fetch("set-cookie"), "better-auth.session_token=;"
+  end
+
   private
 
   def build_auth(options = {})

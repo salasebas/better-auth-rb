@@ -32,8 +32,8 @@ module BetterAuth
         "api/index.test.ts" => {
           owner: "better_auth/api_test.rb",
           status: :covered,
-          plan: "006",
-          notes: "Core API index and endpoint wiring covered in api_test"
+          plan: "007",
+          notes: "Direct API index, hooks, disabled paths, and response formatting covered in api_test"
         },
         "api/middlewares/authorization.test.ts" => {
           owner: "better_auth/api_test.rb",
@@ -42,28 +42,28 @@ module BetterAuth
           notes: "Authorization middleware parity gaps tracked in plan 007"
         },
         "api/middlewares/origin-check.test.ts" => {
-          owner: "better_auth/router_test.rb",
-          status: :partial,
+          owner: ["better_auth/router_test.rb"],
+          status: :covered,
           plan: "007",
-          notes: "Origin-check middleware parity gaps tracked in plan 007"
+          notes: "Origin, Fetch Metadata CSRF, disable flags, and path-scoped skips covered in router_test"
         },
         "api/rate-limiter/rate-limiter.test.ts" => {
-          owner: "better_auth/plugins/rate_limit_matrix_test.rb",
-          status: :partial,
+          owner: ["better_auth/router_test.rb", "better_auth/rate_limiter_test.rb"],
+          status: :covered,
           plan: "007",
-          notes: "Rate limiter parity gaps tracked in plan 007"
+          notes: "Core RateLimiter storage/rules and Rack integration covered in rate_limiter_test and router_test"
         },
         "api/routes/account.test.ts" => {
           owner: "better_auth/routes/account_test.rb",
-          status: :partial,
+          status: :covered,
           plan: "009",
-          notes: "Account route parity gaps tracked in plan 009"
+          notes: "Account listing, unlink guards, access-token refresh, account cookie, refresh-token errors, and account info covered in account_test"
         },
         "api/routes/email-verification.test.ts" => {
           owner: "better_auth/routes/email_verification_test.rb",
-          status: :partial,
+          status: :covered,
           plan: "009",
-          notes: "Email verification route parity gaps tracked in plan 009"
+          notes: "Send/verify email flows, callback redirects, verification callbacks, change-email verification, and secondary storage covered in email_verification_test"
         },
         "api/routes/error.test.ts" => {
           owner: "better_auth/routes/error_test.rb",
@@ -73,75 +73,75 @@ module BetterAuth
         },
         "api/routes/password.test.ts" => {
           owner: "better_auth/routes/password_test.rb",
-          status: :partial,
+          status: :covered,
           plan: "009",
-          notes: "Password route parity gaps tracked in plan 009"
+          notes: "Password reset enumeration safety, callback redirects, credential creation, session revocation, verify-password scope, and length errors covered in password_test"
         },
         "api/routes/session-api.test.ts" => {
-          owner: "better_auth/routes/session_routes_test.rb",
-          status: :partial,
+          owner: ["better_auth/routes/session_routes_test.rb", "better_auth/session_test.rb"],
+          status: :covered,
           plan: "008",
-          notes: "Session route parity gaps tracked in plan 008"
+          notes: "Session routes, cookie cache strategies, deferred refresh, secondary storage, date fields, and update-session guards covered in session_routes_test and session_test"
         },
         "api/routes/sign-in.test.ts" => {
           owner: "better_auth/routes/sign_in_test.rb",
-          status: :partial,
+          status: :covered,
           plan: "009",
-          notes: "Sign-in route parity gaps tracked in plan 009"
+          notes: "Email sign-in, CSRF/origin checks, form-urlencoded bodies, verification-on-sign-in, and callback URL validation covered in sign_in_test; social callback URL checks live in social_test"
         },
         "api/routes/sign-out.test.ts" => {
           owner: "better_auth/routes/sign_out_test.rb",
-          status: :partial,
+          status: :covered,
           plan: "009",
-          notes: "Sign-out route parity gaps tracked in plan 009"
+          notes: "Sign-out idempotency, session deletion, and cookie/cache/account cleanup covered in sign_out_test"
         },
         "api/routes/sign-up.test.ts" => {
           owner: "better_auth/routes/sign_up_test.rb",
-          status: :partial,
+          status: :covered,
           plan: "009",
-          notes: "Sign-up route parity gaps tracked in plan 009"
+          notes: "Sign-up custom fields, enumeration protection, CSRF, form-urlencoded bodies, sendOnSignUp behavior, and synthetic user responses covered in sign_up_test"
         },
         "api/routes/update-user.test.ts" => {
           owner: "better_auth/routes/user_routes_test.rb",
-          status: :partial,
+          status: :covered,
           plan: "009",
-          notes: "Update-user route parity gaps tracked in plan 009"
+          notes: "Update/delete/change-password/change-email flows, enumeration-safe change-email, delete-user verification, and secondary storage propagation covered in user_routes_test"
         },
         "api/to-auth-endpoints.test.ts" => {
           owner: "better_auth/api_test.rb",
           status: :covered,
-          plan: "006",
-          notes: "Endpoint conversion helpers covered in api_test"
+          plan: "007",
+          notes: "Endpoint conversion and direct API dispatch covered in api_test"
         },
         "auth/full.test.ts" => {
-          owner: "better_auth/auth_test.rb",
+          owner: ["better_auth/auth_test.rb", "better_auth/auth_context_upstream_parity_test.rb"],
           status: :covered,
-          plan: "006",
-          notes: "Full auth configuration surface covered in auth_test"
+          plan: "007",
+          notes: "Full auth configuration and context bootstrap covered in auth_test and auth_context_upstream_parity_test"
         },
         "auth/minimal.test.ts" => {
           owner: "better_auth/auth_test.rb",
           status: :covered,
-          plan: "006",
+          plan: "007",
           notes: "Minimal auth configuration covered in auth_test"
         },
         "auth/trusted-origins.test.ts" => {
           owner: "better_auth/auth_context_upstream_parity_test.rb",
-          status: :partial,
+          status: :covered,
           plan: "007",
-          notes: "Trusted-origin parity gaps tracked in plan 007"
+          notes: "Trusted-origin merge, dynamic base URL hosts, and plugin callbacks covered in auth_context_upstream_parity_test"
         },
         "call.test.ts" => {
-          owner: "better_auth/api_test.rb",
+          owner: ["better_auth/api_test.rb", "better_auth/auth_context_upstream_parity_test.rb"],
           status: :covered,
-          plan: "006",
-          notes: "Auth call dispatch covered in api_test"
+          plan: "007",
+          notes: "Auth call dispatch, hooks, cookies, and error chaining covered in api_test and auth_context_upstream_parity_test"
         },
         "context/create-context.test.ts" => {
           owner: "better_auth/auth_context_upstream_parity_test.rb",
-          status: :partial,
+          status: :covered,
           plan: "007",
-          notes: "Context bootstrap parity gaps tracked in plan 007"
+          notes: "Context bootstrap for secrets, session defaults, plugins, dynamic base URL, and password utilities covered in auth_context_upstream_parity_test; upstream hasPlugin has no Ruby equivalent"
         },
         "context/init-minimal.test.ts" => {
           owner: "better_auth/auth_test.rb",
@@ -151,15 +151,15 @@ module BetterAuth
         },
         "context/init.test.ts" => {
           owner: "better_auth/auth_context_upstream_parity_test.rb",
-          status: :partial,
+          status: :covered,
           plan: "007",
-          notes: "Context init parity gaps tracked in plan 007"
+          notes: "Context init, plugin ordering, database hooks exposure, and telemetry options covered in auth_context_upstream_parity_test"
         },
         "cookies/cookies.test.ts" => {
           owner: "better_auth/cookies_test.rb",
-          status: :partial,
+          status: :covered,
           plan: "008",
-          notes: "Cookie and session-cache parity gaps tracked in plan 008"
+          notes: "Cookie defaults, production env, cross-subdomain, parsing, cache strategies, chunking, rotation, and Endpoint set-cookie helpers covered in cookies_test; Ruby uses Endpoint helpers instead of a standalone parseSetCookieHeader utility"
         },
         "crypto/password.test.ts" => {
           owner: "better_auth/password_test.rb",
@@ -234,9 +234,9 @@ module BetterAuth
         },
         "plugins/additional-fields/additional-fields.test.ts" => {
           owner: "better_auth/plugins/additional_fields_test.rb",
-          status: :partial,
+          status: :covered,
           plan: "012",
-          notes: "Additional-fields plugin parity gaps tracked in plan 012"
+          notes: "Additional-fields plugin covered in additional_fields_test"
         },
         "plugins/admin/admin.test.ts" => {
           owner: "better_auth/plugins/admin_test.rb",
@@ -248,25 +248,25 @@ module BetterAuth
           owner: "better_auth/plugins/anonymous_test.rb",
           status: :partial,
           plan: "012",
-          notes: "Anonymous plugin parity gaps tracked in plan 012"
+          notes: "Anonymous linking on /email-otp/verify-email and SIWE verify not covered; sign-in and magic-link paths covered"
         },
         "plugins/bearer/bearer.test.ts" => {
           owner: "better_auth/plugins/bearer_test.rb",
-          status: :partial,
+          status: :covered,
           plan: "012",
-          notes: "Bearer plugin parity gaps tracked in plan 012"
+          notes: "Bearer plugin covered in bearer_test"
         },
         "plugins/captcha/captcha.test.ts" => {
           owner: "better_auth/plugins/captcha_test.rb",
           status: :partial,
           plan: "012",
-          notes: "Captcha plugin parity gaps tracked in plan 012"
+          notes: "Missing secret key surfaces as UNKNOWN_ERROR rather than MISSING_SECRET_KEY response code"
         },
         "plugins/custom-session/custom-session.test.ts" => {
           owner: "better_auth/plugins/custom_session_test.rb",
-          status: :partial,
+          status: :covered,
           plan: "012",
-          notes: "Custom-session plugin parity gaps tracked in plan 012"
+          notes: "Custom-session plugin covered in custom_session_test"
         },
         "plugins/device-authorization/device-authorization.test.ts" => {
           owner: "better_auth/plugins/device_authorization_test.rb",
@@ -275,10 +275,13 @@ module BetterAuth
           notes: "Device authorization plugin covered in device_authorization_test"
         },
         "plugins/email-otp/email-otp.test.ts" => {
-          owner: "better_auth/plugins/email_otp_test.rb",
-          status: :partial,
+          owner: [
+            "better_auth/plugins/email_otp_test.rb",
+            "better_auth/plugins/rate_limit_matrix_test.rb"
+          ],
+          status: :covered,
           plan: "011",
-          notes: "Email OTP plugin parity gaps tracked in plan 011"
+          notes: "Email OTP plugin covered in email_otp_test; custom rate-limit storage in rate_limit_matrix_test"
         },
         "plugins/generic-oauth/generic-oauth.test.ts" => {
           owner: "better_auth/plugins/generic_oauth_test.rb",
@@ -288,9 +291,9 @@ module BetterAuth
         },
         "plugins/haveibeenpwned/haveibeenpwned.test.ts" => {
           owner: "better_auth/plugins/have_i_been_pwned_test.rb",
-          status: :partial,
+          status: :covered,
           plan: "012",
-          notes: "Have I Been Pwned plugin parity gaps tracked in plan 012"
+          notes: "Have I Been Pwned plugin covered in have_i_been_pwned_test"
         },
         "plugins/jwt/jwt.test.ts" => {
           owner: "better_auth/plugins/jwt_test.rb",
@@ -306,21 +309,24 @@ module BetterAuth
         },
         "plugins/last-login-method/custom-prefix.test.ts" => {
           owner: "better_auth/plugins/last_login_method_test.rb",
-          status: :partial,
+          status: :covered,
           plan: "012",
-          notes: "Last-login-method custom prefix parity gaps tracked in plan 012"
+          notes: "Last-login-method custom prefix covered in last_login_method_test"
         },
         "plugins/last-login-method/last-login-method.test.ts" => {
           owner: "better_auth/plugins/last_login_method_test.rb",
           status: :partial,
           plan: "012",
-          notes: "Last-login-method plugin parity gaps tracked in plan 012"
+          notes: "Passkey and phone-number login method paths not covered; core email, magic-link, SIWE, and OAuth paths covered"
         },
         "plugins/magic-link/magic-link.test.ts" => {
-          owner: "better_auth/plugins/magic_link_test.rb",
+          owner: [
+            "better_auth/plugins/magic_link_test.rb",
+            "better_auth/plugins/rate_limit_matrix_test.rb"
+          ],
           status: :partial,
           plan: "011",
-          notes: "Magic-link plugin parity gaps tracked in plan 011"
+          notes: "Rack verify requests without token return 400 validation instead of errorCallback redirect"
         },
         "plugins/mcp/mcp.test.ts" => {
           owner: [
@@ -336,9 +342,9 @@ module BetterAuth
         },
         "plugins/multi-session/multi-session.test.ts" => {
           owner: "better_auth/plugins/multi_session_test.rb",
-          status: :partial,
+          status: :covered,
           plan: "012",
-          notes: "Multi-session plugin parity gaps tracked in plan 012"
+          notes: "Multi-session plugin covered in multi_session_test"
         },
         "plugins/oauth-proxy/oauth-proxy.test.ts" => {
           owner: "better_auth/plugins/oauth_proxy_test.rb",
@@ -360,9 +366,9 @@ module BetterAuth
         },
         "plugins/one-time-token/one-time-token.test.ts" => {
           owner: "better_auth/plugins/one_time_token_test.rb",
-          status: :partial,
+          status: :covered,
           plan: "011",
-          notes: "One-time-token plugin parity gaps tracked in plan 011"
+          notes: "One-time-token plugin covered; disable_client_request applies to generate only"
         },
         "plugins/open-api/open-api.test.ts" => {
           owner: "better_auth/plugins/open_api_test.rb",
@@ -371,40 +377,61 @@ module BetterAuth
           notes: "OpenAPI plugin covered in open_api_test"
         },
         "plugins/organization/organization-hook.test.ts" => {
-          owner: "better_auth/plugins/organization_test.rb",
-          status: :partial,
+          owner: [
+            "better_auth/plugins/organization_test.rb",
+            "better_auth/plugins/organization_org_crud_test.rb",
+            "better_auth/plugins/organization_members_test.rb"
+          ],
+          status: :covered,
           plan: "010",
-          notes: "Organization hook parity gaps tracked in plan 010"
+          notes: "Organization hooks covered in organization_test and org CRUD tests"
         },
         "plugins/organization/organization.test.ts" => {
-          owner: "better_auth/plugins/organization_test.rb",
+          owner: [
+            "better_auth/plugins/organization_test.rb",
+            "better_auth/plugins/organization_org_crud_test.rb",
+            "better_auth/plugins/organization_members_test.rb"
+          ],
           status: :partial,
           plan: "010",
-          notes: "Organization plugin parity gaps tracked in plan 010"
+          notes: "Callable membership_limit is not enforced on add_member; type-only schema order tests excluded"
         },
         "plugins/organization/routes/crud-access-control.test.ts" => {
-          owner: "better_auth/plugins/organization_test.rb",
-          status: :partial,
+          owner: [
+            "better_auth/plugins/organization_test.rb",
+            "better_auth/plugins/organization_members_test.rb"
+          ],
+          status: :covered,
           plan: "010",
-          notes: "Organization access-control route parity gaps tracked in plan 010"
+          notes: "Dynamic access-control routes covered in organization plugin tests"
         },
         "plugins/organization/routes/crud-members.test.ts" => {
-          owner: "better_auth/plugins/organization_test.rb",
+          owner: [
+            "better_auth/plugins/organization_test.rb",
+            "better_auth/plugins/organization_members_test.rb"
+          ],
           status: :partial,
           plan: "010",
-          notes: "Organization member route parity gaps tracked in plan 010"
+          notes: "Callable membership_limit is not enforced on add_member"
         },
         "plugins/organization/routes/crud-org.test.ts" => {
-          owner: "better_auth/plugins/organization_test.rb",
-          status: :partial,
+          owner: [
+            "better_auth/plugins/organization_test.rb",
+            "better_auth/plugins/organization_org_crud_test.rb"
+          ],
+          status: :covered,
           plan: "010",
-          notes: "Organization CRUD route parity gaps tracked in plan 010"
+          notes: "Organization CRUD routes covered in organization plugin tests"
         },
         "plugins/organization/team.test.ts" => {
-          owner: "better_auth/plugins/organization_test.rb",
-          status: :partial,
+          owner: [
+            "better_auth/plugins/organization_test.rb",
+            "better_auth/plugins/organization_org_crud_test.rb",
+            "better_auth/plugins/organization_members_test.rb"
+          ],
+          status: :covered,
           plan: "010",
-          notes: "Organization team parity gaps tracked in plan 010"
+          notes: "Organization team routes covered in organization plugin tests"
         },
         "plugins/phone-number/phone-number.test.ts" => {
           owner: "better_auth/plugins/phone_number_test.rb",
@@ -414,9 +441,9 @@ module BetterAuth
         },
         "plugins/siwe/siwe.test.ts" => {
           owner: "better_auth/plugins/siwe_test.rb",
-          status: :partial,
+          status: :covered,
           plan: "012",
-          notes: "SIWE plugin parity gaps tracked in plan 012"
+          notes: "SIWE plugin covered in siwe_test"
         },
         "plugins/two-factor/two-factor.test.ts" => {
           owner: "better_auth/plugins/two_factor_test.rb",

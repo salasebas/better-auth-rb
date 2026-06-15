@@ -101,6 +101,37 @@ class BetterAuthSessionTest < Minitest::Test
     assert_includes request_ctx.response_headers.fetch("set-cookie"), "Max-Age=0"
   end
 
+  def test_find_current_session_expires_cookie_when_database_session_is_expired
+    auth = BetterAuth.auth(secret: SECRET, session: {cookie_cache: {enabled: false}})
+    user = auth.context.internal_adapter.create_user("name" => "Ada", "email" => "expired@example.com")
+    session = auth.context.internal_adapter.create_session(user["id"], false, {"ipAddress" => "127.0.0.1", "userAgent" => "Minitest"})
+    auth.context.adapter.update(
+      model: "session",
+      where: [{field: "token", value: session.fetch("token")}],
+      update: {expiresAt: Time.now - 1}
+    )
+    ctx = endpoint_context(auth)
+    BetterAuth::Cookies.set_session_cookie(ctx, {session: session, user: user}, false)
+    request_ctx = endpoint_context(auth, cookie: ctx.response_headers.fetch("set-cookie").lines.first.split(";").first)
+
+    assert_nil BetterAuth::Session.find_current(request_ctx)
+    assert_includes request_ctx.response_headers.fetch("set-cookie"), "Max-Age=0"
+  end
+
+  def test_find_current_session_rejects_tampered_signed_session_cookie
+    auth = BetterAuth.auth(secret: SECRET, session: {cookie_cache: {enabled: false}})
+    user = auth.context.internal_adapter.create_user("name" => "Ada", "email" => "tampered@example.com")
+    session = auth.context.internal_adapter.create_session(user["id"])
+    ctx = endpoint_context(auth)
+    BetterAuth::Cookies.set_session_cookie(ctx, {session: session, user: user}, false)
+    cookie = ctx.response_headers.fetch("set-cookie").lines.first.split(";").first
+    tampered = cookie.sub(/(better-auth\.session_token=)([^;]+)/) { "#{$1}#{$2}tampered" }
+    request_ctx = endpoint_context(auth, cookie: tampered)
+
+    assert_nil BetterAuth::Session.find_current(request_ctx)
+    assert_includes request_ctx.response_headers.fetch("set-cookie"), "Max-Age=0"
+  end
+
   private
 
   def endpoint_context(auth, cookie: nil)

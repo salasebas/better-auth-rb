@@ -391,6 +391,107 @@ class BetterAuthPluginsMagicLinkTest < Minitest::Test
     assert_includes verify_headers.fetch("set-cookie"), "better-auth.session_token="
   end
 
+  def test_magic_link_send_passes_context_to_sender
+    captured = []
+    auth = build_auth(
+      plugins: [
+        BetterAuth::Plugins.magic_link(
+          send_magic_link: lambda { |data, ctx|
+            captured << {email: data[:email], has_context: !ctx.nil?, path: ctx&.path}
+          }
+        )
+      ]
+    )
+
+    auth.api.sign_in_magic_link(body: {email: "context-magic@example.com"})
+
+    assert_equal "context-magic@example.com", captured.first[:email]
+    assert_equal true, captured.first[:has_context]
+    assert_equal "/sign-in/magic-link", captured.first[:path]
+  end
+
+  def test_magic_link_empty_token_redirects_with_invalid_token
+    auth = build_auth(
+      plugins: [
+        BetterAuth::Plugins.magic_link(send_magic_link: ->(_data, _ctx = nil) {})
+      ]
+    )
+
+    status, headers, _body = auth.api.magic_link_verify(
+      query: {token: "", errorCallbackURL: "/error"},
+      as_response: true
+    )
+
+    assert_equal 302, status
+    assert_includes headers.fetch("location"), "/error"
+    assert_includes headers.fetch("location"), "error=INVALID_TOKEN"
+  end
+
+  def test_magic_link_malformed_verification_redirects_with_invalid_token
+    auth = build_auth(
+      plugins: [
+        BetterAuth::Plugins.magic_link(send_magic_link: ->(_data, _ctx = nil) {})
+      ]
+    )
+    auth.context.internal_adapter.create_verification_value(
+      identifier: "broken-token",
+      value: "not-json",
+      expiresAt: Time.now + 300
+    )
+
+    status, headers, _body = auth.api.magic_link_verify(
+      query: {token: "broken-token", errorCallbackURL: "/broken-error"},
+      as_response: true
+    )
+
+    assert_equal 302, status
+    assert_includes headers.fetch("location"), "/broken-error"
+    assert_includes headers.fetch("location"), "error=INVALID_TOKEN"
+  end
+
+  def test_magic_link_accepts_trusted_absolute_callback_urls
+    sent = []
+    auth = build_auth(
+      trusted_origins: ["http://localhost:3000"],
+      plugins: [
+        BetterAuth::Plugins.magic_link(send_magic_link: ->(data, _ctx = nil) { sent << data })
+      ]
+    )
+    auth.api.sign_up_email(body: {email: "trusted-callback@example.com", password: "password123", name: "Trusted"})
+    auth.api.sign_in_magic_link(body: {email: "trusted-callback@example.com"})
+
+    status, headers, _body = auth.api.magic_link_verify(
+      query: {token: sent.first[:token], callbackURL: "http://localhost:3000/safe"},
+      as_response: true
+    )
+
+    assert_equal 302, status
+    assert_equal "http://localhost:3000/safe", headers.fetch("location")
+  end
+
+  def test_magic_link_verify_route_uses_plugin_rate_limits
+    auth = build_auth(
+      rate_limit: {enabled: true},
+      plugins: [
+        BetterAuth::Plugins.magic_link(
+          rate_limit: {window: 60, max: 1},
+          send_magic_link: ->(_data, _ctx = nil) {}
+        )
+      ]
+    )
+    auth.context.internal_adapter.create_verification_value(
+      identifier: "rate-limit-token",
+      value: JSON.generate(email: "rate-verify@example.com", attempt: 0),
+      expiresAt: Time.now + 300
+    )
+
+    statuses = 2.times.map do
+      auth.call(rack_env("GET", "/api/auth/magic-link/verify", query: "token=rate-limit-token", body: "")).first
+    end
+
+    assert_equal [200, 429], statuses
+  end
+
   private
 
   def build_auth(options = {})

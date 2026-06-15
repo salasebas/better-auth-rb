@@ -150,6 +150,43 @@ class BetterAuthPluginsOneTimeTokenTest < Minitest::Test
     refute headers.key?("set-ott")
   end
 
+  def test_generate_one_time_token_requires_current_session
+    auth = build_auth(plugins: [BetterAuth::Plugins.one_time_token])
+
+    error = assert_raises(BetterAuth::APIError) do
+      auth.api.generate_one_time_token
+    end
+
+    assert_equal 401, error.status_code
+  end
+
+  def test_generate_one_time_token_stores_current_session_token
+    auth = build_auth(plugins: [BetterAuth::Plugins.one_time_token])
+    cookie = sign_up_cookie(auth, email: "stored-session@example.com")
+    session = auth.api.get_session(headers: {"cookie" => cookie})
+
+    token = auth.api.generate_one_time_token(headers: {"cookie" => cookie})[:token]
+    stored = auth.context.internal_adapter.find_verification_value("one-time-token:#{token}")
+
+    assert_equal session[:session]["token"], stored["value"]
+  end
+
+  def test_disable_client_request_only_blocks_generate_not_verify
+    auth = build_auth(plugins: [BetterAuth::Plugins.one_time_token(disable_client_request: true)])
+    cookie = sign_up_cookie(auth, email: "direct-verify@example.com")
+    token = auth.api.generate_one_time_token(headers: {"cookie" => cookie})[:token]
+
+    response = Rack::MockRequest.new(auth).post(
+      "/api/auth/one-time-token/verify",
+      "CONTENT_TYPE" => "application/json",
+      :input => JSON.generate(token: token)
+    )
+    body = JSON.parse(response.body)
+
+    assert_equal 200, response.status
+    assert_equal "direct-verify@example.com", body.fetch("user").fetch("email")
+  end
+
   private
 
   def build_auth(options = {})

@@ -128,6 +128,23 @@ class BetterAuthPluginsCustomSessionTest < Minitest::Test
     refute sessions.any? { |session| (session[:extra] || session["extra"]) == "unexpected" }
   end
 
+  def test_custom_session_honors_disable_refresh_query_flag
+    auth = build_auth(
+      plugins: [
+        BetterAuth::Plugins.custom_session(
+          lambda { |session, _ctx|
+            session
+          }
+        )
+      ]
+    )
+    cookie = sign_up_cookie(auth, email: "disable-refresh@example.com", name: "Disable Refresh")
+
+    result = auth.api.get_session(headers: {"cookie" => cookie}, query: {disableRefresh: true})
+
+    assert_equal "disable-refresh@example.com", result[:user]["email"]
+  end
+
   private
 
   def build_auth(options = {})

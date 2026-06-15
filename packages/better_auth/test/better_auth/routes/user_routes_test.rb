@@ -476,6 +476,46 @@ class BetterAuthRoutesUserTest < Minitest::Test
     assert_nil auth.context.internal_adapter.find_user_by_id(user_id)
   end
 
+  def test_update_user_rejects_empty_updates
+    auth = build_auth
+    cookie = sign_up_cookie(auth, email: "empty-update@example.com", password: "password123")
+
+    error = assert_raises(BetterAuth::APIError) do
+      auth.api.update_user(headers: {"cookie" => cookie}, body: {})
+    end
+
+    assert_equal 400, error.status_code
+    assert_equal "No fields to update", error.message
+  end
+
+  def test_update_user_refreshes_session_cookie_cache_with_updated_user_fields
+    auth = build_auth(session: {cookie_cache: {enabled: true, strategy: "jwe", max_age: 300}})
+    cookie = sign_up_cookie(auth, email: "cache-update@example.com", password: "password123")
+
+    _status, headers, _body = auth.api.update_user(
+      headers: {"cookie" => cookie},
+      body: {name: "Cached Update"},
+      as_response: true
+    )
+    refreshed_cookie = cookie_header(headers.fetch("set-cookie"))
+    cached = auth.api.get_session(headers: {"cookie" => refreshed_cookie})
+
+    assert_equal "Cached Update", cached[:user]["name"]
+  end
+
+  def test_delete_user_rejects_wrong_password
+    auth = build_auth(user: {delete_user: {enabled: true}})
+    cookie = sign_up_cookie(auth, email: "wrong-password-delete@example.com", password: "password123")
+
+    error = assert_raises(BetterAuth::APIError) do
+      auth.api.delete_user(headers: {"cookie" => cookie}, body: {password: "bad-password"})
+    end
+
+    assert_equal 400, error.status_code
+    assert_equal BetterAuth::BASE_ERROR_CODES["INVALID_PASSWORD"], error.message
+    assert auth.context.internal_adapter.find_user_by_email("wrong-password-delete@example.com")
+  end
+
   private
 
   def build_auth(options = {})
