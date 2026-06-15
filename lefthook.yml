@@ -1,5 +1,5 @@
 # frozen_string_literal: true
-# Lefthook configuration - runs before every commit
+# Lefthook configuration - format staged Ruby before commit
 # Install with: bundle exec lefthook install
 
 output:
@@ -7,9 +7,9 @@ output:
   - failure
 
 pre-commit:
-  parallel: true
+  parallel: false
   commands:
-    standardrb:
+    format:
       glob: "*.rb"
       run: bundle exec standardrb --fix {staged_files}
       stage_fixed: true

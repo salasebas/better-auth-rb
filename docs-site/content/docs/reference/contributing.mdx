@@ -1,0 +1,131 @@
+---
+title: Contributing
+description: A concise guide to contributing to Better Auth Ruby.
+---
+
+Thanks for helping improve Better Auth Ruby. This port tracks upstream Better Auth behavior where it makes sense for Ruby, Rack, Rails, Sinatra, Hanami, Roda, and database adapters.
+
+## Before You Start
+
+- Check existing [issues](https://github.com/sebasxsala/better-auth-rb/issues) and pull requests.
+- Read the root `AGENTS.md` if you are using an AI coding assistant in this repository.
+- For core gem work, read `packages/better_auth/AGENTS.md`.
+- For Rails adapter work, read `packages/better_auth-rails/AGENTS.md`.
+- Inspect matching upstream source and tests under `reference/upstream-src/1.6.9/repository/` before porting behavior (see root `AGENTS.md`).
+
+## Development Setup
+
+<Steps>
+
+<Step>
+### 1. Fork And Clone
+
+```bash title="Terminal"
+git clone https://github.com/YOUR-USERNAME/better-auth-rb.git
+cd better-auth-rb
+```
+</Step>
+
+<Step>
+### 2. Install Ruby Dependencies
+
+```bash title="Terminal"
+bundle install
+```
+</Step>
+
+<Step>
+### 3. Install Docs Dependencies
+
+```bash title="Terminal"
+cd docs
+pnpm install
+```
+</Step>
+
+<Step>
+### 4. Fetch Upstream Reference When Needed
+
+Upstream TypeScript sources are not committed. Pin and version are documented in
+`reference/upstream-better-auth/VERSION.md`.
+
+```bash title="Terminal"
+./scripts/fetch-upstream-better-auth.sh
+```
+</Step>
+
+</Steps>
+
+## Running Tests
+
+Run the core test suite:
+
+```bash title="Terminal"
+bundle exec rake test
+```
+
+Run a single test file:
+
+```bash title="Terminal"
+bundle exec ruby -Itest packages/better_auth/test/better_auth/routes/sign_in_test.rb
+```
+
+Run style checks:
+
+```bash title="Terminal"
+bundle exec standardrb
+```
+
+Build docs:
+
+```bash title="Terminal"
+cd docs
+pnpm build
+```
+
+## Testing Guidelines
+
+- Prefer real adapters or realistic in-memory behavior over mocks.
+- Test public behavior, not private implementation details.
+- Check upstream tests in `reference/upstream-src/1.6.9/repository/packages/better-auth/src/**/*.test.ts` for expected behavior and edge cases.
+- Database tests are preferred when behavior depends on persistence, constraints, transactions, or adapter shape.
+- Include regression tests for bug fixes.
+
+## Porting From Upstream
+
+When porting a feature:
+
+1. Read the upstream implementation.
+2. Read the upstream tests.
+3. Identify JavaScript-specific pieces that need Ruby adaptation.
+4. Implement Ruby behavior with `snake_case` options and idiomatic Ruby APIs.
+5. Add or update docs when public behavior changes.
+6. Note meaningful deviations in the relevant `.docs/features/` or `.docs/plans/` document.
+
+## Documentation
+
+Docs live in `docs-site/content/docs`. Use Ruby examples unless a page explicitly documents an upstream JavaScript comparison.
+
+When adapting upstream docs:
+
+- Convert option names to Ruby `snake_case`.
+- Replace TypeScript imports with Ruby `require` or framework examples.
+- Remove unsupported JavaScript framework helpers.
+- Link to existing Ruby pages for concepts, adapters, integrations, and plugins.
+
+## Pull Requests
+
+Keep pull requests focused on one behavior area. Include:
+
+- A clear description of the change.
+- Tests or a reason tests are not applicable.
+- Docs updates for public behavior.
+- Notes about upstream parity or intentional Ruby-specific differences.
+
+## Versioning
+
+Do not bump every gem version for ordinary unreleased changes. Version bumps are done per package when preparing a publishable release.
+
+## Need Help
+
+Open an [issue](https://github.com/sebasxsala/better-auth-rb/issues) with the context, reproduction steps, expected behavior, and actual behavior.

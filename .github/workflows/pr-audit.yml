@@ -1,0 +1,38 @@
+name: Pull Request Security Audit
+
+on:
+  pull_request:
+    paths:
+      - "**/Gemfile"
+      - "**/Gemfile.lock"
+      - "script/audit_gems.rb"
+  push:
+    branches:
+      - main
+    paths:
+      - "**/Gemfile"
+      - "**/Gemfile.lock"
+      - "script/audit_gems.rb"
+
+concurrency:
+  group: pr-audit-${{ github.workflow }}-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  bundler-audit:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: .ruby-version
+          bundler-cache: true
+
+      - name: Run bundler-audit
+        run: ruby script/audit_gems.rb

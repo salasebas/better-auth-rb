@@ -231,7 +231,7 @@ end
 
 ## Development
 
-Full documentation is being adapted in the root `docs/` app. The Rails guide lives at `docs/content/docs/integrations/rails.mdx`; pages with a Ruby port warning still contain upstream TypeScript examples for reference.
+Full documentation is being adapted in the root `docs-site/` app. The Rails guide lives at `docs-site/content/docs/integrations/rails.mdx`; pages with a Ruby port warning still contain upstream TypeScript examples for reference.
 
 ### Setup
 
@@ -280,7 +280,7 @@ When contributing:
 4. Ensure code style passes (`bundle exec standardrb`)
 5. Commit your changes (`git commit -m 'feat: add amazing feature'`)
 6. Push to the branch (`git push origin feat/amazing-feature`)
-7. Open a Pull Request towards the `canary` branch
+7. Open a Pull Request towards `main`
 
 ## License
 

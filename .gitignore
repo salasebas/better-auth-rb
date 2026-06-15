@@ -11,6 +11,11 @@ Thumbs.db
 .vscode/*
 !.vscode/settings.json
 
+# Local agent skills (not versioned; use ~/.cursor/skills or ~/.claude/skills)
+.agents/
+.claude/skills/
+.kiro/skills/
+
 # Ignore coverage
 coverage/
 .rspec_status

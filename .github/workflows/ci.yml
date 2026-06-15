@@ -9,38 +9,39 @@ on:
     paths:
       - 'packages/**'
       - 'Gemfile'
+      - 'Gemfile.lock'
       - 'Rakefile'
       - '.release.yml'
       - 'docker-compose.yml'
       - '.ruby-version'
       - 'script/**'
       - 'test/**'
-      - 'docs/**'
-      - '.docs/**'
+      - 'docs-site/**'
       - '.github/workflows/ci.yml'
-      - '.github/workflows/release.yml'
   push:
     branches:
       - main
-      - canary
     paths:
       - 'packages/**'
       - 'Gemfile'
+      - 'Gemfile.lock'
       - 'Rakefile'
       - '.release.yml'
       - 'docker-compose.yml'
       - '.ruby-version'
       - 'script/**'
       - 'test/**'
-      - 'docs/**'
+      - 'docs-site/**'
       - '.docs/**'
       - '.github/workflows/ci.yml'
-      - '.github/workflows/release.yml'
   merge_group:
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.event.merge_group.head_ref || github.ref }}
+  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.event.merge_group.head_ref || github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
 
 env:
   BETTER_AUTH_POSTGRES_URL: postgres://user:password@localhost:5432/better_auth
@@ -52,6 +53,63 @@ env:
   BETTER_AUTH_MYSQL_DATABASE: better_auth
 
 jobs:
+  lint-workspace:
+    name: Lint workspace
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: .ruby-version
+          bundler-cache: true
+
+      - name: Run linter
+        run: bundle exec standardrb
+
+  lint-package:
+    name: Lint ${{ matrix.package }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        package:
+          - better_auth
+          - better_auth-passkey
+          - better_auth-cli
+          - openauth-cli
+          - better_auth-api-key
+          - better_auth-rails
+          - better_auth-sinatra
+          - better_auth-roda
+          - better_auth-hanami
+          - better_auth-grape
+          - better_auth-oauth-provider
+          - better_auth-redis-storage
+          - better_auth-mongodb
+          - better_auth-mongo-adapter
+          - better_auth-scim
+          - better_auth-oidc
+          - better_auth-saml
+          - better_auth-sso
+          - better_auth-stripe
+          - better_auth-telemetry
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: .ruby-version
+          bundler-cache: true
+          working-directory: packages/${{ matrix.package }}
+
+      - name: Run linter
+        working-directory: packages/${{ matrix.package }}
+        run: bundle exec standardrb
+
   test-workspace:
     name: Test workspace release metadata
     runs-on: ubuntu-latest
@@ -129,9 +187,6 @@ jobs:
           bundler-cache: true
           working-directory: packages/better_auth
 
-      - name: Run linter
-        working-directory: packages/better_auth
-        run: bundle exec standardrb
 
       - name: Run tests
         working-directory: packages/better_auth
@@ -158,9 +213,6 @@ jobs:
           bundler-cache: true
           working-directory: packages/better_auth-passkey
 
-      - name: Run linter
-        working-directory: packages/better_auth-passkey
-        run: bundle exec standardrb
 
       - name: Run tests
         working-directory: packages/better_auth-passkey
@@ -180,9 +232,6 @@ jobs:
           bundler-cache: true
           working-directory: packages/better_auth-cli
 
-      - name: Run linter
-        working-directory: packages/better_auth-cli
-        run: timeout 180s bundle exec standardrb
 
       - name: Run tests
         working-directory: packages/better_auth-cli
@@ -202,9 +251,6 @@ jobs:
           bundler-cache: true
           working-directory: packages/openauth-cli
 
-      - name: Run linter
-        working-directory: packages/openauth-cli
-        run: timeout 180s bundle exec standardrb
 
       - name: Run tests
         working-directory: packages/openauth-cli
@@ -231,9 +277,6 @@ jobs:
           bundler-cache: true
           working-directory: packages/better_auth-api-key
 
-      - name: Run linter
-        working-directory: packages/better_auth-api-key
-        run: bundle exec standardrb
 
       - name: Run tests
         working-directory: packages/better_auth-api-key
@@ -289,9 +332,6 @@ jobs:
           bundler-cache: true
           working-directory: packages/better_auth-rails
 
-      - name: Run linter
-        working-directory: packages/better_auth-rails
-        run: bundle exec standardrb
 
       - name: Run tests
         working-directory: packages/better_auth-rails
@@ -310,9 +350,6 @@ jobs:
           bundler-cache: true
           working-directory: packages/better_auth-sinatra
 
-      - name: Run linter
-        working-directory: packages/better_auth-sinatra
-        run: bundle exec standardrb
 
       - name: Run tests
         working-directory: packages/better_auth-sinatra
@@ -332,9 +369,6 @@ jobs:
           bundler-cache: true
           working-directory: packages/better_auth-roda
 
-      - name: Run linter
-        working-directory: packages/better_auth-roda
-        run: timeout 180s bundle exec standardrb
 
       - name: Run tests
         working-directory: packages/better_auth-roda
@@ -353,9 +387,6 @@ jobs:
           bundler-cache: true
           working-directory: packages/better_auth-hanami
 
-      - name: Run linter
-        working-directory: packages/better_auth-hanami
-        run: bundle exec standardrb
 
       - name: Run tests
         working-directory: packages/better_auth-hanami
@@ -375,9 +406,6 @@ jobs:
           bundler-cache: true
           working-directory: packages/better_auth-grape
 
-      - name: Run linter
-        working-directory: packages/better_auth-grape
-        run: timeout 180s bundle exec standardrb
 
       - name: Run tests
         working-directory: packages/better_auth-grape
@@ -396,9 +424,6 @@ jobs:
           bundler-cache: true
           working-directory: packages/better_auth-oauth-provider
 
-      - name: Run linter
-        working-directory: packages/better_auth-oauth-provider
-        run: bundle exec standardrb
 
       - name: Run tests
         working-directory: packages/better_auth-oauth-provider
@@ -427,9 +452,6 @@ jobs:
           bundler-cache: true
           working-directory: packages/better_auth-redis-storage
 
-      - name: Run linter
-        working-directory: packages/better_auth-redis-storage
-        run: bundle exec standardrb
 
       - name: Run tests
         working-directory: packages/better_auth-redis-storage
@@ -468,9 +490,6 @@ jobs:
           bundler-cache: true
           working-directory: packages/better_auth-mongodb
 
-      - name: Run linter
-        working-directory: packages/better_auth-mongodb
-        run: bundle exec standardrb
 
       - name: Run tests
         working-directory: packages/better_auth-mongodb
@@ -500,9 +519,6 @@ jobs:
           bundler-cache: true
           working-directory: packages/better_auth-mongo-adapter
 
-      - name: Run linter
-        working-directory: packages/better_auth-mongo-adapter
-        run: bundle exec standardrb
 
       - name: Run tests
         working-directory: packages/better_auth-mongo-adapter
@@ -521,9 +537,6 @@ jobs:
           bundler-cache: true
           working-directory: packages/better_auth-scim
 
-      - name: Run linter
-        working-directory: packages/better_auth-scim
-        run: bundle exec standardrb
 
       - name: Run tests
         working-directory: packages/better_auth-scim
@@ -542,9 +555,6 @@ jobs:
           bundler-cache: true
           working-directory: packages/better_auth-oidc
 
-      - name: Run linter
-        working-directory: packages/better_auth-oidc
-        run: bundle exec standardrb
 
       - name: Run tests
         working-directory: packages/better_auth-oidc
@@ -563,9 +573,6 @@ jobs:
           bundler-cache: true
           working-directory: packages/better_auth-saml
 
-      - name: Run linter
-        working-directory: packages/better_auth-saml
-        run: bundle exec standardrb
 
       - name: Run tests
         working-directory: packages/better_auth-saml
@@ -584,9 +591,6 @@ jobs:
           bundler-cache: true
           working-directory: packages/better_auth-sso
 
-      - name: Run linter
-        working-directory: packages/better_auth-sso
-        run: bundle exec standardrb
 
       - name: Run tests
         working-directory: packages/better_auth-sso
@@ -605,9 +609,6 @@ jobs:
           bundler-cache: true
           working-directory: packages/better_auth-stripe
 
-      - name: Run linter
-        working-directory: packages/better_auth-stripe
-        run: bundle exec standardrb
 
       - name: Run tests
         working-directory: packages/better_auth-stripe
@@ -626,20 +627,19 @@ jobs:
           bundler-cache: true
           working-directory: packages/better_auth-telemetry
 
-      - name: Run linter
-        working-directory: packages/better_auth-telemetry
-        run: bundle exec standardrb
 
       - name: Run tests
         working-directory: packages/better_auth-telemetry
         run: bundle exec rake test
 
   ci:
-    name: ci
+    name: CI
     runs-on: ubuntu-latest
     needs:
-      - test-core
+      - lint-workspace
+      - lint-package
       - test-workspace
+      - test-core
       - test-passkey
       - test-cli
       - test-openauth-cli
@@ -654,6 +654,8 @@ jobs:
       - test-mongodb
       - test-mongo-adapter
       - test-scim
+      - test-oidc
+      - test-saml
       - test-sso
       - test-stripe
       - test-telemetry

@@ -50,11 +50,11 @@ reference/                # Upstream attribution + local clone instructions (see
 
 ## Development Workflow
 
-1. Create a new branch from `canary`:
+1. Create a new branch from `main`:
 
    ```bash
-   git checkout canary
-   git pull origin canary
+   git checkout main
+   git pull origin main
    git checkout -b type/description
    ```
 
@@ -86,7 +86,7 @@ reference/                # Upstream attribution + local clone instructions (see
    docs: improve installation guide
    ```
 
-7. Push and open a PR against `canary`
+7. Push and open a PR against `main`
 
 ## Code Style
 
@@ -153,7 +153,7 @@ If you're porting a feature from the TypeScript upstream:
 
 ## Pull Request Process
 
-1. PRs target `canary` (never `main` directly)
+1. PRs target `main`
 2. Keep PRs focused -- one feature or fix per PR
 3. Write a clear description: what changed and why (2-3 lines)
 4. Reference related issues (`Closes #123`)

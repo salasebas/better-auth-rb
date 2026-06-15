@@ -206,7 +206,7 @@ end
 
 ## Development
 
-Full documentation is being adapted in the root [`docs/`](/Users/sebastiansala/projects/better-auth/docs/README.md) app. Start with the Ruby-first installation, basic usage, Rack, Rails, PostgreSQL, and MySQL pages there; pages with a Ruby port warning still contain upstream TypeScript examples for reference.
+Full documentation is being adapted in the root [`docs-site/`](../../docs-site/README.md) app. Start with the Ruby-first installation, basic usage, Rack, Rails, PostgreSQL, and MySQL pages there; pages with a Ruby port warning still contain upstream TypeScript examples for reference.
 
 ### Quick Start
 
@@ -249,42 +249,16 @@ make db-down         # Stop containers
 
 ### Branch Workflow
 
-This project uses a branch model similar to the upstream:
-
-**Main Branches:**
-
-- **`main`**: Stable code, ready for production
-- **`canary`**: Development/integration branch (like "development" but specific name)
-  - "Canary" comes from "canary in a coal mine" - where changes are tested before production
-  - Feature PRs go to `canary`
-  - When `canary` is stable, merge to `main` for release
-
-**Typical workflow:**
+Development happens on `main`. Create feature branches from `main` and open PRs
+back to `main`.
 
 ```bash
-# 1. Create your feature branch from canary
-git checkout canary
-git pull origin canary
+git checkout main
+git pull origin main
 git checkout -b feat/new-feature
-
-# 2. Make your changes and commits
-# ... code ...
-git add .
-git commit -m "feat(core): add support for X"
-
-# 3. Push and create PR towards canary
+# ... work ...
 git push origin feat/new-feature
-# Create PR on GitHub towards canary
-
-# 4. Once merged to canary and tested,
-#    merge canary → main for release
 ```
-
-**Why canary instead of development?**
-
-- Common name in projects with frequent releases
-- Suggests it's an "experimental" version that might break
-- Allows multiple levels: feature → canary → main
 
 ### How CI/CD Works
 
@@ -292,54 +266,43 @@ git push origin feat/new-feature
 - Each PR runs: lint + tests on Ruby 3.2 and 3.3
 - Everything must pass before merging
 
-**Automatic Release (GitHub Actions):**
+**Manual Release:**
 
-Release is triggered by package-prefixed tags so each gem can ship independently.
+Releases are published manually with `gem build` and `gem push`. See `RELEASING.md`
+at the repository root for the full process.
 
 ```bash
 # STEP 1: Update the target package version file
 # Example: VERSION = "0.1.1"
+# Or update .release.yml and run: rake release:sync_versions
 
 # STEP 2: Commit and push to main
 git add lib/better_auth/version.rb
 git commit -m "chore: bump version to 0.1.1"
 git push origin main
 
-# STEP 3: Create the tag for the gem you want to publish
+# STEP 3: Build and publish
+cd packages/better_auth
+gem build better_auth.gemspec
+gem push better_auth-0.1.1.gem
+
+# STEP 4: Tag the release
 git tag better_auth-v0.1.1
 git push origin better_auth-v0.1.1
-
-# STEP 4: GitHub Actions automatically:
-# - Runs tests
-# - Builds the gem
-# - Publishes to RubyGems (if version is new)
-# - Creates GitHub Release
 ```
 
 Use `better_auth-vX.Y.Z` for the core gem, `better_auth-rails-vX.Y.Z` for Rails, `better_auth-sinatra-vX.Y.Z` for Sinatra, and `better_auth-hanami-vX.Y.Z` for Hanami.
 
-**Required GitHub Configuration:**
-
-1. In RubyGems, configure Trusted Publishing for each gem that should publish from CI.
-2. Use this repository and workflow file: `.github/workflows/release.yml`.
-3. The workflow exchanges GitHub's OIDC token for short-lived RubyGems credentials when the matching package tag is pushed.
-
-**Dry-run options:**
+**Local packaging dry-run:**
 
 ```bash
-# Local packaging dry-run
 make release-check
-
-# CI dry-run from GitHub Actions
-# Actions -> Release -> Run workflow -> dry_run=true
 ```
 
-### Manual Release (without GitHub Actions)
-
-Only if you need to do a manual release:
+### Manual Release (per package)
 
 ```bash
-# 1. Update version.rb
+# 1. Update version.rb (or sync from .release.yml)
 # 2. Build the gem
 gem build better_auth.gemspec
 

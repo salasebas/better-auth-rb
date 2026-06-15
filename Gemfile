@@ -69,6 +69,9 @@ group :development, :test do
   # Git hooks
   gem "lefthook", "~> 1.11", require: false
 
+  # Security audit
+  gem "bundler-audit", require: false
+
   # Build tasks
   gem "rake", "~> 13.2"
 
