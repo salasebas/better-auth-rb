@@ -7,6 +7,8 @@ require "minitest/autorun"
 require "minitest/mock"
 require "minitest/spec"
 
+require_relative "support/auth_test_helpers"
+
 module BetterAuthMySQLTestHelpers
   def mysql_connection
     Mysql2::Client.new(
