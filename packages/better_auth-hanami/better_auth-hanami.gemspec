@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+ROOT_LICENSE = File.expand_path("../../LICENSE.md", __dir__)
+
 require_relative "lib/better_auth/hanami/version"
 
 Gem::Specification.new do |spec|
@@ -24,7 +26,7 @@ Gem::Specification.new do |spec|
   spec.metadata["bug_tracker_uri"] = "https://github.com/sebasxsala/better-auth-rb/issues"
 
   spec.files = Dir.glob("lib/**/*", File::FNM_DOTMATCH).select { |f| File.file?(f) } +
-    ["LICENSE.md", "README.md", "CHANGELOG.md"].select { |f| File.exist?(f) }
+    ["README.md", "CHANGELOG.md"].select { |f| File.exist?(f) } + (File.exist?(ROOT_LICENSE) ? [ROOT_LICENSE] : [])
   spec.bindir = "exe"
   spec.executables = spec.files.grep(%r{\Aexe/}) { |f| File.basename(f) }
   spec.require_paths = ["lib"]

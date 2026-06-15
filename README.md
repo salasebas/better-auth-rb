@@ -253,8 +253,7 @@ docker compose up -d
 ## Contributing
 
 1. Branch from `main`.
-2. Read [`AGENTS.md`](AGENTS.md) and the package-specific instructions before
-   editing a package.
+2. Read [`AGENTS.md`](AGENTS.md) before editing.
 3. Check upstream source and tests for behavior changes (`./scripts/fetch-upstream-better-auth.sh` if needed).
 4. Run the relevant package tests, or `make ci` for the full repo.
 5. Open a PR to `main`.

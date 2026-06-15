@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+ROOT_LICENSE = File.expand_path("../../LICENSE.md", __dir__)
+
 require_relative "lib/better_auth/rails/version"
 
 Gem::Specification.new do |spec|
@@ -23,7 +25,7 @@ Gem::Specification.new do |spec|
 
   spec.files = [
     "lib/better_auth_rails.rb",
-    "LICENSE.md"
+    *(File.exist?(ROOT_LICENSE) ? [ROOT_LICENSE] : [])
   ]
   spec.require_paths = ["lib"]
 
