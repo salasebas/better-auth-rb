@@ -288,4 +288,170 @@ class BetterAuthMigrationSQLTest < Minitest::Test
     assert_equal :postgres, BetterAuth::SQLMigration.normalize_dialect("postgresql")
     assert_equal :sqlite, BetterAuth::SQLMigration.normalize_dialect("sqlite3")
   end
+
+  def test_each_dialect_uses_custom_core_model_names_and_quote_styles
+    config = BetterAuth::Configuration.new(
+      secret: SECRET,
+      database: :memory,
+      user: {model_name: "custom_users"},
+      session: {model_name: "custom_sessions"},
+      account: {model_name: "custom_accounts"},
+      verification: {model_name: "custom_verifications"}
+    )
+
+    {
+      sqlite: {
+        quotes: ['CREATE TABLE IF NOT EXISTS "custom_users"', 'FOREIGN KEY ("user_id") REFERENCES "custom_users" ("id")'],
+        tables: ['"custom_sessions"', '"custom_accounts"', '"custom_verifications"']
+      },
+      postgres: {
+        quotes: ['CREATE TABLE IF NOT EXISTS "custom_users"', 'FOREIGN KEY ("user_id") REFERENCES "custom_users" ("id")'],
+        tables: ['"custom_sessions"', '"custom_accounts"', '"custom_verifications"']
+      },
+      mysql: {
+        quotes: ["CREATE TABLE IF NOT EXISTS `custom_users`", "REFERENCES `custom_users` (`id`)"],
+        tables: ["`custom_sessions`", "`custom_accounts`", "`custom_verifications`"]
+      },
+      mssql: {
+        quotes: ["CREATE TABLE [custom_users]", "REFERENCES [custom_users] ([id])"],
+        tables: ["[custom_sessions]", "[custom_accounts]", "[custom_verifications]"]
+      }
+    }.each do |dialect, expectations|
+      sql = BetterAuth::SQLMigration.render(config, dialect: dialect, generator: "better_auth-test")
+
+      expectations[:quotes].each { |fragment| assert_includes sql, fragment, dialect.to_s }
+      expectations[:tables].each { |fragment| assert_includes sql, fragment, dialect.to_s }
+    end
+  end
+
+  def test_mysql_and_mssql_bound_indexed_string_columns
+    config = BetterAuth::Configuration.new(
+      secret: SECRET,
+      database: :memory,
+      user: {
+        additional_fields: {
+          slug: {type: "string", required: false, index: true}
+        }
+      }
+    )
+
+    mysql = BetterAuth::SQLMigration.render(config, dialect: :mysql, generator: "better_auth-test")
+    mssql = BetterAuth::SQLMigration.render(config, dialect: :mssql, generator: "better_auth-test")
+
+    assert_includes mysql, "`slug` varchar(191)"
+    assert_includes mssql, "[slug] varchar(255)"
+    refute_includes mysql, "`slug` text"
+    refute_includes mssql, "[slug] varchar(8000)"
+  end
+
+  def test_phone_number_plugin_mssql_nullable_unique_uses_filtered_index
+    config = BetterAuth::Configuration.new(
+      secret: SECRET,
+      database: :memory,
+      plugins: [BetterAuth::Plugins.phone_number]
+    )
+    sql = BetterAuth::SQLMigration.render(config, dialect: :mssql, generator: "better_auth-test")
+
+    refute_includes sql, "CONSTRAINT [uniq_users_phone_number] UNIQUE ([phone_number])"
+    assert_includes sql, "CREATE UNIQUE INDEX [uniq_users_phone_number] ON [users] ([phone_number]) WHERE [phone_number] IS NOT NULL"
+  end
+
+  # Passkey schema lives in better_auth-passkey; core tests use custom plugin FK cases instead.
+
+  def test_session_additional_fields_via_plugin_match_direct_options
+    via_options = BetterAuth::Configuration.new(
+      secret: SECRET,
+      database: :memory,
+      session: {
+        additional_fields: {
+          device: {type: "string", required: false}
+        }
+      }
+    )
+    via_plugin = BetterAuth::Configuration.new(
+      secret: SECRET,
+      database: :memory,
+      plugins: [BetterAuth::Plugins.additional_fields(session: {device: {type: "string", required: false}})]
+    )
+
+    options_sql = BetterAuth::SQLMigration.render(via_options, dialect: :postgres, generator: "better_auth-test")
+    plugin_sql = BetterAuth::SQLMigration.render(via_plugin, dialect: :postgres, generator: "better_auth-test")
+
+    assert_includes options_sql, '"device" text'
+    assert_includes plugin_sql, '"device" text'
+  end
+
+  def test_migrate_pending_raises_when_sql_execution_fails
+    connection = SQLite3::Database.new(":memory:")
+    connection.results_as_hash = true
+    auth = BetterAuth.auth(
+      secret: SECRET,
+      database: ->(options) { FakeSQLAdapter.new(options, connection) }
+    )
+
+    def connection.exec(sql)
+      raise "migration statement failed" if sql.match?(/CREATE TABLE IF NOT EXISTS "users"/i)
+
+      super
+    end
+
+    assert_raises(RuntimeError, "migration statement failed") do
+      BetterAuth::SQLMigration.migrate_pending(auth)
+    end
+  end
+
+  def test_migrate_pending_uses_adapter_transaction_when_available
+    Dir.mktmpdir("better-auth-core-migrate-transaction") do |dir|
+      path = File.join(dir, "transaction.sqlite3")
+      adapter = BetterAuth::Adapters::SQLite.new(
+        BetterAuth::Configuration.new(secret: SECRET, database: :memory),
+        path: path
+      )
+      transaction_calls = 0
+      adapter.define_singleton_method(:transaction) do |&block|
+        transaction_calls += 1
+        super(&block)
+      end
+      auth = BetterAuth.auth(secret: SECRET, database: adapter)
+
+      assert BetterAuth::SQLMigration.migrate_pending(auth)
+      assert_equal 1, transaction_calls
+    end
+  end
+
+  def test_migrate_pending_works_with_execute_only_connections
+    connection = ExecuteOnlySQLiteConnection.new
+    auth = BetterAuth.auth(
+      secret: SECRET,
+      database: ->(options) { FakeSQLAdapter.new(options, connection) }
+    )
+
+    assert BetterAuth::SQLMigration.migrate_pending(auth)
+    assert connection.executed_statements.any? { |statement| statement.match?(/CREATE TABLE/i) }
+  end
+
+  def test_execute_sql_reports_supported_methods_for_invalid_connections
+    connection = Object.new
+
+    error = assert_raises(BetterAuth::SQLMigration::UnsupportedAdapterError) do
+      BetterAuth::SQLMigration.execute_sql(connection, "SELECT 1")
+    end
+
+    assert_includes error.message, "exec, execute, or query"
+  end
+
+  class ExecuteOnlySQLiteConnection
+    attr_reader :executed_statements
+
+    def initialize
+      @executed_statements = []
+      @database = SQLite3::Database.new(":memory:")
+      @database.results_as_hash = true
+    end
+
+    def execute(sql)
+      @executed_statements << sql
+      @database.execute(sql)
+    end
+  end
 end

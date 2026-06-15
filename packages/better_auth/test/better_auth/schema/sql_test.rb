@@ -299,4 +299,271 @@ class BetterAuthSchemaSQLTest < Minitest::Test
     assert_includes sql, 'UNIQUE ("action")'
     refute_includes sql, 'CREATE INDEX IF NOT EXISTS "index_audit_logs_on_action"'
   end
+
+  # Ruby CLI generates SQL only; upstream Prisma/Drizzle schema output is not ported here.
+
+  def test_omitted_required_on_plugin_fields_stays_nullable_in_ruby
+    plugin = BetterAuth::Plugin.new(
+      id: "required-default",
+      schema: {
+        auditLog: {
+          model_name: "audit_logs",
+          fields: {
+            action: {type: "string"}
+          }
+        }
+      }
+    )
+    config = BetterAuth::Configuration.new(secret: SECRET, database: :memory, plugins: [plugin])
+    sql = BetterAuth::Schema::SQL.create_statements(config, dialect: :postgres).join("\n")
+
+    assert_includes sql, '"action" text'
+    refute_includes sql, '"action" text NOT NULL'
+  end
+
+  def test_explicit_required_true_adds_not_null
+    plugin = BetterAuth::Plugin.new(
+      id: "required-true",
+      schema: {
+        auditLog: {
+          model_name: "audit_logs",
+          fields: {
+            action: {type: "string", required: true}
+          }
+        }
+      }
+    )
+    config = BetterAuth::Configuration.new(secret: SECRET, database: :memory, plugins: [plugin])
+    sql = BetterAuth::Schema::SQL.create_statements(config, dialect: :postgres).join("\n")
+
+    assert_includes sql, '"action" text NOT NULL'
+  end
+
+  def test_explicit_required_false_stays_nullable
+    plugin = BetterAuth::Plugin.new(
+      id: "required-false",
+      schema: {
+        auditLog: {
+          model_name: "audit_logs",
+          fields: {
+            action: {type: "string", required: false}
+          }
+        }
+      }
+    )
+    config = BetterAuth::Configuration.new(secret: SECRET, database: :memory, plugins: [plugin])
+    sql = BetterAuth::Schema::SQL.create_statements(config, dialect: :postgres).join("\n")
+
+    assert_includes sql, '"action" text'
+    refute_includes sql, '"action" text NOT NULL'
+  end
+
+  def test_json_and_array_field_types_map_per_dialect
+    plugin = BetterAuth::Plugin.new(
+      id: "typed-fields",
+      schema: {
+        auditLog: {
+          model_name: "audit_logs",
+          fields: {
+            metadata: {type: "json", required: false},
+            tags: {type: "string[]", required: false},
+            scores: {type: "number[]", required: false}
+          }
+        }
+      }
+    )
+    config = BetterAuth::Configuration.new(secret: SECRET, database: :memory, plugins: [plugin])
+
+    postgres = BetterAuth::Schema::SQL.create_statements(config, dialect: :postgres).join("\n")
+    mysql = BetterAuth::Schema::SQL.create_statements(config, dialect: :mysql).join("\n")
+    mssql = BetterAuth::Schema::SQL.create_statements(config, dialect: :mssql).join("\n")
+    sqlite = BetterAuth::Schema::SQL.create_statements(config, dialect: :sqlite).join("\n")
+
+    assert_includes postgres, '"metadata" jsonb'
+    assert_includes postgres, '"tags" jsonb'
+    assert_includes mysql, "`metadata` json"
+    assert_includes mysql, "`tags` json"
+    assert_includes mssql, "[metadata] varchar(8000)"
+    assert_includes sqlite, '"metadata" text'
+    assert_includes sqlite, '"tags" text'
+  end
+
+  def test_unsupported_field_type_raises_clear_error
+    plugin = BetterAuth::Plugin.new(
+      id: "bad-type",
+      schema: {
+        auditLog: {
+          model_name: "audit_logs",
+          fields: {
+            payload: {type: "object", required: false}
+          }
+        }
+      }
+    )
+    config = BetterAuth::Configuration.new(secret: SECRET, database: :memory, plugins: [plugin])
+
+    error = assert_raises(BetterAuth::Error) do
+      BetterAuth::Schema::SQL.create_statements(config, dialect: :postgres)
+    end
+    assert_includes error.message, "Unsupported field type: object"
+  end
+
+  def test_string_defaults_are_sql_escaped
+    config = BetterAuth::Configuration.new(
+      secret: SECRET,
+      database: :memory,
+      user: {
+        additional_fields: {
+          nickname: {type: "string", required: false, default_value: "O'Brien"}
+        }
+      }
+    )
+
+    sql = BetterAuth::Schema::SQL.create_statements(config, dialect: :postgres).join("\n")
+
+    assert_includes sql, "DEFAULT 'O''Brien'"
+  end
+
+  def test_boolean_and_numeric_defaults_render_per_dialect
+    plugin = BetterAuth::Plugin.new(
+      id: "defaults",
+      schema: {
+        auditLog: {
+          model_name: "audit_logs",
+          fields: {
+            active: {type: "boolean", required: false, default_value: true},
+            count: {type: "number", required: false, default_value: 42}
+          }
+        }
+      }
+    )
+    config = BetterAuth::Configuration.new(secret: SECRET, database: :memory, plugins: [plugin])
+
+    postgres = BetterAuth::Schema::SQL.create_statements(config, dialect: :postgres).join("\n")
+    mysql = BetterAuth::Schema::SQL.create_statements(config, dialect: :mysql).join("\n")
+    sqlite = BetterAuth::Schema::SQL.create_statements(config, dialect: :sqlite).join("\n")
+
+    assert_includes postgres, '"active" boolean DEFAULT true'
+    assert_includes postgres, '"count" integer DEFAULT 42'
+    assert_includes mysql, "`active` tinyint(1) DEFAULT 1"
+    assert_includes mysql, "`count` integer DEFAULT 42"
+    assert_includes sqlite, '"active" integer DEFAULT 1'
+    assert_includes sqlite, '"count" integer DEFAULT 42'
+  end
+
+  # Enum array SQL types are not supported in Ruby schema generation yet; use string/json instead.
+
+  def test_generate_id_option_does_not_change_sql_id_column_type
+    serial_sql = BetterAuth::Schema::SQL.create_statements(
+      BetterAuth::Configuration.new(secret: SECRET, database: :memory, advanced: {database: {generate_id: "serial"}}),
+      dialect: :postgres
+    ).join("\n")
+    uuid_sql = BetterAuth::Schema::SQL.create_statements(
+      BetterAuth::Configuration.new(secret: SECRET, database: :memory, advanced: {database: {generate_id: "uuid"}}),
+      dialect: :postgres
+    ).join("\n")
+
+    assert_includes serial_sql, '"id" text PRIMARY KEY'
+    assert_includes uuid_sql, '"id" text PRIMARY KEY'
+  end
+
+  def test_additional_fields_via_plugin_match_user_options_physical_columns
+    via_options = BetterAuth::Configuration.new(
+      secret: SECRET,
+      database: :memory,
+      user: {
+        additional_fields: {
+          department: {type: "string", required: false}
+        }
+      }
+    )
+    via_plugin = BetterAuth::Configuration.new(
+      secret: SECRET,
+      database: :memory,
+      plugins: [BetterAuth::Plugins.additional_fields(user: {department: {type: "string", required: false}})]
+    )
+
+    options_sql = BetterAuth::Schema::SQL.create_statements(via_options, dialect: :postgres).join("\n")
+    plugin_sql = BetterAuth::Schema::SQL.create_statements(via_plugin, dialect: :postgres).join("\n")
+
+    assert_includes options_sql, '"department" text'
+    assert_includes plugin_sql, '"department" text'
+  end
+
+  def test_plugins_omitted_from_config_do_not_affect_generated_sql
+    # Plugin class can be defined in the app but omitted from config plugins:
+    BetterAuth::Plugin.new(
+      id: "unused",
+      schema: {
+        auditLog: {
+          model_name: "audit_logs",
+          fields: {
+            action: {type: "string", required: true}
+          }
+        }
+      }
+    )
+    config = BetterAuth::Configuration.new(secret: SECRET, database: :memory)
+    sql = BetterAuth::Schema::SQL.create_statements(config, dialect: :postgres).join("\n")
+
+    refute_includes sql, 'CREATE TABLE IF NOT EXISTS "audit_logs"'
+  end
+
+  def test_custom_plugin_foreign_keys_target_correct_tables
+    same_model_plugin = BetterAuth::Plugin.new(
+      id: "same-model-refs",
+      schema: {
+        parent: {
+          model_name: "parents",
+          fields: {
+            ownerId: {type: "string", required: true, references: {model: "user", field: "id"}},
+            managerId: {type: "string", required: true, references: {model: "user", field: "id"}}
+          }
+        }
+      }
+    )
+    cross_model_plugin = BetterAuth::Plugin.new(
+      id: "cross-model-refs",
+      schema: {
+        project: {
+          model_name: "projects",
+          fields: {
+            ownerId: {type: "string", required: true, references: {model: "user", field: "id"}}
+          }
+        },
+        task: {
+          model_name: "tasks",
+          fields: {
+            projectId: {type: "string", required: true, references: {model: "project", field: "id"}},
+            assigneeId: {type: "string", required: true, references: {model: "user", field: "id"}}
+          }
+        }
+      }
+    )
+    config = BetterAuth::Configuration.new(
+      secret: SECRET,
+      database: :memory,
+      plugins: [same_model_plugin, cross_model_plugin]
+    )
+    sql = BetterAuth::Schema::SQL.create_statements(config, dialect: :postgres).join("\n")
+
+    assert_includes sql, 'FOREIGN KEY ("owner_id") REFERENCES "users" ("id")'
+    assert_includes sql, 'FOREIGN KEY ("manager_id") REFERENCES "users" ("id")'
+    assert_includes sql, 'FOREIGN KEY ("project_id") REFERENCES "projects" ("id")'
+    assert_includes sql, 'FOREIGN KEY ("assignee_id") REFERENCES "users" ("id")'
+  end
+
+  def test_two_factor_and_username_plugins_generate_expected_tables
+    config = BetterAuth::Configuration.new(
+      secret: SECRET,
+      database: :memory,
+      plugins: [BetterAuth::Plugins.two_factor, BetterAuth::Plugins.username]
+    )
+    sql = BetterAuth::Schema::SQL.create_statements(config, dialect: :postgres).join("\n")
+
+    assert_includes sql, 'CREATE TABLE IF NOT EXISTS "two_factors"'
+    assert_includes sql, '"two_factor_enabled" boolean'
+    assert_includes sql, '"username" text'
+    assert_includes sql, 'FOREIGN KEY ("user_id") REFERENCES "users" ("id") ON DELETE CASCADE'
+  end
 end

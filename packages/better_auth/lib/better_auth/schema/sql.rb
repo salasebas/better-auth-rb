@@ -149,7 +149,8 @@ module BetterAuth
       end
 
       def sql_type(logical_field, attributes, dialect)
-        case attributes[:type]
+        type = attributes[:type] || "string"
+        case type
         when "boolean"
           case dialect
           when :mysql
@@ -185,16 +186,22 @@ module BetterAuth
           else
             "text"
           end
+        when "string"
+          indexed_string_sql_type(logical_field, attributes, dialect)
         else
-          if dialect == :mysql
-            indexed = logical_field == "id" || attributes[:unique] || attributes[:index] || attributes[:references] || attributes[:sortable] || attributes.key?(:default_value)
-            indexed ? "varchar(191)" : "text"
-          elsif dialect == :mssql
-            indexed = logical_field == "id" || attributes[:unique] || attributes[:index] || attributes[:references] || attributes[:sortable]
-            indexed ? "varchar(255)" : "varchar(8000)"
-          else
-            "text"
-          end
+          raise BetterAuth::Error, "Unsupported field type: #{type}"
+        end
+      end
+
+      def indexed_string_sql_type(logical_field, attributes, dialect)
+        if dialect == :mysql
+          indexed = logical_field == "id" || attributes[:unique] || attributes[:index] || attributes[:references] || attributes[:sortable] || attributes.key?(:default_value)
+          indexed ? "varchar(191)" : "text"
+        elsif dialect == :mssql
+          indexed = logical_field == "id" || attributes[:unique] || attributes[:index] || attributes[:references] || attributes[:sortable]
+          indexed ? "varchar(255)" : "varchar(8000)"
+        else
+          "text"
         end
       end
 
