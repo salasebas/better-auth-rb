@@ -5,6 +5,7 @@
 
 ignore:
   - 'vendor/**/*'
+  - '**/vendor/**/*'
   - 'node_modules/**/*'
   - 'tmp/**/*'
   - 'coverage/**/*'
