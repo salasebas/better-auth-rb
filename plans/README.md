@@ -74,8 +74,8 @@ Drizzle, `SQLMigration.plan` introspection, framework generators out of band).
 | 001 | CLI command contract characterization | - | DONE |
 | 002 | CLI schema upstream parity matrix | 001 | DONE |
 | 003 | CLI migration / doctor hardening | 001, 002 | DONE |
-| 004 | CLI config discovery & `--cwd` | 001 | TODO |
-| 005 | CLI `secret` + `info --json` | 001, 004 | TODO |
+| 004 | CLI config discovery & `--cwd` | 001 | DONE |
+| 005 | CLI `secret` + `info --json` | 001, 004 | DONE |
 
 Recommended order: 001 → 002 → 003 (migration chain); 004 → 005 can run in
 parallel after 001. Plan 003 is the primary home for migrate/status/doctor

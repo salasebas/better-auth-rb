@@ -42,9 +42,22 @@ bin/rails generate better_auth:migration
 bin/rails db:migrate
 ```
 
+Non-Rails Rack apps can use the CLI:
+
+```bash
+better-auth migrate status --cwd .
+better-auth migrate --cwd . --yes
+```
+
 ### Generating Schema
 
-Generate SQL programmatically for Rack apps:
+Generate SQL with the CLI for Rack apps:
+
+```bash
+better-auth generate --cwd . --dialect postgres --output db/better_auth/schema.sql
+```
+
+Or generate SQL programmatically:
 
 ```ruby
 sql = BetterAuth::Schema::SQL.generate(auth.options, adapter: :postgres)

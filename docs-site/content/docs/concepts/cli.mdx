@@ -3,7 +3,7 @@ title: CLI
 description: Learn the Ruby and Rails commands used to install, migrate, inspect, and configure Better Auth.
 ---
 
-Better Auth Ruby uses Rails generators and Ruby tasks instead of the upstream Node CLI.
+Better Auth Ruby uses Rails generators, the `better-auth` CLI, and Ruby tasks.
 
 ## Generate
 
@@ -21,9 +21,27 @@ bin/rails generate better_auth:migration
 
 The migration generator reads your Better Auth configuration and includes core tables, plugin tables, custom table names, custom fields, and optional rate limit schema.
 
+For non-Rails Rack apps, use the `better-auth` CLI:
+
+```bash
+better-auth generate --cwd . --dialect postgres --output db/better_auth/schema.sql
+```
+
+You can also pass an explicit config path:
+
+```bash
+better-auth generate --config config/better_auth.rb --dialect postgres --output db/better_auth/schema.sql
+```
+
+When `--config` is omitted, the CLI searches under `--cwd` for
+`config/better_auth.rb`, `config/auth.rb`, `better_auth.rb`, or `auth.rb`.
+Relative `--config` and `--output` paths resolve against `--cwd`.
+
 ### Options
 
 Rails generators accept standard Rails generator options, such as `--skip` options provided by Rails itself. Better Auth-specific schema is read from the configured initializer.
+
+For the standalone CLI, use `--cwd`, `--config`, `--dialect`, and `--output` on `generate`.
 
 ## Migrate
 
@@ -33,7 +51,14 @@ Run migrations with Rails:
 bin/rails db:migrate
 ```
 
-For a non-Rails Rack app, use the SQL schema helpers from the core gem and apply the SQL with your own migration tool.
+For a non-Rails Rack app, use the CLI against a Ruby config file:
+
+```bash
+better-auth migrate status --cwd .
+better-auth migrate --cwd . --yes
+```
+
+You can also generate SQL programmatically and apply it with your own migration tool.
 
 ```ruby
 sql = BetterAuth::Schema::SQL.generate(auth.options, adapter: :postgres)
@@ -43,6 +68,8 @@ File.write("db/auth_schema.sql", sql)
 ### Options
 
 Use your database adapter or migration tool options when applying generated SQL outside Rails.
+
+For the standalone CLI, use `--cwd`, `--config`, and `--yes` on `migrate`.
 
 ## Init
 
@@ -76,6 +103,24 @@ auth.api.endpoints.keys
 BetterAuth::Schema.auth_tables(auth.options).keys
 ```
 
+Run `better-auth doctor` against a project config:
+
+```bash
+better-auth doctor --cwd .
+better-auth doctor --config config/better_auth.rb
+better-auth doctor --cwd . --json
+```
+
+For machine-readable diagnostics, use `better-auth info --json`:
+
+```bash
+better-auth info --cwd . --json
+```
+
+`info --json` returns Ruby and gem versions, resolved auth table names,
+endpoint counts, and doctor findings without serializing sensitive config
+values.
+
 For route-level inspection, Rails can list the mounted auth routes:
 
 ```bash
@@ -100,22 +145,37 @@ auth.api.endpoints.keys
 
 Custom config path:
 
-```ruby
-require_relative "../config/auth"
+```bash
+better-auth doctor --config config/better_auth.rb
+```
+
+Or discover a conventional Ruby config from the project root:
+
+```bash
+better-auth doctor --cwd .
 ```
 
 JSON output:
 
-```ruby
-puts JSON.pretty_generate(BetterAuth::Schema.auth_tables(auth.options))
+```bash
+better-auth info --config config/better_auth.rb --json
 ```
 
 ## Secret
 
-Use a strong secret for token signing and encrypted cookies.
+Generate a production-ready secret with the CLI:
 
 ```bash
-ruby -rsecurerandom -e 'puts SecureRandom.hex(32)'
+better-auth secret
+```
+
+The command prints `BETTER_AUTH_SECRET=<64 lowercase hex chars>` for easy copy
+into `.env` or your framework credentials.
+
+Without the CLI gem, you can still generate a secret with:
+
+```bash
+openssl rand -base64 32
 ```
 
 Store the value in your framework's credential or environment system:
