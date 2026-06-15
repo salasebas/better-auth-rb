@@ -187,7 +187,11 @@ module BetterAuth
       raise Error, "Config file not found: #{path}" unless File.exist?(path)
 
       self.class.configure(nil)
-      result = TOPLEVEL_BINDING.eval(File.read(path), path)
+      result = begin
+        TOPLEVEL_BINDING.eval(File.read(path), path)
+      rescue => error
+        raise Error, error.message
+      end
       value = normalize_config_value(result) || self.class.configuration
       raise Error, "Config file must return a Hash, BetterAuth::Configuration, or BetterAuth::Auth" unless value
 

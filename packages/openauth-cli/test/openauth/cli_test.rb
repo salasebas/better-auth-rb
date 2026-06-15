@@ -21,20 +21,31 @@ class OpenAuthCLITest < Minitest::Test
     assert_equal "better_auth-cli", spec.dependencies.find { |dependency| dependency.name == "better_auth-cli" }.name
   end
 
+  def test_openauth_executable_help_lists_commands
+    stdout, stderr, status = capture_openauth_executable("--help")
+
+    assert status.success?, stderr
+    assert_includes stdout, "better-auth generate"
+    assert_includes stdout, "better-auth migrate"
+    assert_includes stdout, "migrate status"
+    assert_includes stdout, "better-auth doctor"
+    assert_includes stdout, "mongo indexes"
+  end
+
+  def test_openauth_executable_unknown_command_returns_error
+    stdout, stderr, status = capture_openauth_executable("wat")
+
+    assert_equal false, status.success?
+    assert_empty stdout
+    assert_includes stderr, "Unknown command: wat"
+  end
+
   def test_openauth_executable_runs_generate_command
     Dir.mktmpdir("openauth-cli") do |dir|
       config_path = write_sqlite_config(dir)
       output = File.join(dir, "openauth.sql")
-      ruby_lib = [
-        File.expand_path("../../lib", __dir__),
-        File.expand_path("../../../better_auth-cli/lib", __dir__),
-        File.expand_path("../../../better_auth/lib", __dir__)
-      ].join(File::PATH_SEPARATOR)
 
-      stdout, stderr, status = Open3.capture3(
-        {"RUBYLIB" => ruby_lib},
-        RbConfig.ruby,
-        File.expand_path("../../exe/openauth", __dir__),
+      stdout, stderr, status = capture_openauth_executable(
         "generate",
         "--config",
         config_path,
@@ -51,6 +62,23 @@ class OpenAuthCLITest < Minitest::Test
   end
 
   private
+
+  def capture_openauth_executable(*argv)
+    Open3.capture3(
+      {"RUBYLIB" => openauth_ruby_lib},
+      RbConfig.ruby,
+      File.expand_path("../../exe/openauth", __dir__),
+      *argv
+    )
+  end
+
+  def openauth_ruby_lib
+    [
+      File.expand_path("../../lib", __dir__),
+      File.expand_path("../../../better_auth-cli/lib", __dir__),
+      File.expand_path("../../../better_auth/lib", __dir__)
+    ].join(File::PATH_SEPARATOR)
+  end
 
   def write_sqlite_config(dir)
     path = File.join(dir, "better_auth.rb")

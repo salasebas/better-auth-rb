@@ -71,9 +71,9 @@ Drizzle, `SQLMigration.plan` introspection, framework generators out of band).
 
 | Plan | Title | Depends on | Status |
 | --- | --- | --- | --- |
-| 001 | CLI command contract characterization | - | TODO |
-| 002 | CLI schema upstream parity matrix | 001 | TODO |
-| 003 | CLI migration / doctor hardening | 001, 002 | TODO |
+| 001 | CLI command contract characterization | - | DONE |
+| 002 | CLI schema upstream parity matrix | 001 | DONE |
+| 003 | CLI migration / doctor hardening | 001, 002 | DONE |
 | 004 | CLI config discovery & `--cwd` | 001 | TODO |
 | 005 | CLI `secret` + `info --json` | 001, 004 | TODO |
 

@@ -1,6 +1,8 @@
 # frozen_string_literal: true
 
 require "fileutils"
+require "open3"
+require "rbconfig"
 require "sqlite3"
 require "stringio"
 require "tmpdir"
@@ -50,6 +52,27 @@ module BetterAuthCLITestHelpers
     [status, stdout.string, stderr.string]
   end
 
+  def run_better_auth_executable(*argv)
+    stdout, stderr, status = Open3.capture3(
+      {"RUBYLIB" => better_auth_ruby_lib},
+      RbConfig.ruby,
+      better_auth_executable_path,
+      *argv
+    )
+    [stdout, stderr, status]
+  end
+
+  def better_auth_executable_path
+    File.expand_path("../../exe/better-auth", __dir__)
+  end
+
+  def better_auth_ruby_lib
+    [
+      File.expand_path("../../lib", __dir__),
+      File.expand_path("../../../better_auth/lib", __dir__)
+    ].join(File::PATH_SEPARATOR)
+  end
+
   def write_config(dir, source, filename: "better_auth.rb")
     path = File.join(dir, filename)
     FileUtils.mkdir_p(File.dirname(path))
@@ -57,11 +80,23 @@ module BetterAuthCLITestHelpers
     path
   end
 
-  def write_hash_config(dir, options = {})
-    write_config(dir, ruby_hash(options))
+  def write_hash_config(dir, **options)
+    filename = options.delete(:filename) || "better_auth.rb"
+    write_config(dir, ruby_hash(options), filename: filename)
   end
 
-  def write_sqlite_config(dir, secret: SECRET, base_url: nil, rate_limit: nil, plugins_source: nil)
+  def write_sqlite_config(
+    dir,
+    secret: SECRET,
+    base_url: nil,
+    rate_limit: nil,
+    plugins_source: nil,
+    user_options_source: nil,
+    session_options_source: nil,
+    account_options_source: nil,
+    verification_options_source: nil,
+    advanced_source: nil
+  )
     db_path = File.join(dir, "auth.sqlite3")
     write_config(
       dir,
@@ -69,20 +104,31 @@ module BetterAuthCLITestHelpers
         {
           secret: #{secret.inspect},
           database: ->(options) { BetterAuth::Adapters::SQLite.new(options, path: #{db_path.inspect}) },
-          email_and_password: {enabled: true}#{option_line(:base_url, base_url)}#{option_line(:rate_limit, rate_limit)}#{plugins_line(plugins_source)}
+          email_and_password: {enabled: true}#{option_line(:base_url, base_url)}#{option_line(:rate_limit, rate_limit)}#{source_line(:user, user_options_source)}#{source_line(:session, session_options_source)}#{source_line(:account, account_options_source)}#{source_line(:verification, verification_options_source)}#{source_line(:advanced, advanced_source)}#{plugins_line(plugins_source)}
         }
       RUBY
     )
   end
 
-  def write_fake_sql_config(dir, dialect:, secret: SECRET, rate_limit: nil)
+  def write_fake_sql_config(
+    dir,
+    dialect:,
+    secret: SECRET,
+    rate_limit: nil,
+    plugins_source: nil,
+    user_options_source: nil,
+    session_options_source: nil,
+    account_options_source: nil,
+    verification_options_source: nil,
+    advanced_source: nil
+  )
     write_config(
       dir,
       <<~RUBY
         {
           secret: #{secret.inspect},
           database: ->(options) { BetterAuthCLIFakeSQLAdapter.new(options, dialect: #{dialect.inspect}) },
-          email_and_password: {enabled: true}#{option_line(:rate_limit, rate_limit)}
+          email_and_password: {enabled: true}#{option_line(:rate_limit, rate_limit)}#{source_line(:user, user_options_source)}#{source_line(:session, session_options_source)}#{source_line(:account, account_options_source)}#{source_line(:verification, verification_options_source)}#{source_line(:advanced, advanced_source)}#{plugins_line(plugins_source)}
         }
       RUBY
     )
@@ -107,6 +153,54 @@ module BetterAuthCLITestHelpers
     db&.close
   end
 
+  def sqlite_db_path(dir)
+    File.join(dir, "auth.sqlite3")
+  end
+
+  def auth_for_sqlite_dir(dir, secret: SECRET, plugins: nil, **options)
+    db_path = sqlite_db_path(dir)
+    config = {
+      secret: secret,
+      database: ->(adapter_options) { BetterAuth::Adapters::SQLite.new(adapter_options, path: db_path) },
+      email_and_password: {enabled: true}
+    }.merge(options)
+    config[:plugins] = plugins if plugins
+    BetterAuth.auth(config)
+  end
+
+  def audit_plugin
+    BetterAuth::Plugin.new(
+      id: "audit-test",
+      schema: {
+        auditLog: {
+          model_name: "audit_logs",
+          fields: {
+            action: {type: "string", required: true}
+          }
+        }
+      }
+    )
+  end
+
+  def audit_plugin_source
+    <<~RUBY.strip
+      [
+        BetterAuth::Plugin.new(
+          id: "audit-test",
+          schema: {
+            auditLog: {
+              model_name: "audit_logs",
+              fields: {
+                action: {type: "string", required: true}
+              }
+            }
+          }
+        )
+      ]
+    RUBY
+  end
+
+  # CLI migration integration uses sqlite temp files by default.
   def db_integration_enabled?
     ENV["BETTER_AUTH_CLI_RUN_DB_INTEGRATION"] == "1"
   end
@@ -123,6 +217,10 @@ module BetterAuthCLITestHelpers
 
   def plugins_line(source)
     source ? ",\n  plugins: #{source}" : ""
+  end
+
+  def source_line(name, source)
+    source ? ",\n  #{name}: #{source}" : ""
   end
 
   def ruby_hash(value)
