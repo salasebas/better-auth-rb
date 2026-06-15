@@ -5,7 +5,7 @@ require "stringio"
 require "tmpdir"
 require_relative "../../spec_helper"
 
-RSpec.describe "BetterAuth::Rails ActiveRecord base routes (MySQL)" do
+RSpec.describe "BetterAuth::Rails ActiveRecord base routes (MySQL)", :integration do
   let(:url) { ENV.fetch("BETTER_AUTH_MYSQL_URL", "mysql2://user:password@127.0.0.1:3306/better_auth") }
   let(:secret) { "test-secret-that-is-long-enough-for-validation" }
 

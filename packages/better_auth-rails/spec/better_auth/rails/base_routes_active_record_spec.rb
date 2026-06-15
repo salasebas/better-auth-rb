@@ -5,7 +5,7 @@ require "stringio"
 require "tmpdir"
 require_relative "../../spec_helper"
 
-RSpec.describe "BetterAuth::Rails ActiveRecord base routes" do
+RSpec.describe "BetterAuth::Rails ActiveRecord base routes", :integration do
   let(:url) { ENV.fetch("BETTER_AUTH_POSTGRES_URL", "postgres://user:password@localhost:5432/better_auth") }
   let(:secret) { "test-secret-that-is-long-enough-for-validation" }
 
