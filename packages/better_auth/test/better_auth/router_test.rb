@@ -459,6 +459,7 @@ class BetterAuthRouterTest < Minitest::Test
     assert_equal 200, auth.call(rack_env("POST", "/api/auth/post", headers: fetch_metadata_headers(site: "same-site", mode: "navigate", origin: "https://app.example"))).first
     assert_equal 200, auth.call(rack_env("POST", "/api/auth/post", headers: fetch_metadata_headers(site: "same-origin", mode: "cors", dest: "empty", origin: "http://localhost:3000"))).first
     assert_equal 403, auth.call(rack_env("POST", "/api/auth/post", headers: fetch_metadata_headers(site: "cross-site", mode: "no-cors", dest: "empty", origin: "https://evil.example"))).first
+    assert_equal 200, auth.call(rack_env("POST", "/api/auth/post", headers: fetch_metadata_headers(site: "cross-site", mode: "cors", dest: "empty", origin: "https://app.example"))).first
   end
 
   def test_origin_check_disable_flags_match_upstream_split

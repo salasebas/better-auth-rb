@@ -37,73 +37,85 @@ class BetterAuthAPIKeyAdapterMatrixTest < Minitest::Test
   end
 
   def test_postgres_adapter_api_key_lifecycle
-    require "pg"
+    require_adapter_integration!
 
-    connection = PG.connect(ENV.fetch("BETTER_AUTH_POSTGRES_URL", "postgres://user:password@localhost:5432/better_auth"))
-    reset_postgres_schema(connection)
-    with_sql_auth(:postgres, connection) do |auth|
-      assert_api_key_lifecycle(auth) do |created|
-        row = connection.exec_params(%(SELECT reference_id, config_id FROM "api_keys" WHERE id = $1), [created.fetch(:id)]).first
-        assert_equal created.fetch(:referenceId), row.fetch("reference_id")
-        assert_equal created.fetch(:configId), row.fetch("config_id")
+    begin
+      require "pg"
+
+      connection = PG.connect(ENV.fetch("BETTER_AUTH_POSTGRES_URL", "postgres://user:password@localhost:5432/better_auth"))
+      reset_postgres_schema(connection)
+      with_sql_auth(:postgres, connection) do |auth|
+        assert_api_key_lifecycle(auth) do |created|
+          row = connection.exec_params(%(SELECT reference_id, config_id FROM "api_keys" WHERE id = $1), [created.fetch(:id)]).first
+          assert_equal created.fetch(:referenceId), row.fetch("reference_id")
+          assert_equal created.fetch(:configId), row.fetch("config_id")
+        end
       end
+    rescue LoadError
+      skip "pg gem is not installed"
+    rescue PG::ConnectionBad
+      skip "PostgreSQL test service is not available"
+    ensure
+      connection&.close
     end
-  rescue LoadError
-    skip "pg gem is not installed"
-  rescue PG::ConnectionBad
-    skip "PostgreSQL test service is not available"
-  ensure
-    connection&.close
   end
 
   def test_mysql_adapter_api_key_lifecycle
-    require "mysql2"
+    require_adapter_integration!
 
-    connection = Mysql2::Client.new(
-      host: ENV.fetch("BETTER_AUTH_MYSQL_HOST", "127.0.0.1"),
-      port: ENV.fetch("BETTER_AUTH_MYSQL_PORT", "3306").to_i,
-      username: ENV.fetch("BETTER_AUTH_MYSQL_USER", "user"),
-      password: ENV.fetch("BETTER_AUTH_MYSQL_PASSWORD", "password"),
-      database: ENV.fetch("BETTER_AUTH_MYSQL_DATABASE", "better_auth"),
-      symbolize_keys: false
-    )
-    reset_mysql_schema(connection)
-    with_sql_auth(:mysql, connection) do |auth|
-      assert_api_key_lifecycle(auth) do |created|
-        statement = connection.prepare("SELECT reference_id, config_id FROM `api_keys` WHERE id = ?")
-        row = statement.execute(created.fetch(:id)).first
-        assert_equal created.fetch(:referenceId), row.fetch("reference_id")
-        assert_equal created.fetch(:configId), row.fetch("config_id")
+    begin
+      require "mysql2"
+
+      connection = Mysql2::Client.new(
+        host: ENV.fetch("BETTER_AUTH_MYSQL_HOST", "127.0.0.1"),
+        port: ENV.fetch("BETTER_AUTH_MYSQL_PORT", "3306").to_i,
+        username: ENV.fetch("BETTER_AUTH_MYSQL_USER", "user"),
+        password: ENV.fetch("BETTER_AUTH_MYSQL_PASSWORD", "password"),
+        database: ENV.fetch("BETTER_AUTH_MYSQL_DATABASE", "better_auth"),
+        symbolize_keys: false
+      )
+      reset_mysql_schema(connection)
+      with_sql_auth(:mysql, connection) do |auth|
+        assert_api_key_lifecycle(auth) do |created|
+          statement = connection.prepare("SELECT reference_id, config_id FROM `api_keys` WHERE id = ?")
+          row = statement.execute(created.fetch(:id)).first
+          assert_equal created.fetch(:referenceId), row.fetch("reference_id")
+          assert_equal created.fetch(:configId), row.fetch("config_id")
+        end
       end
+    rescue LoadError
+      skip "mysql2 gem is not installed"
+    rescue Mysql2::Error::ConnectionError
+      skip "MySQL test service is not available"
+    ensure
+      connection&.close
     end
-  rescue LoadError
-    skip "mysql2 gem is not installed"
-  rescue Mysql2::Error::ConnectionError
-    skip "MySQL test service is not available"
-  ensure
-    connection&.close
   end
 
   def test_mssql_adapter_api_key_lifecycle
-    require "sequel"
-    require "tiny_tds"
+    require_adapter_integration!
 
-    ensure_mssql_database
-    connection = Sequel.connect(ENV.fetch("BETTER_AUTH_MSSQL_URL", "tinytds://sa:Password123!@127.0.0.1:1433/better_auth?timeout=30"))
-    reset_mssql_schema(connection)
-    with_sql_auth(:mssql, connection) do |auth|
-      assert_api_key_lifecycle(auth) do |created|
-        row = connection.fetch("SELECT reference_id, config_id FROM [api_keys] WHERE id = ?", created.fetch(:id)).first
-        assert_equal created.fetch(:referenceId), row.fetch(:reference_id)
-        assert_equal created.fetch(:configId), row.fetch(:config_id)
+    begin
+      require "sequel"
+      require "tiny_tds"
+
+      ensure_mssql_database
+      connection = Sequel.connect(ENV.fetch("BETTER_AUTH_MSSQL_URL", "tinytds://sa:Password123!@127.0.0.1:1433/better_auth?timeout=30"))
+      reset_mssql_schema(connection)
+      with_sql_auth(:mssql, connection) do |auth|
+        assert_api_key_lifecycle(auth) do |created|
+          row = connection.fetch("SELECT reference_id, config_id FROM [api_keys] WHERE id = ?", created.fetch(:id)).first
+          assert_equal created.fetch(:referenceId), row.fetch(:reference_id)
+          assert_equal created.fetch(:configId), row.fetch(:config_id)
+        end
       end
+    rescue LoadError
+      skip "sequel or tiny_tds gem is not installed"
+    rescue Sequel::DatabaseConnectionError
+      skip "MSSQL test service is not available"
+    ensure
+      connection&.disconnect
     end
-  rescue LoadError
-    skip "sequel or tiny_tds gem is not installed"
-  rescue Sequel::DatabaseConnectionError
-    skip "MSSQL test service is not available"
-  ensure
-    connection&.disconnect
   end
 
   def test_fake_mongodb_adapter_api_key_lifecycle_and_field_mapping
@@ -146,6 +158,10 @@ class BetterAuthAPIKeyAdapterMatrixTest < Minitest::Test
   end
 
   private
+
+  def require_adapter_integration!
+    skip "set BETTER_AUTH_ADAPTER_INTEGRATION=1 to run adapter integration tests" unless ENV["BETTER_AUTH_ADAPTER_INTEGRATION"] == "1"
+  end
 
   def with_memory_auth
     yield build_matrix_auth

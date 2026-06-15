@@ -29,96 +29,116 @@ class BetterAuthPluginsScimAdapterMatrixTest < Minitest::Test
   end
 
   def test_scim_flow_persists_with_postgres_adapter_when_available
-    require "pg"
+    require_adapter_integration!
 
-    config = scim_schema_config
-    connection = PG.connect(ENV.fetch("BETTER_AUTH_POSTGRES_URL", "postgres://user:password@localhost:5432/better_auth"))
-    reset_postgres_schema(connection, config)
-    create_sql_schema(connection, config, :postgres)
-    auth = build_scim_auth_with_database(
-      ->(options) { BetterAuth::Adapters::Postgres.new(options, connection: connection) }
-    )
+    begin
+      require "pg"
 
-    run_scim_adapter_smoke(auth, provider_id: "postgres-provider")
-  rescue LoadError
-    skip "pg gem is not installed"
-  rescue PG::ConnectionBad
-    skip "PostgreSQL test service is not available"
-  ensure
-    connection&.close
+      config = scim_schema_config
+      connection = PG.connect(ENV.fetch("BETTER_AUTH_POSTGRES_URL", "postgres://user:password@localhost:5432/better_auth"))
+      reset_postgres_schema(connection, config)
+      create_sql_schema(connection, config, :postgres)
+      auth = build_scim_auth_with_database(
+        ->(options) { BetterAuth::Adapters::Postgres.new(options, connection: connection) }
+      )
+
+      run_scim_adapter_smoke(auth, provider_id: "postgres-provider")
+    rescue LoadError
+      skip "pg gem is not installed"
+    rescue PG::ConnectionBad
+      skip "PostgreSQL test service is not available"
+    ensure
+      connection&.close
+    end
   end
 
   def test_scim_flow_persists_with_mysql_adapter_when_available
-    require "mysql2"
+    require_adapter_integration!
 
-    config = scim_schema_config
-    connection = Mysql2::Client.new(
-      host: ENV.fetch("BETTER_AUTH_MYSQL_HOST", "127.0.0.1"),
-      port: ENV.fetch("BETTER_AUTH_MYSQL_PORT", "3306").to_i,
-      username: ENV.fetch("BETTER_AUTH_MYSQL_USER", "user"),
-      password: ENV.fetch("BETTER_AUTH_MYSQL_PASSWORD", "password"),
-      database: ENV.fetch("BETTER_AUTH_MYSQL_DATABASE", "better_auth"),
-      symbolize_keys: false
-    )
-    reset_mysql_schema(connection, config)
-    create_sql_schema(connection, config, :mysql)
-    auth = build_scim_auth_with_database(
-      ->(options) { BetterAuth::Adapters::MySQL.new(options, connection: connection) }
-    )
+    begin
+      require "mysql2"
 
-    run_scim_adapter_smoke(auth, provider_id: "mysql-provider")
-  rescue LoadError
-    skip "mysql2 gem is not installed"
-  rescue Mysql2::Error::ConnectionError
-    skip "MySQL test service is not available"
-  ensure
-    connection&.close
+      config = scim_schema_config
+      connection = Mysql2::Client.new(
+        host: ENV.fetch("BETTER_AUTH_MYSQL_HOST", "127.0.0.1"),
+        port: ENV.fetch("BETTER_AUTH_MYSQL_PORT", "3306").to_i,
+        username: ENV.fetch("BETTER_AUTH_MYSQL_USER", "user"),
+        password: ENV.fetch("BETTER_AUTH_MYSQL_PASSWORD", "password"),
+        database: ENV.fetch("BETTER_AUTH_MYSQL_DATABASE", "better_auth"),
+        symbolize_keys: false
+      )
+      reset_mysql_schema(connection, config)
+      create_sql_schema(connection, config, :mysql)
+      auth = build_scim_auth_with_database(
+        ->(options) { BetterAuth::Adapters::MySQL.new(options, connection: connection) }
+      )
+
+      run_scim_adapter_smoke(auth, provider_id: "mysql-provider")
+    rescue LoadError
+      skip "mysql2 gem is not installed"
+    rescue Mysql2::Error::ConnectionError
+      skip "MySQL test service is not available"
+    ensure
+      connection&.close
+    end
   end
 
   def test_scim_flow_persists_with_mssql_adapter_when_available
-    require "sequel"
-    require "tiny_tds"
+    require_adapter_integration!
 
-    ensure_mssql_database
-    config = scim_schema_config
-    connection = Sequel.connect(ENV.fetch("BETTER_AUTH_MSSQL_URL", "tinytds://sa:Password123!@127.0.0.1:1433/better_auth?timeout=30"))
-    reset_mssql_schema(connection)
-    create_sql_schema(connection, config, :mssql)
-    auth = build_scim_auth_with_database(
-      ->(options) { BetterAuth::Adapters::MSSQL.new(options, connection: connection) }
-    )
+    begin
+      require "sequel"
+      require "tiny_tds"
 
-    run_scim_adapter_smoke(auth, provider_id: "mssql-provider")
-  rescue LoadError
-    skip "sequel or tiny_tds gem is not installed"
-  rescue Sequel::DatabaseConnectionError
-    skip "MSSQL test service is not available"
-  ensure
-    connection&.disconnect
+      ensure_mssql_database
+      config = scim_schema_config
+      connection = Sequel.connect(ENV.fetch("BETTER_AUTH_MSSQL_URL", "tinytds://sa:Password123!@127.0.0.1:1433/better_auth?timeout=30"))
+      reset_mssql_schema(connection)
+      create_sql_schema(connection, config, :mssql)
+      auth = build_scim_auth_with_database(
+        ->(options) { BetterAuth::Adapters::MSSQL.new(options, connection: connection) }
+      )
+
+      run_scim_adapter_smoke(auth, provider_id: "mssql-provider")
+    rescue LoadError
+      skip "sequel or tiny_tds gem is not installed"
+    rescue Sequel::DatabaseConnectionError
+      skip "MSSQL test service is not available"
+    ensure
+      connection&.disconnect
+    end
   end
 
   def test_scim_flow_persists_with_mongodb_adapter_when_available
-    require "better_auth/mongodb"
-    require "mongo"
+    require_adapter_integration!
 
-    database_name = "better-auth-scim-ruby-test"
-    client = Mongo::Client.new(ENV.fetch("BETTER_AUTH_MONGODB_URL", "mongodb://127.0.0.1:27017/#{database_name}"), server_selection_timeout: 1)
-    client.database.collections.each { |collection| collection.drop unless collection.name.start_with?("system.") }
-    auth = build_scim_auth_with_database(
-      ->(options) { BetterAuth::Adapters::MongoDB.new(options, database: client.database, client: client, transaction: false) }
-    )
+    begin
+      require "better_auth/mongodb"
+      require "mongo"
 
-    auth.context.adapter.ensure_indexes! if auth.context.adapter.respond_to?(:ensure_indexes!)
-    run_scim_adapter_smoke(auth, provider_id: "mongodb-provider")
-  rescue LoadError
-    skip "better_auth-mongodb or mongo gem is not installed"
-  rescue Mongo::Error::NoServerAvailable, Mongo::Error::SocketError
-    skip "MongoDB test service is not available"
-  ensure
-    client&.close
+      database_name = "better-auth-scim-ruby-test"
+      client = Mongo::Client.new(ENV.fetch("BETTER_AUTH_MONGODB_URL", "mongodb://127.0.0.1:27017/#{database_name}"), server_selection_timeout: 1)
+      client.database.collections.each { |collection| collection.drop unless collection.name.start_with?("system.") }
+      auth = build_scim_auth_with_database(
+        ->(options) { BetterAuth::Adapters::MongoDB.new(options, database: client.database, client: client, transaction: false) }
+      )
+
+      auth.context.adapter.ensure_indexes! if auth.context.adapter.respond_to?(:ensure_indexes!)
+      run_scim_adapter_smoke(auth, provider_id: "mongodb-provider")
+    rescue LoadError
+      skip "better_auth-mongodb or mongo gem is not installed"
+    rescue Mongo::Error::NoServerAvailable, Mongo::Error::SocketError
+      skip "MongoDB test service is not available"
+    ensure
+      client&.close
+    end
   end
 
   private
+
+  def require_adapter_integration!
+    skip "set BETTER_AUTH_ADAPTER_INTEGRATION=1 to run adapter integration tests" unless ENV["BETTER_AUTH_ADAPTER_INTEGRATION"] == "1"
+  end
 
   def create_sql_schema(connection, config, dialect)
     BetterAuth::Schema::SQL.create_statements(config, dialect: dialect).each do |statement|

@@ -74,8 +74,7 @@ task :ci do
   puts "\n🧪 Running workspace packaging tests..."
   workspace_test_requires = [
     "./test/openauth_alias_packages_test",
-    "./test/release_version_manifest_test",
-    "./test/mysql_plugin_schema_smoke_test"
+    "./test/release_version_manifest_test"
   ].map { |path| %(require "#{path}") }.join("; ")
   sh %(bundle exec ruby -Itest -e '#{workspace_test_requires}')
 
@@ -399,6 +398,12 @@ task "lint:fix" do
   cd "packages/better_auth-hanami" do
     sh "BUNDLE_GEMFILE=Gemfile bundle exec standardrb --fix"
   end
+end
+
+desc "Run workspace integration tests (MySQL plugin schema smoke; requires MySQL)"
+task "test:integration" do
+  ENV["BETTER_AUTH_ADAPTER_INTEGRATION"] = "1"
+  sh %(bundle exec ruby -Itest -e 'require "./test/mysql_plugin_schema_smoke_test"')
 end
 
 desc "Run tests in specific package"

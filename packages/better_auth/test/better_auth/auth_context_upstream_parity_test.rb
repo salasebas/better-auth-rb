@@ -597,6 +597,107 @@ class BetterAuthAuthContextUpstreamParityTest < Minitest::Test
     assert_equal "changed@email.com", response.fetch(:user).fetch("email")
   end
 
+  def test_secret_resolves_from_better_auth_secret_and_auth_secret_env_aliases
+    with_env("RACK_ENV" => "test", "BETTER_AUTH_SECRET" => "env-better-auth-secret-with-enough-length", "AUTH_SECRET" => nil) do
+      auth = BetterAuth.auth(base_url: "http://localhost:3000")
+
+      assert_equal "env-better-auth-secret-with-enough-length", auth.context.secret
+    end
+
+    with_env("RACK_ENV" => "test", "BETTER_AUTH_SECRET" => nil, "AUTH_SECRET" => "legacy-auth-secret-with-enough-length") do
+      auth = BetterAuth.auth(base_url: "http://localhost:3000")
+
+      assert_equal "legacy-auth-secret-with-enough-length", auth.context.secret
+    end
+  end
+
+  def test_rate_limit_disabled_normalizes_enabled_false
+    auth = BetterAuth.auth(
+      base_url: "http://localhost:3000",
+      secret: SECRET,
+      rate_limit: {enabled: false}
+    )
+
+    assert_equal false, auth.context.rate_limit_config.fetch(:enabled)
+  end
+
+  def test_context_exposes_logger_app_name_telemetry_and_database_hooks
+    hooks_called = []
+    logger = ->(level, message) { hooks_called << [level, message] }
+    database_hooks = {
+      user: {
+        create: {
+          before: ->(data, _context) { data.merge("hooked" => true) }
+        }
+      }
+    }
+    auth = BetterAuth.auth(
+      base_url: "http://localhost:3000",
+      secret: SECRET,
+      app_name: "Parity App",
+      logger: logger,
+      telemetry: {enabled: false, debug: true},
+      database_hooks: database_hooks
+    )
+
+    assert_equal "Parity App", auth.context.app_name
+    assert_same logger, auth.context.logger
+    assert_equal false, auth.options.telemetry.fetch(:enabled)
+    assert_equal true, auth.options.telemetry.fetch(:debug)
+    assert_equal database_hooks, auth.options.database_hooks
+
+    auth.context.logger.call(:info, "context logger works")
+    assert_equal [[:info, "context logger works"]], hooks_called
+  end
+
+  def test_plugin_init_does_not_overwrite_explicit_user_session_options
+    auth = BetterAuth.auth(
+      base_url: "http://localhost:3000",
+      secret: SECRET,
+      session: {expires_in: 999, update_age: 111, fresh_age: 222},
+      plugins: [
+        {
+          id: "session-defaults",
+          init: ->(_context) {
+            {options: {session: {expires_in: 1, update_age: 2, fresh_age: 3, cookie_cache: {enabled: false}}}}
+          }
+        }
+      ]
+    )
+
+    assert_equal 999, auth.options.session.fetch(:expires_in)
+    assert_equal 111, auth.options.session.fetch(:update_age)
+    assert_equal 222, auth.options.session.fetch(:fresh_age)
+    assert_equal false, auth.options.session.dig(:cookie_cache, :enabled)
+  end
+
+  def test_plugin_context_attributes_are_exposed_on_context
+    auth = BetterAuth.auth(
+      base_url: "http://localhost:3000",
+      secret: SECRET,
+      plugins: [
+        {
+          id: "context-plugin",
+          init: ->(_context) { {context: {plugin_marker: "present", adapter: :should_not_apply}} }
+        }
+      ]
+    )
+
+    assert_equal "present", auth.context.plugin_marker
+    refute_equal :should_not_apply, auth.context.adapter
+  end
+
+  def test_ruby_plugin_presence_is_checked_via_options_plugins_not_upstream_has_plugin
+    auth = BetterAuth.auth(
+      base_url: "http://localhost:3000",
+      secret: SECRET,
+      plugins: [{id: "parity-plugin", endpoints: {}}]
+    )
+
+    assert auth.options.plugins.any? { |plugin| plugin.id == "parity-plugin" }
+    refute_respond_to auth.context, :has_plugin
+  end
+
   private
 
   def assert_trusted_origin(auth, url)

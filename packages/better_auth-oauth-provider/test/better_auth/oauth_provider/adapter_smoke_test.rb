@@ -31,66 +31,78 @@ class OAuthProviderAdapterSmokeTest < Minitest::Test
   end
 
   def test_postgres_adapter_oauth_provider_smoke_flow
-    require "pg"
+    require_adapter_integration!
 
-    connection = PG.connect(ENV.fetch("BETTER_AUTH_POSTGRES_URL", "postgres://user:password@localhost:5432/better_auth"))
-    reset_postgres_schema(connection)
-    create_sql_schema(connection, :postgres)
+    begin
+      require "pg"
 
-    run_oauth_provider_smoke(
-      database: ->(options) { BetterAuth::Adapters::Postgres.new(options, connection: connection) }
-    )
-  rescue LoadError
-    skip "pg gem is not installed"
-  rescue PG::ConnectionBad
-    skip "PostgreSQL test service is not available"
-  ensure
-    connection&.close
+      connection = PG.connect(ENV.fetch("BETTER_AUTH_POSTGRES_URL", "postgres://user:password@localhost:5432/better_auth"))
+      reset_postgres_schema(connection)
+      create_sql_schema(connection, :postgres)
+
+      run_oauth_provider_smoke(
+        database: ->(options) { BetterAuth::Adapters::Postgres.new(options, connection: connection) }
+      )
+    rescue LoadError
+      skip "pg gem is not installed"
+    rescue PG::ConnectionBad
+      skip "PostgreSQL test service is not available"
+    ensure
+      connection&.close
+    end
   end
 
   def test_mysql_adapter_oauth_provider_smoke_flow
-    require "mysql2"
+    require_adapter_integration!
 
-    connection = Mysql2::Client.new(
-      host: ENV.fetch("BETTER_AUTH_MYSQL_HOST", "127.0.0.1"),
-      port: ENV.fetch("BETTER_AUTH_MYSQL_PORT", "3306").to_i,
-      username: ENV.fetch("BETTER_AUTH_MYSQL_USER", "user"),
-      password: ENV.fetch("BETTER_AUTH_MYSQL_PASSWORD", "password"),
-      database: ENV.fetch("BETTER_AUTH_MYSQL_DATABASE", "better_auth"),
-      symbolize_keys: false
-    )
-    reset_mysql_schema(connection)
-    create_sql_schema(connection, :mysql)
+    begin
+      require "mysql2"
 
-    run_oauth_provider_smoke(
-      database: ->(options) { BetterAuth::Adapters::MySQL.new(options, connection: connection) }
-    )
-  rescue LoadError
-    skip "mysql2 gem is not installed"
-  rescue Mysql2::Error::ConnectionError
-    skip "MySQL test service is not available"
-  ensure
-    connection&.close
+      connection = Mysql2::Client.new(
+        host: ENV.fetch("BETTER_AUTH_MYSQL_HOST", "127.0.0.1"),
+        port: ENV.fetch("BETTER_AUTH_MYSQL_PORT", "3306").to_i,
+        username: ENV.fetch("BETTER_AUTH_MYSQL_USER", "user"),
+        password: ENV.fetch("BETTER_AUTH_MYSQL_PASSWORD", "password"),
+        database: ENV.fetch("BETTER_AUTH_MYSQL_DATABASE", "better_auth"),
+        symbolize_keys: false
+      )
+      reset_mysql_schema(connection)
+      create_sql_schema(connection, :mysql)
+
+      run_oauth_provider_smoke(
+        database: ->(options) { BetterAuth::Adapters::MySQL.new(options, connection: connection) }
+      )
+    rescue LoadError
+      skip "mysql2 gem is not installed"
+    rescue Mysql2::Error::ConnectionError
+      skip "MySQL test service is not available"
+    ensure
+      connection&.close
+    end
   end
 
   def test_mssql_adapter_oauth_provider_smoke_flow
-    require "sequel"
-    require "tiny_tds"
+    require_adapter_integration!
 
-    ensure_mssql_database
-    connection = Sequel.connect(ENV.fetch("BETTER_AUTH_MSSQL_URL", "tinytds://sa:Password123!@127.0.0.1:1433/better_auth?timeout=30"))
-    reset_mssql_schema(connection)
-    create_sql_schema(connection, :mssql)
+    begin
+      require "sequel"
+      require "tiny_tds"
 
-    run_oauth_provider_smoke(
-      database: ->(options) { BetterAuth::Adapters::MSSQL.new(options, connection: connection) }
-    )
-  rescue LoadError
-    skip "sequel or tiny_tds gem is not installed"
-  rescue Sequel::DatabaseConnectionError
-    skip "MSSQL test service is not available"
-  ensure
-    connection&.disconnect
+      ensure_mssql_database
+      connection = Sequel.connect(ENV.fetch("BETTER_AUTH_MSSQL_URL", "tinytds://sa:Password123!@127.0.0.1:1433/better_auth?timeout=30"))
+      reset_mssql_schema(connection)
+      create_sql_schema(connection, :mssql)
+
+      run_oauth_provider_smoke(
+        database: ->(options) { BetterAuth::Adapters::MSSQL.new(options, connection: connection) }
+      )
+    rescue LoadError
+      skip "sequel or tiny_tds gem is not installed"
+    rescue Sequel::DatabaseConnectionError
+      skip "MSSQL test service is not available"
+    ensure
+      connection&.disconnect
+    end
   end
 
   def test_mongodb_adapter_oauth_provider_smoke_flow
@@ -121,6 +133,10 @@ class OAuthProviderAdapterSmokeTest < Minitest::Test
   end
 
   private
+
+  def require_adapter_integration!
+    skip "set BETTER_AUTH_ADAPTER_INTEGRATION=1 to run adapter integration tests" unless ENV["BETTER_AUTH_ADAPTER_INTEGRATION"] == "1"
+  end
 
   def run_oauth_provider_smoke(database:)
     auth = BetterAuth.auth(

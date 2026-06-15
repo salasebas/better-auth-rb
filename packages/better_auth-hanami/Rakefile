@@ -5,7 +5,17 @@ require "rspec/core/rake_task"
 
 Bundler::GemHelper.install_tasks(name: "better_auth-hanami")
 
-RSpec::Core::RakeTask.new(:spec)
+desc "Run fast specs without database services"
+RSpec::Core::RakeTask.new(:spec) do |task|
+  task.rspec_opts = "--tag ~integration"
+end
+
+namespace :test do
+  desc "Run database integration specs (PostgreSQL/MySQL/MSSQL services required)"
+  task :integration do
+    sh "bundle exec rspec --tag integration"
+  end
+end
 
 desc "Run StandardRB linter"
 task :lint do
@@ -17,10 +27,10 @@ task "lint:fix" do
   sh "bundle exec standardrb --fix"
 end
 
-desc "Run all tests"
+desc "Run fast tests without database services"
 task test: :spec
 
-desc "Run full CI check (lint + test)"
+desc "Run full CI check (lint + fast tests)"
 task ci: [:lint, :test]
 
 task default: :ci

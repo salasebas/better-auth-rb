@@ -3,9 +3,23 @@
 require "rake/testtask"
 require "standard/rake"
 
+desc "Run unit tests without external services"
 Rake::TestTask.new(:test) do |task|
   task.libs << "test"
   task.pattern = "test/**/*_test.rb"
+end
+
+namespace :test do
+  Rake::TestTask.new(:adapter_integration) do |task|
+    task.libs << "test"
+    task.pattern = "test/better_auth/scim/scim_adapter_matrix_test.rb"
+  end
+
+  desc "Run service-backed adapter integration tests (PostgreSQL/MySQL/MSSQL/MongoDB)"
+  task :integration do
+    ENV["BETTER_AUTH_ADAPTER_INTEGRATION"] = "1"
+    Rake::Task["test:adapter_integration"].invoke
+  end
 end
 
 task default: [:test, :standard]

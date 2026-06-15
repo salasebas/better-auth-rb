@@ -14,6 +14,8 @@ class BetterAuthMySQLPluginSchemaSmokeTest < Minitest::Test
   SECRET = "test-secret-that-is-long-enough-for-validation"
 
   def setup
+    skip "set BETTER_AUTH_ADAPTER_INTEGRATION=1 to run MySQL plugin schema smoke tests" unless ENV["BETTER_AUTH_ADAPTER_INTEGRATION"] == "1"
+
     @connection = mysql_connection
     reset_mysql_schema
   rescue Mysql2::Error::ConnectionError

@@ -439,4 +439,130 @@ class BetterAuthAPITest < Minitest::Test
     assert_includes headers.fetch("set-cookie"), "endpoint=value"
     assert_includes headers.fetch("set-cookie"), "after=value"
   end
+
+  def test_direct_api_before_hook_can_short_circuit_with_rack_tuple
+    auth = BetterAuth.auth(
+      base_url: "http://localhost:3000",
+      secret: SECRET,
+      plugins: [
+        {
+          id: "test",
+          endpoints: {
+            echo: BetterAuth::Endpoint.new(path: "/echo", method: "GET") { {ok: true} }
+          }
+        }
+      ],
+      hooks: {
+        before: lambda do |_ctx|
+          [418, {"content-type" => "text/plain", "x-short-circuit" => "rack"}, ["teapot"]]
+        end
+      }
+    )
+
+    status, headers, body = auth.api.echo(as_response: true)
+
+    assert_equal 418, status
+    assert_equal "rack", headers.fetch("x-short-circuit")
+    assert_equal ["teapot"], body
+  end
+
+  def test_direct_api_before_hook_can_short_circuit_with_endpoint_result
+    auth = BetterAuth.auth(
+      base_url: "http://localhost:3000",
+      secret: SECRET,
+      plugins: [
+        {
+          id: "test",
+          endpoints: {
+            echo: BetterAuth::Endpoint.new(path: "/echo", method: "GET") { {ok: true} }
+          }
+        }
+      ],
+      hooks: {
+        before: lambda do |ctx|
+          BetterAuth::Endpoint::Result.new(response: {from: "result"}, status: 202, headers: {"x-result" => "yes"})
+        end
+      }
+    )
+
+    data = auth.api.echo(return_headers: true, return_status: true)
+
+    assert_equal 202, data[:status]
+    assert_equal({from: "result"}, data[:response])
+    assert_equal "yes", data[:headers]["x-result"]
+  end
+
+  def test_direct_api_before_hook_can_short_circuit_with_api_error_response
+    auth = BetterAuth.auth(
+      base_url: "http://localhost:3000",
+      secret: SECRET,
+      plugins: [
+        {
+          id: "test",
+          endpoints: {
+            echo: BetterAuth::Endpoint.new(path: "/echo", method: "GET") { {ok: true} }
+          }
+        }
+      ],
+      hooks: {
+        before: lambda do |_ctx|
+          raise BetterAuth::APIError.new("FORBIDDEN", message: "short-circuit", headers: {"x-error" => "before"})
+        end
+      }
+    )
+
+    error = assert_raises(BetterAuth::APIError) { auth.api.echo }
+    assert_equal "FORBIDDEN", error.status
+    assert_equal "before", error.headers.fetch("x-error")
+
+    status, headers, body = auth.api.echo(as_response: true)
+    assert_equal 403, status
+    assert_equal "before", headers.fetch("x-error")
+    assert_equal({code: "FORBIDDEN", message: "short-circuit"}, JSON.parse(body.join, symbolize_names: true))
+  end
+
+  def test_disabled_paths_return_not_found_for_rack_but_remain_callable_via_direct_api
+    auth = BetterAuth.auth(
+      base_url: "http://localhost:3000",
+      secret: SECRET,
+      disabled_paths: ["/blocked"],
+      plugins: [
+        {
+          id: "test",
+          endpoints: {
+            blocked: BetterAuth::Endpoint.new(path: "/blocked", method: "GET") { {ok: true} }
+          }
+        }
+      ]
+    )
+
+    assert_equal({ok: true}, auth.api.blocked)
+    assert_equal 404, auth.call(BetterAuthTestHelpers.json_rack_env("GET", "/api/auth/blocked")).first
+  end
+
+  def test_direct_api_error_supports_custom_response_headers_on_known_status_codes
+    auth = BetterAuth.auth(
+      base_url: "http://localhost:3000",
+      secret: SECRET,
+      plugins: [
+        {
+          id: "test",
+          endpoints: {
+            custom_error: BetterAuth::Endpoint.new(path: "/custom-error", method: "GET") do |_ctx|
+              raise BetterAuth::APIError.new("NOT_FOUND", message: "custom", headers: {"x-custom" => "yes"})
+            end
+          }
+        }
+      ]
+    )
+
+    error = assert_raises(BetterAuth::APIError) { auth.api.custom_error }
+    assert_equal "NOT_FOUND", error.status
+    assert_equal 404, error.status_code
+    assert_equal "yes", error.headers.fetch("x-custom")
+
+    status, headers, = auth.api.custom_error(as_response: true)
+    assert_equal 404, status
+    assert_equal "yes", headers.fetch("x-custom")
+  end
 end

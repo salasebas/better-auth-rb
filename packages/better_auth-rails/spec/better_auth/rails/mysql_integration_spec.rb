@@ -3,7 +3,7 @@
 require "tmpdir"
 require_relative "../../spec_helper"
 
-RSpec.describe "BetterAuth::Rails MySQL integration" do
+RSpec.describe "BetterAuth::Rails MySQL integration", :integration do
   let(:url) { ENV.fetch("BETTER_AUTH_MYSQL_URL", "mysql2://user:password@127.0.0.1:3306/better_auth") }
   let(:secret) { "test-secret-that-is-long-enough-for-validation" }
   let(:config) { BetterAuth::Configuration.new(secret: secret, database: :memory) }

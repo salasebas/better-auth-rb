@@ -2,7 +2,7 @@
 
 require_relative "../../spec_helper"
 
-RSpec.describe "BetterAuth::Hanami::SequelAdapter database integrations" do
+RSpec.describe "BetterAuth::Hanami::SequelAdapter database integrations", :integration do
   let(:secret) { "test-secret-that-is-long-enough-for-validation" }
   let(:plugin) do
     BetterAuth::Plugin.new(

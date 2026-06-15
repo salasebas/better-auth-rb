@@ -3,6 +3,7 @@
 require "rake/testtask"
 require "standard/rake"
 
+desc "Run unit tests without external services"
 Rake::TestTask.new(:test) do |task|
   task.libs << "test"
   task.pattern = "test/**/*_test.rb"
@@ -14,6 +15,7 @@ namespace :test do
     task.pattern = "test/better_auth/redis_storage_integration_test.rb"
   end
 
+  desc "Run real Redis integration tests (requires REDIS_URL or local Redis)"
   task :integration do
     ENV["REDIS_INTEGRATION"] = "1"
     Rake::Task["test:redis_integration"].invoke

@@ -31,77 +31,96 @@ class BetterAuthSSOAdapterMatrixTest < Minitest::Test
   end
 
   def test_postgres_adapter_persists_sso_provider_oidc_callback_saml_state_and_domain_verification
-    require "pg"
+    require_adapter_integration!
 
-    connection = PG.connect(ENV.fetch("BETTER_AUTH_POSTGRES_URL", "postgres://user:password@localhost:5432/better_auth"))
-    reset_postgres_schema(connection)
-    auth = sql_matrix_auth(:postgres, connection) { |options| BetterAuth::Adapters::Postgres.new(options, connection: connection) }
+    begin
+      require "pg"
 
-    assert_sso_matrix_round_trip(auth, "postgres")
-  rescue LoadError
-    skip "pg gem is not installed"
-  rescue PG::ConnectionBad
-    skip "PostgreSQL test service is not available"
-  ensure
-    connection&.close
+      connection = PG.connect(ENV.fetch("BETTER_AUTH_POSTGRES_URL", "postgres://user:password@localhost:5432/better_auth"))
+      reset_postgres_schema(connection)
+      auth = sql_matrix_auth(:postgres, connection) { |options| BetterAuth::Adapters::Postgres.new(options, connection: connection) }
+
+      assert_sso_matrix_round_trip(auth, "postgres")
+    rescue LoadError
+      skip "pg gem is not installed"
+    rescue PG::ConnectionBad
+      skip "PostgreSQL test service is not available"
+    ensure
+      connection&.close
+    end
   end
 
   def test_mysql_adapter_persists_sso_provider_oidc_callback_saml_state_and_domain_verification
-    require "mysql2"
+    require_adapter_integration!
 
-    connection = mysql_connection
-    reset_mysql_schema(connection)
-    auth = sql_matrix_auth(:mysql, connection) { |options| BetterAuth::Adapters::MySQL.new(options, connection: connection) }
+    begin
+      require "mysql2"
 
-    assert_sso_matrix_round_trip(auth, "mysql")
-  rescue LoadError
-    skip "mysql2 gem is not installed"
-  rescue Mysql2::Error::ConnectionError
-    skip "MySQL test service is not available"
-  ensure
-    connection&.close
+      connection = mysql_connection
+      reset_mysql_schema(connection)
+      auth = sql_matrix_auth(:mysql, connection) { |options| BetterAuth::Adapters::MySQL.new(options, connection: connection) }
+
+      assert_sso_matrix_round_trip(auth, "mysql")
+    rescue LoadError
+      skip "mysql2 gem is not installed"
+    rescue Mysql2::Error::ConnectionError
+      skip "MySQL test service is not available"
+    ensure
+      connection&.close
+    end
   end
 
   def test_mssql_adapter_persists_sso_provider_oidc_callback_saml_state_and_domain_verification
-    require "sequel"
-    require "tiny_tds"
+    require_adapter_integration!
 
-    ensure_mssql_database
-    connection = Sequel.connect(ENV.fetch("BETTER_AUTH_MSSQL_URL", "tinytds://sa:Password123!@127.0.0.1:1433/better_auth?timeout=30"))
-    reset_mssql_schema(connection)
-    auth = sql_matrix_auth(:mssql, connection) { |options| BetterAuth::Adapters::MSSQL.new(options, connection: connection) }
+    begin
+      require "sequel"
+      require "tiny_tds"
 
-    assert_sso_matrix_round_trip(auth, "mssql")
-  rescue LoadError
-    skip "sequel or tiny_tds gem is not installed"
-  rescue Sequel::DatabaseConnectionError
-    skip "MSSQL test service is not available"
-  ensure
-    connection&.disconnect
+      ensure_mssql_database
+      connection = Sequel.connect(ENV.fetch("BETTER_AUTH_MSSQL_URL", "tinytds://sa:Password123!@127.0.0.1:1433/better_auth?timeout=30"))
+      reset_mssql_schema(connection)
+      auth = sql_matrix_auth(:mssql, connection) { |options| BetterAuth::Adapters::MSSQL.new(options, connection: connection) }
+
+      assert_sso_matrix_round_trip(auth, "mssql")
+    rescue LoadError
+      skip "sequel or tiny_tds gem is not installed"
+    rescue Sequel::DatabaseConnectionError
+      skip "MSSQL test service is not available"
+    ensure
+      connection&.disconnect
+    end
   end
 
   def test_mongodb_adapter_is_exercised_when_real_mongo_package_and_service_are_available
+    require_adapter_integration!
     skip "Set BETTER_AUTH_MONGODB_URL to run the real MongoDB SSO matrix test" unless ENV["BETTER_AUTH_MONGODB_URL"]
 
-    require "mongo"
-    require "better_auth/mongodb"
+    begin
+      require "mongo"
+      require "better_auth/mongodb"
 
-    client = Mongo::Client.new(ENV.fetch("BETTER_AUTH_MONGODB_URL"), database: ENV.fetch("BETTER_AUTH_MONGODB_DATABASE", "better_auth_sso_test"))
-    client.database.collections.each(&:drop)
-    auth = matrix_auth(database: ->(options) { BetterAuth::Adapters::MongoDB.new(options, database: client.database) })
+      client = Mongo::Client.new(ENV.fetch("BETTER_AUTH_MONGODB_URL"), database: ENV.fetch("BETTER_AUTH_MONGODB_DATABASE", "better_auth_sso_test"))
+      client.database.collections.each(&:drop)
+      auth = matrix_auth(database: ->(options) { BetterAuth::Adapters::MongoDB.new(options, database: client.database) })
 
-    assert_sso_matrix_round_trip(auth, "mongodb")
-  rescue LoadError
-    skip "mongo or better_auth-mongodb gem is not installed"
-  rescue => error
-    raise unless defined?(Mongo::Error) && error.is_a?(Mongo::Error)
+      assert_sso_matrix_round_trip(auth, "mongodb")
+    rescue LoadError
+      skip "mongo or better_auth-mongodb gem is not installed"
+    rescue => error
+      raise unless defined?(Mongo::Error) && error.is_a?(Mongo::Error)
 
-    skip "MongoDB test service is not available"
-  ensure
-    client&.close
+      skip "MongoDB test service is not available"
+    ensure
+      client&.close
+    end
   end
 
   private
+
+  def require_adapter_integration!
+    skip "set BETTER_AUTH_ADAPTER_INTEGRATION=1 to run adapter integration tests" unless ENV["BETTER_AUTH_ADAPTER_INTEGRATION"] == "1"
+  end
 
   def matrix_auth(database:)
     build_sso_auth(

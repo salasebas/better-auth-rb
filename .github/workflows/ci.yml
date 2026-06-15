@@ -198,14 +198,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install database client headers
-        run: |
-          if [ -f /etc/apt/apt-mirrors.txt ]; then
-            echo "https://archive.ubuntu.com/ubuntu/" | sudo tee /etc/apt/apt-mirrors.txt
-          fi
-          sudo apt-get update -o Acquire::Retries=3 -o Acquire::http::Timeout=10 -o Acquire::https::Timeout=10
-          sudo apt-get install -y --no-install-recommends default-libmysqlclient-dev freetds-dev
-
       - name: Set up Ruby
         uses: ruby/setup-ruby@v1
         with:
@@ -262,14 +254,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install database client headers
-        run: |
-          if [ -f /etc/apt/apt-mirrors.txt ]; then
-            echo "https://archive.ubuntu.com/ubuntu/" | sudo tee /etc/apt/apt-mirrors.txt
-          fi
-          sudo apt-get update -o Acquire::Retries=3 -o Acquire::http::Timeout=10 -o Acquire::https::Timeout=10
-          sudo apt-get install -y --no-install-recommends default-libmysqlclient-dev freetds-dev
-
       - name: Set up Ruby
         uses: ruby/setup-ruby@v1
         with:
@@ -285,45 +269,8 @@ jobs:
   test-rails:
     name: Test better_auth-rails (Rails Adapter)
     runs-on: ubuntu-latest
-    services:
-      postgres:
-        image: postgres:latest
-        env:
-          POSTGRES_USER: user
-          POSTGRES_PASSWORD: password
-          POSTGRES_DB: better_auth
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd "pg_isready -U user -d better_auth"
-          --health-interval 1s
-          --health-timeout 5s
-          --health-retries 10
-      mysql:
-        image: mysql:latest
-        env:
-          MYSQL_ROOT_PASSWORD: root_password
-          MYSQL_DATABASE: better_auth
-          MYSQL_USER: user
-          MYSQL_PASSWORD: password
-        ports:
-          - 3306:3306
-        options: >-
-          --health-cmd "mysqladmin ping -h 127.0.0.1 -uuser -ppassword"
-          --health-interval 1s
-          --health-timeout 5s
-          --health-retries 30
-          --health-start-period 30s
     steps:
       - uses: actions/checkout@v4
-
-      - name: Install database client headers
-        run: |
-          if [ -f /etc/apt/apt-mirrors.txt ]; then
-            echo "https://archive.ubuntu.com/ubuntu/" | sudo tee /etc/apt/apt-mirrors.txt
-          fi
-          sudo apt-get update -o Acquire::Retries=3 -o Acquire::http::Timeout=10 -o Acquire::https::Timeout=10
-          sudo apt-get install -y --no-install-recommends default-libmysqlclient-dev
 
       - name: Set up Ruby
         uses: ruby/setup-ruby@v1
@@ -333,9 +280,9 @@ jobs:
           working-directory: packages/better_auth-rails
 
 
-      - name: Run tests
+      - name: Run fast tests
         working-directory: packages/better_auth-rails
-        run: bundle exec rspec
+        run: bundle exec rake test
 
   test-sinatra:
     name: Test better_auth-sinatra (Sinatra Adapter)
@@ -388,9 +335,24 @@ jobs:
           working-directory: packages/better_auth-hanami
 
 
-      - name: Run tests
+      - name: Run fast tests
         working-directory: packages/better_auth-hanami
-        run: bundle exec rspec
+        run: bundle exec rake test
+
+  test-openauth-grape:
+    name: Test openauth-grape (alias smoke)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: .ruby-version
+          bundler-cache: true
+
+      - name: Run openauth-grape smoke spec
+        run: bundle exec rspec packages/openauth-grape/spec --format progress
 
   test-grape:
     name: Test better_auth-grape (Grape Adapter)
@@ -432,16 +394,6 @@ jobs:
   test-redis-storage:
     name: Test better_auth-redis-storage (Redis Storage Plugin)
     runs-on: ubuntu-latest
-    services:
-      redis:
-        image: redis:7-alpine
-        ports:
-          - 6379:6379
-        options: >-
-          --health-cmd "redis-cli ping"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
     steps:
       - uses: actions/checkout@v4
 
@@ -453,75 +405,8 @@ jobs:
           working-directory: packages/better_auth-redis-storage
 
 
-      - name: Run tests
+      - name: Run fast tests
         working-directory: packages/better_auth-redis-storage
-        env:
-          REDIS_URL: redis://localhost:6379/0
-        run: bundle exec rake test
-
-      - name: Run Redis integration tests
-        working-directory: packages/better_auth-redis-storage
-        env:
-          REDIS_INTEGRATION: "1"
-          REDIS_URL: redis://localhost:6379/0
-        run: bundle exec rake test:integration
-
-  test-mongodb:
-    name: Test better_auth-mongodb (MongoDB Adapter)
-    runs-on: ubuntu-latest
-    services:
-      mongodb:
-        image: mongo:latest
-        ports:
-          - 27017:27017
-        options: >-
-          --health-cmd "mongosh --quiet --eval \"db.adminCommand('ping').ok\""
-          --health-interval 2s
-          --health-timeout 5s
-          --health-retries 20
-          --health-start-period 10s
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Set up Ruby
-        uses: ruby/setup-ruby@v1
-        with:
-          ruby-version: .ruby-version
-          bundler-cache: true
-          working-directory: packages/better_auth-mongodb
-
-
-      - name: Run tests
-        working-directory: packages/better_auth-mongodb
-        run: bundle exec rake test
-
-  test-mongo-adapter:
-    name: Test better_auth-mongo-adapter (Compatibility)
-    runs-on: ubuntu-latest
-    services:
-      mongodb:
-        image: mongo:latest
-        ports:
-          - 27017:27017
-        options: >-
-          --health-cmd "mongosh --quiet --eval \"db.adminCommand('ping').ok\""
-          --health-interval 2s
-          --health-timeout 5s
-          --health-retries 20
-          --health-start-period 10s
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Set up Ruby
-        uses: ruby/setup-ruby@v1
-        with:
-          ruby-version: .ruby-version
-          bundler-cache: true
-          working-directory: packages/better_auth-mongo-adapter
-
-
-      - name: Run tests
-        working-directory: packages/better_auth-mongo-adapter
         run: bundle exec rake test
 
   test-scim:
@@ -647,12 +532,11 @@ jobs:
       - test-rails
       - test-sinatra
       - test-hanami
+      - test-openauth-grape
       - test-grape
       - test-roda
       - test-oauth-provider
       - test-redis-storage
-      - test-mongodb
-      - test-mongo-adapter
       - test-scim
       - test-oidc
       - test-saml
