@@ -17,6 +17,16 @@ class BetterAuthMigrationSQLTest < Minitest::Test
     end
   end
 
+  class FakeSQLiteAdapter < BetterAuth::Adapters::Base
+    attr_reader :connection, :dialect
+
+    def initialize(options, connection)
+      super(options)
+      @connection = connection
+      @dialect = :sqlite
+    end
+  end
+
   class FakeSQLConnection
     attr_reader :executed_statements, :applied_versions
 
@@ -386,13 +396,13 @@ class BetterAuthMigrationSQLTest < Minitest::Test
     connection.results_as_hash = true
     auth = BetterAuth.auth(
       secret: SECRET,
-      database: ->(options) { FakeSQLAdapter.new(options, connection) }
+      database: ->(options) { FakeSQLiteAdapter.new(options, connection) }
     )
-
-    def connection.exec(sql)
+    original_execute = connection.method(:execute)
+    connection.define_singleton_method(:execute) do |sql, *binds|
       raise "migration statement failed" if sql.match?(/CREATE TABLE IF NOT EXISTS "users"/i)
 
-      super
+      original_execute.call(sql, *binds)
     end
 
     assert_raises(RuntimeError, "migration statement failed") do
@@ -423,7 +433,7 @@ class BetterAuthMigrationSQLTest < Minitest::Test
     connection = ExecuteOnlySQLiteConnection.new
     auth = BetterAuth.auth(
       secret: SECRET,
-      database: ->(options) { FakeSQLAdapter.new(options, connection) }
+      database: ->(options) { FakeSQLiteAdapter.new(options, connection) }
     )
 
     assert BetterAuth::SQLMigration.migrate_pending(auth)
@@ -437,7 +447,7 @@ class BetterAuthMigrationSQLTest < Minitest::Test
       BetterAuth::SQLMigration.execute_sql(connection, "SELECT 1")
     end
 
-    assert_includes error.message, "exec, execute, or query"
+    assert_includes error.message, "execute, exec, or query"
   end
 
   class ExecuteOnlySQLiteConnection

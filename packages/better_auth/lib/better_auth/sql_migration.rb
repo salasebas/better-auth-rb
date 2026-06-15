@@ -219,14 +219,14 @@ module BetterAuth
     def execute_sql(connection, sql)
       statements(sql).each_with_object([]) do |statement, results|
         result =
-          if connection.respond_to?(:exec)
-            connection.exec(statement)
-          elsif connection.respond_to?(:execute)
+          if connection.respond_to?(:execute)
             connection.execute(statement)
+          elsif connection.respond_to?(:exec)
+            connection.exec(statement)
           elsif connection.respond_to?(:query)
             connection.query(statement)
           else
-            raise UnsupportedAdapterError, "SQL connection does not support exec, execute, or query"
+            raise UnsupportedAdapterError, "SQL connection does not support execute, exec, or query"
           end
         results.concat(result.to_a) if result.respond_to?(:to_a)
       end
