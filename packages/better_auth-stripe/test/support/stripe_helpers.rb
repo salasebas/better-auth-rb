@@ -4,6 +4,8 @@ require "json"
 require "securerandom"
 require "stringio"
 
+require File.expand_path("../../../better_auth/test/support/password_test_helpers.rb", __dir__)
+
 module BetterAuthStripeTestHelpers
   def build_auth(options = {})
     plugin_options = {
@@ -14,7 +16,7 @@ module BetterAuthStripeTestHelpers
       base_url: "http://localhost:3000",
       secret: stripe_test_secret,
       database: :memory,
-      email_and_password: {enabled: true},
+      email_and_password: BetterAuthTestPasswordHelpers.fast_email_and_password_config,
       plugins: [
         BetterAuth::Plugins.stripe(plugin_options)
       ]

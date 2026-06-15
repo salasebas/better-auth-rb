@@ -8,6 +8,8 @@ require "stringio"
 require "uri"
 require "zlib"
 
+require File.expand_path("../../../better_auth/test/support/password_test_helpers.rb", __dir__)
+
 module BetterAuthSSOTestHelpers
   SECRET = "test-secret-that-is-long-enough-for-validation"
 
@@ -55,15 +57,15 @@ module BetterAuthSSOTestHelpers
   end
 
   def build_sso_auth(plugin_options: {}, plugins: nil, **options)
-    BetterAuth.auth(
-      {
-        base_url: "http://localhost:3000",
-        secret: SECRET,
-        database: :memory,
-        email_and_password: {enabled: true},
-        plugins: plugins || [BetterAuth::Plugins.sso(plugin_options)]
-      }.merge(options)
-    )
+    auth_options = {
+      base_url: "http://localhost:3000",
+      secret: SECRET,
+      database: :memory,
+      plugins: plugins || [BetterAuth::Plugins.sso(plugin_options)]
+    }
+    auth_options[:email_and_password] = BetterAuthTestPasswordHelpers.fast_email_and_password_config unless options.key?(:email_and_password)
+
+    BetterAuth.auth(auth_options.merge(options))
   end
 
   def sign_up_cookie(auth, email: "owner-#{SecureRandom.hex(4)}@example.com", password: "password123")

@@ -8,6 +8,7 @@ require "minitest/mock"
 require "minitest/spec"
 
 require_relative "support/auth_test_helpers"
+require_relative "support/password_test_helpers"
 
 module BetterAuthMySQLTestHelpers
   def mysql_connection

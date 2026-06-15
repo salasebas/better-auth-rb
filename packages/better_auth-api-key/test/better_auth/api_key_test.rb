@@ -2,6 +2,9 @@
 
 require_relative "../test_helper"
 
+PASSWORD_TEST_HELPERS = File.expand_path("../../../better_auth/test/support/password_test_helpers.rb", __dir__)
+require PASSWORD_TEST_HELPERS
+
 class BetterAuthPluginsAPIKeyTest < Minitest::Test
   SECRET = "phase-nine-api-key-secret-with-enough-entropy"
 
@@ -2028,7 +2031,7 @@ class BetterAuthPluginsAPIKeyTest < Minitest::Test
     session = options.is_a?(Hash) ? options.delete(:session) : nil
     BetterAuth.auth({
       secret: SECRET,
-      email_and_password: {enabled: true},
+      email_and_password: BetterAuthTestPasswordHelpers.fast_email_and_password_config,
       advanced: advanced,
       secondary_storage: secondary_storage,
       session: session,

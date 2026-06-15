@@ -5,6 +5,7 @@ require "json"
 require "openssl"
 require "rack/mock"
 require_relative "../../../test_helper"
+require_relative "../../../support/password_test_helpers"
 
 module MCPTestHelpers
   SECRET = "phase-eleven-secret-with-enough-entropy-123"
@@ -15,7 +16,7 @@ module MCPTestHelpers
       base_url: "http://localhost:3000",
       secret: SECRET,
       database: :memory,
-      email_and_password: {enabled: true},
+      email_and_password: BetterAuthTestPasswordHelpers.fast_email_and_password_config,
       plugins: [BetterAuth::Plugins.mcp({login_page: "/login"}.merge(options)), *extra_plugins]
     )
   end
