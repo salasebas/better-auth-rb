@@ -26,11 +26,14 @@ class OpenAuthCLITest < Minitest::Test
     stdout, stderr, status = capture_openauth_executable("--help")
 
     assert status.success?, stderr
+    assert_includes stdout, "better-auth init"
     assert_includes stdout, "better-auth generate"
     assert_includes stdout, "better-auth migrate"
     assert_includes stdout, "migrate status"
     assert_includes stdout, "better-auth doctor"
+    assert_includes stdout, "better-auth upgrade"
     assert_includes stdout, "mongo indexes"
+    assert_includes stdout, "--discover-config"
   end
 
   def test_openauth_executable_unknown_command_returns_error
@@ -48,6 +51,8 @@ class OpenAuthCLITest < Minitest::Test
 
       stdout, stderr, status = capture_openauth_executable(
         "generate",
+        "--cwd",
+        dir,
         "--config",
         config_path,
         "--dialect",
@@ -69,7 +74,8 @@ class OpenAuthCLITest < Minitest::Test
       _stdout, stderr, status = capture_openauth_executable(
         "doctor",
         "--cwd",
-        dir
+        dir,
+        "--discover-config"
       )
 
       assert_equal false, status.success?
@@ -82,6 +88,36 @@ class OpenAuthCLITest < Minitest::Test
 
     assert status.success?, stderr
     assert_match(/\ABETTER_AUTH_SECRET=[0-9a-f]{64}\n\z/, stdout)
+  end
+
+  def test_openauth_executable_init_requires_cwd
+    _, stderr, status = capture_openauth_executable("init", "--framework", "rack")
+
+    refute status.success?, stderr
+    assert_includes stderr, "--cwd"
+  end
+
+  def test_openauth_executable_generate_strict_missing_cwd
+    _, stderr, status = capture_openauth_executable(
+      "generate",
+      "--config", "config/better_auth.rb",
+      "--dialect", "sqlite",
+      "--output", "out.sql"
+    )
+
+    refute status.success?, stderr
+    assert_includes stderr, "--cwd"
+  end
+
+  def test_openauth_executable_upgrade_dry_run
+    Dir.mktmpdir("openauth-cli") do |dir|
+      File.write(File.join(dir, "Gemfile"), 'gem "better_auth"')
+
+      stdout, stderr, status = capture_openauth_executable("upgrade", "--cwd", dir)
+
+      assert status.success?, stderr
+      assert_includes stdout, "bundle update"
+    end
   end
 
   private

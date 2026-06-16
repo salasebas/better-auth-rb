@@ -46,9 +46,37 @@ module BetterAuthCLITestHelpers
   HARDENED_SECRET = "cli-hardened-secret-1234567890-ABCDEFGHIJKLMNOPQRSTUVWXYZ"
 
   def run_cli(*argv)
+    argv = argv.map(&:to_s)
     stdout = StringIO.new
     stderr = StringIO.new
     status = BetterAuth::CLI.run(argv, stdout: stdout, stderr: stderr)
+    [status, stdout.string, stderr.string]
+  end
+
+  def run_cli_strict(*argv)
+    run_cli(*argv)
+  end
+
+  def cli_dir_flags(dir, config: nil, discover_config: false)
+    flags = ["--cwd", dir]
+    flags += ["--config", config] if config
+    flags += ["--discover-config"] if discover_config
+    flags
+  end
+
+  def with_cli_command_runner(runner)
+    previous = @cli_command_runner
+    @cli_command_runner = runner
+    yield
+  ensure
+    @cli_command_runner = previous
+  end
+
+  def run_init_cli(*argv, command_runner: @cli_command_runner)
+    stdout = StringIO.new
+    stderr = StringIO.new
+    runner = command_runner || BetterAuth::CLI::Init.default_command_runner
+    status = BetterAuth::CLI::Init.run(argv, stdout: stdout, stderr: stderr, command_runner: runner)
     [status, stdout.string, stderr.string]
   end
 
