@@ -3,30 +3,59 @@
 Command-line tools for Better Auth Ruby.
 
 ```bash
-better-auth generate --config config/better_auth.rb --dialect postgres --output db/better_auth/schema.sql
-better-auth migrate --config config/better_auth.rb --yes
-better-auth migrate status --config config/better_auth.rb
-better-auth doctor --config config/better_auth.rb
-better-auth info --config config/better_auth.rb --json
+better-auth init --cwd . --framework rails
+better-auth generate --cwd . --config config/better_auth.rb --dialect postgres --output db/better_auth/schema.sql
+better-auth migrate --cwd . --config config/better_auth.rb --yes
+better-auth migrate status --cwd . --config config/better_auth.rb
+better-auth doctor --cwd . --config config/better_auth.rb
+better-auth info --cwd . --config config/better_auth.rb --json
 better-auth secret
-better-auth mongo indexes --config config/better_auth.rb
+better-auth mongo indexes --cwd . --config config/better_auth.rb
 ```
 
-## Config discovery and `--cwd`
+## Init
 
-Run commands from a project root without passing `--config` when a conventional
-Ruby config file exists:
+Scaffold Better Auth into an existing Ruby app (non-interactive, CI-safe):
 
 ```bash
-better-auth generate --cwd . --dialect postgres --output db/better_auth/schema.sql
-better-auth migrate status --cwd .
-better-auth migrate --cwd . --yes
-better-auth doctor --cwd .
-better-auth mongo indexes --cwd .
+# Explicit framework (recommended for CI)
+better-auth init --cwd . --framework rails
+better-auth init --cwd . --framework hanami|sinatra|roda|rack
+
+# Opt-in detection (never implicit)
+better-auth init --cwd . --detect-framework
 ```
 
-When `--config` is omitted, the CLI searches under `--cwd` (default: the current
-directory) in this order:
+- `--cwd` is **required** for every config-backed command, including `init`.
+- Pass exactly one of `--framework` or `--detect-framework`.
+- `rack` is never auto-detected; pass `--framework rack` for generic Rack apps.
+- Framework packages own templates; the CLI orchestrates `rails generate`,
+  `rake better_auth:install`, or writes a minimal Rack scaffold.
+
+Use `--force` to overwrite CLI-owned Rack scaffold files only.
+
+## Explicit flags (no silent defaults)
+
+Every config-backed command requires `--cwd`. Config resolution requires either
+`--config PATH` or `--discover-config` (opt-in replacement for implicit discovery).
+
+```bash
+# Explicit config path
+better-auth doctor --cwd . --config config/better_auth.rb
+
+# Search conventional paths under --cwd
+better-auth doctor --cwd . --discover-config
+```
+
+`generate` also requires `--dialect` and `--output`. There is no implicit
+`postgres` dialect fallback.
+
+`info` requires `--cwd`; `--config` and `--discover-config` are optional (version-only output when omitted).
+
+## Config discovery with `--discover-config`
+
+When `--discover-config` is passed (without `--config`), the CLI searches under
+`--cwd` in this order:
 
 1. `config/better_auth.rb`
 2. `config/auth.rb`
@@ -42,9 +71,8 @@ storage, SQL adapter support, and pending Better Auth migrations.
 `mongo indexes` is for MongoDB adapters and idempotently ensures the indexes
 declared by the active Better Auth schema.
 
-Non-Rails Rack apps can use `generate`, `migrate status`, `migrate --yes`, and
-`doctor` with a Ruby config file that declares the full auth configuration,
-including plugins and additional fields.
+Non-Rails Rack apps can use `init --framework rack`, then `generate`, `migrate
+status`, `migrate --yes`, and `doctor` with the generated config.
 
 ## Secret and diagnostics
 
@@ -61,7 +89,8 @@ Inspect runtime and schema diagnostics as JSON:
 
 ```bash
 better-auth info --cwd . --json
-better-auth doctor --cwd . --json
+better-auth info --cwd . --config config/better_auth.rb --json
+better-auth doctor --cwd . --config config/better_auth.rb --json
 ```
 
 `info --json` returns Ruby, gem, CLI, resolved table names from
@@ -69,3 +98,17 @@ better-auth doctor --cwd . --json
 serializing sensitive config values.
 
 Install `openauth-cli` for the `openauth` executable alias.
+
+## Command reference
+
+| Command | Required flags | Optional flags |
+| --- | --- | --- |
+| `init` | `--cwd`, (`--framework` XOR `--detect-framework`) | `--force`, `--write-env-example`, `--plugin`, `--database-dialect` |
+| `upgrade` | `--cwd` | `--yes` |
+| `generate` | `--cwd`, (`--config` or `--discover-config`), `--dialect`, `--output` | — |
+| `migrate` | `--cwd`, (`--config` or `--discover-config`), `--yes` | — |
+| `migrate status` | `--cwd`, (`--config` or `--discover-config`) | — |
+| `doctor` | `--cwd`, (`--config` or `--discover-config`) | `--json` |
+| `info` | `--cwd` | `--config`, `--discover-config`, `--json` |
+| `secret` | — | `--raw` |
+| `mongo indexes` | `--cwd`, (`--config` or `--discover-config`) | — |

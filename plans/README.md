@@ -77,10 +77,30 @@ Drizzle, `SQLMigration.plan` introspection, framework generators out of band).
 | 004 | CLI config discovery & `--cwd` | 001 | DONE |
 | 005 | CLI `secret` + `info --json` | 001, 004 | DONE |
 
-Recommended order: 001 → 002 → 003 (migration chain); 004 → 005 can run in
-parallel after 001. Plan 003 is the primary home for migrate/status/doctor
-behavior; 002 for SQL generation; 004/005 for config discovery and `info` output
-that must reflect `Schema.auth_tables`.
+Recommended order for 001–005: 001 → 002 → 003 (migration chain); 004 → 005
+after 001. Superseded for discovery behavior by 016–017 (`--discover-config`).
+
+## CLI Full Parity Initiative (016–018)
+
+Deep audit 2026-06-15: close gap vs upstream `packages/cli` (~291 cases) with
+**explicit flags only** (no silent defaults), full `init`, framework detection,
+and ≥210 Ruby CLI tests covering 100% of Ruby-applicable upstream behavior.
+
+| Plan | Title | Depends on | Status |
+| --- | --- | --- | --- |
+| 016 | CLI upstream parity inventory + strict options contract | 001, 005 | DONE |
+| 017 | CLI init, framework detection, strict options | 016 | DONE |
+| 018 | CLI full test parity + info/upgrade coverage | 016, 017 | DONE |
+
+Recommended order: **016 → 017 → 018**. Plan 016 defines the inventory and
+error contract. Plan 017 implements breaking strict flags and `init`. Plan 018
+splits tests, ports upstream cases, and closes inventory to `:covered`.
+
+Dependency notes:
+
+- 017 must not start until 016 inventory exists (prevents blind test porting).
+- 018 depends on 017 strict flags — all existing CLI tests need `--cwd` updates.
+- Plan 004 implicit discovery is superseded by `--discover-config` opt-in (017).
 
 ## Existing Unrelated Plan Files
 
@@ -128,6 +148,16 @@ Use these commands as gates unless a plan gives a narrower command first:
 - Parallelizing shared database integration tests inside a single job: rejected
   for the first pass because many tests reset shared schemas. Plan 015 favors
   explicit workflow/job separation before introducing concurrency.
+- Upstream CLI `ai`, `mcp`, `login`, `logout`: rejected for Ruby CLI (Node/IDE
+  specific). See plan 018 rejected table.
+- Upstream CLI Prisma/Drizzle/Kysely codegen tests: rejected; Ruby CLI is
+  SQL-only per plan 002.
+- Upstream CLI npm package manager / install-dependencies tests: rejected; Ruby
+  uses Bundler/`bundle update` guidance instead.
+- Upstream CLI interactive init/migrate/generate prompts: rejected; Ruby CLI
+  stays non-interactive for CI. Use explicit flags or pretty errors.
+- Implicit `--cwd` / config discovery without `--discover-config`: rejected per
+  maintainer policy; plan 017 supersedes plan 004 implicit discovery behavior.
 
 ## Notes For Executors
 

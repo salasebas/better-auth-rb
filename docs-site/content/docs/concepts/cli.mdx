@@ -5,6 +5,50 @@ description: Learn the Ruby and Rails commands used to install, migrate, inspect
 
 Better Auth Ruby uses Rails generators, the `better-auth` CLI, and Ruby tasks.
 
+## Init
+
+Install Better Auth into an existing Ruby app with the unified CLI (non-interactive):
+
+```bash
+better-auth init --cwd . --framework rails
+better-auth init --cwd . --framework hanami|sinatra|roda|rack
+better-auth init --cwd . --detect-framework
+```
+
+- `--cwd` is required.
+- Pass exactly one of `--framework` or `--detect-framework`.
+- `rack` is never auto-detected; use `--framework rack` for generic Rack apps.
+- Rails/Hanami/Sinatra/Roda installs delegate to each framework package's generator or rake task.
+- Rack installs write a minimal `config/better_auth.rb` and migration directory.
+
+The Rails install generator also remains available directly:
+
+```bash
+bin/rails generate better_auth:install
+```
+
+```ruby title="config/routes.rb"
+mount BetterAuth::Rails.app => "/api/auth"
+```
+
+### Options
+
+Use `--force` to overwrite CLI-owned Rack scaffold files. Framework-specific
+options (`--secret`, `--base-url`, `--database-dialect`) are validated when
+present but not auto-filled.
+
+## Explicit flags
+
+Config-backed commands require `--cwd`. Pass `--config PATH` or add
+`--discover-config` to search conventional paths under `--cwd`:
+
+1. `config/better_auth.rb`
+2. `config/auth.rb`
+3. `better_auth.rb`
+4. `auth.rb`
+
+There are no silent defaults for working directory, config path, or SQL dialect.
+
 ## Generate
 
 Generate Rails installation files:
@@ -24,24 +68,22 @@ The migration generator reads your Better Auth configuration and includes core t
 For non-Rails Rack apps, use the `better-auth` CLI:
 
 ```bash
-better-auth generate --cwd . --dialect postgres --output db/better_auth/schema.sql
+better-auth generate --cwd . --config config/better_auth.rb --dialect postgres --output db/better_auth/schema.sql
 ```
 
-You can also pass an explicit config path:
+Or discover config under the project root:
 
 ```bash
-better-auth generate --config config/better_auth.rb --dialect postgres --output db/better_auth/schema.sql
+better-auth generate --cwd . --discover-config --dialect postgres --output db/better_auth/schema.sql
 ```
 
-When `--config` is omitted, the CLI searches under `--cwd` for
-`config/better_auth.rb`, `config/auth.rb`, `better_auth.rb`, or `auth.rb`.
 Relative `--config` and `--output` paths resolve against `--cwd`.
 
 ### Options
 
 Rails generators accept standard Rails generator options, such as `--skip` options provided by Rails itself. Better Auth-specific schema is read from the configured initializer.
 
-For the standalone CLI, use `--cwd`, `--config`, `--dialect`, and `--output` on `generate`.
+For the standalone CLI, `--cwd`, (`--config` or `--discover-config`), `--dialect`, and `--output` are all required on `generate`.
 
 ## Migrate
 
@@ -54,8 +96,8 @@ bin/rails db:migrate
 For a non-Rails Rack app, use the CLI against a Ruby config file:
 
 ```bash
-better-auth migrate status --cwd .
-better-auth migrate --cwd . --yes
+better-auth migrate status --cwd . --config config/better_auth.rb
+better-auth migrate --cwd . --config config/better_auth.rb --yes
 ```
 
 You can also generate SQL programmatically and apply it with your own migration tool.
@@ -69,28 +111,7 @@ File.write("db/auth_schema.sql", sql)
 
 Use your database adapter or migration tool options when applying generated SQL outside Rails.
 
-For the standalone CLI, use `--cwd`, `--config`, and `--yes` on `migrate`.
-
-## Init
-
-The Rails install generator creates an initializer and route mounting code for a typical app.
-
-```ruby title="config/routes.rb"
-mount BetterAuth::Rails.app => "/api/auth"
-```
-
-```ruby title="config/initializers/better_auth.rb"
-Rails.application.config.better_auth = BetterAuth.auth(
-  base_url: "http://localhost:3000/api/auth",
-  secret: Rails.application.credentials.fetch(:better_auth_secret),
-  database: :active_record,
-  email_and_password: {enabled: true}
-)
-```
-
-### Options
-
-Configure `base_url`, `secret`, `database`, providers, plugins, and storage in the generated initializer.
+For the standalone CLI, use `--cwd`, (`--config` or `--discover-config`), and `--yes` on `migrate`.
 
 ## Info
 
@@ -106,15 +127,16 @@ BetterAuth::Schema.auth_tables(auth.options).keys
 Run `better-auth doctor` against a project config:
 
 ```bash
-better-auth doctor --cwd .
-better-auth doctor --config config/better_auth.rb
-better-auth doctor --cwd . --json
+better-auth doctor --cwd . --config config/better_auth.rb
+better-auth doctor --cwd . --discover-config
+better-auth doctor --cwd . --config config/better_auth.rb --json
 ```
 
 For machine-readable diagnostics, use `better-auth info --json`:
 
 ```bash
 better-auth info --cwd . --json
+better-auth info --cwd . --config config/better_auth.rb --json
 ```
 
 `info --json` returns Ruby and gem versions, resolved auth table names,
@@ -146,19 +168,19 @@ auth.api.endpoints.keys
 Custom config path:
 
 ```bash
-better-auth doctor --config config/better_auth.rb
+better-auth doctor --cwd . --config config/better_auth.rb
 ```
 
-Or discover a conventional Ruby config from the project root:
+Discover config from the project root:
 
 ```bash
-better-auth doctor --cwd .
+better-auth doctor --cwd . --discover-config
 ```
 
 JSON output:
 
 ```bash
-better-auth info --config config/better_auth.rb --json
+better-auth info --cwd . --config config/better_auth.rb --json
 ```
 
 ## Secret
@@ -191,3 +213,17 @@ If generated migrations miss plugin tables, make sure the initializer includes t
 If callbacks generate untrusted callback URL errors, configure `base_url` and `trusted_origins` to match the public origin used by your app.
 
 If requests do not keep sessions, forward `Set-Cookie` from auth responses and include the cookie header on later server-side calls.
+
+If the CLI reports missing flags, pass `--cwd` and either `--config` or `--discover-config` on config-backed commands.
+
+## Command reference
+
+| Command | Required flags |
+| --- | --- |
+| `init` | `--cwd`, (`--framework` or `--detect-framework`) |
+| `upgrade` | `--cwd` |
+| `generate` | `--cwd`, (`--config` or `--discover-config`), `--dialect`, `--output` |
+| `migrate` | `--cwd`, (`--config` or `--discover-config`), `--yes` |
+| `doctor` / `mongo indexes` | `--cwd`, (`--config` or `--discover-config`) |
+| `info` | `--cwd` |
+| `secret` | none |
