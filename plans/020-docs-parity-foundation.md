@@ -362,12 +362,12 @@ No Ruby tests. Validation is tooling + manifest completeness:
 
 ## Done criteria
 
-- [x] `docs-site/scripts/docs-parity-manifest.json` exists with classified entries for all upstream pages
-- [x] `docs-site/scripts/docs-parity-rules.md` exists with transform tables
-- [x] `docs-site/scripts/port-upstream-doc.mjs` runs on a sample slug
-- [x] `docs-site/AGENTS.md` documents the workflow
-- [x] `cd docs-site && pnpm lint` exits 0
-- [x] `plans/README.md` status row for 020 updated
+- [ ] `docs-site/scripts/docs-parity-manifest.json` exists with classified entries for all upstream pages
+- [ ] `docs-site/scripts/docs-parity-rules.md` exists with transform tables
+- [ ] `docs-site/scripts/port-upstream-doc.mjs` runs on a sample slug
+- [ ] `docs-site/AGENTS.md` documents the workflow
+- [ ] `cd docs-site && pnpm lint` exits 0
+- [ ] `plans/README.md` status row for 020 updated
 
 ## STOP conditions
 

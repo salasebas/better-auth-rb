@@ -223,11 +223,11 @@ cd docs-site && pnpm dev
 
 ## Done criteria
 
-- [x] All 13 in-scope MDX files ported; none contain `createAuthClient`, `` ```ts ``, or `npx auth`
-- [x] `concepts/database.mdx` >= 400 lines; `email-password.mdx` >= 200 lines
-- [x] `cd docs-site && pnpm lint && pnpm build` exit 0
-- [x] No files outside scope modified
-- [x] `plans/README.md` row 021 updated to DONE
+- [ ] All 13 in-scope MDX files ported; none contain `createAuthClient`, `` ```ts ``, or `npx auth`
+- [ ] `concepts/database.mdx` >= 400 lines; `email-password.mdx` >= 200 lines
+- [ ] `cd docs-site && pnpm lint && pnpm build` exit 0
+- [ ] No files outside scope modified
+- [ ] `plans/README.md` row 021 updated to DONE
 
 ## STOP conditions
 

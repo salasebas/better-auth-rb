@@ -226,14 +226,14 @@ cd docs-site && pnpm build
 
 ## Done criteria
 
-- [x] `reference/options.mdx` >= 500 lines, Ruby-only code fences
-- [x] All error pages have >= 25 lines body content
-- [x] `state_invalid.mdx` exists
-- [x] Ruby guides created: your-first-plugin, create-a-db-adapter
-- [x] Migration guides ported (5) without TS client code
-- [x] browser-extension guide not added
-- [x] `pnpm lint && pnpm build` pass
-- [x] `plans/README.md` row 024 DONE
+- [ ] `reference/options.mdx` >= 500 lines, Ruby-only code fences
+- [ ] All error pages have >= 25 lines body content
+- [ ] `state_invalid.mdx` exists
+- [ ] Ruby guides created: your-first-plugin, create-a-db-adapter
+- [ ] Migration guides ported (5) without TS client code
+- [ ] browser-extension guide not added
+- [ ] `pnpm lint && pnpm build` pass
+- [ ] `plans/README.md` row 024 DONE
 
 ## STOP conditions
 

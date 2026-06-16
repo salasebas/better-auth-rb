@@ -246,12 +246,12 @@ cd docs-site && pnpm lint && pnpm build
 
 ## Done criteria
 
-- [x] All port-list plugin MDX files >= 100 lines (except hook-only plugins >= 80)
-- [x] Zero `See the plugin tests under` on ported pages
-- [x] Zero `createAuthClient` / `` ```ts `` in plugins/
-- [x] External gem pages document `gem` + `require`
-- [x] `pnpm lint && pnpm build` pass
-- [x] `plans/README.md` row 022 DONE
+- [ ] All port-list plugin MDX files >= 100 lines (except hook-only plugins >= 80)
+- [ ] Zero `See the plugin tests under` on ported pages
+- [ ] Zero `createAuthClient` / `` ```ts `` in plugins/
+- [ ] External gem pages document `gem` + `require`
+- [ ] `pnpm lint && pnpm build` pass
+- [ ] `plans/README.md` row 022 DONE
 
 ## STOP conditions
 

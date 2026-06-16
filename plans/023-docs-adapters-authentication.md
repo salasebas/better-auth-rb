@@ -260,13 +260,13 @@ rg 'Kysely|better-sqlite3|createAuthClient' docs-site/content/docs/adapters/
 
 ## Done criteria
 
-- [x] Each relational adapter page ≥ min line count; includes schema table + joins sections
-- [x] PostgreSQL retains full non-default schema section from upstream
-- [x] `other-relational-databases.mdx` ≥ 120 lines with ORM integrations + UnderDevelopment dialects
-- [x] No standalone `drizzle.mdx` / `prisma.mdx`
-- [x] THIN auth providers (google, apple) ≥ 150 lines
-- [x] `pnpm lint && pnpm build` pass
-- [x] `plans/README.md` row 023 DONE
+- [ ] Each relational adapter page ≥ min line count; includes schema table + joins sections
+- [ ] PostgreSQL retains full non-default schema section from upstream
+- [ ] `other-relational-databases.mdx` ≥ 120 lines with ORM integrations + UnderDevelopment dialects
+- [ ] No standalone `drizzle.mdx` / `prisma.mdx`
+- [ ] THIN auth providers (google, apple) ≥ 150 lines
+- [ ] `pnpm lint && pnpm build` pass
+- [ ] `plans/README.md` row 023 DONE
 
 ## STOP conditions
 
