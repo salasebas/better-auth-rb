@@ -201,10 +201,11 @@ Short version:
 - [`better_auth-stripe`](packages/better_auth-stripe/): Stripe billing plugin
   package.
 
-OpenAuth alias packages are also available for users who prefer that naming.
+Alias packages are also available for users who prefer alternate naming.
 They install and load the matching Better Auth Ruby packages, and their READMEs
 point back to the canonical documentation at https://better-auth-rb.vercel.app/.
 
+- [`rubyauth`](packages/rubyauth/): Alias for `better_auth`.
 - [`openauth`](packages/openauth/): Alias for `better_auth`.
 - [`openauth-cli`](packages/openauth-cli/): Alias CLI package that exposes
   `openauth`.

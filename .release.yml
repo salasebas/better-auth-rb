@@ -22,6 +22,7 @@ version_files:
   - packages/better_auth-telemetry/lib/better_auth/telemetry/version.rb
 
 literal_gemspec_versions:
+  - packages/rubyauth/rubyauth.gemspec
   - packages/openauth/openauth.gemspec
   - packages/openauth-cli/openauth-cli.gemspec
   - packages/openauth-api-key/openauth-api-key.gemspec
@@ -42,6 +43,8 @@ literal_gemspec_versions:
   - packages/openauth-telemetry/openauth-telemetry.gemspec
 
 pinned_dependencies:
+  packages/rubyauth/rubyauth.gemspec:
+    - better_auth
   packages/openauth/openauth.gemspec:
     - better_auth
   packages/openauth-cli/openauth-cli.gemspec:

@@ -74,6 +74,7 @@ task :ci do
   puts "\n🧪 Running workspace packaging tests..."
   workspace_test_requires = [
     "./test/openauth_alias_packages_test",
+    "./test/rubyauth_alias_package_test",
     "./test/release_version_manifest_test"
   ].map { |path| %(require "#{path}") }.join("; ")
   sh %(bundle exec ruby -Itest -e '#{workspace_test_requires}')
