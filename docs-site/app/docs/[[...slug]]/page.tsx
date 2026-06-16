@@ -1,111 +1,117 @@
-import { AutoTypeTable } from "fumadocs-typescript/ui";
 import { Accordion, Accordions } from "fumadocs-ui/components/accordion";
 import { File, Files, Folder } from "fumadocs-ui/components/files";
 import { Step, Steps } from "fumadocs-ui/components/steps";
 import { Tab, Tabs } from "fumadocs-ui/components/tabs";
 import { TypeTable } from "fumadocs-ui/components/type-table";
 import defaultMdxComponents from "fumadocs-ui/mdx";
+import {
+	DocsBody,
+	DocsDescription,
+	DocsPage,
+	DocsTitle,
+} from "fumadocs-ui/page";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { APIMethod } from "@/components/api-method";
-import { BackLink } from "@/components/back-link";
-import { Features } from "@/components/blocks/features";
-import { DividerText } from "@/components/divider-text";
-import { DocsBody, DocsPage, DocsTitle } from "@/components/docs/page";
-import { Endpoint } from "@/components/endpoint";
-import { ForkButton } from "@/components/fork-button";
-import { GenerateAppleJwt } from "@/components/generate-apple-jwt";
-import { GenerateSecret } from "@/components/generate-secret";
-import { AddToCursor } from "@/components/mdx/add-to-cursor";
-import DatabaseTable from "@/components/mdx/database-tables";
+import { Features } from "@/components/docs/features";
+import {
+	DatabaseTable,
+	DividerText,
+	Endpoint,
+	ForkButton,
+	GenerateAppleJwt,
+	GenerateSecret,
+	RubyAuthDisclaimer,
+	UnderDevelopment,
+} from "@/components/docs/mdx-components";
 import { Callout } from "@/components/ui/callout";
-import { AnimatePresence } from "@/components/ui/fade-in";
-import { GITHUB_REPO } from "@/lib/constants";
-import { source } from "@/lib/source";
-import { absoluteUrl, cn, isSubpageOf } from "@/lib/utils";
+import {
+	docsVersions,
+	resolveVersionFromSlug,
+	scopeDocsHref,
+} from "@/lib/docs-versions";
+import { createMetadata } from "@/lib/metadata";
+import { getSourceFor } from "@/lib/source";
+import { cn } from "@/lib/utils";
 import { LLMCopyButton, ViewOptions } from "./page.client";
+
 export default async function Page({
 	params,
 }: {
 	params: Promise<{ slug?: string[] }>;
 }) {
 	const { slug } = await params;
-	let page = source.getPage(slug);
+	const { version, relSlug } = resolveVersionFromSlug(slug ?? []);
+	const src = getSourceFor(version.slug);
+	const page = src.getPage(relSlug);
 
 	if (!page) {
-		if (slug?.[0] === "errors") {
-			page = source.getPage(["errors", "unknown"])!;
-		} else {
-			return notFound();
-		}
+		return notFound();
 	}
 
-	const MDX = page.data.body;
-	const avoidLLMHeader = ["Introduction", "Comparison"];
-	const isErrorSubpage = isSubpageOf(slug, ["reference", "errors"]);
+	const { body: MDX, toc } = await page.data.load();
+
+	const GITHUB_OWNER = "salasebas";
+	const GITHUB_REPO = "better-auth-rb";
+	const githubBase = `https://github.com/${GITHUB_OWNER}/${GITHUB_REPO}/blob/${version.branch}/docs-site/content/docs`;
+
+	// Keep every absolute /docs link scoped to the version being viewed.
+	const scope = (href: string | undefined) => scopeDocsHref(href, version);
+	const DefaultAnchor = defaultMdxComponents.a;
+
 	return (
 		<DocsPage
-			toc={page.data.toc}
-			full={page.data.full}
+			toc={toc}
+			full={false}
+			tableOfContent={{
+				style: "clerk",
+			}}
+			breadcrumb={{ enabled: false }}
 			editOnGithub={{
-				owner: GITHUB_REPO.owner,
-				repo: GITHUB_REPO.name,
-				branch: "main",
+				owner: GITHUB_OWNER,
+				repo: GITHUB_REPO,
+				sha: version.branch,
 				path: `docs-site/content/docs/${page.path}`,
 			}}
-			tableOfContent={{
-				header: <div className="w-10 h-4"></div>,
-			}}
 		>
-			{isErrorSubpage && (
-				<BackLink href="/docs/reference/errors">Back to Errors</BackLink>
-			)}
-			<DocsTitle>{page.data.title}</DocsTitle>
-			{!avoidLLMHeader.includes(page.data.title) && (
-				<div className="flex flex-row gap-2 items-center pb-3 border-b">
-					<LLMCopyButton />
+			<div className="flex items-center justify-between gap-4">
+				<DocsTitle className="mb-0">{page.data.title}</DocsTitle>
+				<div className="flex items-center gap-2 not-prose shrink-0">
+					<LLMCopyButton markdownUrl={`/llms.txt${page.url}.md`} />
 					<ViewOptions
 						markdownUrl={`${page.url}.mdx`}
-						githubUrl={`${GITHUB_REPO.url}/blob/main/docs-site/content/docs/${page.path}`}
+						githubUrl={`${githubBase}/${page.path}`}
+						rawMdUrl={`/llms.txt${page.url}.md`}
 					/>
 				</div>
+			</div>
+			{page.data.description && (
+				<DocsDescription>{page.data.description}</DocsDescription>
 			)}
 			<DocsBody>
 				<MDX
 					components={{
 						...defaultMdxComponents,
-						Link: ({
-							className,
-							...props
-						}: React.ComponentProps<typeof Link>) => (
-							<Link
-								className={cn(
-									"font-medium underline underline-offset-4",
-									className,
-								)}
-								{...props}
-							/>
-						),
 						Step,
 						Steps,
-						File,
-						Folder,
-						Files,
 						Tab,
 						Tabs,
-						AutoTypeTable,
-						GenerateSecret,
-						GenerateAppleJwt,
-						AnimatePresence,
-						TypeTable,
-						Features,
-						ForkButton,
-						AddToCursor,
-						DatabaseTable,
 						Accordion,
 						Accordions,
-						Endpoint,
+						File,
+						Files,
+						Folder,
+						TypeTable,
 						APIMethod,
+						DatabaseTable,
+						ForkButton,
+						Features,
+						Endpoint,
+						GenerateAppleJwt,
+						GenerateSecret,
+						RubyAuthDisclaimer,
+						UnderDevelopment,
+						DividerText,
 						Callout: ({
 							children,
 							type,
@@ -119,9 +125,29 @@ export default async function Page({
 								{children}
 							</Callout>
 						),
-						DividerText,
-						iframe: (props) => (
-							<iframe {...props} className="w-full h-[500px]" />
+						iframe: (props: React.ComponentProps<"iframe">) => (
+							<iframe
+								title="Embedded content"
+								{...props}
+								className="w-full h-[500px]"
+							/>
+						),
+						a: (props: React.ComponentProps<"a">) => (
+							<DefaultAnchor {...props} href={scope(props.href)} />
+						),
+						Link: ({
+							href,
+							className,
+							...props
+						}: React.ComponentProps<typeof Link>) => (
+							<Link
+								href={typeof href === "string" ? (scope(href) ?? href) : href}
+								className={cn(
+									"font-medium underline underline-offset-4",
+									className,
+								)}
+								{...props}
+							/>
 						),
 					}}
 				/>
@@ -131,7 +157,12 @@ export default async function Page({
 }
 
 export async function generateStaticParams() {
-	return source.generateParams();
+	return docsVersions.flatMap((v) => {
+		const src = getSourceFor(v.slug);
+		return src.generateParams().map((p) => ({
+			slug: v.slug ? [v.slug, ...(p.slug ?? [])] : p.slug,
+		}));
+	});
 }
 
 export async function generateMetadata({
@@ -140,32 +171,32 @@ export async function generateMetadata({
 	params: Promise<{ slug?: string[] }>;
 }) {
 	const { slug } = await params;
-	let page = source.getPage(slug);
-	if (page == null) {
-		if (slug?.[0] === "errors") {
-			page = source.getPage(["errors", "unknown"])!;
-		} else {
-			return notFound();
-		}
-	}
-	const baseUrl = process.env.NEXT_PUBLIC_URL || process.env.VERCEL_URL;
-	const url = new URL(`${baseUrl}/api/og`);
-	const { title, description } = page.data;
-	url.searchParams.set("type", "Documentation");
-	url.searchParams.set("mode", "dark");
-	url.searchParams.set("heading", `${title}`);
+	const { version, relSlug } = resolveVersionFromSlug(slug ?? []);
+	const src = getSourceFor(version.slug);
+	const page = src.getPage(relSlug);
+	if (!page) return notFound();
 
-	return {
+	const title = version.slug
+		? `${version.label} - ${page.data.title}`
+		: page.data.title;
+
+	const ogSearchParams = new URLSearchParams();
+	ogSearchParams.set("heading", title);
+	ogSearchParams.set("type", "documentation");
+	ogSearchParams.set("mode", "dark");
+
+	const ogUrl = `/api/og?${ogSearchParams.toString()}`;
+
+	return createMetadata({
 		title,
-		description,
+		description: page.data.description,
 		openGraph: {
 			title,
-			description,
-			type: "website",
-			url: absoluteUrl(page.url),
+			description: page.data.description,
+			type: "article",
 			images: [
 				{
-					url: url.toString(),
+					url: ogUrl,
 					width: 1200,
 					height: 630,
 					alt: title,
@@ -175,8 +206,8 @@ export async function generateMetadata({
 		twitter: {
 			card: "summary_large_image",
 			title,
-			description,
-			images: [url.toString()],
+			description: page.data.description,
+			images: [ogUrl],
 		},
-	};
+	});
 }

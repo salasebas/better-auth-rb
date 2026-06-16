@@ -1,0 +1,6 @@
+<svg width="320" height="64" viewBox="0 0 320 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+<polygon points="32 4 58 22 58 46 32 60 6 46 6 22" fill="#e9573f"/>
+<polygon points="32 4 58 22 32 34 6 22" fill="#ffffff" fill-opacity="0.22"/>
+<polygon points="32 34 58 46 32 60 6 46" fill="#141c22" fill-opacity="0.18"/>
+<text x="76" y="42" fill="#f5f5f5" font-family="ui-sans-serif, system-ui, sans-serif" font-size="28" font-weight="600" letter-spacing="-0.02em">RubyAuth</text>
+</svg>

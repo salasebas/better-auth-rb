@@ -1,38 +1,38 @@
 ---
-title: unable_to_link_account
-description: The account could not be linked.
+title: Unable To Link Account
+description: OAuth error `unable_to_link_account` in RubyAuth.
 ---
 
-## What is it?
+## When this appears
 
-This error occurs only during an OAuth flow when attempting to link the provider account to the
-currently authenticated user. Better Auth blocks the operation if either:
+Account linking is not allowed for this provider or email.
 
-1. The database operation to create/update the linked account fails.
-2. The provider is not considered trusted for linking based on your auth configuration
-   (`account.account_linking.trusted_providers`).
+Redirect URL shape:
 
-## Common Causes
+```
+/api/auth/error?error=unable_to_link_account
+```
 
-* The provider is not listed in `account.account_linking.trusted_providers`.
-* Configuration differs across environments (dev/staging/prod), so the provider appears untrusted in one environment.
-* Database write failed due to unique constraint, foreign key violation, or transaction/connection issues.
-* A race condition linking the same provider concurrently caused a conflict.
-* Pending migrations or a mismatched schema between services caused the write to fail.
+Or your configured `errorCallbackURL` with the same query parameters.
 
-## How to resolve
+## Common causes
 
-### Allow linking for the intended provider
+- Implicit sign-up disabled for provider
+- Linking rules block provider
+- Email domain restricted
 
-* Add the provider id (e.g., `github`, `google`) to `account.account_linking.trusted_providers` in your auth config.
-* Verify you are using the correct provider id/slug that your integration expects.
+## How to fix
 
-### Fix database reliability and constraints
+- Enable linking in account options
+- Use explicit link flow while authenticated
 
-* Run pending migrations and ensure the schema matches the current Better Auth version.
-* Investigate DB errors (deadlocks, timeouts, connection pool limits) and retry if appropriate.
+## Diagnostics
 
-### Verify environment configuration
+```bash
+bundle exec better-auth doctor --cwd . --config config/better_auth.rb
+```
 
-* Ensure the same auth config is deployed to all environments and that environment variables are loaded as expected.
-* Double-check that the runtime sees the intended `trusted_providers` list.
+## Related
+
+- [OAuth errors index](/docs/reference/errors)
+- [OAuth concepts](/docs/concepts/oauth)

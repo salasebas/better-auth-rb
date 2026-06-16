@@ -1,23 +1,29 @@
 ---
-title: Grape Integration
-description: Use Better Auth Ruby in Grape APIs.
+title: Grape
+description: Mount RubyAuth in Grape APIs with better_auth-grape.
 ---
 
-The Grape adapter mounts the core Rack auth object and provides request helpers
-plus Better Auth-specific SQL migration Rake tasks.
+<RubyAuthDisclaimer />
 
-## Install
+<Callout type="info">
+  `bundle exec better-auth init` does not scaffold Grape apps yet. Add the gem and extension manually.
+</Callout>
+
+## Installation
 
 ```ruby title="Gemfile"
 gem "better_auth-grape"
-gem "pg"
 ```
 
-```bash title="Terminal"
+```bash
 bundle install
 ```
 
-## Configure And Mount
+## Setup
+
+<Steps>
+
+### Include the extension
 
 ```ruby title="api.rb"
 require "grape"
@@ -32,33 +38,23 @@ class API < Grape::API
     config.secret = ENV.fetch("BETTER_AUTH_SECRET")
     config.base_url = ENV.fetch("BETTER_AUTH_URL", "http://localhost:9292")
     config.database = ->(options) {
-      BetterAuth::Adapters::Postgres.new(
-        options,
-        url: ENV.fetch("DATABASE_URL")
-      )
+      BetterAuth::Adapters::Postgres.new(options, url: ENV.fetch("DATABASE_URL"))
     }
-    config.email_and_password = {
-      enabled: true
-    }
-    config.plugins = []
+    config.email_and_password = { enabled: true }
   end
 
   get "/dashboard" do
     require_authentication
-    {email: current_user.fetch("email")}
+    { email: current_user.fetch("email") }
   end
 end
 ```
 
-By default this mounts Better Auth at `/api/auth`. The core Better Auth router
-handles internal routes such as `/ok`, `/sign-up/email`, and plugin endpoints.
+### Path prefixes and versioning
 
-## Prefixes And Versioning
+When using Grape `prefix` or path-based `version`, pass a relative auth path:
 
-When a Grape API uses a path prefix or path-based versioning, pass a relative
-auth path. The adapter mounts Better Auth below the effective Grape path:
-
-```ruby title="api.rb"
+```ruby
 class API < Grape::API
   include BetterAuth::Grape
 
@@ -73,74 +69,29 @@ class API < Grape::API
 end
 ```
 
-This exposes Better Auth at `/api/v1/auth`.
+Auth routes are exposed at `/api/v1/auth/*`.
 
-If you pass a full path that already includes the prefix, such as
-`at: "/api/auth"`, the adapter uses that path as-is.
-
-## Grape Inside Rails
-
-If your Rails app uses Grape for API routes, choose one Better Auth integration
-to own the auth mount:
-
-- Use `better_auth-grape` when the auth endpoints should live inside the Grape
-  API tree and Grape helpers should protect API endpoints.
-- Use `better_auth-rails` when the auth endpoints should live in
-  `config/routes.rb` and Rails controllers should use controller helpers.
-
-Avoid mounting the same Better Auth base path through both adapters in the same
-Rack stack.
-
-## Helpers
-
-Available helpers:
-
-- `current_session`
-- `current_user`
-- `authenticated?`
-- `require_authentication`
-
-`require_authentication` stops the Grape endpoint with `401` when no Better
-Auth user is present. Helpers resolve sessions through the core `get-session`
-API path, so Better Auth plugin hooks that affect session lookup, such as the
-bearer plugin, run for `current_user` and `require_authentication`.
-
-Helper session lookup may emit Better Auth `Set-Cookie` headers when stale
-cookies need to be cleared or session cookies need to be refreshed.
-
-## Rake Tasks
-
-Grape does not have a Rails-style generator or built-in migration command. Load
-the Better Auth tasks from your app Rakefile:
+### Rake tasks
 
 ```ruby title="Rakefile"
 require "better_auth/grape/tasks"
 ```
 
-Create the default config and migration directory:
-
-```bash title="Terminal"
+```bash
 rake better_auth:install
-```
-
-Generate SQL for the configured Better Auth schema:
-
-```bash title="Terminal"
 BETTER_AUTH_DIALECT=postgres rake better_auth:generate:migration
-```
-
-Run pending Better Auth SQL migrations:
-
-```bash title="Terminal"
 rake better_auth:migrate
 ```
 
-Generated SQL files live in `db/better_auth/migrate`.
+</Steps>
 
-## Limitations
+## Verify
 
-- The Rake migration runner supports Better Auth core SQL adapters that expose a
-  SQL connection and dialect.
-- Memory, MongoDB, and arbitrary custom adapters cannot run SQL migrations.
-- Apps that already use an ORM should manage app-level ORM migrations
-  themselves.
+```bash
+curl http://localhost:9292/api/auth/ok
+```
+
+## Next steps
+
+- [Sinatra](/docs/integrations/sinatra) — similar mount helpers
+- [API concept](/docs/concepts/api)

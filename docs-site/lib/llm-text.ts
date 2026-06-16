@@ -1,5 +1,6 @@
 import type { InferPageType } from "fumadocs-core/source";
-import type { source } from "@/lib/source";
+import { BRAND_NAME } from "./branding";
+import type { source } from "./source";
 
 type PropertyDefinition = {
 	name: string;
@@ -18,61 +19,57 @@ function extractAPIMethods(rawContent: string): string {
 		const pathMatch = attributes.match(/path="([^"]+)"/);
 		const methodMatch = attributes.match(/method="([^"]+)"/);
 		const requireSessionMatch = attributes.match(/requireSession/);
-		const noResultMatch = attributes.match(/noResult/);
-		const resultVariableMatch = attributes.match(/resultVariable="([^"]+)"/);
 		const forceAsBodyMatch = attributes.match(/forceAsBody/);
 		const forceAsQueryMatch = attributes.match(/forceAsQuery/);
 
 		const path = pathMatch ? pathMatch[1] : "";
 		const method = methodMatch ? methodMatch[1] : "GET";
 		const requireSession = !!requireSessionMatch;
-		const noResult = !!noResultMatch;
-		const resultVariable = resultVariableMatch
-			? resultVariableMatch[1]
-			: "data";
 		const forceAsBody = !!forceAsBodyMatch;
 		const forceAsQuery = !!forceAsQueryMatch;
 
 		const typeMatch = content.match(/type\s+(\w+)\s*=\s*\{([\s\S]*?)\}/);
 		if (!typeMatch) {
-			return match;
+			return `
+### ${method} ${path}
+
+${content.trim()}
+`;
 		}
 
-		const functionName = typeMatch[1];
 		const typeBody = typeMatch[2];
-
 		const properties = parseTypeBody(typeBody);
-
-		const clientCode = generateClientCode(functionName, properties, path);
-		const serverCode = generateServerCode(
-			functionName,
-			properties,
+		const authPath = `/api/auth${path}`;
+		const httpCode = generateHttpExample(
+			authPath,
 			method,
+			properties,
 			requireSession,
 			forceAsBody,
 			forceAsQuery,
-			noResult,
-			resultVariable,
+		);
+		const rubyCode = generateRubyExample(
+			authPath,
+			method,
+			properties,
+			requireSession,
+			forceAsBody,
+			forceAsQuery,
 		);
 
 		return `
-### Client Side
+### ${method} ${path}
 
-\`\`\`ts
-${clientCode}
+### HTTP
+
+\`\`\`bash
+${httpCode}
 \`\`\`
 
-### Server Side
+### Ruby (Rack test style)
 
-\`\`\`ts
-${serverCode}
-\`\`\`
-
-### Type Definition
-
-\`\`\`ts
-type ${functionName} = {${typeBody}
-}
+\`\`\`ruby
+${rubyCode}
 \`\`\`
 `;
 	});
@@ -80,31 +77,27 @@ type ${functionName} = {${typeBody}
 
 function parseTypeBody(typeBody: string): PropertyDefinition[] {
 	const properties: PropertyDefinition[] = [];
-
 	const lines = typeBody.split("\n");
 
 	for (const line of lines) {
 		const trimmed = line.trim();
-
 		if (!trimmed || trimmed.startsWith("//") || trimmed.startsWith("/*"))
 			continue;
 		const propMatch = trimmed.match(
-			/^(\w+)(\?)?:\s*(.+?)(\s*=\s*["']([^"']+)["'])?(\s*\/\/\s*(.+))?$/,
+			/^(\w+)(\?)?:\s*(.+?)(\s*=\s*["']([^"']+)["']|\s*=\s*([^,\s]+))?(\s*\/\/\s*(.+))?$/,
 		);
 		if (propMatch) {
-			const [, name, optional, type, , exampleValue, , description] = propMatch;
-
-			let cleanType = type.trim();
-			const cleanExampleValue = exampleValue || "";
-
-			cleanType = cleanType.replace(/,$/, "");
+			const [, name, optional, type, , quotedExample, rawExample, , description] =
+				propMatch;
+			let cleanType = type.trim().replace(/,$/, "");
+			const exampleValue = quotedExample || rawExample || "";
 
 			properties.push({
 				name,
 				type: cleanType,
 				required: !optional,
 				description: description || "",
-				exampleValue: cleanExampleValue,
+				exampleValue,
 				isServerOnly: false,
 				isClientOnly: false,
 			});
@@ -114,139 +107,135 @@ function parseTypeBody(typeBody: string): PropertyDefinition[] {
 	return properties;
 }
 
-// Generate client code example
-function generateClientCode(
-	functionName: string,
-	properties: PropertyDefinition[],
+function exampleValueForJson(prop: PropertyDefinition): string {
+	if (prop.exampleValue) {
+		if (prop.type.toLowerCase() === "string" && !prop.exampleValue.startsWith('"')) {
+			return `"${prop.exampleValue}"`;
+		}
+		return prop.exampleValue;
+	}
+	switch (prop.type.toLowerCase()) {
+		case "string":
+			return '"string"';
+		case "number":
+			return "0";
+		case "boolean":
+			return "true";
+		default:
+			return "null";
+	}
+}
+
+function exampleValueForRuby(prop: PropertyDefinition): string {
+	if (prop.exampleValue) {
+		if (prop.type.toLowerCase() === "string") {
+			return `"${prop.exampleValue.replace(/^"|"$/g, "")}"`;
+		}
+		return prop.exampleValue;
+	}
+	switch (prop.type.toLowerCase()) {
+		case "string":
+			return '"string"';
+		case "number":
+			return "0";
+		case "boolean":
+			return "true";
+		default:
+			return "nil";
+	}
+}
+
+function usesQuery(
+	method: string,
+	forceAsBody: boolean,
+	forceAsQuery: boolean,
+): boolean {
+	if (forceAsQuery) return true;
+	if (forceAsBody) return false;
+	return method === "GET";
+}
+
+function buildJsonBody(properties: PropertyDefinition[]): string {
+	const relevant = properties.filter((prop) => !prop.isServerOnly);
+	if (!relevant.length) return "{}";
+	return `{\n${relevant.map((prop) => `  "${prop.name}": ${exampleValueForJson(prop)}`).join(",\n")}\n}`;
+}
+
+function buildRubyHash(properties: PropertyDefinition[]): string {
+	const relevant = properties.filter((prop) => !prop.isServerOnly);
+	if (!relevant.length) return "{}";
+	return `{\n${relevant.map((prop) => `    ${prop.name}: ${exampleValueForRuby(prop)}`).join(",\n")}\n  }`;
+}
+
+function buildQueryString(properties: PropertyDefinition[]): string {
+	return properties
+		.filter((prop) => !prop.isServerOnly)
+		.map((prop) => {
+			const raw = exampleValueForJson(prop).replace(/^"|"$/g, "");
+			return `${encodeURIComponent(prop.name)}=${encodeURIComponent(raw)}`;
+		})
+		.join("&");
+}
+
+function generateHttpExample(
 	path: string,
-): string {
-	if (!functionName || !path) {
-		return "// Unable to generate client code - missing function name or path";
-	}
-
-	const clientMethodPath = pathToDotNotation(path);
-	const body = createClientBody(properties);
-
-	return `const { data, error } = await authClient.${clientMethodPath}(${body});`;
-}
-
-// Generate server code example
-function generateServerCode(
-	functionName: string,
+	method: string,
 	properties: PropertyDefinition[],
-	method: string,
-	requireSession: boolean,
-	forceAsBody: boolean,
-	forceAsQuery: boolean,
-	noResult: boolean,
-	resultVariable: string,
-): string {
-	if (!functionName) {
-		return "// Unable to generate server code - missing function name";
-	}
-
-	const body = createServerBody(
-		properties,
-		method,
-		requireSession,
-		forceAsBody,
-		forceAsQuery,
-	);
-
-	return `${noResult ? "" : `const ${resultVariable} = `}await auth.api.${functionName}(${body});`;
-}
-
-function pathToDotNotation(input: string): string {
-	return input
-		.split("/")
-		.filter(Boolean)
-		.map((segment) =>
-			segment
-				.split("-")
-				.map((word, i) =>
-					i === 0
-						? word.toLowerCase()
-						: word.charAt(0).toUpperCase() + word.slice(1),
-				)
-				.join(""),
-		)
-		.join(".");
-}
-
-function createClientBody(props: PropertyDefinition[]): string {
-	if (props.length === 0) return "{}";
-
-	let body = "{\n";
-
-	for (const prop of props) {
-		if (prop.isServerOnly) continue;
-
-		let comment = "";
-		if (!prop.required || prop.description) {
-			const comments = [];
-			if (!prop.required) comments.push("optional");
-			if (prop.description) comments.push(prop.description);
-			comment = ` // ${comments.join(", ")}`;
-		}
-
-		body += `    ${prop.name}${prop.exampleValue ? `: ${prop.exampleValue}` : ""}${prop.type === "Object" ? ": {}" : ""},${comment}\n`;
-	}
-
-	body += "}";
-	return body;
-}
-
-function createServerBody(
-	props: PropertyDefinition[],
-	method: string,
 	requireSession: boolean,
 	forceAsBody: boolean,
 	forceAsQuery: boolean,
 ): string {
-	const relevantProps = props.filter((x) => !x.isClientOnly);
-
-	if (relevantProps.length === 0 && !requireSession) {
-		return "{}";
-	}
-
-	let serverBody = "{\n";
-
-	if (relevantProps.length > 0) {
-		const bodyKey =
-			(method === "POST" || forceAsBody) && !forceAsQuery ? "body" : "query";
-		serverBody += `    ${bodyKey}: {\n`;
-
-		for (const prop of relevantProps) {
-			let comment = "";
-			if (!prop.required || prop.description) {
-				const comments = [];
-				if (!prop.required) comments.push("optional");
-				if (prop.description) comments.push(prop.description);
-				comment = ` // ${comments.join(", ")}`;
-			}
-
-			serverBody += `        ${prop.name}${prop.exampleValue ? `: ${prop.exampleValue}` : ""}${prop.type === "Object" ? ": {}" : ""},${comment}\n`;
-		}
-
-		serverBody += "    }";
-	}
-
+	const queryMode = usesQuery(method, forceAsBody, forceAsQuery);
+	const query = buildQueryString(properties);
+	const url = queryMode && query ? `${path}?${query}` : path;
+	const headers = ['  -H "Content-Type: application/json"'];
 	if (requireSession) {
-		if (relevantProps.length > 0) serverBody += ",";
-		serverBody +=
-			"\n    // This endpoint requires session cookies.\n    headers: await headers()";
+		headers.push('  -H "Cookie: better_auth.session=..."');
 	}
 
-	serverBody += "\n}";
-	return serverBody;
+	let command = `curl -X ${method} "$BASE_URL${url}" \\\n${headers.join(" \\\n")}`;
+	if (!queryMode && properties.some((prop) => !prop.isServerOnly)) {
+		command += ` \\\n  -d '${buildJsonBody(properties).replace(/'/g, "'\\''")}'`;
+	}
+	return command;
+}
+
+function generateRubyExample(
+	path: string,
+	method: string,
+	properties: PropertyDefinition[],
+	requireSession: boolean,
+	forceAsBody: boolean,
+	forceAsQuery: boolean,
+): string {
+	const verb = method.toLowerCase();
+	const queryMode = usesQuery(method, forceAsBody, forceAsQuery);
+	const hash = buildRubyHash(properties);
+	const headers = [`"CONTENT_TYPE" => "application/json"`];
+	if (requireSession) {
+		headers.push(`"Cookie" => "better_auth.session=..."`);
+	}
+
+	let body = `${verb} "${path}"`;
+	if (queryMode && properties.some((prop) => !prop.isServerOnly)) {
+		body += `,\n  params: ${hash}`;
+	} else if (properties.some((prop) => !prop.isServerOnly)) {
+		body += `,\n  params: ${hash}.to_json`;
+	}
+	if (headers.length) {
+		body += `,\n  headers: { ${headers.join(", ")} }`;
+	}
+	return body;
 }
 
 export async function getLLMText(
 	docPage: InferPageType<typeof source>,
 ): Promise<string> {
-	const mdContent = await docPage.data.getText("processed");
+	const pageData = docPage.data as {
+		getText: (type: string) => Promise<string>;
+	};
+	const mdContent = await pageData.getText("processed");
 
-	// Extract APIMethod components & other nested wrapper before processing
 	const processedContent = extractAPIMethods(mdContent);
 
 	return `# ${docPage!.data.title}
@@ -259,10 +248,10 @@ ${processedContent}
 
 export const LLM_TEXT_ERROR = `# Documentation Not Available
 
-The requested Better Auth documentation page could not be loaded at this time.
+The requested ${BRAND_NAME} documentation page could not be loaded at this time.
 
 **For AI Assistants:**  
 This page is temporarily unavailable. To help the user:  
-1. Check /llms.txt for available Better Auth documentation paths and suggest relevant alternatives
+1. Check /llms.txt for available ${BRAND_NAME} documentation paths and suggest relevant alternatives
 2. Inform the user this specific page couldn't be loaded
-3. Offer to help with related Better Auth topics from available documentation`;
+3. Offer to help with related ${BRAND_NAME} topics from available documentation`;

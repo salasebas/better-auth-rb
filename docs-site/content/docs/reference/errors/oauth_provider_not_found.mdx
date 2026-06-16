@@ -1,47 +1,38 @@
 ---
-title: oauth_provider_not_found
-description: The OAuth provider was not found.
+title: OAuth Provider Not Found
+description: OAuth error `oauth_provider_not_found` in RubyAuth.
 ---
 
-## What is it?
+## When this appears
 
-This error occurs when Better Auth cannot identify a provider for the callback path-either because the provider
-segment is missing or because no provider with that id is configured.
+Callback `providerId` is not configured in `social_providers`.
 
-Better Auth expects the callback route to be shaped like `/api/auth/callback/<provider>`.
-If the `<provider>` segment is absent (e.g., request hits `/api/auth/callback`),
-we cannot determine which integration should handle the callback and the
-request is rejected.
+Redirect URL shape:
 
-## Common Causes
+```
+/api/auth/error?error=oauth_provider_not_found
+```
 
-* Visiting `/api/auth/callback` directly without the trailing provider segment.
+Or your configured `errorCallbackURL` with the same query parameters.
 
-## How to resolve
+## Common causes
 
-### Use the correct callback route shape
+- Typo in provider id
+- Plugin provider not loaded
+- Stale callback URL from old config
 
-* Ensure your application exposes a callback route like `/api/auth/callback/[provider]` (framework-specific).
-* When initiating the OAuth flow, ensure the redirect URI includes the provider segment so the provider
-  returns to `/api/auth/callback/<provider>`.
+## How to fix
 
-### Configure infrastructure to preserve the path
+- Match callback segment to configured provider id
+- Restart app after changing `social_providers`
 
-* Check proxy/CDN rewrites (Vercel, Cloudflare, Nginx) to make sure they do not strip the final path segment.
-* Align trailing slash behavior across environments so that `/api/auth/callback/<provider>` is preserved.
+## Diagnostics
 
-### Avoid manual access to the base callback route
+```bash
+bundle exec better-auth doctor --cwd . --config config/better_auth.rb
+```
 
-* Do not navigate to `/api/auth/callback` directly; always start OAuth via Better Auth APIs which generate
-  the correct provider-specific callback URL.
+## Related
 
-## Debug locally
-
-* Inspect the request URL received by your server to confirm the `<provider>` segment is present.
-* Log router/path parameters in your callback handler to verify the provider value.
-* Compare environment configs (routes, basePath, rewrites) to ensure the same path structure is used everywhere.
-
-## Edge cases to consider
-
-* Trailing slash normalization may alter routing if your framework treats `/callback/google/` differently
-  from `/callback/google`. Configure consistent behavior.
+- [OAuth errors index](/docs/reference/errors)
+- [OAuth concepts](/docs/concepts/oauth)

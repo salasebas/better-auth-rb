@@ -1,38 +1,49 @@
 ---
 title: Telemetry
-description: Telemetry behavior in Better Auth Ruby.
+description: Opt-in telemetry with the better_auth-telemetry gem.
 ---
 
-Better Auth Ruby does not collect or send telemetry.
+Telemetry is **disabled by default** in RubyAuth. It is not a plugin — install the optional gem:
 
-The upstream JavaScript project has optional anonymous telemetry for Node-based runtime and CLI usage. That telemetry system has not been ported to Ruby, and the Ruby gems do not include a telemetry client, background sender, or `BETTER_AUTH_TELEMETRY` runtime integration.
+```ruby
+gem "better_auth-telemetry"
+```
 
-## What Is Sent
+When bundled, core soft-loads a publisher on `auth.telemetry`. Without the gem, `#publish` is a safe no-op.
 
-Nothing is sent by Better Auth Ruby itself.
+## Opt in
 
-The Ruby port may still run inside applications that use their own analytics, logging, error reporting, APM, or hosting telemetry. Those systems are outside Better Auth Ruby and should be configured in your application or hosting provider.
-
-## Environment Variables
-
-These upstream JavaScript environment variables are not used by Better Auth Ruby:
-
-- `BETTER_AUTH_TELEMETRY`
-- `BETTER_AUTH_TELEMETRY_DEBUG`
-
-Setting them has no effect in the Ruby gem.
-
-## Logging Instead
-
-Use `logger` when you want Better Auth Ruby warnings or errors routed into your application logger.
-
-```ruby title="config/auth.rb"
-auth = BetterAuth.auth(
-  secret: ENV.fetch("BETTER_AUTH_SECRET"),
-  logger: ->(level, message) {
-    Rails.logger.public_send(level, message)
-  }
+```ruby
+BetterAuth.auth(
+  telemetry: { enabled: true }
 )
 ```
 
-The logger receives local runtime messages only. It does not send data to Better Auth maintainers.
+Or via environment:
+
+```bash
+export BETTER_AUTH_TELEMETRY=1
+export BETTER_AUTH_TELEMETRY_ENDPOINT=https://telemetry.example.com/ingest
+```
+
+Explicit `telemetry: { enabled: false }` overrides env vars.
+
+## Debug mode
+
+```ruby
+telemetry: { enabled: true, debug: true }
+```
+
+Logs JSON events locally — no HTTP requests.
+
+## Ruby-specific behavior
+
+- Detects Ruby frameworks (Rails, Sinatra, Hanami, Roda, Grape) via `Gem.loaded_specs`
+- Reports Bundler as package manager, not npm
+- Skipped automatically in test environments (`RACK_ENV=test`, etc.)
+
+See `packages/better_auth-telemetry/README.md` for full env var table and redaction rules.
+
+## Related
+
+- [Options — telemetry](/docs/reference/options#telemetry)

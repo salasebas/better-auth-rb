@@ -1,48 +1,64 @@
 import type { Folder, Root } from "fumadocs-core/page-tree";
 import type { LucideIcon } from "lucide-react";
 import {
+	Activity,
+	AppWindow,
 	Binoculars,
 	Book,
-	Bot,
+	BotIcon,
 	CircleHelp,
 	Database,
+	FileBoxIcon,
 	FlaskConical,
 	Gauge,
 	Key,
 	KeyRound,
+	Logs,
 	LucideAArrowDown,
 	Mail,
 	Mailbox,
 	Phone,
+	Route,
 	ScanFace,
-	ScrollText,
+	ScrollTextIcon,
+	Server,
 	ShieldCheck,
-	Sparkles,
 	TriangleAlertIcon,
 	UserCircle,
 	UserSquare2,
 	Users2,
+	Zap,
 } from "lucide-react";
 import type { ReactNode, SVGProps } from "react";
 import { Icons } from "./icons";
 
-export interface ContentListItem {
+export interface SubpageItem {
 	title: string;
-	href: string;
+	href?: string;
+	icon?: ((props?: SVGProps<any>) => ReactNode) | LucideIcon;
+	group?: boolean;
+}
+
+export interface ListItem {
+	title: string;
+	href?: string;
 	icon: ((props?: SVGProps<any>) => ReactNode) | LucideIcon;
 	group?: boolean;
+	separator?: boolean;
 	isNew?: boolean;
-	isUpdated?: boolean;
-	children?: ContentListItem[];
+	subpages?: SubpageItem[];
+	/** Navigates to a non-docs URL (e.g. `/llms.txt`) without a docs MDX page. */
+	external?: boolean;
 }
 
 interface Content {
 	title: string;
 	href?: string;
+	/** Expand this sidebar section when pathname is this URL or a child path (no extra nav row). */
+	expandSectionForPathPrefix?: string;
 	Icon: ((props?: SVGProps<any>) => ReactNode) | LucideIcon;
 	isNew?: boolean;
-	isUpdated?: boolean;
-	list: ContentListItem[];
+	list: ListItem[];
 }
 
 export function getPageTree(): Root {
@@ -68,35 +84,6 @@ export function getPageTree(): Root {
 	};
 }
 
-function contentListItemToPageTreeNode(
-	item: ContentListItem,
-): Folder | { type: "page"; url: string; name: string; icon: ReactNode } {
-	// If item has children, create a folder with nested pages
-	if (item.children && item.children.length > 0) {
-		return {
-			type: "folder",
-			name: item.title,
-			icon: <item.icon />,
-			index: {
-				type: "page",
-				url: item.href,
-				name: item.title,
-				icon: <item.icon />,
-			},
-			children: item.children
-				.filter((child) => !child.group && child.href)
-				.map((child) => contentListItemToPageTreeNode(child)),
-		};
-	}
-	// Regular page
-	return {
-		type: "page",
-		url: item.href,
-		name: item.title,
-		icon: <item.icon />,
-	};
-}
-
 function contentToPageTree(content: Content): Folder {
 	return {
 		type: "folder",
@@ -111,8 +98,21 @@ function contentToPageTree(content: Content): Folder {
 				}
 			: undefined,
 		children: content.list
-			.filter((item) => !item.group && item.href)
-			.map((item) => contentListItemToPageTreeNode(item)),
+			.filter((item) => !item.group && (item.href || item.separator))
+			.filter((item) => !item.external)
+			.map((item) =>
+				item.separator
+					? ({
+							type: "separator",
+							name: item.title,
+						} as const)
+					: ({
+							type: "page",
+							url: item.href!,
+							name: item.title,
+							icon: <item.icon />,
+						} as const),
+			),
 	};
 }
 
@@ -149,11 +149,6 @@ export const contents: Content[] = [
 						/>
 					</svg>
 				),
-			},
-			{
-				title: "Supported Features",
-				href: "/docs/supported-features",
-				icon: () => <Binoculars className="w-4 h-4" />,
 			},
 			{
 				title: "Comparison",
@@ -210,6 +205,48 @@ export const contents: Content[] = [
 					</svg>
 				),
 			},
+			{
+				title: "LLMs.txt",
+				href: "/llms.txt",
+				external: true,
+				icon: () => <Book className="w-4 h-4 text-current" />,
+			},
+		],
+	},
+	{
+		title: "Integrations",
+		Icon: () => <AppWindow className="w-4 h-4" />,
+		list: [
+			{
+				title: "Rails",
+				href: "/docs/integrations/rails",
+				icon: () => <Server className="w-4 h-4" />,
+			},
+			{
+				title: "Hanami",
+				href: "/docs/integrations/hanami",
+				icon: () => <AppWindow className="w-4 h-4" />,
+			},
+			{
+				title: "Sinatra",
+				href: "/docs/integrations/sinatra",
+				icon: () => <Route className="w-4 h-4" />,
+			},
+			{
+				title: "Roda",
+				href: "/docs/integrations/roda",
+				icon: () => <Route className="w-4 h-4" />,
+			},
+			{
+				title: "Grape",
+				href: "/docs/integrations/grape",
+				icon: () => <FlaskConical className="w-4 h-4" />,
+			},
+			{
+				title: "Rack",
+				href: "/docs/integrations/rack",
+				icon: () => <Server className="w-4 h-4" />,
+			},
 		],
 	},
 	{
@@ -250,23 +287,6 @@ export const contents: Content[] = [
 					</svg>
 				),
 				href: "/docs/concepts/cli",
-			},
-			{
-				title: "Client",
-				href: "/docs/concepts/client",
-				icon: () => (
-					<svg
-						xmlns="http://www.w3.org/2000/svg"
-						width="1.2em"
-						height="1.2em"
-						viewBox="0 0 24 24"
-					>
-						<path
-							fill="currentColor"
-							d="M4 8h4V4H4zm6 12h4v-4h-4zm-6 0h4v-4H4zm0-6h4v-4H4zm6 0h4v-4h-4zm6-10v4h4V4zm-6 4h4V4h-4zm6 6h4v-4h-4zm0 6h4v-4h-4z"
-						></path>
-					</svg>
-				),
 			},
 			{
 				title: "Cookies",
@@ -482,7 +502,7 @@ export const contents: Content[] = [
 				viewBox="0 0 24 24"
 			>
 				<path
-					className="fill-foreground"
+					fill="currentColor"
 					fillRule="evenodd"
 					d="M10 4h4c3.771 0 5.657 0 6.828 1.172C22 6.343 22 8.229 22 12c0 3.771 0 5.657-1.172 6.828C19.657 20 17.771 20 14 20h-4c-3.771 0-5.657 0-6.828-1.172C2 17.657 2 15.771 2 12c0-3.771 0-5.657 1.172-6.828C4.343 4 6.229 4 10 4m3.25 5a.75.75 0 0 1 .75-.75h5a.75.75 0 0 1 0 1.5h-5a.75.75 0 0 1-.75-.75m1 3a.75.75 0 0 1 .75-.75h4a.75.75 0 0 1 0 1.5h-4a.75.75 0 0 1-.75-.75m1 3a.75.75 0 0 1 .75-.75h3a.75.75 0 0 1 0 1.5h-3a.75.75 0 0 1-.75-.75M11 9a2 2 0 1 1-4 0a2 2 0 0 1 4 0m-2 8c4 0 4-.895 4-2s-1.79-2-4-2s-4 .895-4 2s0 2 4 2"
 					clipRule="evenodd"
@@ -677,6 +697,28 @@ export const contents: Content[] = [
 						<path
 							fill="currentColor"
 							d="m28.568 12.893l-.037-.094l-3.539-9.235a.92.92 0 0 0-.364-.439a.95.95 0 0 0-1.083.058a.95.95 0 0 0-.314.477l-2.39 7.31h-9.675l-2.39-7.31a.93.93 0 0 0-.313-.478a.95.95 0 0 0-1.083-.058a.93.93 0 0 0-.365.438L3.47 12.794l-.035.093a6.57 6.57 0 0 0 2.18 7.595l.011.01l.033.022l5.39 4.037l2.668 2.019l1.624 1.226c.39.297.931.297 1.322 0l1.624-1.226l2.667-2.019l5.424-4.061l.013-.01a6.574 6.574 0 0 0 2.177-7.588Z"
+						/>
+					</svg>
+				),
+			},
+			{
+				title: "Railway",
+				href: "/docs/authentication/railway",
+				icon: () => (
+					<svg
+						xmlns="http://www.w3.org/2000/svg"
+						width="1.2em"
+						height="1.2em"
+						viewBox="0 0 1024 1024"
+						fill="none"
+					>
+						<path
+							d="M4.756 438.175A520.713 520.713 0 0 0 0 489.735h777.799c-2.716-5.306-6.365-10.09-10.045-14.772-132.97-171.791-204.498-156.896-306.819-161.26-34.114-1.403-57.249-1.967-193.037-1.967-72.677 0-151.688.185-228.628.39-9.96 26.884-19.566 52.942-24.243 74.14h398.571v51.909H4.756ZM783.93 541.696H.399c.82 13.851 2.112 27.517 3.978 40.999h723.39c32.248 0 50.299-18.297 56.162-40.999ZM45.017 724.306S164.941 1018.77 511.46 1024c207.112 0 385.071-123.006 465.907-299.694H45.017Z"
+							fill="currentColor"
+						/>
+						<path
+							d="M511.454 0C319.953 0 153.311 105.16 65.31 260.612c68.771-.144 202.704-.226 202.704-.226h.031v-.051c158.309 0 164.193.707 195.118 1.998l19.149.706c66.7 2.224 148.683 9.384 213.19 58.19 35.015 26.471 85.571 84.896 115.708 126.52 27.861 38.499 35.876 82.756 16.933 125.158-17.436 38.97-54.952 62.215-100.383 62.215H16.69s4.233 17.944 10.58 37.751h970.632A510.385 510.385 0 0 0 1024 512.218C1024.01 229.355 794.532 0 511.454 0Z"
+							fill="currentColor"
 						/>
 					</svg>
 				),
@@ -1095,7 +1137,6 @@ C0.7,239.6,62.1,0.5,62.2,0.4c0,0,54,13.8,119.9,30.8S302.1,62,302.2,62c0.2,0,0.2,
 			{
 				title: "Vercel",
 				href: "/docs/authentication/vercel",
-				isNew: true,
 				icon: () => (
 					<svg
 						xmlns="http://www.w3.org/2000/svg"
@@ -1123,6 +1164,23 @@ C0.7,239.6,62.1,0.5,62.2,0.4c0,0,54,13.8,119.9,30.8S302.1,62,302.2,62c0.2,0,0.2,
 							fillRule="evenodd"
 							d="M17.802 12.298s1.617 1.597 2.017 2.336a.1.1 0 0 1 .018.035q.244.409.123.645c-.135.261-.592.392-.747.403h-2.858c-.199 0-.613-.052-1.117-.4c-.385-.269-.768-.712-1.139-1.145c-.554-.643-1.033-1.201-1.518-1.201a.6.6 0 0 0-.18.03c-.367.116-.833.639-.833 2.032c0 .436-.344.684-.585.684H9.674c-.446 0-2.768-.156-4.827-2.327C2.324 10.732.058 5.4.036 5.353c-.141-.345.155-.533.475-.533h2.886c.387 0 .513.234.601.444c.102.241.48 1.205 1.1 2.288c1.004 1.762 1.621 2.479 2.114 2.479a.53.53 0 0 0 .264-.07c.644-.354.524-2.654.494-3.128c0-.092-.001-1.027-.331-1.479c-.236-.324-.638-.45-.881-.496c.065-.094.203-.238.38-.323c.441-.22 1.238-.252 2.029-.252h.439c.858.012 1.08.067 1.392.146c.628.15.64.557.585 1.943c-.016.396-.033.842-.033 1.367c0 .112-.005.237-.005.364c-.019.711-.044 1.512.458 1.841a.4.4 0 0 0 .217.062c.174 0 .695 0 2.108-2.425c.62-1.071 1.1-2.334 1.133-2.429c.028-.053.112-.202.214-.262a.5.5 0 0 1 .236-.056h3.395c.37 0 .621.056.67.196c.082.227-.016.92-1.566 3.016c-.261.349-.49.651-.691.915c-1.405 1.844-1.405 1.937.083 3.337"
 							clipRule="evenodd"
+						/>
+					</svg>
+				),
+			},
+			{
+				title: "WeChat",
+				href: "/docs/authentication/wechat",
+				icon: () => (
+					<svg
+						xmlns="http://www.w3.org/2000/svg"
+						width="1.2em"
+						height="1.2em"
+						viewBox="0 0 24 24"
+					>
+						<path
+							fill="currentColor"
+							d="M8.691 2.188C3.891 2.188 0 5.476 0 9.53c0 2.212 1.17 4.203 3.002 5.55a.59.59 0 0 1 .213.665l-.39 1.504c-.019.07-.048.141-.048.213 0 .163.13.295.29.295a.326.326 0 0 0 .167-.054l1.903-1.114a.864.864 0 0 1 .717-.098 10.16 10.16 0 0 0 2.837.403c.276 0 .543-.027.811-.05-.857-2.578.157-4.972 1.932-6.446 1.703-1.415 3.882-1.98 5.853-1.838-.576-3.583-4.196-6.348-8.596-6.348zM5.785 5.991c.642 0 1.162.529 1.162 1.18a1.17 1.17 0 0 1-1.162 1.178A1.17 1.17 0 0 1 4.623 7.17c0-.651.52-1.18 1.162-1.18zm5.813 0c.642 0 1.162.529 1.162 1.18a1.17 1.17 0 0 1-1.162 1.178 1.17 1.17 0 0 1-1.162-1.178c0-.651.52-1.18 1.162-1.18zm5.34 2.867c-1.797-.052-3.746.512-5.28 1.786-1.72 1.428-2.687 3.72-1.78 6.22.942 2.453 3.666 4.229 6.884 4.229.826 0 1.622-.12 2.361-.336a.722.722 0 0 1 .598.082l1.584.926a.272.272 0 0 0 .14.047c.134 0 .24-.111.24-.247 0-.06-.023-.12-.038-.177l-.327-1.233a.582.582 0 0 1-.023-.156.49.49 0 0 1 .201-.398C23.024 18.48 24 16.82 24 14.98c0-3.21-2.931-5.837-6.656-6.088V8.89c-.135-.01-.27-.027-.407-.03zm-2.53 3.274c.535 0 .969.44.969.982a.976.976 0 0 1-.969.983.976.976 0 0 1-.969-.983c0-.542.434-.982.97-.982zm4.844 0c.535 0 .969.44.969.982a.976.976 0 0 1-.969.983.976.976 0 0 1-.969-.983c0-.542.434-.982.969-.982z"
 						/>
 					</svg>
 				),
@@ -1171,7 +1229,7 @@ C0.7,239.6,62.1,0.5,62.2,0.4c0,0,54,13.8,119.9,30.8S302.1,62,302.2,62c0.2,0,0.2,
 			},
 		],
 	},
-{
+	{
 		title: "Databases",
 		Icon: () => (
 			<svg
@@ -1303,52 +1361,6 @@ C0.7,239.6,62.1,0.5,62.2,0.4c0,0,54,13.8,119.9,30.8S302.1,62,302.2,62c0.2,0,0.2,
 			},
 		],
 	},
-{
-	title: "Integrations",
-	Icon: () => (
-		<svg
-			xmlns="http://www.w3.org/2000/svg"
-			width="1.3em"
-			height="1.3em"
-			viewBox="0 0 48 48"
-		>
-			<path
-				fill="currentColor"
-				stroke="currentColor"
-				strokeLinejoin="round"
-				strokeWidth="4"
-				d="M18 6H8a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2Zm0 22H8a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V30a2 2 0 0 0-2-2ZM40 6H30a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2Zm0 22H30a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V30a2 2 0 0 0-2-2Z"
-			></path>
-		</svg>
-	),
-	list: [
-		{
-			title: "Rack",
-			icon: Icons.rack,
-			href: "/docs/integrations/rack",
-		},
-		{
-			title: "Rails",
-			icon: Icons.rails,
-			href: "/docs/integrations/rails",
-		},
-		{
-			title: "Sinatra",
-			icon: Icons.sinatra,
-			href: "/docs/integrations/sinatra",
-		},
-		{
-			title: "Roda",
-			icon: Icons.rack,
-			href: "/docs/integrations/roda",
-		},
-		{
-			title: "Hanami",
-			icon: Icons.hanami,
-			href: "/docs/integrations/hanami",
-		},
-	],
-},
 	{
 		title: "Plugins",
 		Icon: () => (
@@ -1516,38 +1528,6 @@ C0.7,239.6,62.1,0.5,62.2,0.4c0,0,54,13.8,119.9,30.8S302.1,62,302.2,62c0.2,0,0.2,
 				icon: () => <KeyRound className="size-4" />,
 			},
 			{
-				title: "MCP",
-				icon: () => (
-					<svg
-						width="1.2em"
-						height="1.2em"
-						viewBox="0 0 156 173"
-						fill="none"
-						xmlns="http://www.w3.org/2000/svg"
-					>
-						<path
-							d="M6 80.9117L73.8822 13.0294C83.255 3.65685 98.451 3.65685 107.823 13.0294C117.196 22.4019 117.196 37.598 107.823 46.9706L56.5581 98.2359"
-							stroke="currentColor"
-							strokeWidth="12"
-							strokeLinecap="round"
-						/>
-						<path
-							d="M57.2652 97.5289L107.823 46.9706C117.196 37.598 132.392 37.598 141.765 46.9706L142.118 47.324C151.491 56.6966 151.491 71.8926 142.118 81.2651L80.7248 142.659C77.6006 145.783 77.6006 150.848 80.7248 153.972L93.331 166.579"
-							stroke="currentColor"
-							strokeWidth="12"
-							strokeLinecap="round"
-						/>
-						<path
-							d="M90.853 29.9999L40.6482 80.2045C31.2756 89.5768 31.2756 104.773 40.6482 114.146C50.0208 123.518 65.2167 123.518 74.5893 114.146L124.794 63.941"
-							stroke="currentColor"
-							strokeWidth="12"
-							strokeLinecap="round"
-						/>
-					</svg>
-				),
-				href: "/docs/plugins/mcp",
-			},
-			{
 				title: "Organization",
 				icon: () => <Users2 className="w-4 h-4" />,
 				href: "/docs/plugins/organization",
@@ -1579,7 +1559,6 @@ C0.7,239.6,62.1,0.5,62.2,0.4c0,0,54,13.8,119.9,30.8S302.1,62,302.2,62c0.2,0,0.2,
 						/>
 					</svg>
 				),
-				isNew: true,
 			},
 			{
 				title: "SSO",
@@ -1618,7 +1597,6 @@ C0.7,239.6,62.1,0.5,62.2,0.4c0,0,54,13.8,119.9,30.8S302.1,62,302.2,62c0.2,0,0.2,
 					</svg>
 				),
 				href: "/docs/plugins/scim",
-				isNew: true,
 			},
 			{
 				title: "Utility",
@@ -1797,12 +1775,6 @@ C0.7,239.6,62.1,0.5,62.2,0.4c0,0,54,13.8,119.9,30.8S302.1,62,302.2,62c0.2,0,0.2,
 				href: "/docs/plugins/jwt",
 			},
 			{
-				title: "Test Utils",
-				href: "/docs/plugins/test-utils",
-				icon: () => <FlaskConical className="w-4 h-4" />,
-				isNew: true,
-			},
-			{
 				title: "Payments",
 				group: true,
 				href: "",
@@ -1854,23 +1826,6 @@ C0.7,239.6,62.1,0.5,62.2,0.4c0,0,54,13.8,119.9,30.8S302.1,62,302.2,62c0.2,0,0.2,
 						/>
 					</svg>
 				),
-				isNew: true,
-			},
-		],
-	},
-	{
-		title: "AI Resources",
-		Icon: () => <Sparkles className="w-4 h-4 text-current" />,
-		list: [
-			{
-				title: "Skills",
-				href: "/docs/ai-resources/skills",
-				icon: () => <Bot className="w-4 h-4 text-current" />,
-			},
-			{
-				title: "LLMs.txt",
-				href: "/llms.txt",
-				icon: () => <ScrollText className="w-4 h-4 text-current" />,
 			},
 		],
 	},
@@ -1911,7 +1866,7 @@ C0.7,239.6,62.1,0.5,62.2,0.4c0,0,54,13.8,119.9,30.8S302.1,62,302.2,62c0.2,0,0.2,
 				title: "Errors",
 				href: "/docs/reference/errors",
 				icon: () => <TriangleAlertIcon className="w-4 h-4 text-current" />,
-				children: [
+				subpages: [
 					{
 						title: "invalid_callback_request",
 						href: "/docs/reference/errors/invalid_callback_request",
@@ -2093,22 +2048,4 @@ C0.7,239.6,62.1,0.5,62.2,0.4c0,0,54,13.8,119.9,30.8S302.1,62,302.2,62c0.2,0,0.2,
 	},
 ];
 
-export const examples: Content[] = [
-	{
-		title: "Examples",
-		href: "/docs/examples/rack",
-		Icon: Icons.rack,
-		list: [
-			{
-				title: "Rack",
-				href: "/docs/examples/rack",
-				icon: Icons.rack,
-			},
-			{
-				title: "Rails",
-				href: "/docs/examples/rails",
-				icon: Icons.rails,
-			},
-		],
-	},
-];
+export const examples: Content[] = [];

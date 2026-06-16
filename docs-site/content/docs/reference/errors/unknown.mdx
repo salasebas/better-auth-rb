@@ -1,17 +1,38 @@
 ---
-title: Unknown error
-description: An unknown error occurred.
+title: Unknown
+description: OAuth error `unknown` in RubyAuth.
 ---
 
-{/* 
-    This page is intentionally not listed in the errors index.
-    It's a fallback for unknown errors.
-  */}
+## When this appears
 
-If you're seeing this page, it means that an unknown error occurred.
-Please try again or return to the home page.
+Unhandled OAuth error slug or provider-returned error.
 
-If you believe this error comes from Better Auth core functionality or a plugin,
-please open an issue on [GitHub](https://github.com/better-auth/better-auth/issues).
+Redirect URL shape:
 
-To view all known errors, please visit the [Error Codes Reference](/docs/reference/errors) page.
+```
+/api/auth/error?error=unknown
+```
+
+Or your configured `errorCallbackURL` with the same query parameters.
+
+## Common causes
+
+- Provider sent unexpected error query param
+- Custom plugin error
+
+## How to fix
+
+- Check `error_description` query param
+- Inspect server logs
+- Run `bundle exec better-auth doctor`
+
+## Diagnostics
+
+```bash
+bundle exec better-auth doctor --cwd . --config config/better_auth.rb
+```
+
+## Related
+
+- [OAuth errors index](/docs/reference/errors)
+- [OAuth concepts](/docs/concepts/oauth)

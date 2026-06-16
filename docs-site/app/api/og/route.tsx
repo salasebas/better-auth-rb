@@ -1,10 +1,10 @@
 import { ImageResponse } from "@vercel/og";
 import * as z from "zod";
-import { GITHUB_REPO } from "@/lib/constants";
+import { BRAND_NAME } from "@/lib/branding";
 export const runtime = "edge";
 
 const ogSchema = z.object({
-	heading: z.string().default("Better Auth Documentation"),
+	heading: z.string().default(`${BRAND_NAME} Documentation`),
 	mode: z.string().default("dark"),
 	type: z.string().default("documentation"),
 });
@@ -34,7 +34,7 @@ export async function GET(req: Request) {
 					backgroundColor: "transparent",
 					border: "1px solid rgba(255, 255, 255, 0.1)",
 					boxShadow: "0 -20px 80px -20px rgba(28, 12, 12, 0.1) inset",
-					background: "#0a0505",
+					background: "linear-gradient(135deg, #141c22 0%, #e9573f 100%)",
 				}}
 			>
 				<div
@@ -103,19 +103,26 @@ export async function GET(req: Request) {
 					</svg>
 					<div tw="flex flex-col flex-1 py-10">
 						<svg
-							width="100"
-							height="95"
-							viewBox="0 0 60 45"
+							width="96"
+							height="96"
+							viewBox="0 0 64 64"
 							fill="none"
 							className="mb-10"
 							xmlns="http://www.w3.org/2000/svg"
 						>
-							<path
-								fillRule="evenodd"
-								stroke={paint}
-								clipRule="evenodd"
-								d="M0 0H15V15H30V30H15V45H0V30V15V0ZM45 30V15H30V0H45H60V15V30V45H45H30V30H45Z"
-								fill="white"
+							<polygon
+								points="32 4 58 22 58 46 32 60 6 46 6 22"
+								fill="#e9573f"
+							/>
+							<polygon
+								points="32 4 58 22 32 34 6 22"
+								fill="#ffffff"
+								fillOpacity="0.22"
+							/>
+							<polygon
+								points="32 34 58 46 32 60 6 46"
+								fill="#141c22"
+								fillOpacity="0.18"
 							/>
 						</svg>
 						<div
@@ -157,7 +164,7 @@ export async function GET(req: Request) {
 							tw="flex text-xl"
 							style={{ fontFamily: "GeistSans", fontWeight: "semibold" }}
 						>
-							Better Auth.
+							{BRAND_NAME}.
 						</div>
 						<div tw="flex gap-2 items-center text-xl">
 							<svg
@@ -177,7 +184,7 @@ export async function GET(req: Request) {
 								}}
 								tw="flex ml-2"
 							>
-								github.com/{GITHUB_REPO.owner}/{GITHUB_REPO.name}
+								github.com/salasebas/better-auth-rb
 							</span>
 						</div>
 					</div>

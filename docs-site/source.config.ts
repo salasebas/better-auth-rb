@@ -4,11 +4,6 @@ import {
 	defineDocs,
 } from "fumadocs-mdx/config";
 import lastModified from "fumadocs-mdx/plugins/last-modified";
-import {
-	createFileSystemGeneratorCache,
-	createGenerator,
-	remarkAutoTypeTable,
-} from "fumadocs-typescript";
 import * as z from "zod";
 
 export const docs = defineDocs({
@@ -17,17 +12,8 @@ export const docs = defineDocs({
 		postprocess: {
 			includeProcessedMarkdown: true,
 		},
+		async: true,
 	},
-});
-
-export const changelogCollection = defineCollections({
-	type: "doc",
-	dir: "./content/changelogs",
-	schema: z.object({
-		title: z.string(),
-		description: z.string(),
-		date: z.date(),
-	}),
 });
 
 export const blogCollection = defineCollections({
@@ -37,18 +23,20 @@ export const blogCollection = defineCollections({
 		title: z.string(),
 		description: z.string(),
 		date: z.date(),
-		author: z.object({
-			name: z.string(),
-			avatar: z.string(),
-			twitter: z.string().optional(),
-		}),
-		image: z.string(),
-		tags: z.array(z.string()),
+		draft: z.boolean().optional(),
+		author: z
+			.object({
+				name: z.string(),
+				avatar: z.string(),
+				twitter: z.string().optional(),
+			})
+			.optional(),
+		image: z.string().optional(),
+		tags: z.array(z.string()).optional(),
 	}),
-});
-
-const generator = createGenerator({
-	cache: createFileSystemGeneratorCache(".next/fumadocs-typescript"),
+	postprocess: {
+		includeProcessedMarkdown: true,
+	},
 });
 
 export default defineConfig({
@@ -58,7 +46,6 @@ export default defineConfig({
 				id: "persist-install",
 			},
 		},
-		remarkPlugins: [[remarkAutoTypeTable, { generator }]],
 	},
 	plugins: [lastModified()],
 });

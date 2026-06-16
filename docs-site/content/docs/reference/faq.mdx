@@ -1,182 +1,66 @@
 ---
 title: FAQ
-description: Frequently asked questions about Better Auth Ruby.
+description: Frequently asked questions about RubyAuth.
 ---
 
-This page covers common Better Auth Ruby questions and issues.
+<RubyAuthDisclaimer />
 
-## Which gem should I install?
+## Is RubyAuth the same as Better Auth?
 
-Use `better_auth` for Rack-compatible apps and custom integrations.
+No. RubyAuth is an independent Ruby server library inspired by Better Auth v1.6.9. It is not the official npm package or hosted service.
 
-```ruby title="Gemfile"
-gem "better_auth"
+## Is there a JavaScript client?
+
+No official browser client gem. Frontends call `/api/auth/*` over HTTP with cookies or bearer tokens. External API-key docs note upstream JS client plugins can talk to the Ruby server.
+
+## How do I mount auth in Rails?
+
+Add `better_auth-rails`, run `bin/rails generate better_auth:install`, and add `better_auth` to routes. See [Rails integration](/docs/integrations/rails).
+
+## How do I generate a secret?
+
+```bash
+bundle exec better-auth secret
 ```
 
-Use `better_auth-rails` for Rails apps.
+Set `BETTER_AUTH_SECRET` in the environment.
 
-```ruby title="Gemfile"
-gem "better_auth-rails"
+## Which databases are supported?
+
+PostgreSQL, MySQL, SQLite, SQL Server, in-memory, and MongoDB (via `better_auth-mongodb`). Rails uses ActiveRecord; Hanami uses Sequel.
+
+## How do migrations work?
+
+```bash
+bundle exec better-auth generate --cwd . --dialect postgres --output db/better_auth/schema.sql
+bundle exec better-auth migrate --cwd . --config config/better_auth.rb --yes
 ```
 
-Use `better_auth-sinatra` or `better_auth-hanami` when you want the dedicated adapter for those frameworks.
+## How do I read the session server-side?
 
-## How do I mount Better Auth?
-
-Rack:
-
-```ruby title="config.ru"
-require_relative "config/auth"
-
-map "/api/auth" do
-  run auth
-end
+```ruby
+auth.api.get_session(headers: { "cookie" => request.env["HTTP_COOKIE"] })
 ```
 
-Rails:
+Or use framework helpers (`current_user` in Rails/Sinatra/Roda/Grape).
 
-```ruby title="config/routes.rb"
-Rails.application.routes.draw do
-  better_auth
-end
-```
+## Why do OAuth redirects fail with state_mismatch?
 
-The default base path is `/api/auth`.
+Usually cookie or origin issues. See [State mismatch](/docs/reference/errors/state_mismatch).
 
-## Why does OAuth redirect to the wrong URL?
+## How do I disable sign-up?
 
-Check `base_url`, `base_path`, and your provider callback URL.
+Configure provider or global sign-up disable options; OAuth returns `signup_disabled` when blocked.
 
-```ruby title="config/auth.rb"
-auth = BetterAuth.auth(
-  base_url: "https://example.com",
-  base_path: "/api/auth",
-  secret: ENV.fetch("BETTER_AUTH_SECRET")
-)
-```
+## Where are plugin options documented?
 
-The provider callback should usually be:
+[Plugins index](/docs/plugins) and individual plugin pages.
 
-```txt
-https://example.com/api/auth/callback/github
-```
+## How do I contribute?
 
-If your app is behind a reverse proxy and `base_url` is intentionally omitted, enable `advanced.trusted_proxy_headers` only when your proxy controls the forwarded headers.
+See [Contributing](/docs/reference/contributing).
 
-## Why do I get `state_mismatch` during OAuth?
+## Related
 
-`state_mismatch` means the callback could not validate the state generated when the flow started. Common causes are:
-
-- The callback reached a different domain than the one that started the flow.
-- The state cookie was blocked or not sent.
-- The verification record expired or was deleted.
-- Multiple app instances do not share the same database or secondary storage.
-- `BETTER_AUTH_SECRET` changed during an active OAuth flow.
-
-See [state_mismatch](/docs/reference/errors/state_mismatch).
-
-## Why do I get `Invalid origin`?
-
-Unsafe requests that include cookies must come from a trusted origin. Add your frontend origin to `trusted_origins`.
-
-```ruby title="config/auth.rb"
-auth = BetterAuth.auth(
-  base_url: "https://auth.example.com",
-  secret: ENV.fetch("BETTER_AUTH_SECRET"),
-  trusted_origins: ["https://app.example.com"]
-)
-```
-
-Do not disable CSRF or origin checks unless you have a narrow, well-understood integration that cannot be modeled with trusted origins.
-
-## How do I call server APIs?
-
-Use `auth.api`. Method names are Ruby `snake_case` versions of upstream endpoint keys.
-
-```ruby title="app/services/auth_lookup.rb"
-session = auth.api.get_session(
-  headers: {
-    "cookie" => request.get_header("HTTP_COOKIE").to_s
-  }
-)
-```
-
-Use `as_response: true` when you need the Rack response tuple with headers.
-
-```ruby title="app/controllers/sessions_controller.rb"
-status, headers, body = auth.api.sign_out(
-  headers: {
-    "cookie" => request.get_header("HTTP_COOKIE").to_s
-  },
-  as_response: true
-)
-```
-
-## Does `auth.api` apply rate limits?
-
-No. Rate limits apply to HTTP requests handled by the Rack router. Server-side calls through `auth.api` are trusted application calls. If a controller, job, or RPC endpoint exposes `auth.api` behavior to users, rate limit that public entry point separately.
-
-## How do I configure Rails?
-
-Run the installer and then edit the initializer.
-
-```bash title="Terminal"
-bin/rails generate better_auth:install
-```
-
-```ruby title="config/initializers/better_auth.rb"
-BetterAuth::Rails.configure do |config|
-  config.secret = ENV.fetch("BETTER_AUTH_SECRET")
-  config.base_url = ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000")
-  config.email_and_password do |auth|
-    auth.enabled = true
-  end
-end
-```
-
-See [Rails Integration](/docs/integrations/rails).
-
-## Can I use the upstream JavaScript client?
-
-Better Auth Ruby exposes upstream-compatible HTTP routes where implemented, so a frontend can call those routes over HTTP. The Ruby port does not provide TypeScript type inference or React hooks. Use the HTTP API, your framework's fetch utilities, or the route methods exposed by your app.
-
-## Can I use TypeScript examples from upstream docs?
-
-Use them as behavior references, then translate to Ruby:
-
-- `betterAuth({...})` becomes `BetterAuth.auth(...)`.
-- `camelCase` options become `snake_case`.
-- `auth.api.getSession` becomes `auth.api.get_session`.
-- JavaScript callbacks become Ruby lambdas or callables.
-
-## Why is my session missing on the server?
-
-Pass the inbound cookie header to server-side API calls.
-
-```ruby title="app/controllers/application_controller.rb"
-session = auth.api.get_session(
-  headers: {
-    "cookie" => request.get_header("HTTP_COOKIE").to_s
-  }
-)
-```
-
-If you are forwarding through another app or proxy, make sure `Cookie` and `Set-Cookie` headers are preserved.
-
-## Can I remove `name`, `image`, or `email` from the user table?
-
-The core user schema expects the upstream user fields. You can add fields using schema extension patterns, but removing core fields is not supported.
-
-See [Users And Accounts](/docs/concepts/users-accounts).
-
-## How do I debug production auth issues?
-
-Start with:
-
-- Server logs from the auth route.
-- Browser DevTools network tab for callback and cookie headers.
-- `BETTER_AUTH_URL`, `BETTER_AUTH_SECRET`, and provider credentials.
-- Whether all app instances share the same database or secondary storage.
-- Whether reverse proxies preserve query strings and forwarded headers.
-
-For OAuth issues, inspect the provider dashboard callback URL and compare it to the URL received by your app.
+- [Installation](/docs/installation)
+- [Options](/docs/reference/options)

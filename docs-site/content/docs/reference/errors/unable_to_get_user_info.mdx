@@ -1,31 +1,39 @@
 ---
-title: unable_to_get_user_info
-description: The user info was not found in the request.
+title: Unable To Get User Info
+description: OAuth error `unable_to_get_user_info` in RubyAuth.
 ---
 
-## What is it?
+## When this appears
 
-This error occurs only on the `/api/auth/callback` endpoint during an OAuth flow. After exchanging
-the authorization code for tokens, Better Auth fetches the user's profile from the provider. If the
-provider response is incorrect, empty, or missing required fields (like id or email when needed),
-no usable user info can be derived and the request is rejected.
+Token exchange succeeded but user profile could not be fetched.
 
-## Common Causes
+Redirect URL shape:
 
-* Missing or insufficient scopes, so the provider does not return profile data.
-* The provider returned an error or an empty profile object for the user info request.
-* Token exchange succeeded, but the user info request failed (network error, 401/403, invalid token).
-* Provider configuration or environment mismatch (wrong client/tenant), causing unexpected or minimal claims.
-* Temporary provider outage or rate limiting.
+```
+/api/auth/error?error=unable_to_get_user_info
+```
 
-## How to resolve
+Or your configured `errorCallbackURL` with the same query parameters.
 
-### Request the right data
+## Common causes
 
-* Start the OAuth flow using Better Auth methods so the correct scopes and parameters are used.
-* Ensure your provider app is configured to return basic profile details needed by your app.
+- Revoked tokens
+- Provider API outage
+- Missing userinfo scope
 
-### Verify configuration and environment
+## How to fix
 
-* Confirm the client credentials and callback URL match the environment you are testing (dev/staging/prod).
-* If the provider supports different response modes or endpoints, ensure they align with the integration you use.
+- Check provider status
+- Verify scopes include profile/email
+- Inspect server logs for provider HTTP errors
+
+## Diagnostics
+
+```bash
+bundle exec better-auth doctor --cwd . --config config/better_auth.rb
+```
+
+## Related
+
+- [OAuth errors index](/docs/reference/errors)
+- [OAuth concepts](/docs/concepts/oauth)

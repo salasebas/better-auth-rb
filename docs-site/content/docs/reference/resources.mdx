@@ -1,164 +1,29 @@
 ---
 title: Resources
-description: A curated collection of Better Auth Ruby and upstream Better Auth resources.
+description: Links and resources for RubyAuth.
 ---
 
-import { Resource } from "@/components/resource-section";
+## Official
 
-Use these resources to learn the Ruby port, compare behavior with upstream, and
-find migration or integration examples.
+- [GitHub — better-auth-rb](https://github.com/salasebas/better-auth-rb)
+- [Documentation](/docs/introduction)
+- [LLMs.txt](/llms.txt) — machine-readable docs
 
-## Better Auth Ruby
+## Gems
 
-<Resource resources={
-  [
-    {
-      title: "Ruby Port README",
-      description: "Project overview, supported gems, examples, and development notes for Better Auth Ruby.",
-      href: "https://github.com/sebasxsala/better-auth-rb",
-      tags: ["ruby", "overview"],
-    },
-    {
-      title: "Core Gem README",
-      description: "Core Rack-compatible Better Auth Ruby package documentation.",
-      href: "https://github.com/sebasxsala/better-auth-rb/tree/main/packages/better_auth",
-      tags: ["ruby", "core", "rack"],
-    },
-    {
-      title: "Rails Adapter README",
-      description: "Rails integration setup, generator usage, and initializer examples.",
-      href: "https://github.com/sebasxsala/better-auth-rb/tree/main/packages/better_auth-rails",
-      tags: ["ruby", "rails"],
-    },
-    {
-      title: "Sinatra Adapter README",
-      description: "Sinatra-specific setup and mounting examples.",
-      href: "https://github.com/sebasxsala/better-auth-rb/tree/main/packages/better_auth-sinatra",
-      tags: ["ruby", "sinatra"],
-    },
-    {
-      title: "Roda Adapter README",
-      description: "Roda plugin setup, mounting examples, helpers, and SQL migration tasks.",
-      href: "https://github.com/sebasxsala/better-auth-rb/tree/main/packages/better_auth-roda",
-      tags: ["ruby", "roda"],
-    },
-    {
-      title: "Hanami Adapter README",
-      description: "Hanami integration setup and database initialization.",
-      href: "https://github.com/sebasxsala/better-auth-rb/tree/main/packages/better_auth-hanami",
-      tags: ["ruby", "hanami"],
-    },
-  ]
-} />
+- [better_auth](https://rubygems.org/gems/better_auth) — core
+- [better_auth-rails](https://rubygems.org/gems/better_auth-rails) — Rails integration
+- Extension gems: `better_auth-api-key`, `better_auth-sso`, `better_auth-stripe`, `better_auth-passkey`, `better_auth-mongodb`
 
-## Upstream Better Auth
+## Inspiration
 
-These resources target the upstream JavaScript project. They are useful for
-understanding concepts and expected behavior, but code samples usually need to
-be translated to Ruby.
+Design inspired by [Better Auth](https://www.better-auth.com) (TypeScript). RubyAuth is a community Ruby port — not affiliated with the upstream project.
 
-<Resource resources={
-  [
-    {
-      title: "Upstream Better Auth Documentation",
-      description: "The JavaScript Better Auth documentation used as the behavior reference for this port.",
-      href: "https://www.better-auth.com/docs",
-      tags: ["upstream", "docs"],
-    },
-    {
-      title: "Upstream Source Repository",
-      description: "Better Auth source code, tests, issues, and release history.",
-      href: "https://github.com/better-auth/better-auth",
-      tags: ["upstream", "source"],
-    },
-    {
-      title: "Better Auth Discord",
-      description: "Community discussions for upstream Better Auth users and maintainers.",
-      href: "https://discord.gg/better-auth",
-      tags: ["upstream", "community"],
-    },
-  ]
-} />
+## Community
 
-## Video Tutorials
+Open issues and discussions on GitHub. For adapter or plugin contributions see [Community plugins](/docs/plugins/community-plugins).
 
-Most videos use the upstream JavaScript package. Treat them as conceptual
-guides and adapt setup/configuration to Ruby.
+## Related
 
-<Resource resources={
-  [
-    {
-      title: "10 Better Auth plugins that just save so much time",
-      description: "<strong>Dreams of Code</strong> showcases a broad list of Better Auth plugins.",
-      href: "https://www.youtube.com/watch?v=CpBgjjnXuy4",
-      tags: ["video", "plugins", "upstream"],
-    },
-    {
-      title: "The State of Authentication",
-      description: "<strong>Theo(t3.gg)</strong> explores modern authentication tradeoffs and trends.",
-      href: "https://www.youtube.com/watch?v=lxslnp-ZEMw",
-      tags: ["video", "overview", "upstream"],
-    },
-    {
-      title: "Last Authentication You Will Ever Need",
-      description: "A tutorial covering why Better Auth can work as a complete auth foundation.",
-      href: "https://www.youtube.com/watch?v=hFtufpaMcLM",
-      tags: ["video", "tutorial", "upstream"],
-    },
-    {
-      title: "This Might Be My New Favourite Auth Library",
-      description: "<strong>developedbyed</strong> reviews Better Auth features and capabilities.",
-      href: "https://www.youtube.com/watch?v=Hjs3zM7o7NE",
-      tags: ["video", "review", "upstream"],
-    },
-    {
-      title: "8 Reasons To Try Better Auth",
-      description: "<strong>CJ</strong> presents a practical overview of Better Auth features.",
-      href: "https://www.youtube.com/watch?v=_OApmLmex14",
-      tags: ["video", "review", "upstream"],
-    },
-    {
-      title: "Better Auth is so good that I almost switched programming languages",
-      description: "<strong>Dreams of Code</strong> reviews Better Auth from a developer experience angle.",
-      href: "https://www.youtube.com/watch?v=dNY4FKXwTsM",
-      tags: ["video", "review", "upstream"],
-    },
-    {
-      title: "Better-Auth: A First Look",
-      description: "Introductory overview and demonstration of Better Auth core features.",
-      href: "https://www.youtube.com/watch?v=2cQTV6NYxis",
-      tags: ["video", "overview", "upstream"],
-    },
-    {
-      title: "Goodbye Clerk, Hello Better Auth - Full Migration Guide",
-      description: "Migration walkthrough from Clerk to Better Auth.",
-      href: "https://www.youtube.com/watch?v=Za_QihbDSuk",
-      tags: ["video", "migration", "upstream"],
-    },
-  ]
-} />
-
-## Blog Posts
-
-<Resource resources={
-  [
-    {
-      title: "Better Auth with Hono, Bun, TypeScript, React and Vite",
-      description: "A client/server Better Auth setup using the upstream JavaScript package.",
-      href: "https://catalins.tech/better-auth-with-hono-bun-typescript-react-vite",
-      tags: ["blog", "upstream", "architecture"],
-    },
-    {
-      title: "Authenticating users in Astro with Better Auth",
-      description: "Step-by-step guide for upstream Better Auth in Astro.",
-      href: "https://www.launchfa.st/blog/astro-better-auth",
-      tags: ["blog", "upstream", "astro"],
-    },
-    {
-      title: "Building Multi-Tenant Apps With Better-Auth and ZenStack",
-      description: "A multi-tenant application article using upstream Better Auth and ZenStack.",
-      href: "https://zenstack.dev/blog/better-auth",
-      tags: ["blog", "upstream", "multi-tenant"],
-    },
-  ]
-} />
+- [Contributing](/docs/reference/contributing)
+- [FAQ](/docs/reference/faq)

@@ -1,41 +1,15 @@
 ---
-title: unable_to_create_user
-description: The user could not be created during authentication.
+title: Unable To Create User
+description: Upstream OAuth error slug — not emitted by RubyAuth redirects.
 ---
 
-## What is it?
+<Callout type="info" title="RubyAuth note">
+  RubyAuth does not emit this OAuth redirect slug. Similar failures may appear as JSON API errors from `BetterAuth::APIError` instead. See [options](/docs/reference/options#on-api-error) for `on_api_error` configuration.
+</Callout>
 
-This error occurs when Better Auth fails to create a new user during the authentication process. It typically happens during OAuth or SSO-based signup flows when a new user record is expected to be created but the operation fails.
+This page documents an upstream Better Auth error slug kept for bookmark compatibility. If you see auth failures with related symptoms, check server logs and API error codes rather than this redirect query parameter.
 
-## Common Causes
+## Related
 
-* Database write failure due to connection issues, timeouts, or transaction errors.
-* Missing or invalid required fields in the user schema.
-* Unique constraint violations (e.g., email already exists).
-* Mismatch between your database schema and the expected Better Auth schema.
-* Errors thrown inside custom database hooks (e.g., `user.create`).
-* Misconfigured adapters or database clients.
-
-## How to resolve
-
-### Verify database connectivity
-
-* Ensure your database is reachable and properly configured.
-* Check for connection pool issues, timeouts, or failed queries.
-
-### Validate schema and constraints
-
-* Make sure all required user fields are present and correctly typed.
-* Check for unique constraints (e.g., email conflicts).
-
-### Run migrations
-
-* Ensure your database schema is up to date with the current Better Auth version.
-
-### Review custom hooks
-
-* If you are using `databaseHooks.user.create`, ensure it is not throwing errors or returning invalid data.
-
-### Inspect logs
-
-* Check server logs for detailed error messages during user creation.
+- [OAuth errors index](/docs/reference/errors)
+- [FAQ](/docs/reference/faq)

@@ -1,79 +1,29 @@
 ---
 title: Introduction
-description: A modern authentication framework for Ruby, inspired by Better Auth.
+description: Introduction to RubyAuth — a server-first authentication library for Ruby inspired by Better Auth.
 ---
 
-> This project is independent and is not affiliated with, maintained by, or endorsed by the Better Auth project.
+<RubyAuthDisclaimer />
 
-Better Auth Ruby is a Ruby/Rack port of Better Auth. It keeps the upstream HTTP
-route surface, cookie names, JSON keys, option concepts, and plugin model where
-that maps cleanly to Ruby, while exposing an idiomatic server API through
-`BetterAuth.auth(...)`.
+RubyAuth is a **server-first** authentication and authorization library for Ruby. It exposes a Rack-compatible auth handler, a programmatic `auth.api` surface, and a plugin ecosystem — so you can add email/password, OAuth, 2FA, organizations, and more without rebuilding auth infrastructure.
 
-## What This Port Provides
+The design is inspired by [Better Auth](https://www.better-auth.com) v1.6.9, but RubyAuth is an independent Ruby implementation maintained in this repository. API shapes follow the Ruby gems here, not the upstream TypeScript docs.
 
-- A framework-agnostic Rack core gem: `better_auth`
-- A Rails adapter gem: `better_auth-rails`
-- A Hanami adapter gem: `better_auth-hanami`
-- A Roda adapter gem: `better_auth-roda`
-- Email/password auth, social OAuth routes, sessions, cookies, hooks, and rate limiting
-- PostgreSQL, MySQL, memory, and Rails ActiveRecord persistence paths
-- The upstream-style plugin system with Ruby plugin modules
-- Server-side API calls through `auth.api`
+## Features
 
-## Current Status
+RubyAuth provides a wide range of **server-side** authentication features for Ruby apps and extends via plugins. Supported capabilities are documented here; features still catching up to the upstream design are marked **Under development**.
 
-This port is usable for server-side Ruby flows, but it is still catching up to
-the full upstream surface. The implementation plan and parity notes live in:
+<Features />
 
-- `.docs/plans/2026-04-25-better-auth-ruby-port.md`
-- `.docs/features/upstream-parity-matrix.md`
+...and much more!
 
-The short version:
+## Getting started
 
-- Core Rack auth and Rails, Sinatra, Hanami, and Roda mounting are implemented.
-- Most server-side plugins have Ruby implementations with local tests, including
-  SSO, SCIM, Stripe, API key, OAuth Provider, and Dub.
-- OpenAPI generation is supported with upstream base-route inventory, rich
-  schemas, and Scalar reference output.
+1. [Installation](/docs/installation) — gems, environment, mount, and migrations
+2. [Basic usage](/docs/basic-usage) — HTTP sign-up, sign-in, and sessions
+3. [Concepts](/docs/concepts/cli) — CLI, API, database, sessions, plugins
+4. [Plugins](/docs/plugins) — optional features and integrations
 
-## Packages
+## LLM-friendly docs
 
-```ruby title="Gemfile"
-gem "better_auth"
-
-# Rails apps usually want this adapter package instead:
-gem "better_auth-rails"
-
-# Hanami 2.3+ apps can use:
-gem "better_auth-hanami"
-
-# Roda apps can use:
-gem "better_auth-roda"
-```
-
-## How It Fits Together
-
-```txt
-BetterAuth.auth(options)
-  -> BetterAuth::Context
-  -> BetterAuth::RackApp
-  -> BetterAuth::Router
-  -> BetterAuth::Endpoint / BetterAuth::API
-  -> BetterAuth::Cookies / BetterAuth::SessionStore
-  -> BetterAuth::Adapters::{Memory, Postgres, MySQL, Rails, Hanami}
-  -> BetterAuth::Plugins::*
-```
-
-Rails, Hanami, and Roda integrations wrap the same core Rack auth object. They do not
-reimplement auth in controllers or actions.
-
-## Next Steps
-
-Start with [Installation](/docs/installation), then pick either the
-[Rack integration](/docs/integrations/rack),
-[Rails integration](/docs/integrations/rails), or
-[Hanami integration](/docs/integrations/hanami), or
-[Roda integration](/docs/integrations/roda).
-
-{/* Upstream introduction is preserved in reference/upstream-src/1.6.9/repository/docs/content/docs/introduction.mdx. */}
+Your auth lives in your codebase. RubyAuth fits well into agentic workflows. See **[LLMs.txt](/llms.txt)** for machine-readable docs you can feed to coding assistants.

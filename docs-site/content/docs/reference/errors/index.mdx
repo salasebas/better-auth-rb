@@ -1,27 +1,35 @@
 ---
 title: Errors
-description: Errors that can occur in Better Auth.
+description: OAuth redirect errors and troubleshooting in RubyAuth.
 ---
 
-This section contains all the errors that cause you to be redirected to the `/api/auth/error` page.
+Social and generic OAuth flows redirect to `/api/auth/error` (or your `errorCallbackURL`) with an `error` query parameter when sign-in fails.
 
-## List of errors
+## RubyAuth redirect errors
 
-* [invalid\_callback\_request](/docs/reference/errors/invalid_callback_request)
-* [invalid\_code](/docs/reference/errors/invalid_code)
-* [internal\_server\_error](/docs/reference/errors/internal_server_error)
-* [state\_not\_found](/docs/reference/errors/state_not_found)
-* [state\_mismatch](/docs/reference/errors/state_mismatch)
-* [no\_code](/docs/reference/errors/no_code)
-* [no\_callback\_url](/docs/reference/errors/no_callback_url)
-* [oauth\_provider\_not\_found](/docs/reference/errors/oauth_provider_not_found)
-* [email\_not\_found](/docs/reference/errors/email_not_found)
-* [email\_doesn't\_match](/docs/reference/errors/email_doesn't_match)
-* [unable\_to\_get\_user\_info](/docs/reference/errors/unable_to_get_user_info)
-* [unable\_to\_link\_account](/docs/reference/errors/unable_to_link_account)
-* [unable\_to\_create\_user](/docs/reference/errors/unable_to_create_user)
-* [unable\_to\_create\_session](/docs/reference/errors/unable_to_create_session)
-* [account\_not\_linked](/docs/reference/errors/account_not_linked)
-* [account\_already\_linked\_to\_different\_user](/docs/reference/errors/account_already_linked_to_different_user)
-* [signup\_disabled](/docs/reference/errors/signup_disabled)
-* [please\_restart\_the\_process](/docs/reference/errors/please_restart_the_process)
+* [Account Already Linked To Different User](/docs/reference/errors/account_already_linked_to_different_user)
+* [Account Not Linked](/docs/reference/errors/account_not_linked)
+* [Email Doesn't Match](/docs/reference/errors/email_doesn't_match)
+* [Email Not Found](/docs/reference/errors/email_not_found)
+* [Invalid Code](/docs/reference/errors/invalid_code)
+* [No Code](/docs/reference/errors/no_code)
+* [OAuth Provider Not Found](/docs/reference/errors/oauth_provider_not_found)
+* [Please Restart The Process](/docs/reference/errors/please_restart_the_process)
+* [Signup Disabled](/docs/reference/errors/signup_disabled)
+* [State Mismatch](/docs/reference/errors/state_mismatch)
+* [State Not Found](/docs/reference/errors/state_not_found)
+* [Unable To Get User Info](/docs/reference/errors/unable_to_get_user_info)
+* [Unable To Link Account](/docs/reference/errors/unable_to_link_account)
+* [Unknown](/docs/reference/errors/unknown)
+
+## Upstream-only slugs
+
+These slugs exist in upstream Better Auth docs but are **not** emitted by RubyAuth OAuth redirects:
+
+* [Unable To Create User](/docs/reference/errors/unable_to_create_user)
+* [Unable To Create Session](/docs/reference/errors/unable_to_create_session)
+* [Invalid Callback Request](/docs/reference/errors/invalid_callback_request)
+* [No Callback Url](/docs/reference/errors/no_callback_url)
+* [Internal Server Error](/docs/reference/errors/internal_server_error)
+
+For API JSON errors, configure [`on_api_error`](/docs/reference/options#on-api-error) and inspect `BetterAuth::APIError` in server logs.

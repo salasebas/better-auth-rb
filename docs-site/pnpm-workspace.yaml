@@ -1,3 +1,20 @@
-allowBuilds:
-  esbuild: true
-  sharp: true
+packages:
+  - .
+
+catalog:
+  typescript: ^5.9.3
+
+catalogs:
+  react19:
+    "@types/react": ^19.2.14
+    "@types/react-dom": ^19.2.3
+    react: ^19.2.4
+    react-dom: ^19.2.4
+  tailwind:
+    "@tailwindcss/postcss": ^4.2.1
+    tailwindcss: ^4.2.1
+    tailwindcss-animate: ^1.0.7
+
+onlyBuiltDependencies:
+  - esbuild
+  - sharp

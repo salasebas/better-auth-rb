@@ -1,54 +1,63 @@
 ---
-title: Rails Integration
-description: Use Better Auth Ruby in Rails.
+title: Rails
+description: Mount RubyAuth in a Rails application with better_auth-rails.
 ---
 
-The Rails adapter mounts the core Rack auth object and provides generators,
-ActiveRecord persistence, schema-driven associations, migrations, and controller
-helpers.
+<RubyAuthDisclaimer />
 
-## Install
+## Installation
 
 ```ruby title="Gemfile"
 gem "better_auth-rails"
 ```
 
-```bash title="Terminal"
+```bash
 bundle install
-bin/rails generate better_auth:install
 ```
 
-The install generator creates:
+## Setup
 
-- `config/initializers/better_auth.rb`
-- a Better Auth migration for the configured core/plugin schema
+<Steps>
 
-## Configure
+### Require the gem
+
+In `config/application.rb`:
+
+```ruby
+require "better_auth/rails"
+```
+
+Or in the Gemfile:
+
+```ruby
+gem "better_auth-rails", require: "better_auth/rails"
+```
+
+### Install generator
+
+```bash
+bin/rails generate better_auth:install
+# equivalent:
+bin/rails better_auth:init
+```
+
+This creates `config/initializers/better_auth.rb` and a base migration.
+
+### Configure
 
 ```ruby title="config/initializers/better_auth.rb"
 BetterAuth::Rails.configure do |config|
-  config.secret =
-    Rails.application.credentials.dig(:better_auth, :secret) ||
-    Rails.application.credentials.secret_key_base ||
-    Rails.application.secret_key_base
-
-  config.base_url = ENV["BETTER_AUTH_URL"]
+  config.secret = ENV.fetch("BETTER_AUTH_SECRET")
+  config.base_url = ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000")
   config.base_path = "/api/auth"
 
-  config.email_and_password do |auth|
-    auth.enabled = true
-    auth.require_email_verification = true
+  config.email_and_password do |email_and_password|
+    email_and_password.enabled = true
   end
-
-  config.plugins = [
-    # BetterAuth::Plugins.username
-  ]
 end
 ```
 
-Rails uses `BetterAuth::Rails::ActiveRecordAdapter` by default. For a custom adapter, assign `config.database` directly.
-
-## Mount Routes
+### Mount routes
 
 ```ruby title="config/routes.rb"
 Rails.application.routes.draw do
@@ -56,30 +65,13 @@ Rails.application.routes.draw do
 end
 ```
 
-By default this mounts Better Auth at `/api/auth`.
+Customize the mount path:
 
-Customize the path:
-
-```ruby title="config/routes.rb"
-Rails.application.routes.draw do
-  better_auth at: "/auth"
-end
+```ruby
+better_auth at: "/auth"
 ```
 
-## Run Migrations
-
-```bash title="Terminal"
-bin/rails db:migrate
-```
-
-When you add plugins that introduce schema tables or fields, regenerate a
-migration before migrating a new app:
-
-```bash title="Terminal"
-bin/rails generate better_auth:migration
-```
-
-## Controller Helpers
+### Controller helpers
 
 ```ruby title="app/controllers/application_controller.rb"
 class ApplicationController < ActionController::Base
@@ -87,21 +79,23 @@ class ApplicationController < ActionController::Base
 end
 ```
 
-Available helpers:
+### Migrate
 
-- `current_session`
-- `current_user`
-- `authenticated?`
-- `require_authentication`
-
-Example:
-
-```ruby title="app/controllers/dashboard_controller.rb"
-class DashboardController < ApplicationController
-  before_action :require_authentication
-
-  def show
-    @user = current_user
-  end
-end
+```bash
+bin/rails db:migrate
+bin/rails better_auth:doctor
 ```
+
+</Steps>
+
+## Verify
+
+```bash
+curl http://localhost:3000/api/auth/ok
+```
+
+## Next steps
+
+- [Basic usage](/docs/basic-usage)
+- [PostgreSQL adapter](/docs/adapters/postgresql) — ActiveRecord-backed persistence
+- [Installation](/docs/installation)

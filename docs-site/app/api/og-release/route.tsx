@@ -1,5 +1,6 @@
 import { ImageResponse } from "@vercel/og";
 import * as z from "zod";
+import { BRAND_NAME } from "@/lib/branding";
 export const runtime = "edge";
 
 const ogSchema = z.object({
@@ -27,7 +28,7 @@ export async function GET(req: Request) {
 				tw="flex w-full h-full relative flex-col"
 				style={{
 					background:
-						"radial-gradient(circle 230px at 0% 0%, #000000, #000000)",
+						"radial-gradient(circle 230px at 0% 0%, #141c22, #e9573f)",
 					fontFamily: "Geist",
 					color: "white",
 				}}
@@ -45,7 +46,7 @@ export async function GET(req: Request) {
 							width: "350px",
 							height: "120px",
 							borderRadius: "100px",
-							background: "#c7c7c7",
+							background: "#e9573f",
 							opacity: 0.21,
 							filter: "blur(35px)",
 							transform: "rotate(50deg)",
@@ -83,11 +84,11 @@ export async function GET(req: Request) {
 							}}
 						/>
 						<div
-							tw="flex text-6xl absolute bottom-56 isolate font-bold"
+							tw="flex text-6xl absolute top-10 isolate font-bold"
 							style={{
 								paddingLeft: "170px",
 								paddingTop: "200px",
-								background: "linear-gradient(45deg, #000000 4%, #fff, #000)",
+								background: "linear-gradient(45deg, #141c22 4%, #fff, #e9573f)",
 								backgroundClip: "text",
 								color: "transparent",
 							}}
@@ -121,6 +122,16 @@ export async function GET(req: Request) {
 							}}
 						>
 							{date}
+						</div>
+
+						<div
+							tw="flex text-xl absolute bottom-8 z-[999] font-semibold"
+							style={{
+								paddingLeft: "170px",
+								color: "rgba(255,255,255,0.75)",
+							}}
+						>
+							{BRAND_NAME}
 						</div>
 					</div>
 

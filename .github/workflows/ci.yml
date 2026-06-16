@@ -522,6 +522,28 @@ jobs:
         working-directory: packages/better_auth-telemetry
         run: bundle exec rake test
 
+  docs-site:
+    name: Docs site
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: docs-site
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: docs-site/pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm lint
+      - run: pnpm build
+        env:
+          NEXT_PUBLIC_URL: https://example.com
+
   ci:
     name: CI
     runs-on: ubuntu-latest
@@ -548,6 +570,7 @@ jobs:
       - test-sso
       - test-stripe
       - test-telemetry
+      - docs-site
     if: always()
     steps:
       - uses: re-actors/alls-green@05ac9388f0aebcb5727afa17fcccfecd6f8ec5fe # v1.2.2

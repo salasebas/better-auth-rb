@@ -1,127 +1,39 @@
 ---
 title: Comparison
-description: Why choose Better Auth Ruby over other auth libraries, managed services, or a custom auth system.
+description: How RubyAuth relates to other Ruby auth approaches and the upstream Better Auth project.
 ---
 
-Better Auth Ruby gives you the Better Auth server model in Ruby: Rack-first,
-framework-friendly, database-owned, and explicit enough to debug when auth gets
-messy.
+<RubyAuthDisclaimer />
 
-<div className="not-prose my-8 grid gap-3 md:grid-cols-3">
-  <HighlightCard
-    eyebrow="Control"
-    title="Your app owns auth"
-    body="Users, sessions, accounts, tokens, and plugin tables live in your database. You choose the adapter, runtime, and deployment shape."
-  />
-  <HighlightCard
-    eyebrow="Ruby"
-    title="Rack at the core"
-    body="Rails, Sinatra, Hanami, Roda, and plain Rack apps mount the same auth object instead of routing through a framework-specific black box."
-  />
-  <HighlightCard
-    eyebrow="Docs"
-    title="Current and practical"
-    body="The Ruby docs track the implemented server behavior, call out partial areas, and link you to the exact setup path for each integration."
-  />
-</div>
+## Design inspiration
 
-## vs Other Auth Libraries
+RubyAuth implements the Better Auth **server** design in idiomatic Ruby: Rack handler, cookie sessions, plugin hooks, and HTTP routes such as `/api/auth/sign-in/email`. It targets parity with Better Auth v1.6.9 where tests and adapters exist in this repo.
 
-<ComparisonGrid>
-  <ComparisonCard
-    title="Framework agnostic"
-    body="The core is Rack-compatible, so you can use the same auth runtime across Rails, Sinatra, Hanami, Roda, or a custom Rack stack."
-  />
-  <ComparisonCard
-    title="Advanced features built in"
-    body="OAuth, sessions, account linking, organizations, passkeys, two-factor auth, API keys, SSO, SCIM, Stripe, and more are available as server plugins."
-  />
-  <ComparisonCard
-    title="Better Auth behavior, Ruby shape"
-    body="The port follows upstream Better Auth behavior where it fits Ruby, then exposes it through Ruby objects, adapters, migrations, and framework helpers."
-  />
-  <ComparisonCard
-    title="No hidden control flow"
-    body="Configuration is explicit. You mount the app, choose storage, wire callbacks, and keep enough surface area visible to inspect production issues."
-  />
-</ComparisonGrid>
+It is **not** a port of the Better Auth JavaScript client, hosted dashboard, or npm toolchain.
 
-## vs Managed Auth Services
+## Compared to Devise-only setups
 
-<ComparisonGrid>
-  <ComparisonCard
-    title="Keep your data"
-    body="Auth data stays in your database instead of becoming a second user system owned by a vendor."
-  />
-  <ComparisonCard
-    title="No per-user auth bill"
-    body="You scale on your own infrastructure and database costs, without adding auth seats or monthly active user pricing to every product decision."
-  />
-  <ComparisonCard
-    title="Deploy where your app runs"
-    body="Run embedded in your Ruby app, behind your own proxy, or as a dedicated Rack service on infrastructure you already understand."
-  />
-  <ComparisonCard
-    title="Product-specific flows"
-    body="You control redirects, account linking rules, email behavior, provider setup, and plugin configuration without waiting for a hosted dashboard to support your edge case."
-  />
-</ComparisonGrid>
+| Topic | Devise (typical) | RubyAuth |
+|-------|------------------|----------|
+| Scope | Rails-focused, Warden-based | Rack-first; Rails/Hanami/Sinatra/Roda/Grape adapters |
+| API shape | Controllers + helpers | HTTP auth routes + optional `auth.api` |
+| OAuth / social | Via OmniAuth add-ons | Built-in provider configuration |
+| Plugins | Community gems | First-party plugin modules (2FA, orgs, JWT, …) |
+| Schema | Devise generators | Better Auth schema via CLI or Rails generators |
 
-## vs Rolling Your Own
+Many teams keep Devise for legacy apps. RubyAuth fits greenfield Ruby services that want Better Auth–style routes and plugins without a Node auth server.
 
-<ComparisonGrid>
-  <ComparisonCard
-    title="Security work is shared"
-    body="Cookie handling, state checks, session lifecycle, OAuth callbacks, token storage, password flows, and plugin routes are implemented as reusable library behavior."
-  />
-  <ComparisonCard
-    title="Provider details are handled"
-    body="Built-in social providers cover the common OAuth differences so each app does not need to rediscover callback URLs, profile mapping, and token handling."
-  />
-  <ComparisonCard
-    title="Database work is repeatable"
-    body="Schema definitions, SQL generation, Rails migrations, Hanami migrations, Roda SQL tasks, and adapter behavior give you a consistent path from local development to production."
-  />
-  <ComparisonCard
-    title="Docs stay close to implementation"
-    body="The docs focus on what the Ruby packages actually support, including partial areas, server-only scope, and integration-specific setup."
-  />
-</ComparisonGrid>
+## Compared to rolling your own
 
-## When Better Auth Ruby Fits
+RubyAuth gives you session handling, CSRF/origin checks, rate limiting hooks, and tested route behavior instead of one-off cookie logic. You still own deployment, secrets, and database migrations.
 
-Choose Better Auth Ruby when you want full ownership of the auth system without
-writing every protocol, provider, route, and schema detail yourself. It is a good
-fit for teams that prefer explicit Ruby code, database-level visibility,
-framework flexibility, and infrastructure they can operate directly.
+## When RubyAuth may not fit
 
-It is not trying to be a managed identity platform. You bring your UI, email
-provider, deployment, observability, and operational standards. In return, you
-keep the auth layer understandable, portable, and under your control.
+- You need the official Better Auth **browser client** or React hooks — use HTTP from your frontend or wait for community clients.
+- You require 100% upstream feature parity — check plugin docs; some areas are marked **Under development**.
+- You want a batteries-included Rails-only DSL with years of Stack Overflow answers — Devise remains the default Rails choice.
 
-export function HighlightCard({ eyebrow, title, body }) {
-  return (
-    <div className="rounded-lg border bg-card p-4">
-      <p className="text-xs font-medium uppercase text-muted-foreground">
-        {eyebrow}
-      </p>
-      <p className="mt-2 text-lg font-semibold text-foreground">{title}</p>
-      <p className="mt-2 text-sm leading-6 text-muted-foreground">{body}</p>
-    </div>
-  );
-}
+## Next steps
 
-export function ComparisonGrid({ children }) {
-  return (
-    <div className="not-prose my-6 grid gap-3 md:grid-cols-2">{children}</div>
-  );
-}
-
-export function ComparisonCard({ title, body }) {
-  return (
-    <div className="rounded-lg border bg-card p-4">
-      <p className="font-medium text-foreground">{title}</p>
-      <p className="mt-2 text-sm leading-6 text-muted-foreground">{body}</p>
-    </div>
-  );
-}
+- [Installation](/docs/installation)
+- [Plugins](/docs/plugins)

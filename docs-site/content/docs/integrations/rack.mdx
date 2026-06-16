@@ -1,89 +1,103 @@
 ---
-title: Rack Integration
-description: Mount Better Auth Ruby in a Rack application.
+title: Rack
+description: Run RubyAuth as a plain Rack application or mount it in a custom stack.
 ---
 
-Better Auth Ruby is Rack-first. `BetterAuth.auth(...)` returns an object that can
-be called directly by Rack.
+<RubyAuthDisclaimer />
 
-## Gemfile
+Use the core `better_auth` gem when you are not on Rails, Hanami, Sinatra, Roda, or Grape — or when you want full control over the Rack stack.
+
+## Installation
 
 ```ruby title="Gemfile"
 gem "better_auth"
+gem "better_auth-cli"  # optional, for init/migrate/doctor
 ```
 
-## Auth Instance
+## Setup
 
-```ruby title="config/auth.rb"
+<Steps>
+
+### Scaffold (optional)
+
+```bash
+bundle exec better-auth init --cwd . --framework rack
+```
+
+This writes `config/better_auth.rb` and `db/better_auth/migrate/.keep`.
+
+### Configure
+
+```ruby title="config/better_auth.rb"
 require "better_auth"
 
-AUTH = BetterAuth.auth(
+BetterAuth.auth(
   secret: ENV.fetch("BETTER_AUTH_SECRET"),
-  base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
-  email_and_password: {
-    enabled: true
-  },
-  database: BetterAuth::Adapters::Postgres.new(
-    url: ENV.fetch("DATABASE_URL")
-  )
+  base_url: ENV.fetch("BETTER_AUTH_URL"),
+  database: :postgres,  # replace :memory before production
+  email_and_password: { enabled: true }
 )
 ```
 
-## Mount In Rack
+### Run as the whole app
 
 ```ruby title="config.ru"
-require_relative "config/auth"
+require_relative "config/better_auth"
+
+auth = BetterAuth.auth(
+  secret: ENV.fetch("BETTER_AUTH_SECRET"),
+  base_url: ENV.fetch("BETTER_AUTH_URL"),
+  database: :postgres,
+  email_and_password: { enabled: true }
+)
+
+run auth
+```
+
+### Mount under a prefix
+
+```ruby title="config.ru"
+require_relative "config/better_auth"
+
+auth = BetterAuth.auth(/* ... */)
 
 map "/api/auth" do
-  run AUTH
+  run auth
+end
+
+map "/" do
+  run MyMainApp
 end
 ```
 
-Verify the mount:
+Set `base_path: "/api/auth"` in configuration when the public URL includes that prefix.
 
-```bash title="Terminal"
-curl http://localhost:3000/api/auth/ok
+### Migrate
+
+```bash
+bundle exec better-auth generate \
+  --cwd . \
+  --config config/better_auth.rb \
+  --dialect postgres \
+  --output db/better_auth/schema.sql
+
+bundle exec better-auth migrate --cwd . --config config/better_auth.rb --yes
+bundle exec better-auth doctor --cwd . --config config/better_auth.rb
 ```
 
-```json
-{ "ok": true }
+</Steps>
+
+## Framework CLI init
+
+`better-auth init --framework` supports `rails`, `hanami`, `sinatra`, `roda`, and `rack` — not Grape. Prefer the matching integration gem when one exists.
+
+## Verify
+
+```bash
+curl http://localhost:9292/api/auth/ok
 ```
 
-## Sinatra
+## Next steps
 
-Sinatra apps should use the `better_auth-sinatra` adapter for helpers and
-Better Auth-specific Rake tasks. See the Sinatra integration guide for the full
-setup.
-
-## Roda
-
-Roda apps should use the `better_auth-roda` adapter for plugin mounting, request
-helpers, and SQL migration tasks. See the Roda integration guide for the full
-setup.
-
-## Server-Side API Calls
-
-You can also call endpoints from Ruby code:
-
-```ruby
-result = AUTH.api.sign_in_email(
-  body: {
-    email: "ada@example.com",
-    password: "password123"
-  }
-)
-```
-
-When you need to forward cookies, request a Rack response:
-
-```ruby
-status, headers, body = AUTH.api.sign_in_email(
-  {
-    body: {
-      email: "ada@example.com",
-      password: "password123"
-    },
-    as_response: true
-  }
-)
-```
+- [Installation](/docs/installation)
+- [Rails](/docs/integrations/rails) and other framework guides

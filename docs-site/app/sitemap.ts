@@ -1,9 +1,10 @@
 import type { MetadataRoute } from "next";
-import { changelogs, source } from "@/lib/source";
+import { baseUrl } from "@/lib/metadata";
+import { blogs, source } from "@/lib/source";
 
-const BASE_URL = "https://www.better-auth.com";
+const BASE_URL = baseUrl.origin;
 
-export default function sitemap(): MetadataRoute.Sitemap {
+export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
 	const basePages: MetadataRoute.Sitemap = [
 		{
 			url: BASE_URL,
@@ -18,43 +19,61 @@ export default function sitemap(): MetadataRoute.Sitemap {
 			priority: 0.8,
 		},
 		{
+			url: `${BASE_URL}/changelog`,
+			lastModified: new Date(),
+			changeFrequency: "weekly",
+			priority: 0.8,
+		},
+		{
 			url: `${BASE_URL}/community`,
 			lastModified: new Date(),
 			changeFrequency: "weekly",
 			priority: 0.8,
 		},
 		{
-			url: `${BASE_URL}/changelogs`,
+			url: `${BASE_URL}/legal/terms`,
+			lastModified: new Date(),
+			changeFrequency: "monthly",
+			priority: 0.5,
+		},
+		{
+			url: `${BASE_URL}/legal/privacy`,
+			lastModified: new Date(),
+			changeFrequency: "monthly",
+			priority: 0.5,
+		},
+		{
+			url: `${BASE_URL}/brand`,
+			lastModified: new Date(),
+			changeFrequency: "monthly",
+			priority: 0.5,
+		},
+		{
+			url: `${BASE_URL}/llms.txt`,
 			lastModified: new Date(),
 			changeFrequency: "weekly",
-			priority: 0.8,
+			priority: 0.6,
 		},
-		// /enterprise is preserved in the app, but hidden from public discovery for now.
 	];
 
-	const docPages: MetadataRoute.Sitemap = source.getPages().map((page) => ({
-		url: `${BASE_URL}${page.url}`,
-		lastModified: page.data.lastModified
-			? new Date(page.data.lastModified)
-			: new Date(),
-		changeFrequency: "weekly",
-		priority: 0.7,
+	const docPages: MetadataRoute.Sitemap = await Promise.all(
+		source.getPages().map(async (page) => {
+			const { lastModified } = await page.data.load();
+			return {
+				url: `${BASE_URL}${page.url}`,
+				lastModified: lastModified ? new Date(lastModified) : new Date(),
+				changeFrequency: "weekly",
+				priority: 0.7,
+			};
+		}),
+	);
+
+	const blogPages: MetadataRoute.Sitemap = blogs.getPages().map((page) => ({
+		url: `${BASE_URL}${page.url.replace("/blogs/", "/blog/")}`,
+		lastModified: page.data.date ? new Date(page.data.date) : new Date(),
+		changeFrequency: "monthly",
+		priority: 0.6,
 	}));
 
-	// Blog articles are preserved in docs/content/blogs, but hidden while Ruby-specific content is planned.
-
-	const changelogPages: MetadataRoute.Sitemap = changelogs
-		.getPages()
-		.map((page) => ({
-			url: `${BASE_URL}${page.url}`,
-			lastModified: page.data.date ? new Date(page.data.date) : new Date(),
-			changeFrequency: "monthly",
-			priority: 0.6,
-		}));
-
-	return [
-		...basePages,
-		...docPages,
-		...changelogPages,
-	];
+	return [...basePages, ...docPages, ...blogPages];
 }

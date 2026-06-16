@@ -1,158 +1,64 @@
 ---
 title: Dynamic Base URL
-description: Configure Better Auth Ruby for preview deployments, multiple domains, and per-request URL resolution.
+description: Configure RubyAuth for preview deployments and multiple hostnames.
 ---
 
-Use dynamic base URL when your app is served from more than one hostname, such as:
+Use dynamic `base_url` when your app is served from multiple hostnames (custom domains, preview URLs, branch deploys).
 
-- custom domains like `myapp.com` and `www.myapp.com`
-- preview deployments like `my-app-abc123.vercel.app`
-- branch environments like `feature-branch.myapp.com`
+Configuration lives on the [`base_url` option](/docs/reference/options#base_url).
 
-The configuration itself lives on the [`base_url` option](/docs/reference/options#baseurl). This guide focuses on when to use it and how to structure it safely.
+## Basic setup
 
-## Basic Setup
-
-Configure `base_url` as a Hash with an `allowed_hosts` allowlist:
-
-```ruby title="config/auth.rb"
-auth = BetterAuth.auth(
+```ruby
+BetterAuth.auth(
   secret: ENV.fetch("BETTER_AUTH_SECRET"),
   base_url: {
     allowed_hosts: [
       "myapp.com",
       "www.myapp.com",
-      "*.vercel.app"
-    ]
-  }
-)
-```
-
-When a request comes in, Better Auth extracts the host from `x-forwarded-host`, `host` header, or the request URL (in that order), validates it against `allowed_hosts`, and uses the matched value to build the request-specific base URL.
-
-## Common Deployment Patterns
-
-### Vercel Deployment
-
-```ruby title="config/auth.rb"
-auth = BetterAuth.auth(
-  secret: ENV.fetch("BETTER_AUTH_SECRET"),
-  base_url: {
-    allowed_hosts: [
-      "myapp.com",
-      "www.myapp.com",
-      "*.vercel.app"
-    ]
-  }
-)
-```
-
-### Development + Production
-
-```ruby title="config/auth.rb"
-auth = BetterAuth.auth(
-  secret: ENV.fetch("BETTER_AUTH_SECRET"),
-  base_url: {
-    allowed_hosts: [
-      "localhost:3000",
-      "localhost:5173",
-      "myapp.com",
-      "*.vercel.app"
+      "*.vercel.app",
+      "localhost:3000"
     ],
-    protocol: ENV["RACK_ENV"] == "development" ? "http" : "https"
-  }
-)
-```
-
-### Multiple Production Domains
-
-```ruby title="config/auth.rb"
-auth = BetterAuth.auth(
-  secret: ENV.fetch("BETTER_AUTH_SECRET"),
-  base_url: {
-    allowed_hosts: [
-      "myapp.com",
-      "myapp.co.uk",
-      "myapp.eu"
-    ],
-    protocol: "https"
-  }
-)
-```
-
-## Choosing a Fallback
-
-By default, Better Auth raises an error if the incoming host does not match `allowed_hosts`. That is usually the safer default because it exposes proxy or deployment mistakes immediately.
-
-If you need a fallback, set one explicitly:
-
-```ruby title="config/auth.rb"
-auth = BetterAuth.auth(
-  secret: ENV.fetch("BETTER_AUTH_SECRET"),
-  base_url: {
-    allowed_hosts: ["myapp.com", "*.vercel.app"],
+    protocol: "https",
     fallback: "https://myapp.com"
-  }
-)
-```
-
-Use this only when falling back to a canonical domain is clearly preferable to failing the request.
-
-## Cookies Across Subdomains
-
-If you need to share cookies across subdomains, you can enable `cross_subdomain_cookies` while still using dynamic base URL. Better Auth will derive the cookie domain from the resolved host unless you set `domain` explicitly.
-
-```ruby title="config/auth.rb"
-auth = BetterAuth.auth(
-  secret: ENV.fetch("BETTER_AUTH_SECRET"),
-  base_url: {
-    allowed_hosts: [
-      "auth.example1.com",
-      "auth.example2.com"
-    ],
-    protocol: "https"
   },
-  advanced: {
-    cross_subdomain_cookies: {
-      enabled: true
-    }
-  }
+  database: :postgres
 )
 ```
 
-If you want to force a shared parent domain instead, set it directly:
+RubyAuth reads `x-forwarded-host`, `host`, or the request URL, validates against `allowed_hosts`, and sets a per-request runtime base URL.
 
-```ruby title="config/auth.rb"
-auth = BetterAuth.auth(
-  secret: ENV.fetch("BETTER_AUTH_SECRET"),
-  base_url: {
-    allowed_hosts: ["auth.example1.com", "auth.example2.com"],
-    protocol: "https"
-  },
-  advanced: {
-    cross_subdomain_cookies: {
-      enabled: true,
-      domain: ".example.com"
-    }
-  }
-)
+## Wildcards
+
+Patterns like `*.vercel.app` match preview subdomains. Keep the list as small as possible.
+
+## Trusted origins
+
+Dynamic hosts are also added to trusted origin inference where configured. Still set explicit `trusted_origins` for frontend apps on different ports during development:
+
+```ruby
+trusted_origins: ["http://localhost:5173", "https://myapp.com"]
 ```
 
-See [Cookies](/docs/concepts/cookies#cross-subdomain-cookies) for the full cookie behavior.
+## Rails
 
-## Security Model
+```ruby
+BetterAuth::Rails.configure do |config|
+  config.base_url = {
+    allowed_hosts: ["myapp.com", "*.herokuapp.com"],
+    protocol: "https",
+    fallback: ENV.fetch("BETTER_AUTH_URL")
+  }
+end
+```
 
-Dynamic base URL uses an allowlist model:
+## Diagnostics
 
-1. Only hosts listed in `allowed_hosts` are accepted
-2. `x-forwarded-host` and `host` headers are sanitized and validated before use
-3. Unknown hosts raise an error unless you provide `fallback`
-4. `allowed_hosts` are automatically added to [`trusted_origins`](/docs/reference/options#trustedorigins) (localhost entries get both `http` and `https`)
+Misconfigured allowlists raise at boot: `baseURL.allowedHosts cannot be empty`.
 
-This keeps multi-domain support explicit instead of trusting arbitrary headers or platform-specific behavior.
+OAuth redirect mismatches usually mean the resolved host was not in `allowed_hosts` — check provider console redirect URIs against the resolved URL.
 
-## Reference
+## Related
 
-For the exact option shape and property-level behavior, see [`base_url` in the options reference](/docs/reference/options#baseurl).
-
-{/* Upstream dynamic base URL guide is preserved in reference/upstream-src/1.6.9/repository/docs/content/docs/guides/dynamic-base-url.mdx. */}
+- [Options — base_url](/docs/reference/options#base_url)
+- [Security](/docs/reference/security)

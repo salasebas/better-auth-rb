@@ -1,23 +1,25 @@
 ---
-title: Sinatra Integration
-description: Use Better Auth Ruby in Sinatra.
+title: Sinatra
+description: Mount RubyAuth in Sinatra with better_auth-sinatra.
 ---
 
-The Sinatra adapter mounts the core Rack auth object and provides request
-helpers plus Better Auth-specific SQL migration Rake tasks.
+<RubyAuthDisclaimer />
 
-## Install
+## Installation
 
 ```ruby title="Gemfile"
 gem "better_auth-sinatra"
-gem "pg"
 ```
 
-```bash title="Terminal"
+```bash
 bundle install
 ```
 
-## Configure And Mount
+## Setup
+
+<Steps>
+
+### Register the extension
 
 ```ruby title="app.rb"
 require "sinatra/base"
@@ -28,82 +30,55 @@ class App < Sinatra::Base
 
   better_auth at: "/api/auth" do |config|
     config.secret = ENV.fetch("BETTER_AUTH_SECRET")
-    config.base_url = ENV.fetch("BETTER_AUTH_URL", "http://localhost:9292")
+    config.base_url = ENV.fetch("BETTER_AUTH_URL")
     config.database = ->(options) {
-      BetterAuth::Adapters::Postgres.new(
-        options,
-        url: ENV.fetch("DATABASE_URL")
-      )
+      BetterAuth::Adapters::Postgres.new(options, url: ENV.fetch("DATABASE_URL"))
     }
-    config.email_and_password = {
-      enabled: true
-    }
-    config.plugins = []
+    config.email_and_password = { enabled: true }
   end
 
   get "/dashboard" do
     require_authentication
-    "Signed in as #{current_user.fetch("email")}"
+    current_user.fetch("email")
   end
 end
 ```
 
-By default this mounts Better Auth at `/api/auth`. The core Better Auth router
-handles internal routes such as `/ok`, `/sign-up/email`, and plugin endpoints.
+Call `better_auth` once per Sinatra app class.
 
-## Helpers
-
-Available helpers:
-
-- `current_session`
-- `current_user`
-- `authenticated?`
-- `require_authentication`
-
-`require_authentication` halts the Sinatra request with `401` when no Better
-Auth user is present.
-
-Sinatra helpers resolve sessions through the core `get-session` API path, so
-Better Auth plugin hooks that affect session lookup, such as the bearer plugin,
-run for `current_user` and `require_authentication`. Helper session lookup may
-emit Better Auth `Set-Cookie` headers when stale cookies need to be cleared or
-session cookies need to be refreshed.
-
-## Rake Tasks
-
-Sinatra does not have a Rails-style generator or built-in migration command.
-Load the Better Auth tasks from your app Rakefile:
+### Rake tasks
 
 ```ruby title="Rakefile"
 require "better_auth/sinatra/tasks"
 ```
 
-Create the default config and migration directory:
-
-```bash title="Terminal"
+```bash
 rake better_auth:install
-```
-
-Generate SQL for the configured Better Auth schema:
-
-```bash title="Terminal"
-BETTER_AUTH_DIALECT=postgres rake better_auth:generate:migration
-```
-
-Run pending Better Auth SQL migrations:
-
-```bash title="Terminal"
+rake better_auth:generate:migration
 rake better_auth:migrate
+rake better_auth:doctor
 ```
 
-Generated SQL files live in `db/better_auth/migrate`.
+</Steps>
 
-## Limitations
+## Mount patterns
 
-- ActiveRecord-backed Sinatra migrations are not supported yet.
-- The Rake migration runner supports Better Auth core SQL adapters that expose a
-  SQL connection and dialect.
-- Memory, MongoDB, and arbitrary custom adapters cannot run SQL migrations.
-- Apps that already use `sinatra-activerecord` can still mount Better Auth, but
-  should manage ActiveRecord migrations themselves until optional support is
-  added.
+- **Nested mount:** parent app at `/api`, auth at `better_auth at: "/auth"` → routes at `/api/auth/*`
+- **Shared prefix:** Sinatra app mounted at `/api/auth` with `better_auth at: "/api/auth"`
+
+Set `config.base_url` to the public URL users see, including any parent mount prefix.
+
+## Helpers
+
+`current_session`, `current_user`, `authenticated?`, and `require_authentication` delegate to the core session API.
+
+## Verify
+
+```bash
+curl http://localhost:9292/api/auth/ok
+```
+
+## Next steps
+
+- [Basic usage](/docs/basic-usage)
+- [PostgreSQL adapter](/docs/adapters/postgresql)

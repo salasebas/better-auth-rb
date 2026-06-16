@@ -1,109 +1,60 @@
 ---
-title: Optimizing for Performance
-description: A guide to optimizing your Better Auth Ruby application for performance.
+title: Optimizing For Performance
+description: Performance tips for RubyAuth server deployments.
 ---
 
-In this guide, we'll go over some of the ways you can optimize your Ruby application for a more performant Better Auth setup.
+RubyAuth runs as a Rack app — optimize the Ruby process, database, and cookie/session strategy.
 
-## Cookie Cache
+## Database
 
-Calling your database every time a session is looked up isn't ideal, especially if sessions don't change frequently. Cookie caching handles this by storing session data in a short-lived, signed cookie similar to how JWT access tokens are used with refresh tokens.
+- Use PostgreSQL or MySQL in production; avoid `:memory`
+- Index auth tables from generated migrations
+- Place auth DB close to app servers (low latency)
 
-To turn on cookie caching, set `session.cookie_cache` in your auth config:
+## Session cookie cache
 
-```ruby title="config/auth.rb"
-auth = BetterAuth.auth(
-  secret: ENV.fetch("BETTER_AUTH_SECRET"),
-  session: {
-    cookie_cache: {
-      enabled: true,
-      max_age: 5 * 60, # Cache duration in seconds
-      strategy: "jwe"  # "jwe", "jwt", or "compact"
-    }
+Reduce database reads with encrypted session data cookies:
+
+```ruby
+session: {
+  cookie_cache: {
+    enabled: true,
+    max_age: 300,
+    strategy: "jwe"
   }
-)
+}
 ```
 
-Read more about [cookie caching](/docs/concepts/session-management#cookie-cache).
+See [Session management](/docs/concepts/session-management).
 
-## Framework Caching
+## Rate limiting storage
 
-Because Better Auth Ruby is Rack-based, you can wrap auth API calls with any caching layer your framework provides or with Rack middleware.
+Use shared storage for rate limits when running multiple Puma/Unicorn workers:
 
-**Rails example using fragment caching:**
-
-```ruby title="app/controllers/users_controller.rb"
-class UsersController < ApplicationController
-  def index
-    users = Rails.cache.fetch("auth_users", expires_in: 1.hour) do
-      auth.api.list_users[:users]
-    end
-    render json: users
-  end
-end
+```ruby
+rate_limit: {
+  enabled: true,
+  storage: :memory  # single process only
+}
 ```
 
-**Rack::Cache example:**
+<UnderDevelopment>
+  Redis-backed rate limit storage requires explicit adapter wiring — verify with `bundle exec better-auth doctor`.
+</UnderDevelopment>
 
-```ruby title="config.ru"
-use Rack::Cache,
-    metastore: "file:/var/cache/rack/meta",
-    entitystore: "file:/var/cache/rack/body"
-run app
-```
+## Secondary storage
 
-Cache responses that do not change often (such as public provider metadata or user lists) to reduce repeated auth API calls.
+Optional Redis secondary storage can offload hot session data. Configure only when needed and benchmark first.
 
-## Background Tasks
+## Keep plugins minimal
 
-On serverless platforms or multi-process servers, you can improve response times by deferring non-critical work (cleanup, analytics, rate limit updates, email sending) to run after the response is sent. Configure `advanced.background_tasks` and use `ctx.context.run_in_background` in hooks.
+Each plugin adds routes and schema. Enable only plugins you use.
 
-```ruby title="config/auth.rb"
-auth = BetterAuth.auth(
-  secret: ENV.fetch("BETTER_AUTH_SECRET"),
-  advanced: {
-    background_tasks: {
-      handler: ->(task) { Thread.new { task.call } }
-    }
-  },
-  hooks: {
-    after: ->(ctx) {
-      if ctx.path == "/sign-up/email"
-        ctx.context.run_in_background(-> { Analytics.log_sign_up(ctx.context.new_session&.dig("user", "id")) })
-      end
-    }
-  }
-)
-```
+## Reverse proxies
 
-See the [Hooks documentation](/docs/concepts/hooks#runinbackground) for more examples.
+Set `trusted_origins`, forward `X-Forwarded-*` headers correctly, and use HTTPS termination at the load balancer.
 
-## Database Optimizations
+## Related
 
-Optimizing database performance is essential to get the best out of Better Auth.
-
-### Recommended Fields to Index
-
-| Table         | Fields                     | Plugin       |
-| ------------- | -------------------------- | ------------ |
-| users         | `email`                    |              |
-| accounts      | `user_id`                  |              |
-| sessions      | `user_id`, `token`         |              |
-| verifications | `identifier`               |              |
-| invitations   | `email`, `organization_id` | organization |
-| members       | `user_id`, `organization_id` | organization |
-| organizations | `slug`                     | organization |
-| passkey       | `user_id`                  | passkey      |
-| two_factor    | `secret`                   | two_factor   |
-
-<Callout>
-  In Better Auth Ruby all database fields use `snake_case` by convention. If you are writing raw SQL or migrations, use `user_id`, `organization_id`, etc.
-</Callout>
-
-## Bundle Size Optimization
-
-<Callout type="info">
-  Bundle size optimization is specific to JavaScript build pipelines. In Ruby, `better_auth` is loaded as a gem at runtime and only required files are parsed by the interpreter. There is no equivalent "bundle" to trim, so this section does not apply to the Ruby port.
-</Callout>
-
-{/* Upstream performance guide is preserved in reference/upstream-src/1.6.9/repository/docs/content/docs/guides/optimizing-for-performance.mdx. */}
+- [Options](/docs/reference/options)
+- [PostgreSQL adapter](/docs/adapters/postgresql)

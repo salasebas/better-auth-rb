@@ -1,76 +1,83 @@
 ---
-title: Hanami Integration
-description: Use Better Auth Ruby in Hanami 2.3+.
+title: Hanami
+description: Mount RubyAuth in Hanami 2.3+ with better_auth-hanami.
 ---
 
-The Hanami adapter mounts the core Better Auth Rack app, uses Hanami's
-ROM/Sequel database gateway for persistence, renders ROM::SQL migrations, and
-generates Hanami relations/repos for app-level queries.
+<RubyAuthDisclaimer />
 
-## Install
+## Installation
 
 ```ruby title="Gemfile"
 gem "better_auth-hanami"
 ```
 
-```bash title="Terminal"
+```bash
 bundle install
-bundle exec rake better_auth:init
 ```
 
-The install task creates or updates:
+<Callout type="info">
+  Requires Hanami 2.3+ (Rack 3). Hanami 1.x and 2.2 are not supported.
+</Callout>
 
-- `config/providers/better_auth.rb`
-- `config/routes.rb`
-- `config/settings.rb`
-- `lib/tasks/better_auth.rake`
-- `config/db/migrate/*_create_better_auth_tables.rb`
-- `app/repo.rb`
-- `app/relations/*.rb`
-- `app/repos/*_repo.rb`
+## Setup
 
-## Configure
+<Steps>
 
-The generated provider registers the auth object in the Hanami container:
+### Load Rake tasks
 
-```ruby title="config/providers/better_auth.rb"
+```ruby title="Rakefile"
+require "better_auth/hanami"
+load Gem.loaded_specs.fetch("better_auth-hanami").full_gem_path + "/lib/tasks/better_auth.rake"
+```
+
+### Initialize
+
+```bash
+bundle exec rake better_auth:init
+bin/hanami db migrate
+```
+
+### Configure provider
+
+The generator creates `config/providers/better_auth.rb`:
+
+```ruby
 Hanami.app.register_provider(:better_auth) do
   prepare do
     require "better_auth/hanami"
   end
 
   start do
+    better_auth_url = target["settings"].better_auth_url.to_s
+    raise "better_auth_url must be configured" if better_auth_url.empty?
+
     BetterAuth::Hanami.configure do |config|
       config.secret = target["settings"].better_auth_secret
-      config.base_url = target["settings"].better_auth_url
+      config.base_url = better_auth_url
       config.base_path = "/api/auth"
       config.database = ->(options) {
         BetterAuth::Hanami::SequelAdapter.from_container(target, options)
       }
-
-      config.email_and_password = {
-        enabled: true
-      }
-
-      config.plugins = [
-        # BetterAuth::Plugins.username
-      ]
+      config.trusted_origins = [better_auth_url]
+      config.email_and_password = { enabled: true }
     end
 
     auth = BetterAuth::Hanami.auth
     register "better_auth.auth", auth
-    register "better_auth.rack_app",
-      BetterAuth::Hanami::MountedApp.new(auth, mount_path: BetterAuth::Hanami.configuration.base_path)
+    register "better_auth.rack_app", BetterAuth::Hanami::MountedApp.new(
+      auth,
+      mount_path: BetterAuth::Hanami.configuration.base_path
+    )
   end
 end
 ```
 
-## Mount Routes
+### Routes
 
 ```ruby title="config/routes.rb"
-require "better_auth/hanami/routing"
+require "better_auth/hanami"
 
-module Bookshelf
+module MyApp
   class Routes < Hanami::Routes
     include BetterAuth::Hanami::Routing
 
@@ -79,46 +86,7 @@ module Bookshelf
 end
 ```
 
-By default this mounts Better Auth at `/api/auth`.
-
-Customize the path:
-
-```ruby title="config/routes.rb"
-better_auth at: "/auth"
-```
-
-## Run Migrations
-
-```bash title="Terminal"
-bin/hanami db migrate
-```
-
-When you add plugins that introduce schema tables or fields, regenerate a
-migration before migrating a new app:
-
-```bash title="Terminal"
-bundle exec rake better_auth:generate:migration
-bundle exec rake better_auth:generate:relations
-```
-
-## Relations And Repos
-
-Better Auth writes and reads auth data through
-`BetterAuth::Hanami::SequelAdapter`. The generated Hanami relations/repos give
-your application a normal Hanami way to query those same tables:
-
-```ruby
-users = Hanami.app["relations.users"].to_a
-session = Hanami.app["repos.session_repo"].sessions.by_pk(session_id).one
-```
-
-The adapter and generated repos are separate on purpose. You can use the
-default adapter, configure your own Better Auth adapter, and still keep Hanami
-relations/repos available for reporting, admin screens, or app-specific reads.
-
-## Action Helpers
-
-Include helpers in your base action:
+### Action helpers
 
 ```ruby title="app/action.rb"
 class Action < Hanami::Action
@@ -126,34 +94,17 @@ class Action < Hanami::Action
 end
 ```
 
-Use them in actions by passing the Hanami request and response:
+</Steps>
 
-```ruby title="app/actions/dashboard/show.rb"
-module Bookshelf
-  module Actions
-    module Dashboard
-      class Show < Bookshelf::Action
-        def handle(request, response)
-          return unless require_authentication(request, response)
+## Verify
 
-          response.body = current_user(request).fetch("email")
-        end
-      end
-    end
-  end
-end
+```bash
+curl http://localhost:2300/api/auth/ok
 ```
 
-Available helpers:
+Use your Hanami `better_auth_url` setting for the host and port.
 
-- `current_session(request)`
-- `current_user(request)`
-- `authenticated?(request)`
-- `require_authentication(request, response)`
+## Next steps
 
-## Limitations
-
-- Hanami support starts at 2.3 because Better Auth core requires Rack 3 and Hanami 2.3 is the first Hanami line that allows Rack 3.
-- Hanami 1.x and Hanami 2.2/Rack 2 apps are not supported by this adapter.
-- The stable command surface is Rake/generator based. The adapter does not expose `hanami better_auth ...` commands because the current public Hanami guides do not document a stable third-party CLI extension API.
-- Apps created with `--skip-db` can use memory storage for development or tests, but production apps should configure Hanami DB or pass an explicit Better Auth database adapter.
+- [Sequel adapter via Hanami](/docs/adapters/postgresql)
+- [CLI](/docs/concepts/cli)

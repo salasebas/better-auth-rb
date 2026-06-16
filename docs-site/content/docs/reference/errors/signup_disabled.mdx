@@ -1,32 +1,37 @@
 ---
-title: signup_disabled
-description: Signup disabled error
+title: Signup Disabled
+description: OAuth error `signup_disabled` in RubyAuth.
 ---
 
-This error occurs when sign-up is disabled for an auth flow and a user tries to create a new account through that flow.
+## When this appears
+
+OAuth attempted to create a new user but sign-up is disabled.
+
+Redirect URL shape:
+
+```
+/api/auth/error?error=signup_disabled
+```
+
+Or your configured `errorCallbackURL` with the same query parameters.
+
+## Common causes
+
+- `disableSignUp` on provider or global policy
+- Invite-only app
 
 ## How to fix
 
-If you want to block sign-up based on application policy, use a database hook so the decision is enforced server-side.
+- Create user through admin flow first
+- Adjust provider `disable_sign_up` options
 
-```ruby title="config/auth.rb"
-auth = BetterAuth.auth(
-  secret: ENV.fetch("BETTER_AUTH_SECRET"),
-  database_hooks: {
-    user: {
-      create: {
-        before: ->(user, ctx = nil) {
-          unless SignupPolicy.allowed?(user)
-            raise BetterAuth::APIError.new(
-              "BAD_REQUEST",
-              message: "Signup is disabled"
-            )
-          end
+## Diagnostics
 
-          user
-        }
-      }
-    }
-  }
-)
+```bash
+bundle exec better-auth doctor --cwd . --config config/better_auth.rb
 ```
+
+## Related
+
+- [OAuth errors index](/docs/reference/errors)
+- [OAuth concepts](/docs/concepts/oauth)

@@ -1,340 +1,43 @@
 ---
 title: Security
-description: Better Auth Ruby security features.
+description: Security defaults and hardening in RubyAuth.
 ---
 
-Better Auth Ruby keeps the upstream security model where it applies to Rack and Ruby runtimes: secure password hashing, signed cookies, OAuth state validation, origin checks, callback URL validation, session revocation, and rate limiting.
+<RubyAuthDisclaimer />
 
-## Password Hashing
+## Secrets
 
-Passwords are hashed with `scrypt` by default.
+- Set `BETTER_AUTH_SECRET` with high entropy (`bundle exec better-auth secret`)
+- Never commit secrets; use Rails credentials or environment variables
+- Optional `BETTER_AUTH_SECRETS` for rotation
 
-```ruby title="config/auth.rb"
-auth = BetterAuth.auth(
-  secret: ENV.fetch("BETTER_AUTH_SECRET"),
-  password_hasher: :scrypt
-)
-```
+## Origin and CSRF
 
-`bcrypt` is also supported.
+RubyAuth validates trusted origins on mutating routes. Configure `trusted_origins` to include every frontend origin that calls auth APIs.
 
-```ruby title="config/auth.rb"
-auth = BetterAuth.auth(
-  secret: ENV.fetch("BETTER_AUTH_SECRET"),
-  password_hasher: :bcrypt
-)
-```
+Fetch Metadata / origin checks are enforced in the Rack router — see core router tests.
 
-## Sessions
+## Session cookies
 
-Sessions are identified by a signed `session_token` cookie and resolved on the server. With a database adapter, session records are persisted in the database. Without a database, the Ruby port enables stateless defaults and stores session cache data in signed or encrypted cookies.
+Default cookie prefix: `better-auth.session_token`. Cookies are `HttpOnly`. `Secure` is enabled for HTTPS `base_url` or production environments.
 
-Sessions expire after seven days by default.
+See [Cookies](/docs/concepts/cookies) and `BetterAuth::Cookies`.
 
-```ruby title="config/auth.rb"
-auth = BetterAuth.auth(
-  secret: ENV.fetch("BETTER_AUTH_SECRET"),
-  session: {
-    expires_in: 60 * 60 * 24 * 7,
-    update_age: 60 * 60 * 24,
-    fresh_age: 60 * 60 * 24
-  }
-)
-```
+## Password hashing
 
-`fresh_age` protects sensitive routes such as password changes, email changes, and account deletion. Set it to `0` only when you intentionally want to disable fresh-session checks.
+Default hasher: **scrypt** (`password_hasher: :scrypt`). Alternative: `:bcrypt`.
 
-See [Session Management](/docs/concepts/session-management).
+Use the [Have I Been Pwned](/docs/plugins/have-i-been-pwned) plugin to reject breached passwords.
 
-## CSRF Protection
+## Rate limiting
 
-Better Auth Ruby rejects unsafe cross-origin requests in several layers.
+Enable `rate_limit: { enabled: true }` to throttle auth endpoints. Use shared storage in multi-process deployments.
 
-1. Unsafe methods require a trusted `Origin` or `Referer` header when cookies are present.
-2. `callbackURL`, `redirectTo`, `errorCallbackURL`, and `newUserCallbackURL` are validated against trusted origins.
-3. Fetch Metadata headers block first-login CSRF attempts, such as cross-site navigations to sign-in routes before cookies exist.
-4. `GET`, `HEAD`, and `OPTIONS` are treated as non-mutating by the origin-check middleware.
+## HTTPS
 
-```ruby title="config/auth.rb"
-auth = BetterAuth.auth(
-  base_url: "https://auth.example.com",
-  secret: ENV.fetch("BETTER_AUTH_SECRET"),
-  trusted_origins: [
-    "https://app.example.com",
-    "https://*.preview.example.com"
-  ]
-)
-```
-
-Relative redirect paths such as `/dashboard` are allowed where the route accepts relative callback URLs. Protocol-relative URLs such as `//evil.example` are not treated as safe relative paths.
-
-### Disabling Security Checks
-
-Better Auth provides two separate options to disable security checks. These options control different aspects of security:
-
-#### `disableCSRFCheck`
-
-Disables **all CSRF protection**, including:
-
-- Origin header validation when cookies are present
-- Fetch Metadata checks (`Sec-Fetch-Site`, `Sec-Fetch-Mode`, `Sec-Fetch-Dest`)
-- Cross-site navigation blocking for first-login scenarios
-
-```ruby title="config/auth.rb"
-auth = BetterAuth.auth(
-  secret: ENV.fetch("BETTER_AUTH_SECRET"),
-  advanced: {
-    disable_csrf_check: true
-  }
-)
-```
-
-<Callout type="warn">
-  Disabling CSRF checks allows requests from any origin to use cookies and perform actions on behalf of users. This opens your application to CSRF attacks.
-</Callout>
-
-#### `disableOriginCheck`
-
-Disables **URL validation** against `trusted_origins`, including:
-
-- `callbackURL` validation
-- `redirectTo` validation
-- `errorCallbackURL` validation
-- `newUserCallbackURL` validation
+Always use HTTPS in production. Set `BETTER_AUTH_URL` to the public HTTPS URL so OAuth redirect URIs match provider consoles.
 
-```ruby title="config/auth.rb"
-auth = BetterAuth.auth(
-  secret: ENV.fetch("BETTER_AUTH_SECRET"),
-  advanced: {
-    disable_origin_check: true
-  }
-)
-```
-
-<Callout type="warn">
-  Disabling origin checks allows any URL to be used in redirects and callbacks. This opens your application to open redirect vulnerabilities.
-</Callout>
-
-<Callout type="info">
-  For backward compatibility, `disable_origin_check: true` also disables CSRF protection. If you only want to disable URL validation without affecting CSRF protection, this is not currently possible — both checks are disabled together when using this option.
-</Callout>
-
-#### Summary
-
-| Option               | What it disables                                                       |
-| -------------------- | ---------------------------------------------------------------------- |
-| `disableCSRFCheck`   | CSRF protection only (origin header validation, Fetch Metadata checks) |
-| `disableOriginCheck` | URL validation AND CSRF protection (for backward compatibility)        |
-
-## OAuth State and PKCE
-
-OAuth state protects sign-in and account-linking flows from CSRF and replay attacks. For stateless setups, the default account configuration stores state in cookies.
-
-```ruby title="config/auth.rb"
-auth = BetterAuth.auth(
-  secret: ENV.fetch("BETTER_AUTH_SECRET"),
-  database: nil,
-  account: {
-    store_state_strategy: "cookie",
-    store_account_cookie: true
-  }
-)
-```
-
-If users repeatedly see state errors, check that the same `BETTER_AUTH_SECRET`, database, and secondary storage are shared across all deployed instances.
-
-## Cookies
-
-Better Auth Ruby cookies are `http_only`, `same_site: "lax"`, and scoped to `/` by default. Cookies are marked secure when `advanced.use_secure_cookies` is true, when `base_url` uses HTTPS, or when the app runs in production.
-
-```ruby title="config/auth.rb"
-auth = BetterAuth.auth(
-  base_url: "https://auth.example.com",
-  secret: ENV.fetch("BETTER_AUTH_SECRET"),
-  advanced: {
-    use_secure_cookies: true,
-    cookie_prefix: "my-app"
-  }
-)
-```
-
-Cross-subdomain cookies are available when the auth server and application share a trusted parent domain.
-
-```ruby title="config/auth.rb"
-auth = BetterAuth.auth(
-  base_url: "https://auth.example.com",
-  secret: ENV.fetch("BETTER_AUTH_SECRET"),
-  advanced: {
-    cross_subdomain_cookies: {
-      enabled: true,
-      domain: "example.com"
-    }
-  },
-  trusted_origins: ["https://app.example.com"]
-)
-```
-
-### Customizing Cookies
-
-You can customize cookie names to minimize the risk of fingerprinting attacks and set specific cookie options as needed for additional control. For more information, refer to the [cookie options](/docs/concepts/cookies).
-
-Plugins can also set custom cookie options to align with specific security needs. If you're using Better Auth in non-browser environments, plugins offer ways to manage cookies securely in those contexts as well.
-
-## Rate Limiting
-
-Rate limiting protects HTTP requests handled by the Rack router. It is enabled automatically in production and disabled by default in development and test.
-
-```ruby title="config/auth.rb"
-auth = BetterAuth.auth(
-  secret: ENV.fetch("BETTER_AUTH_SECRET"),
-  rate_limit: {
-    enabled: true,
-    window: 60,
-    max: 100
-  }
-)
-```
-
-See [Rate Limit](/docs/concepts/rate-limit).
-
-## IP Address Headers
-
-Rate limiting and security checks use the request IP. Configure trusted headers only when your reverse proxy controls them and users cannot forge them.
-
-```ruby title="config/auth.rb"
-auth = BetterAuth.auth(
-  secret: ENV.fetch("BETTER_AUTH_SECRET"),
-  advanced: {
-    ip_address: {
-      ip_address_headers: ["cf-connecting-ip", "x-forwarded-for"],
-      disable_ip_tracking: false
-    }
-  }
-)
-```
-
-## Trusted Proxy Headers
-
-If the app runs behind a reverse proxy, `advanced.trusted_proxy_headers` allows Better Auth Ruby to infer request origins from `X-Forwarded-Host` and `X-Forwarded-Proto` when `base_url` is not configured.
-
-```ruby title="config/auth.rb"
-auth = BetterAuth.auth(
-  secret: ENV.fetch("BETTER_AUTH_SECRET"),
-  advanced: {
-    trusted_proxy_headers: true
-  }
-)
-```
-
-<Callout type="warn">
-Only enable this when your proxy overwrites forwarded headers and strips any client-supplied values. Forged proxy headers can affect generated URLs, callbacks, and redirects.
-</Callout>
-
-When enabled, the base URL resolution follows this priority:
-
-1. Static `base_url` from the configuration (if set, proxy headers are ignored)
-2. Environment variables (`BETTER_AUTH_URL`, `NEXT_PUBLIC_BETTER_AUTH_URL`, etc.)
-3. `X-Forwarded-Host` + `X-Forwarded-Proto` headers (when `trusted_proxy_headers` is `true`)
-4. The request URL origin as a final fallback
-
-If you're serving your app from multiple approved domains, you'll typically want to:
-
-- **Omit `base_url`** from the configuration so it's derived per-request from the proxy headers
-- Set **`trusted_origins`** to an allowlist of your approved domains (see below)
-- Leave `cross_subdomain_cookies` disabled — cookies are host-only by default, which means each domain gets its own independent session
-
-## Trusted Origins
-
-Trusted origins prevent CSRF attacks and block open redirects. You can set a list of trusted origins in the `trusted_origins` configuration option. Requests from origins not on this list are automatically blocked.
-
-### Basic Usage
-
-The most basic usage is to specify exact origins, below is an example of a trusted origins configuration:
-
-```ruby title="config/auth.rb"
-auth = BetterAuth.auth(
-  secret: ENV.fetch("BETTER_AUTH_SECRET"),
-  trusted_origins: [
-    "https://example.com",
-    "https://app.example.com",
-    "http://localhost:3000"
-  ]
-)
-```
-
-<Callout type="warn">
-  Do not leave the localhost origin in a trusted origins list of a production auth instance.
-</Callout>
-
-### Wildcard Origins
-
-Better Auth supports wildcard patterns in trusted origins, which allows you to trust multiple subdomains with a single entry:
-
-```ruby title="config/auth.rb"
-auth = BetterAuth.auth(
-  secret: ENV.fetch("BETTER_AUTH_SECRET"),
-  trusted_origins: [
-    "*.example.com",             # Trust all subdomains of example.com (any protocol)
-    "https://*.example.com",     # Trust only HTTPS subdomains of example.com
-    "http://*.dev.example.com"   # Trust all HTTP subdomains of dev.example.com
-  ]
-)
-```
-
-#### Protocol-specific wildcards
-
-When using a wildcard pattern with a protocol prefix (like `https://`):
-
-- The protocol must match exactly
-- The domain can have any subdomain in place of the `*`
-- Requests using a different protocol will be rejected, even if the domain matches
-
-#### Protocol-agnostic wildcards
-
-When using a wildcard pattern without a protocol prefix (like `*.example.com`):
-
-- Any protocol (http, https, etc.) will be accepted
-- The domain must match the wildcard pattern
-
-### Custom Schemes
-
-Trusted origins also support custom schemes for mobile apps and browser extensions:
-
-```ruby title="config/auth.rb"
-auth = BetterAuth.auth(
-  secret: ENV.fetch("BETTER_AUTH_SECRET"),
-  trusted_origins: [
-    "myapp://",                               # Mobile app scheme
-    "chrome-extension://YOUR_EXTENSION_ID",   # Browser extension
-    "exp://**",                               # Trust all Expo development URLs
-    "exp://10.0.0.*:*/**",                    # Trust 10.0.0.x IP range with any port
-  ]
-)
-```
-
-### Dynamic origin list
-
-You can also dynamically set the list of trusted origins by providing a proc that receives the Rack request and returns an array of origins:
-
-```ruby title="config/auth.rb"
-auth = BetterAuth.auth(
-  secret: ENV.fetch("BETTER_AUTH_SECRET"),
-  trusted_origins: ->(request) {
-    query_trusted_domains(request)
-  }
-)
-```
-
-<Callout>
-  **Important**: This proc will be invoked per incoming request, so be careful if you decide to dynamically fetch your list of trusted domains.
-</Callout>
-
-## Email Enumeration Protection
-
-Better Auth prevents email enumeration on the sign-up and change-email endpoints. When `require_email_verification` is enabled or `auto_sign_in` is set to `false`, the sign-up endpoint returns the same `200` response whether the email is already registered or not, following [OWASP authentication best practices](https://cheatsheetseries.owasp.org/cheatsheets/Authentication_Cheat_Sheet.html#authentication-and-error-messages). Timing attacks are mitigated by simulating password hashing on duplicate sign-up attempts.
-
-See [Email and Password — Email Enumeration Protection](/docs/authentication/email-password#email-enumeration-protection) for configuration details.
-
-## Reporting Vulnerabilities
-
-Please do not report security issues in public issues. Follow the repository [Security Policy](https://github.com/sebasxsala/better-auth-rb/blob/main/SECURITY.md) and include enough detail for maintainers to reproduce the issue.
+## Related
+
+- [Options](/docs/reference/options)
+- [Security-focused plugins](/docs/plugins/captcha)

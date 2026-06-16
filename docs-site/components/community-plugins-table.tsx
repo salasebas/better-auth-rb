@@ -205,6 +205,28 @@ export const communityPlugins: CommunityPlugin[] = [
 		},
 	},
 	{
+		name: "@alexasomba/better-auth-paystack",
+		url: "https://github.com/alexasomba/better-auth-paystack",
+		description:
+			"Paystack plugin for Better Auth — integrates Paystack transactions, webhooks, and subscription flows.",
+		author: {
+			name: "alexasomba",
+			github: "alexasomba",
+			avatar: "https://github.com/alexasomba.png",
+		},
+	},
+	{
+		name: "better-auth-lark",
+		url: "https://github.com/uselark/better-auth-lark",
+		description:
+			"Lark billing plugin that automatically creates customers and subscribes them to free plans on signup.",
+		author: {
+			name: "Vijit",
+			github: "vijit-lark",
+			avatar: "https://github.com/vijit-lark.png",
+		},
+	},
+	{
 		name: "stargate-better-auth",
 		url: "https://github.com/neiii/stargate-better-auth",
 		description:
@@ -244,6 +266,72 @@ export const communityPlugins: CommunityPlugin[] = [
 			name: "Ramiras123",
 			github: "ramiras123",
 			avatar: "https://github.com/ramiras123.png",
+		},
+	},
+	{
+		name: "better-auth-razorpay",
+		url: "https://github.com/iamjasonkendrick/better-auth-razorpay",
+		description:
+			"Razorpay payment plugin for Better Auth — integrates Razorpay payments, webhooks, and subscription flows.",
+		author: {
+			name: "iamjasonkendrick",
+			github: "iamjasonkendrick",
+			avatar: "https://github.com/iamjasonkendrick.png",
+		},
+	},
+	{
+		name: "better-auth-payu",
+		url: "https://github.com/iamjasonkendrick/better-auth-payu",
+		description:
+			"PayU payment plugin for Better Auth — integrates PayU payments, webhooks, and subscription flows.",
+		author: {
+			name: "iamjasonkendrick",
+			github: "iamjasonkendrick",
+			avatar: "https://github.com/iamjasonkendrick.png",
+		},
+	},
+	{
+		name: "better-invite",
+		url: "https://github.com/better-invite/better-invite",
+		description:
+			"Easily create and manage user invitations, allowing you to invite users with customizable settings and track usage.",
+		author: {
+			name: "Sandy",
+			github: "0-Sandy",
+			avatar: "https://github.com/0-Sandy.png",
+		},
+	},
+	{
+		name: "better-auth-usos",
+		url: "https://github.com/qamarq/better-auth-usos",
+		description:
+			"USOS plugin for Better Auth - allows students to authenticate using their university credentials via the USOS API. Using oauth 1a.",
+		author: {
+			name: "qamarq",
+			github: "qamarq",
+			avatar: "https://github.com/qamarq.png",
+		},
+	},
+	{
+		name: "better-auth-devtools",
+		url: "https://github.com/C-W-D-Harshit/better-auth-devtools",
+		description:
+			"A devtools panel for Better Auth that lets you create managed test users from templates, switch between sessions instantly, inspect live session data, and edit fields like roles on the fly. All from a floating React UI that only runs in development.",
+		author: {
+			name: "C-W-D-Harshit",
+			github: "C-W-D-Harshit",
+			avatar: "https://github.com/C-W-D-Harshit.png",
+		},
+	},
+	{
+		name: "better-auth-audit-logs",
+		url: "https://github.com/ejirocodes/better-auth-audit-logs",
+		description:
+			"Audit log plugin for Better Auth. Auto-captures auth events with severity inference, PII redaction, custom storage backends, and retention policies.",
+		author: {
+			name: "ejirocodes",
+			github: "ejirocodes",
+			avatar: "https://github.com/ejirocodes.png",
 		},
 	},
 ];
