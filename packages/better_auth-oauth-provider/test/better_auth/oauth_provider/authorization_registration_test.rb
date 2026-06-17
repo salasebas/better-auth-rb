@@ -36,7 +36,7 @@ class OAuthProviderAuthorizationRegistrationTest < Minitest::Test
     cookie = sign_up_cookie(auth)
     client = create_client(auth, cookie, scope: "openid", skip_consent: true)
 
-    status, headers, = auth.api.o_auth2_authorize(
+    status, headers, = auth.api.oauth2_authorize(
       query: {
         response_type: "code",
         client_id: client[:client_id],
@@ -64,7 +64,7 @@ class OAuthProviderAuthorizationRegistrationTest < Minitest::Test
     cookie = sign_up_cookie(auth)
     client = create_client(auth, cookie, scope: "openid", skip_consent: true)
 
-    status, headers, = auth.api.o_auth2_authorize(
+    status, headers, = auth.api.oauth2_authorize(
       query: {
         response_type: "code",
         client_id: client[:client_id],
@@ -224,7 +224,7 @@ class OAuthProviderAuthorizationRegistrationTest < Minitest::Test
     cookie = sign_up_cookie(auth)
     client = create_client(auth, cookie, scope: "openid profile", skip_consent: true)
 
-    status, headers, = auth.api.o_auth2_authorize(
+    status, headers, = auth.api.oauth2_authorize(
       query: {
         client_id: client[:client_id],
         request_uri: "urn:ietf:params:oauth:request_uri:test",
@@ -261,7 +261,7 @@ class OAuthProviderAuthorizationRegistrationTest < Minitest::Test
     cookie = sign_up_cookie(auth)
     client = create_client(auth, cookie, scope: "openid", skip_consent: true)
 
-    status, headers, = auth.api.o_auth2_authorize(
+    status, headers, = auth.api.oauth2_authorize(
       query: {
         client_id: client[:client_id],
         request_uri: "urn:ietf:params:oauth:request_uri:front-client"
@@ -279,7 +279,7 @@ class OAuthProviderAuthorizationRegistrationTest < Minitest::Test
     cookie = sign_up_cookie(auth)
     client = create_client(auth, cookie, scope: "openid", skip_consent: true)
 
-    status, headers, = auth.api.o_auth2_authorize(
+    status, headers, = auth.api.oauth2_authorize(
       headers: {"cookie" => cookie},
       query: {
         response_type: "code",
@@ -304,7 +304,7 @@ class OAuthProviderAuthorizationRegistrationTest < Minitest::Test
     cookie = sign_up_cookie(auth)
     client = create_client(auth, cookie, scope: "openid")
 
-    status, headers, = auth.api.o_auth2_authorize(
+    status, headers, = auth.api.oauth2_authorize(
       query: {
         client_id: client[:client_id],
         redirect_uri: "https://resource.example/callback",
@@ -358,7 +358,7 @@ class OAuthProviderAuthorizationRegistrationTest < Minitest::Test
   def test_registration_rejects_missing_body_and_unauthenticated_request
     auth = build_auth
 
-    missing_body = assert_raises(BetterAuth::APIError) { auth.api.register_o_auth_client(body: nil) }
+    missing_body = assert_raises(BetterAuth::APIError) { auth.api.register_oauth_client(body: nil) }
     assert_equal 401, missing_body.status_code
 
     unauthenticated = assert_raises(BetterAuth::APIError) do
@@ -407,7 +407,7 @@ class OAuthProviderAuthorizationRegistrationTest < Minitest::Test
       end
       assert_equal 400, confidential.status_code
 
-      public_client = auth.api.admin_create_o_auth_client(
+      public_client = auth.api.admin_create_oauth_client(
         body: {
           redirect_uris: ["https://resource.example/#{type}/callback"],
           token_endpoint_auth_method: "none",

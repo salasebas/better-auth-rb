@@ -9,7 +9,7 @@ class OAuthProviderUserinfoTest < Minitest::Test
     auth = build_auth(scopes: ["openid"])
 
     error = assert_raises(BetterAuth::APIError) do
-      auth.api.o_auth2_user_info(headers: {})
+      auth.api.oauth2_user_info(headers: {})
     end
 
     assert_equal 401, error.status_code
@@ -30,7 +30,7 @@ class OAuthProviderUserinfoTest < Minitest::Test
     tokens = issue_authorization_code_tokens(auth, cookie, client, scope: "profile")
 
     error = assert_raises(BetterAuth::APIError) do
-      auth.api.o_auth2_user_info(headers: {"authorization" => "Bearer #{tokens[:access_token]}"})
+      auth.api.oauth2_user_info(headers: {"authorization" => "Bearer #{tokens[:access_token]}"})
     end
 
     assert_equal 400, error.status_code
@@ -43,7 +43,7 @@ class OAuthProviderUserinfoTest < Minitest::Test
     client = create_client(auth, cookie, grant_types: ["authorization_code"], response_types: ["code"], scope: "openid profile email")
     tokens = issue_authorization_code_tokens(auth, cookie, client, scope: "openid")
 
-    userinfo = auth.api.o_auth2_user_info(headers: {"authorization" => "Bearer #{tokens[:access_token]}"})
+    userinfo = auth.api.oauth2_user_info(headers: {"authorization" => "Bearer #{tokens[:access_token]}"})
 
     assert userinfo[:sub]
     refute userinfo.key?(:name)
@@ -59,7 +59,7 @@ class OAuthProviderUserinfoTest < Minitest::Test
     client = create_client(auth, cookie, grant_types: ["authorization_code"], response_types: ["code"], scope: "openid profile email")
     tokens = issue_authorization_code_tokens(auth, cookie, client, scope: "openid profile")
 
-    userinfo = auth.api.o_auth2_user_info(headers: {"authorization" => "Bearer #{tokens[:access_token]}"})
+    userinfo = auth.api.oauth2_user_info(headers: {"authorization" => "Bearer #{tokens[:access_token]}"})
 
     assert userinfo[:sub]
     assert_equal "OAuth Profile", userinfo[:name]
@@ -75,7 +75,7 @@ class OAuthProviderUserinfoTest < Minitest::Test
     client = create_client(auth, cookie, grant_types: ["authorization_code"], response_types: ["code"], scope: "openid profile email")
     tokens = issue_authorization_code_tokens(auth, cookie, client, scope: "openid email")
 
-    userinfo = auth.api.o_auth2_user_info(headers: {"authorization" => "Bearer #{tokens[:access_token]}"})
+    userinfo = auth.api.oauth2_user_info(headers: {"authorization" => "Bearer #{tokens[:access_token]}"})
 
     assert userinfo[:sub]
     assert_equal "userinfo-email@example.com", userinfo[:email]
@@ -94,9 +94,9 @@ class OAuthProviderUserinfoTest < Minitest::Test
     profile = issue_authorization_code_tokens(auth, cookie, client, scope: "openid profile")
     email = issue_authorization_code_tokens(auth, cookie, client, scope: "openid email")
 
-    openid_info = auth.api.o_auth2_user_info(headers: {"authorization" => "Bearer #{openid[:access_token]}"})
-    profile_info = auth.api.o_auth2_user_info(headers: {"authorization" => "Bearer #{profile[:access_token]}"})
-    email_info = auth.api.o_auth2_user_info(headers: {"authorization" => "Bearer #{email[:access_token]}"})
+    openid_info = auth.api.oauth2_user_info(headers: {"authorization" => "Bearer #{openid[:access_token]}"})
+    profile_info = auth.api.oauth2_user_info(headers: {"authorization" => "Bearer #{profile[:access_token]}"})
+    email_info = auth.api.oauth2_user_info(headers: {"authorization" => "Bearer #{email[:access_token]}"})
 
     assert openid_info[:sub]
     refute openid_info.key?(:name)

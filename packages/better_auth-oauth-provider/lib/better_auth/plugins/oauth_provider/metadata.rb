@@ -139,11 +139,11 @@ module BetterAuth
       openid_path = oauth_openid_configuration_issuer_path(normalized, config[:base_path])
 
       {
-        get_o_auth_server_config_issuer_path: oauth_server_metadata_endpoint(
+        get_oauth_server_config_issuer_path: oauth_server_metadata_endpoint(
           config,
           path: "/.well-known/oauth-authorization-server#{normalized}"
         ),
-        get_open_id_config_issuer_path: oauth_openid_metadata_endpoint(
+        get_openid_config_issuer_path: oauth_openid_metadata_endpoint(
           config,
           path: openid_path
         )

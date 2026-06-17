@@ -12,7 +12,7 @@ class OAuthProviderTokenPkceTest < Minitest::Test
       valid_audiences: ["https://myapi.example.com"]
     )
     cookie = sign_up_cookie(auth)
-    client = auth.api.admin_create_o_auth_client(
+    client = auth.api.admin_create_oauth_client(
       body: {
         redirect_uris: ["https://resource.example/callback"],
         token_endpoint_auth_method: "client_secret_post",
@@ -72,7 +72,7 @@ class OAuthProviderTokenPkceTest < Minitest::Test
     auth = build_auth(scopes: ["openid"])
     cookie = sign_up_cookie(auth)
     client = create_client(auth, cookie, scope: "openid", skip_consent: true)
-    status, headers, = auth.api.o_auth2_authorize(
+    status, headers, = auth.api.oauth2_authorize(
       headers: {"cookie" => cookie},
       query: {
         response_type: "code",
@@ -89,7 +89,7 @@ class OAuthProviderTokenPkceTest < Minitest::Test
     code = params.fetch("code")
     refute params.key?("state")
 
-    tokens = auth.api.o_auth2_token(
+    tokens = auth.api.oauth2_token(
       body: {
         grant_type: "authorization_code",
         code: code,
@@ -113,7 +113,7 @@ class OAuthProviderTokenPkceTest < Minitest::Test
     client = create_client(auth, cookie, scope: "openid profile email offline_access", skip_consent: true)
 
     same_source = issue_authorization_code_tokens(auth, cookie, client, scope: "openid profile offline_access")
-    same = auth.api.o_auth2_token(body: refresh_grant_body(client, same_source[:refresh_token]))
+    same = auth.api.oauth2_token(body: refresh_grant_body(client, same_source[:refresh_token]))
     assert same[:access_token]
     assert same[:id_token]
     assert same[:refresh_token]
@@ -122,20 +122,20 @@ class OAuthProviderTokenPkceTest < Minitest::Test
     assert_kind_of Integer, same[:expires_at]
 
     lesser_source = issue_authorization_code_tokens(auth, cookie, client, scope: "openid profile offline_access")
-    lesser = auth.api.o_auth2_token(body: refresh_grant_body(client, lesser_source[:refresh_token], scope: "openid"))
+    lesser = auth.api.oauth2_token(body: refresh_grant_body(client, lesser_source[:refresh_token], scope: "openid"))
     assert lesser[:access_token]
     assert lesser[:id_token]
     assert lesser[:refresh_token]
     assert_equal "openid", lesser[:scope]
 
     without_offline_source = issue_authorization_code_tokens(auth, cookie, client, scope: "openid profile offline_access")
-    without_offline = auth.api.o_auth2_token(body: refresh_grant_body(client, without_offline_source[:refresh_token], scope: "openid"))
+    without_offline = auth.api.oauth2_token(body: refresh_grant_body(client, without_offline_source[:refresh_token], scope: "openid"))
     assert without_offline[:refresh_token]
     assert_equal "openid", without_offline[:scope]
 
     more_source = issue_authorization_code_tokens(auth, cookie, client, scope: "openid profile offline_access")
     error = assert_raises(BetterAuth::APIError) do
-      auth.api.o_auth2_token(body: refresh_grant_body(client, more_source[:refresh_token], scope: "openid email offline_access"))
+      auth.api.oauth2_token(body: refresh_grant_body(client, more_source[:refresh_token], scope: "openid email offline_access"))
     end
     assert_equal 400, error.status_code
     assert_match(/invalid_scope/i, error.message)
@@ -147,7 +147,7 @@ class OAuthProviderTokenPkceTest < Minitest::Test
       scope: "openid offline_access",
       resource: "https://myapi.example.com"
     )
-    jwt_refresh = auth.api.o_auth2_token(
+    jwt_refresh = auth.api.oauth2_token(
       body: refresh_grant_body(client, jwt_source[:refresh_token], resource: "https://myapi.example.com")
     )
     payload = JWT.decode(jwt_refresh[:access_token], nil, false).first
@@ -171,7 +171,7 @@ class OAuthProviderTokenPkceTest < Minitest::Test
       scope: "read write"
     )
 
-    opaque = auth.api.o_auth2_token(
+    opaque = auth.api.oauth2_token(
       body: {
         grant_type: "client_credentials",
         client_id: client[:client_id],
@@ -186,7 +186,7 @@ class OAuthProviderTokenPkceTest < Minitest::Test
     assert_nil opaque[:refresh_token]
     assert_nil opaque[:id_token]
 
-    all_scopes = auth.api.o_auth2_token(
+    all_scopes = auth.api.oauth2_token(
       body: {
         grant_type: "client_credentials",
         client_id: client[:client_id],
@@ -195,7 +195,7 @@ class OAuthProviderTokenPkceTest < Minitest::Test
     )
     assert_equal "read write", all_scopes[:scope]
 
-    jwt = auth.api.o_auth2_token(
+    jwt = auth.api.oauth2_token(
       body: {
         grant_type: "client_credentials",
         client_id: client[:client_id],
@@ -215,7 +215,7 @@ class OAuthProviderTokenPkceTest < Minitest::Test
   def test_confidential_client_with_require_pkce_false_can_exchange_without_pkce
     auth = build_auth(scopes: ["openid"])
     cookie = sign_up_cookie(auth)
-    client = auth.api.admin_create_o_auth_client(
+    client = auth.api.admin_create_oauth_client(
       body: {
         redirect_uris: ["https://resource.example/callback"],
         token_endpoint_auth_method: "client_secret_post",
@@ -228,7 +228,7 @@ class OAuthProviderTokenPkceTest < Minitest::Test
     )
 
     code = authorization_code_for(auth, cookie, client, scope: "openid", verifier: nil)
-    tokens = auth.api.o_auth2_token(
+    tokens = auth.api.oauth2_token(
       body: {
         grant_type: "authorization_code",
         code: code,
@@ -245,7 +245,7 @@ class OAuthProviderTokenPkceTest < Minitest::Test
   def test_public_client_cannot_opt_out_of_pkce
     auth = build_auth(scopes: ["openid"])
     cookie = sign_up_cookie(auth)
-    client = auth.api.admin_create_o_auth_client(
+    client = auth.api.admin_create_oauth_client(
       body: {
         redirect_uris: ["com.example.app:/callback"],
         token_endpoint_auth_method: "none",
@@ -276,7 +276,7 @@ class OAuthProviderTokenPkceTest < Minitest::Test
   def test_token_exchange_rejects_code_verifier_when_authorize_did_not_use_pkce
     auth = build_auth(scopes: ["openid"])
     cookie = sign_up_cookie(auth)
-    client = auth.api.admin_create_o_auth_client(
+    client = auth.api.admin_create_oauth_client(
       body: {
         redirect_uris: ["https://resource.example/callback"],
         token_endpoint_auth_method: "client_secret_post",
@@ -290,7 +290,7 @@ class OAuthProviderTokenPkceTest < Minitest::Test
     code = authorization_code_for(auth, cookie, client, scope: "openid", verifier: nil)
 
     error = assert_raises(BetterAuth::APIError) do
-      auth.api.o_auth2_token(
+      auth.api.oauth2_token(
         body: {
           grant_type: "authorization_code",
           code: code,
@@ -309,7 +309,7 @@ class OAuthProviderTokenPkceTest < Minitest::Test
   def test_offline_access_requires_pkce_even_when_client_opted_out
     auth = build_auth(scopes: ["openid", "offline_access"])
     cookie = sign_up_cookie(auth)
-    client = auth.api.admin_create_o_auth_client(
+    client = auth.api.admin_create_oauth_client(
       body: {
         redirect_uris: ["https://resource.example/callback"],
         token_endpoint_auth_method: "client_secret_post",
@@ -336,7 +336,7 @@ class OAuthProviderTokenPkceTest < Minitest::Test
     code = authorization_code_for(auth, cookie, client, scope: "openid", verifier: pkce_verifier)
 
     error = assert_raises(BetterAuth::APIError) do
-      auth.api.o_auth2_token(
+      auth.api.oauth2_token(
         body: {
           grant_type: "authorization_code",
           code: code,
@@ -355,7 +355,7 @@ class OAuthProviderTokenPkceTest < Minitest::Test
   def test_loopback_redirect_uri_matching_ignores_port_for_ip_literals_only
     auth = build_auth(scopes: ["openid"])
     cookie = sign_up_cookie(auth)
-    loopback = auth.api.admin_create_o_auth_client(
+    loopback = auth.api.admin_create_oauth_client(
       body: {
         redirect_uris: ["http://127.0.0.1:3000/callback"],
         token_endpoint_auth_method: "client_secret_post",
@@ -365,7 +365,7 @@ class OAuthProviderTokenPkceTest < Minitest::Test
         skip_consent: true
       }
     )
-    ipv6 = auth.api.admin_create_o_auth_client(
+    ipv6 = auth.api.admin_create_oauth_client(
       body: {
         redirect_uris: ["http://[::1]:3000/callback"],
         token_endpoint_auth_method: "client_secret_post",
@@ -375,7 +375,7 @@ class OAuthProviderTokenPkceTest < Minitest::Test
         skip_consent: true
       }
     )
-    web = auth.api.admin_create_o_auth_client(
+    web = auth.api.admin_create_oauth_client(
       body: {
         redirect_uris: ["https://resource.example:3000/callback"],
         token_endpoint_auth_method: "client_secret_post",
@@ -467,7 +467,7 @@ class OAuthProviderTokenPkceTest < Minitest::Test
     cookie = sign_up_cookie(auth)
     client = create_client(auth, cookie, scope: "openid offline_access read:payments write:payments", skip_consent: true)
 
-    machine = auth.api.o_auth2_token(
+    machine = auth.api.oauth2_token(
       body: {
         grant_type: "client_credentials",
         client_id: client[:client_id],
@@ -487,7 +487,7 @@ class OAuthProviderTokenPkceTest < Minitest::Test
     )
     assert_equal 1800, auth_code[:expires_in]
 
-    refreshed = auth.api.o_auth2_token(
+    refreshed = auth.api.oauth2_token(
       body: refresh_grant_body(client, auth_code[:refresh_token], resource: "https://api.example")
     )
     assert_equal 1800, refreshed[:expires_in]

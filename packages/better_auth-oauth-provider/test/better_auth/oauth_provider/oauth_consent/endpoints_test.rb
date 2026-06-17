@@ -11,11 +11,11 @@ class OAuthProviderOauthConsentEndpointsTest < Minitest::Test
     client = create_client(auth, cookie, scope: "openid profile", skip_consent: false)
     issue_authorization_code_tokens(auth, cookie, client, scope: "openid profile")
 
-    list = auth.api.get_o_auth_consents(headers: {"cookie" => cookie})
+    list = auth.api.get_oauth_consents(headers: {"cookie" => cookie})
     consent_id = list.first.fetch(:id)
-    read = auth.api.get_o_auth_consent(headers: {"cookie" => cookie}, query: {id: consent_id})
-    updated = auth.api.update_o_auth_consent(headers: {"cookie" => cookie}, body: {id: consent_id, scopes: ["openid"]})
-    deleted = auth.api.delete_o_auth_consent(headers: {"cookie" => cookie}, body: {id: consent_id})
+    read = auth.api.get_oauth_consent(headers: {"cookie" => cookie}, query: {id: consent_id})
+    updated = auth.api.update_oauth_consent(headers: {"cookie" => cookie}, body: {id: consent_id, scopes: ["openid"]})
+    deleted = auth.api.delete_oauth_consent(headers: {"cookie" => cookie}, body: {id: consent_id})
 
     assert_equal consent_id, read[:id]
     assert_equal ["openid"], updated[:scopes]

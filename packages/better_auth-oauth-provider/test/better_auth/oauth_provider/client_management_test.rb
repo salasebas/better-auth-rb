@@ -16,7 +16,7 @@ class OAuthProviderClientManagementTest < Minitest::Test
     assert_equal "trusted-client", client[:client_id]
 
     update_error = assert_raises(BetterAuth::APIError) do
-      auth.api.update_o_auth_client(
+      auth.api.update_oauth_client(
         headers: {"cookie" => cookie},
         body: {client_id: client[:client_id], update: {client_name: "Updated"}}
       )
@@ -24,12 +24,12 @@ class OAuthProviderClientManagementTest < Minitest::Test
     assert_equal 500, update_error.status_code
 
     rotate_error = assert_raises(BetterAuth::APIError) do
-      auth.api.rotate_o_auth_client_secret(headers: {"cookie" => cookie}, body: {client_id: client[:client_id]})
+      auth.api.rotate_oauth_client_secret(headers: {"cookie" => cookie}, body: {client_id: client[:client_id]})
     end
     assert_equal 500, rotate_error.status_code
 
     delete_error = assert_raises(BetterAuth::APIError) do
-      auth.api.delete_o_auth_client(headers: {"cookie" => cookie}, body: {client_id: client[:client_id]})
+      auth.api.delete_oauth_client(headers: {"cookie" => cookie}, body: {client_id: client[:client_id]})
     end
     assert_equal 500, delete_error.status_code
   end
@@ -50,7 +50,7 @@ class OAuthProviderClientManagementTest < Minitest::Test
   private
 
   def create_client(auth, cookie, **options)
-    auth.api.create_o_auth_client(headers: {"cookie" => cookie}, body: {
+    auth.api.create_oauth_client(headers: {"cookie" => cookie}, body: {
       client_name: options[:client_name] || "Test Client",
       redirect_uris: ["https://client.example.com/callback"],
       token_endpoint_auth_method: options[:token_endpoint_auth_method] || "client_secret_post",

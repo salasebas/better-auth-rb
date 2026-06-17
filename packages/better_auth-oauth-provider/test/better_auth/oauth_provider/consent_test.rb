@@ -15,7 +15,7 @@ class OAuthProviderConsentTest < Minitest::Test
 
     cookie_b = sign_up_cookie(auth, email: "owner-b@example.com")
     error = assert_raises(BetterAuth::APIError) do
-      auth.api.o_auth2_consent(headers: {"cookie" => cookie_b}, body: {accept: true, consent_code: consent_code})
+      auth.api.oauth2_consent(headers: {"cookie" => cookie_b}, body: {accept: true, consent_code: consent_code})
     end
 
     assert_equal 403, error.status_code
@@ -35,7 +35,7 @@ class OAuthProviderConsentTest < Minitest::Test
     assert_equal 302, status
     consent_code = extract_redirect_params(headers).fetch("consent_code")
 
-    auth.api.o_auth2_consent(headers: {"cookie" => cookie}, body: {accept: true, consent_code: consent_code})
+    auth.api.oauth2_consent(headers: {"cookie" => cookie}, body: {accept: true, consent_code: consent_code})
 
     stored = auth.context.adapter.find_one(model: "oauthConsent", where: [{field: "referenceId", value: "pending-reference"}])
     recomputed = auth.context.adapter.find_one(model: "oauthConsent", where: [{field: "referenceId", value: "recomputed-reference"}])

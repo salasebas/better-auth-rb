@@ -8,7 +8,7 @@ class OAuthProviderMetadataTest < Minitest::Test
   def test_authorization_server_metadata_matches_upstream_endpoints_and_cache_headers
     auth = build_auth(scopes: ["openid", "profile", "email"])
 
-    response = auth.api.get_o_auth_server_config(as_response: true)
+    response = auth.api.get_oauth_server_config(as_response: true)
     body = JSON.parse(response.body.join, symbolize_names: true)
 
     assert_equal 200, response.status
@@ -23,7 +23,7 @@ class OAuthProviderMetadataTest < Minitest::Test
   def test_authorization_server_metadata_omits_registration_endpoint_when_dcr_disabled
     auth = build_auth(scopes: ["openid"], allow_dynamic_client_registration: false)
 
-    response = auth.api.get_o_auth_server_config(as_response: true)
+    response = auth.api.get_oauth_server_config(as_response: true)
     body = JSON.parse(response.body.join, symbolize_names: true)
 
     assert_equal 200, response.status
@@ -33,7 +33,7 @@ class OAuthProviderMetadataTest < Minitest::Test
   def test_openid_metadata_omits_registration_endpoint_when_dcr_disabled
     auth = build_auth(scopes: ["openid"], allow_dynamic_client_registration: false)
 
-    response = auth.api.get_open_id_config(as_response: true)
+    response = auth.api.get_openid_config(as_response: true)
     body = JSON.parse(response.body.join, symbolize_names: true)
 
     assert_equal 200, response.status
@@ -52,7 +52,7 @@ class OAuthProviderMetadataTest < Minitest::Test
       ]
     )
 
-    metadata = auth.api.get_open_id_config
+    metadata = auth.api.get_openid_config
 
     assert_equal "http://localhost:3000/api/auth/jwks", metadata[:jwks_uri]
     assert_equal ["EdDSA"], metadata[:id_token_signing_alg_values_supported]

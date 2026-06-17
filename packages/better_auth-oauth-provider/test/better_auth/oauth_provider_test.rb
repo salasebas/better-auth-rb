@@ -77,7 +77,7 @@ class BetterAuthPluginsOAuthProviderTest < Minitest::Test
 
   def test_oauth_authorization_server_metadata_excludes_none_when_unauthenticated_disabled
     auth = build_auth(scopes: ["openid", "profile", "email"])
-    metadata = auth.api.get_o_auth_server_config
+    metadata = auth.api.get_oauth_server_config
 
     refute_includes metadata[:token_endpoint_auth_methods_supported], "none"
     assert_includes metadata[:token_endpoint_auth_methods_supported], "client_secret_basic"
@@ -87,7 +87,7 @@ class BetterAuthPluginsOAuthProviderTest < Minitest::Test
   def test_oauth_authorization_server_metadata_includes_none_when_unauthenticated_enabled
     auth = build_auth(allow_unauthenticated_client_registration: true)
 
-    assert_includes auth.api.get_o_auth_server_config[:token_endpoint_auth_methods_supported], "none"
+    assert_includes auth.api.get_oauth_server_config[:token_endpoint_auth_methods_supported], "none"
   end
 
   def test_oidc_metadata_uses_jwt_plugin_alg_when_available
@@ -101,13 +101,13 @@ class BetterAuthPluginsOAuthProviderTest < Minitest::Test
       ]
     )
 
-    assert_equal ["EdDSA"], auth.api.get_open_id_config[:id_token_signing_alg_values_supported]
+    assert_equal ["EdDSA"], auth.api.get_openid_config[:id_token_signing_alg_values_supported]
   end
 
   def test_oidc_metadata_advertises_prompt_none
     auth = build_auth(scopes: ["openid"])
 
-    assert_includes auth.api.get_open_id_config[:prompt_values_supported], "none"
+    assert_includes auth.api.get_openid_config[:prompt_values_supported], "none"
   end
 
   def test_access_token_schema_matches_upstream_canonical_columns
@@ -162,13 +162,13 @@ class BetterAuthPluginsOAuthProviderTest < Minitest::Test
     auth = build_auth
     cookie = sign_up_cookie(auth)
 
-    metadata = auth.api.get_o_auth_server_config
+    metadata = auth.api.get_oauth_server_config
     assert_equal "http://localhost:3000", metadata[:issuer]
     assert_equal "http://localhost:3000/api/auth/oauth2/introspect", metadata[:introspection_endpoint]
     assert_equal "http://localhost:3000/api/auth/oauth2/revoke", metadata[:revocation_endpoint]
     assert_includes metadata[:grant_types_supported], "client_credentials"
 
-    client = auth.api.register_o_auth_client(
+    client = auth.api.register_oauth_client(
       headers: {"cookie" => cookie},
       body: {
         redirect_uris: ["https://resource.example/callback"],
@@ -182,11 +182,11 @@ class BetterAuthPluginsOAuthProviderTest < Minitest::Test
     assert client[:client_id]
     assert client[:client_secret]
 
-    public_client = auth.api.get_o_auth_client_public(query: {client_id: client[:client_id]})
+    public_client = auth.api.get_oauth_client_public(query: {client_id: client[:client_id]})
     assert_equal "Machine Client", public_client[:client_name]
     assert_nil public_client[:client_secret]
 
-    tokens = auth.api.o_auth2_token(
+    tokens = auth.api.oauth2_token(
       body: {
         grant_type: "client_credentials",
         client_id: client[:client_id],
@@ -198,7 +198,7 @@ class BetterAuthPluginsOAuthProviderTest < Minitest::Test
     assert tokens[:access_token]
     assert_equal "read", tokens[:scope]
 
-    active = auth.api.o_auth2_introspect(
+    active = auth.api.oauth2_introspect(
       body: {
         token: tokens[:access_token],
         token_type_hint: "access_token",
@@ -210,7 +210,7 @@ class BetterAuthPluginsOAuthProviderTest < Minitest::Test
     assert_equal client[:client_id], active[:client_id]
     assert_equal "read", active[:scope]
 
-    revoke = auth.api.o_auth2_revoke(
+    revoke = auth.api.oauth2_revoke(
       body: {
         token: tokens[:access_token],
         token_type_hint: "access_token",
@@ -220,7 +220,7 @@ class BetterAuthPluginsOAuthProviderTest < Minitest::Test
     )
     assert_equal({revoked: true}, revoke)
 
-    inactive = auth.api.o_auth2_introspect(
+    inactive = auth.api.oauth2_introspect(
       body: {
         token: tokens[:access_token],
         token_type_hint: "access_token",
@@ -236,7 +236,7 @@ class BetterAuthPluginsOAuthProviderTest < Minitest::Test
     cookie = sign_up_cookie(auth)
 
     error = assert_raises(BetterAuth::APIError) do
-      auth.api.register_o_auth_client(
+      auth.api.register_oauth_client(
         headers: {"cookie" => cookie},
         body: {
           redirect_uris: ["https://resource.example/callback"],
@@ -258,7 +258,7 @@ class BetterAuthPluginsOAuthProviderTest < Minitest::Test
       store_client_secret: "hashed"
     )
 
-    status, headers, body = auth.api.register_o_auth_client(
+    status, headers, body = auth.api.register_oauth_client(
       body: {
         client_id: "attacker-controlled-id",
         client_secret: "attacker-controlled-secret",
@@ -295,7 +295,7 @@ class BetterAuthPluginsOAuthProviderTest < Minitest::Test
   def test_dynamic_registration_omitted_scope_uses_provider_scopes
     auth = build_auth(scopes: ["openid", "profile"], allow_unauthenticated_client_registration: true)
 
-    client = auth.api.register_o_auth_client(
+    client = auth.api.register_oauth_client(
       body: {
         redirect_uris: ["https://resource.example/callback"],
         token_endpoint_auth_method: "none",
@@ -311,7 +311,7 @@ class BetterAuthPluginsOAuthProviderTest < Minitest::Test
   def test_dynamic_registration_defaults_require_pkce_to_true
     auth = build_auth(allow_unauthenticated_client_registration: true)
 
-    client = auth.api.register_o_auth_client(
+    client = auth.api.register_oauth_client(
       body: {
         redirect_uris: ["https://resource.example/callback"],
         token_endpoint_auth_method: "none",
@@ -327,7 +327,7 @@ class BetterAuthPluginsOAuthProviderTest < Minitest::Test
     auth = build_auth(allow_unauthenticated_client_registration: true)
 
     error = assert_raises(BetterAuth::APIError) do
-      auth.api.register_o_auth_client(
+      auth.api.register_oauth_client(
         body: {
           redirect_uris: ["https://resource.example/callback"],
           token_endpoint_auth_method: "none",
@@ -346,7 +346,7 @@ class BetterAuthPluginsOAuthProviderTest < Minitest::Test
     auth = build_auth(allow_unauthenticated_client_registration: true)
 
     error = assert_raises(BetterAuth::APIError) do
-      auth.api.register_o_auth_client(
+      auth.api.register_oauth_client(
         body: {
           redirect_uris: ["https://resource.example/callback"],
           token_endpoint_auth_method: "none",
@@ -364,7 +364,7 @@ class BetterAuthPluginsOAuthProviderTest < Minitest::Test
     auth = build_auth(allow_unauthenticated_client_registration: true)
 
     error = assert_raises(BetterAuth::APIError) do
-      auth.api.register_o_auth_client(
+      auth.api.register_oauth_client(
         body: {
           redirect_uris: ["https://resource.example/callback"],
           token_endpoint_auth_method: "private_key_jwt",
@@ -381,7 +381,7 @@ class BetterAuthPluginsOAuthProviderTest < Minitest::Test
   def test_authorization_code_flow_requires_and_records_consent
     auth = build_auth(consent_page: "/consent")
     cookie = sign_up_cookie(auth)
-    client = auth.api.register_o_auth_client(
+    client = auth.api.register_oauth_client(
       headers: {"cookie" => cookie},
       body: {
         redirect_uris: ["https://resource.example/callback"],
@@ -393,7 +393,7 @@ class BetterAuthPluginsOAuthProviderTest < Minitest::Test
       }
     )
 
-    status, headers, = auth.api.o_auth2_authorize(
+    status, headers, = auth.api.oauth2_authorize(
       headers: {"cookie" => cookie},
       query: {
         response_type: "code",
@@ -412,7 +412,7 @@ class BetterAuthPluginsOAuthProviderTest < Minitest::Test
     assert_equal "/consent", consent_redirect.path
     consent_code = Rack::Utils.parse_query(consent_redirect.query).fetch("consent_code")
 
-    consent = auth.api.o_auth2_consent(
+    consent = auth.api.oauth2_consent(
       headers: {"cookie" => cookie},
       body: {accept: true, consent_code: consent_code}
     )
@@ -422,7 +422,7 @@ class BetterAuthPluginsOAuthProviderTest < Minitest::Test
     assert_equal "http://localhost:3000", params.fetch("iss")
     assert params.fetch("code")
 
-    tokens = auth.api.o_auth2_token(
+    tokens = auth.api.oauth2_token(
       body: {
         grant_type: "authorization_code",
         code: params.fetch("code"),
@@ -443,7 +443,7 @@ class BetterAuthPluginsOAuthProviderTest < Minitest::Test
   def test_consent_can_grant_narrower_scope_set
     auth = build_auth(scopes: ["read", "write"])
     cookie = sign_up_cookie(auth)
-    client = auth.api.register_o_auth_client(
+    client = auth.api.register_oauth_client(
       headers: {"cookie" => cookie},
       body: {
         redirect_uris: ["https://resource.example/callback"],
@@ -455,7 +455,7 @@ class BetterAuthPluginsOAuthProviderTest < Minitest::Test
       }
     )
 
-    status, headers, = auth.api.o_auth2_authorize(
+    status, headers, = auth.api.oauth2_authorize(
       headers: {"cookie" => cookie},
       query: {
         response_type: "code",
@@ -472,12 +472,12 @@ class BetterAuthPluginsOAuthProviderTest < Minitest::Test
     assert_equal 302, status
     consent_code = Rack::Utils.parse_query(URI.parse(headers.fetch("location")).query).fetch("consent_code")
 
-    consent = auth.api.o_auth2_consent(
+    consent = auth.api.oauth2_consent(
       headers: {"cookie" => cookie},
       body: {accept: true, consent_code: consent_code, scope: "read"}
     )
     code = Rack::Utils.parse_query(URI.parse(consent.fetch(:redirectURI)).query).fetch("code")
-    tokens = auth.api.o_auth2_token(
+    tokens = auth.api.oauth2_token(
       body: {
         grant_type: "authorization_code",
         code: code,
@@ -489,14 +489,14 @@ class BetterAuthPluginsOAuthProviderTest < Minitest::Test
     )
 
     assert_equal "read", tokens[:scope]
-    saved = auth.api.get_o_auth_consent(headers: {"cookie" => cookie}, query: {client_id: client[:client_id]})
+    saved = auth.api.get_oauth_consent(headers: {"cookie" => cookie}, query: {client_id: client[:client_id]})
     assert_equal ["read"], saved[:scopes]
   end
 
   def test_continue_created_reenters_authorize_from_signed_oauth_query
     auth = build_auth(signup: {page: "/signup"}, consent_page: "/consent")
     cookie = sign_up_cookie(auth)
-    client = auth.api.register_o_auth_client(
+    client = auth.api.register_oauth_client(
       headers: {"cookie" => cookie},
       body: {
         redirect_uris: ["https://resource.example/callback"],
@@ -508,7 +508,7 @@ class BetterAuthPluginsOAuthProviderTest < Minitest::Test
       }
     )
 
-    status, headers, = auth.api.o_auth2_authorize(
+    status, headers, = auth.api.oauth2_authorize(
       query: {
         response_type: "code",
         client_id: client[:client_id],
@@ -528,7 +528,7 @@ class BetterAuthPluginsOAuthProviderTest < Minitest::Test
     assert signup_params["sig"]
     assert signup_params["exp"]
 
-    continued = auth.api.o_auth2_continue(
+    continued = auth.api.oauth2_continue(
       headers: {"cookie" => cookie},
       body: {created: true, oauth_query: signup_uri.query}
     )
@@ -542,7 +542,7 @@ class BetterAuthPluginsOAuthProviderTest < Minitest::Test
   def test_continue_selected_reenters_authorize_and_issues_code
     auth = build_auth(select_account: {page: "/select-account"})
     cookie = sign_up_cookie(auth)
-    client = auth.api.create_o_auth_client(
+    client = auth.api.create_oauth_client(
       headers: {"cookie" => cookie},
       body: {
         redirect_uris: ["https://resource.example/callback"],
@@ -555,7 +555,7 @@ class BetterAuthPluginsOAuthProviderTest < Minitest::Test
       }
     )
 
-    status, headers, = auth.api.o_auth2_authorize(
+    status, headers, = auth.api.oauth2_authorize(
       headers: {"cookie" => cookie},
       query: {
         response_type: "code",
@@ -573,7 +573,7 @@ class BetterAuthPluginsOAuthProviderTest < Minitest::Test
     select_uri = URI.parse(headers.fetch("location"))
     assert_equal "/select-account", select_uri.path
 
-    continued = auth.api.o_auth2_continue(
+    continued = auth.api.oauth2_continue(
       headers: {"cookie" => cookie},
       body: {selected: true, oauth_query: select_uri.query}
     )
@@ -592,7 +592,7 @@ class BetterAuthPluginsOAuthProviderTest < Minitest::Test
       }
     )
     cookie = sign_up_cookie(auth)
-    client = auth.api.create_o_auth_client(
+    client = auth.api.create_oauth_client(
       headers: {"cookie" => cookie},
       body: {
         redirect_uris: ["https://resource.example/callback"],
@@ -605,7 +605,7 @@ class BetterAuthPluginsOAuthProviderTest < Minitest::Test
       }
     )
 
-    status, headers, = auth.api.o_auth2_authorize(
+    status, headers, = auth.api.oauth2_authorize(
       headers: {"cookie" => cookie},
       query: {
         response_type: "code",
@@ -622,7 +622,7 @@ class BetterAuthPluginsOAuthProviderTest < Minitest::Test
     post_login_uri = URI.parse(headers.fetch("location"))
     assert_equal "/post-login", post_login_uri.path
 
-    continued = auth.api.o_auth2_continue(
+    continued = auth.api.oauth2_continue(
       headers: {"cookie" => cookie},
       body: {postLogin: true, oauth_query: post_login_uri.query}
     )
@@ -636,7 +636,7 @@ class BetterAuthPluginsOAuthProviderTest < Minitest::Test
   def test_authorize_requires_pkce_by_default
     auth = build_auth
     cookie = sign_up_cookie(auth)
-    client = auth.api.register_o_auth_client(
+    client = auth.api.register_oauth_client(
       headers: {"cookie" => cookie},
       body: {
         redirect_uris: ["https://resource.example/callback"],
@@ -648,7 +648,7 @@ class BetterAuthPluginsOAuthProviderTest < Minitest::Test
       }
     )
 
-    status, headers, = auth.api.o_auth2_authorize(
+    status, headers, = auth.api.oauth2_authorize(
       headers: {"cookie" => cookie},
       query: {
         response_type: "code",
@@ -670,7 +670,7 @@ class BetterAuthPluginsOAuthProviderTest < Minitest::Test
   def test_confidential_authorize_requires_pkce_by_default
     auth = build_auth
     cookie = sign_up_cookie(auth)
-    client = auth.api.register_o_auth_client(
+    client = auth.api.register_oauth_client(
       headers: {"cookie" => cookie},
       body: {
         redirect_uris: ["https://resource.example/callback"],
@@ -682,7 +682,7 @@ class BetterAuthPluginsOAuthProviderTest < Minitest::Test
       }
     )
 
-    status, headers, = auth.api.o_auth2_authorize(
+    status, headers, = auth.api.oauth2_authorize(
       headers: {"cookie" => cookie},
       query: {
         response_type: "code",
@@ -705,7 +705,7 @@ class BetterAuthPluginsOAuthProviderTest < Minitest::Test
     cookie = sign_up_cookie(auth)
 
     error = assert_raises(BetterAuth::APIError) do
-      auth.api.register_o_auth_client(
+      auth.api.register_oauth_client(
         headers: {"cookie" => cookie},
         body: {
           redirect_uris: ["https://resource.example/callback"],
@@ -726,7 +726,7 @@ class BetterAuthPluginsOAuthProviderTest < Minitest::Test
   def test_authorize_rejects_scopes_outside_client_registration
     auth = build_auth(scopes: ["read", "write"])
     cookie = sign_up_cookie(auth)
-    client = auth.api.register_o_auth_client(
+    client = auth.api.register_oauth_client(
       headers: {"cookie" => cookie},
       body: {
         redirect_uris: ["https://resource.example/callback"],
@@ -738,7 +738,7 @@ class BetterAuthPluginsOAuthProviderTest < Minitest::Test
       }
     )
 
-    status, headers, = auth.api.o_auth2_authorize(
+    status, headers, = auth.api.oauth2_authorize(
       headers: {"cookie" => cookie},
       query: {
         response_type: "code",
@@ -760,7 +760,7 @@ class BetterAuthPluginsOAuthProviderTest < Minitest::Test
   def test_authorize_rejects_plain_pkce_challenge_method
     auth = build_auth
     cookie = sign_up_cookie(auth)
-    client = auth.api.register_o_auth_client(
+    client = auth.api.register_oauth_client(
       headers: {"cookie" => cookie},
       body: {
         redirect_uris: ["https://resource.example/callback"],
@@ -772,7 +772,7 @@ class BetterAuthPluginsOAuthProviderTest < Minitest::Test
       }
     )
 
-    status, headers, = auth.api.o_auth2_authorize(
+    status, headers, = auth.api.oauth2_authorize(
       headers: {"cookie" => cookie},
       query: {
         response_type: "code",
@@ -796,7 +796,7 @@ class BetterAuthPluginsOAuthProviderTest < Minitest::Test
     auth = build_auth(scopes: ["read"])
 
     error = assert_raises(BetterAuth::APIError) do
-      auth.api.get_open_id_config
+      auth.api.get_openid_config
     end
 
     assert_equal 404, error.status_code
@@ -812,7 +812,7 @@ class BetterAuthPluginsOAuthProviderTest < Minitest::Test
       }
     )
 
-    status, headers, body = auth.api.get_open_id_config(as_response: true)
+    status, headers, body = auth.api.get_openid_config(as_response: true)
     metadata = JSON.parse(body.join, symbolize_names: true)
 
     assert_equal 200, status
@@ -830,8 +830,8 @@ class BetterAuthPluginsOAuthProviderTest < Minitest::Test
       }
     )
 
-    metadata = auth.api.get_open_id_config
-    server_metadata = auth.api.get_o_auth_server_config
+    metadata = auth.api.get_openid_config
+    server_metadata = auth.api.get_oauth_server_config
 
     assert_equal "https://issuer.example/.well-known/jwks.json", metadata[:jwks_uri]
     assert_equal "https://issuer.example/.well-known/jwks.json", server_metadata[:jwks_uri]
@@ -840,7 +840,7 @@ class BetterAuthPluginsOAuthProviderTest < Minitest::Test
   def test_userinfo_requires_openid_scope
     auth = build_auth(scopes: ["openid", "profile", "email"])
     cookie = sign_up_cookie(auth)
-    client = auth.api.register_o_auth_client(
+    client = auth.api.register_oauth_client(
       headers: {"cookie" => cookie},
       body: {
         redirect_uris: ["https://resource.example/callback"],
@@ -855,7 +855,7 @@ class BetterAuthPluginsOAuthProviderTest < Minitest::Test
     tokens = issue_authorization_code_tokens(auth, cookie, client, scope: "profile email")
 
     error = assert_raises(BetterAuth::APIError) do
-      auth.api.o_auth2_user_info(headers: {"authorization" => "Bearer #{tokens[:access_token]}"})
+      auth.api.oauth2_user_info(headers: {"authorization" => "Bearer #{tokens[:access_token]}"})
     end
 
     assert_equal 400, error.status_code
@@ -864,7 +864,7 @@ class BetterAuthPluginsOAuthProviderTest < Minitest::Test
   def test_userinfo_returns_standard_openid_profile_and_email_claims
     auth = build_auth(scopes: ["openid", "profile", "email"])
     cookie = sign_up_cookie(auth)
-    client = auth.api.register_o_auth_client(
+    client = auth.api.register_oauth_client(
       headers: {"cookie" => cookie},
       body: {
         redirect_uris: ["https://resource.example/callback"],
@@ -876,7 +876,7 @@ class BetterAuthPluginsOAuthProviderTest < Minitest::Test
       }
     )
 
-    status, headers, = auth.api.o_auth2_authorize(
+    status, headers, = auth.api.oauth2_authorize(
       headers: {"cookie" => cookie},
       query: {
         response_type: "code",
@@ -892,12 +892,12 @@ class BetterAuthPluginsOAuthProviderTest < Minitest::Test
     )
     assert_equal 302, status
     consent_code = Rack::Utils.parse_query(URI.parse(headers.fetch("location")).query).fetch("consent_code")
-    consent = auth.api.o_auth2_consent(
+    consent = auth.api.oauth2_consent(
       headers: {"cookie" => cookie},
       body: {accept: true, consent_code: consent_code}
     )
     code = Rack::Utils.parse_query(URI.parse(consent.fetch(:redirectURI)).query).fetch("code")
-    tokens = auth.api.o_auth2_token(
+    tokens = auth.api.oauth2_token(
       body: {
         grant_type: "authorization_code",
         code: code,
@@ -908,7 +908,7 @@ class BetterAuthPluginsOAuthProviderTest < Minitest::Test
       }
     )
 
-    userinfo = auth.api.o_auth2_user_info(headers: {"authorization" => "Bearer #{tokens[:access_token]}"})
+    userinfo = auth.api.oauth2_user_info(headers: {"authorization" => "Bearer #{tokens[:access_token]}"})
 
     assert userinfo[:sub]
     assert_equal "OAuth Owner", userinfo[:name]
@@ -926,7 +926,7 @@ class BetterAuthPluginsOAuthProviderTest < Minitest::Test
       }
     )
     cookie = sign_up_cookie(auth)
-    client = auth.api.register_o_auth_client(
+    client = auth.api.register_oauth_client(
       headers: {"cookie" => cookie},
       body: {
         redirect_uris: ["https://resource.example/callback"],
@@ -943,7 +943,7 @@ class BetterAuthPluginsOAuthProviderTest < Minitest::Test
     assert tokens[:access_token].start_with?("hello_at_")
     assert tokens[:refresh_token].start_with?("hello_rt_")
 
-    access = auth.api.o_auth2_introspect(
+    access = auth.api.oauth2_introspect(
       body: {
         token: tokens[:access_token],
         token_type_hint: "access_token",
@@ -954,7 +954,7 @@ class BetterAuthPluginsOAuthProviderTest < Minitest::Test
     assert_equal true, access[:active]
     assert_equal "openid offline_access", access[:scope]
 
-    refresh = auth.api.o_auth2_introspect(
+    refresh = auth.api.oauth2_introspect(
       body: {
         token: tokens[:refresh_token],
         token_type_hint: "refresh_token",
@@ -965,7 +965,7 @@ class BetterAuthPluginsOAuthProviderTest < Minitest::Test
     assert_equal true, refresh[:active]
     assert_equal "openid offline_access", refresh[:scope]
 
-    wrong_hint = auth.api.o_auth2_introspect(
+    wrong_hint = auth.api.oauth2_introspect(
       body: {
         token: tokens[:access_token],
         token_type_hint: "refresh_token",
@@ -979,7 +979,7 @@ class BetterAuthPluginsOAuthProviderTest < Minitest::Test
   def test_refresh_token_rotation_prevents_replay_and_reduces_scopes
     auth = build_auth(scopes: ["openid", "profile", "offline_access"])
     cookie = sign_up_cookie(auth)
-    client = auth.api.register_o_auth_client(
+    client = auth.api.register_oauth_client(
       headers: {"cookie" => cookie},
       body: {
         redirect_uris: ["https://resource.example/callback"],
@@ -992,7 +992,7 @@ class BetterAuthPluginsOAuthProviderTest < Minitest::Test
     )
     tokens = issue_authorization_code_tokens(auth, cookie, client, scope: "openid profile offline_access")
 
-    refreshed = auth.api.o_auth2_token(
+    refreshed = auth.api.oauth2_token(
       body: {
         grant_type: "refresh_token",
         refresh_token: tokens[:refresh_token],
@@ -1005,7 +1005,7 @@ class BetterAuthPluginsOAuthProviderTest < Minitest::Test
     assert_equal "openid", refreshed[:scope]
 
     replay_error = assert_raises(BetterAuth::APIError) do
-      auth.api.o_auth2_token(
+      auth.api.oauth2_token(
         body: {
           grant_type: "refresh_token",
           refresh_token: tokens[:refresh_token],
@@ -1018,7 +1018,7 @@ class BetterAuthPluginsOAuthProviderTest < Minitest::Test
     assert_match(/invalid_grant/i, replay_error.message)
 
     cascade_error = assert_raises(BetterAuth::APIError) do
-      auth.api.o_auth2_token(
+      auth.api.oauth2_token(
         body: {
           grant_type: "refresh_token",
           refresh_token: refreshed[:refresh_token],
@@ -1033,7 +1033,7 @@ class BetterAuthPluginsOAuthProviderTest < Minitest::Test
   def test_refresh_token_rejects_authenticated_client_mismatch
     auth = build_auth(scopes: ["openid", "offline_access"])
     cookie = sign_up_cookie(auth)
-    client_a = auth.api.register_o_auth_client(
+    client_a = auth.api.register_oauth_client(
       headers: {"cookie" => cookie},
       body: {
         redirect_uris: ["https://resource.example/callback"],
@@ -1044,7 +1044,7 @@ class BetterAuthPluginsOAuthProviderTest < Minitest::Test
         scope: "openid offline_access"
       }
     )
-    client_b = auth.api.register_o_auth_client(
+    client_b = auth.api.register_oauth_client(
       headers: {"cookie" => cookie},
       body: {
         redirect_uris: ["https://resource.example/callback"],
@@ -1058,7 +1058,7 @@ class BetterAuthPluginsOAuthProviderTest < Minitest::Test
     tokens = issue_authorization_code_tokens(auth, cookie, client_a, scope: "openid offline_access")
 
     error = assert_raises(BetterAuth::APIError) do
-      auth.api.o_auth2_token(body: refresh_grant_body(client_b, tokens[:refresh_token]))
+      auth.api.oauth2_token(body: refresh_grant_body(client_b, tokens[:refresh_token]))
     end
 
     assert_equal 400, error.status_code
@@ -1068,7 +1068,7 @@ class BetterAuthPluginsOAuthProviderTest < Minitest::Test
   def test_id_token_includes_nonce_and_preserves_auth_time_after_refresh
     auth = build_auth(scopes: ["openid", "offline_access"])
     cookie = sign_up_cookie(auth)
-    client = auth.api.register_o_auth_client(
+    client = auth.api.register_oauth_client(
       headers: {"cookie" => cookie},
       body: {
         redirect_uris: ["https://resource.example/callback"],
@@ -1086,7 +1086,7 @@ class BetterAuthPluginsOAuthProviderTest < Minitest::Test
     assert_equal "nonce-123", id_token["nonce"]
     assert_kind_of Integer, id_token["auth_time"]
 
-    refreshed = auth.api.o_auth2_token(
+    refreshed = auth.api.oauth2_token(
       body: {
         grant_type: "refresh_token",
         refresh_token: tokens[:refresh_token],
@@ -1102,7 +1102,7 @@ class BetterAuthPluginsOAuthProviderTest < Minitest::Test
   def test_id_token_is_not_signed_with_public_client_id
     auth = build_auth(scopes: ["openid"])
     cookie = sign_up_cookie(auth)
-    client = auth.api.admin_create_o_auth_client(
+    client = auth.api.admin_create_oauth_client(
       body: {
         redirect_uris: ["https://resource.example/callback"],
         token_endpoint_auth_method: "client_secret_post",
@@ -1122,7 +1122,7 @@ class BetterAuthPluginsOAuthProviderTest < Minitest::Test
   def test_token_endpoint_rejects_grants_not_registered_for_client
     auth = build_auth(allow_public_client_prelogin: true)
     cookie = sign_up_cookie(auth)
-    client = auth.api.register_o_auth_client(
+    client = auth.api.register_oauth_client(
       headers: {"cookie" => cookie},
       body: {
         redirect_uris: ["https://resource.example/callback"],
@@ -1135,7 +1135,7 @@ class BetterAuthPluginsOAuthProviderTest < Minitest::Test
     )
 
     error = assert_raises(BetterAuth::APIError) do
-      auth.api.o_auth2_token(
+      auth.api.oauth2_token(
         body: {
           grant_type: "client_credentials",
           client_id: client[:client_id],
@@ -1152,7 +1152,7 @@ class BetterAuthPluginsOAuthProviderTest < Minitest::Test
   def test_token_endpoint_validates_requested_resource_audience
     auth = build_auth(scopes: ["read"], valid_audiences: ["https://api.example"])
     cookie = sign_up_cookie(auth)
-    client = auth.api.register_o_auth_client(
+    client = auth.api.register_oauth_client(
       headers: {"cookie" => cookie},
       body: {
         redirect_uris: ["https://resource.example/callback"],
@@ -1165,7 +1165,7 @@ class BetterAuthPluginsOAuthProviderTest < Minitest::Test
     )
 
     error = assert_raises(BetterAuth::APIError) do
-      auth.api.o_auth2_token(
+      auth.api.oauth2_token(
         body: {
           grant_type: "client_credentials",
           client_id: client[:client_id],
@@ -1178,7 +1178,7 @@ class BetterAuthPluginsOAuthProviderTest < Minitest::Test
     assert_equal 400, error.status_code
     assert_match(/resource/i, error.message)
 
-    tokens = auth.api.o_auth2_token(
+    tokens = auth.api.oauth2_token(
       body: {
         grant_type: "client_credentials",
         client_id: client[:client_id],
@@ -1197,7 +1197,7 @@ class BetterAuthPluginsOAuthProviderTest < Minitest::Test
       custom_access_token_claims: ->(_info) { {tenant: "acme", aud: "https://evil.example", scope: "evil"} }
     )
     cookie = sign_up_cookie(auth)
-    client = auth.api.register_o_auth_client(
+    client = auth.api.register_oauth_client(
       headers: {"cookie" => cookie},
       body: {
         redirect_uris: ["https://resource.example/callback"],
@@ -1209,7 +1209,7 @@ class BetterAuthPluginsOAuthProviderTest < Minitest::Test
       }
     )
 
-    tokens = auth.api.o_auth2_token(
+    tokens = auth.api.oauth2_token(
       body: {
         grant_type: "client_credentials",
         client_id: client[:client_id],
@@ -1226,7 +1226,7 @@ class BetterAuthPluginsOAuthProviderTest < Minitest::Test
     assert_equal "read", payload["scope"]
     assert_equal "acme", payload["tenant"]
 
-    active = auth.api.o_auth2_introspect(
+    active = auth.api.oauth2_introspect(
       body: {
         token: tokens[:access_token],
         token_type_hint: "access_token",
@@ -1247,7 +1247,7 @@ class BetterAuthPluginsOAuthProviderTest < Minitest::Test
       custom_user_info_claims: ->(info) { {roles: ["admin"], requested: info[:scopes]} }
     )
     cookie = sign_up_cookie(auth)
-    client = auth.api.register_o_auth_client(
+    client = auth.api.register_oauth_client(
       headers: {"cookie" => cookie},
       body: {
         redirect_uris: ["https://resource.example/callback"],
@@ -1263,7 +1263,7 @@ class BetterAuthPluginsOAuthProviderTest < Minitest::Test
     assert_equal "acme", tokens[:tenant]
     assert_equal "authorization_code", tokens[:grant]
 
-    userinfo = auth.api.o_auth2_user_info(headers: {"authorization" => "Bearer #{tokens[:access_token]}"})
+    userinfo = auth.api.oauth2_user_info(headers: {"authorization" => "Bearer #{tokens[:access_token]}"})
     assert_equal ["admin"], userinfo[:roles]
     assert_equal ["openid", "profile"], userinfo[:requested]
   end
@@ -1271,7 +1271,7 @@ class BetterAuthPluginsOAuthProviderTest < Minitest::Test
   def test_pairwise_subjects_are_client_specific
     auth = build_auth(scopes: ["openid"], pairwise_secret: "pairwise-secret-with-enough-entropy-123")
     cookie = sign_up_cookie(auth)
-    client_a = auth.api.create_o_auth_client(
+    client_a = auth.api.create_oauth_client(
       headers: {"cookie" => cookie},
       body: {
         redirect_uris: ["https://a.example/callback"],
@@ -1283,7 +1283,7 @@ class BetterAuthPluginsOAuthProviderTest < Minitest::Test
         subject_type: "pairwise"
       }
     )
-    client_b = auth.api.create_o_auth_client(
+    client_b = auth.api.create_oauth_client(
       headers: {"cookie" => cookie},
       body: {
         redirect_uris: ["https://b.example/callback"],
@@ -1304,14 +1304,14 @@ class BetterAuthPluginsOAuthProviderTest < Minitest::Test
     refute_equal sub_a, sub_b
     refute_equal auth.context.adapter.find_one(model: "user", where: [{field: "email", value: "oauth-provider@example.com"}]).fetch("id"), sub_a
 
-    userinfo = auth.api.o_auth2_user_info(headers: {"authorization" => "Bearer #{tokens_a[:access_token]}"})
+    userinfo = auth.api.oauth2_user_info(headers: {"authorization" => "Bearer #{tokens_a[:access_token]}"})
     assert_equal sub_a, userinfo[:sub]
   end
 
   def test_end_session_validates_id_token_and_redirects_to_registered_logout_uri
     auth = build_auth(scopes: ["openid"])
     cookie = sign_up_cookie(auth)
-    client = auth.api.admin_create_o_auth_client(
+    client = auth.api.admin_create_oauth_client(
       body: {
         redirect_uris: ["https://resource.example/callback"],
         post_logout_redirect_uris: ["https://resource.example/logout"],
@@ -1325,7 +1325,7 @@ class BetterAuthPluginsOAuthProviderTest < Minitest::Test
     )
     tokens = issue_authorization_code_tokens(auth, cookie, client, scope: "openid")
 
-    status, headers, = auth.api.o_auth2_end_session(
+    status, headers, = auth.api.oauth2_end_session(
       query: {
         id_token_hint: tokens[:id_token],
         post_logout_redirect_uri: "https://resource.example/logout",
@@ -1343,7 +1343,7 @@ class BetterAuthPluginsOAuthProviderTest < Minitest::Test
   def test_end_session_rejects_clients_without_logout_enabled
     auth = build_auth(scopes: ["openid"])
     cookie = sign_up_cookie(auth)
-    client = auth.api.register_o_auth_client(
+    client = auth.api.register_oauth_client(
       headers: {"cookie" => cookie},
       body: {
         redirect_uris: ["https://resource.example/callback"],
@@ -1358,7 +1358,7 @@ class BetterAuthPluginsOAuthProviderTest < Minitest::Test
     tokens = issue_authorization_code_tokens(auth, cookie, client, scope: "openid")
 
     error = assert_raises(BetterAuth::APIError) do
-      auth.api.o_auth2_end_session(
+      auth.api.oauth2_end_session(
         query: {
           id_token_hint: tokens[:id_token],
           post_logout_redirect_uri: "https://resource.example/logout"
@@ -1373,7 +1373,7 @@ class BetterAuthPluginsOAuthProviderTest < Minitest::Test
     auth = build_auth(prefix: {client_secret: "rot_"})
     owner_cookie = sign_up_cookie(auth)
     other_cookie = sign_up_cookie(auth, email: "other-oauth-owner@example.com")
-    client = auth.api.register_o_auth_client(
+    client = auth.api.register_oauth_client(
       headers: {"cookie" => owner_cookie},
       body: {
         redirect_uris: ["https://resource.example/callback"],
@@ -1386,11 +1386,11 @@ class BetterAuthPluginsOAuthProviderTest < Minitest::Test
     )
 
     ownership_error = assert_raises(BetterAuth::APIError) do
-      auth.api.get_o_auth_client(headers: {"cookie" => other_cookie}, params: {id: client[:client_id]})
+      auth.api.get_oauth_client(headers: {"cookie" => other_cookie}, params: {id: client[:client_id]})
     end
     assert_equal 404, ownership_error.status_code
 
-    updated = auth.api.update_o_auth_client(
+    updated = auth.api.update_oauth_client(
       headers: {"cookie" => owner_cookie},
       body: {
         client_id: client[:client_id],
@@ -1401,7 +1401,7 @@ class BetterAuthPluginsOAuthProviderTest < Minitest::Test
     assert_nil updated[:client_secret]
     assert_equal "read write", updated[:scope]
 
-    rotated = auth.api.rotate_o_auth_client_secret(
+    rotated = auth.api.rotate_oauth_client_secret(
       headers: {"cookie" => owner_cookie},
       body: {client_id: client[:client_id]}
     )
@@ -1409,7 +1409,7 @@ class BetterAuthPluginsOAuthProviderTest < Minitest::Test
     refute_equal client[:client_secret], rotated[:client_secret]
 
     error = assert_raises(BetterAuth::APIError) do
-      auth.api.o_auth2_token(
+      auth.api.oauth2_token(
         body: {
           grant_type: "client_credentials",
           client_id: client[:client_id],
@@ -1424,9 +1424,9 @@ class BetterAuthPluginsOAuthProviderTest < Minitest::Test
   def test_oauth2_get_client_uses_query_param_like_upstream
     auth = build_auth
     cookie = sign_up_cookie(auth, email: "client-paths@example.com")
-    client = auth.api.create_o_auth_client(headers: {"cookie" => cookie}, body: {redirect_uris: ["https://example.com/cb"]})
+    client = auth.api.create_oauth_client(headers: {"cookie" => cookie}, body: {redirect_uris: ["https://example.com/cb"]})
 
-    fetched = auth.api.get_o_auth_client(headers: {"cookie" => cookie}, query: {client_id: client[:client_id]})
+    fetched = auth.api.get_oauth_client(headers: {"cookie" => cookie}, query: {client_id: client[:client_id]})
 
     assert_equal client[:client_id], fetched[:client_id]
   end
@@ -1434,17 +1434,17 @@ class BetterAuthPluginsOAuthProviderTest < Minitest::Test
   def test_oauth2_get_clients_returns_owned_clients
     auth = build_auth
     cookie = sign_up_cookie(auth, email: "list-clients@example.com")
-    auth.api.create_o_auth_client(headers: {"cookie" => cookie}, body: {redirect_uris: ["https://example.com/cb"]})
+    auth.api.create_oauth_client(headers: {"cookie" => cookie}, body: {redirect_uris: ["https://example.com/cb"]})
 
-    assert_equal 1, auth.api.get_o_auth_clients(headers: {"cookie" => cookie}).length
+    assert_equal 1, auth.api.get_oauth_clients(headers: {"cookie" => cookie}).length
   end
 
   def test_oauth2_update_client_post_with_update_envelope
     auth = build_auth
     cookie = sign_up_cookie(auth, email: "update-paths@example.com")
-    client = auth.api.create_o_auth_client(headers: {"cookie" => cookie}, body: {redirect_uris: ["https://example.com/cb"]})
+    client = auth.api.create_oauth_client(headers: {"cookie" => cookie}, body: {redirect_uris: ["https://example.com/cb"]})
 
-    updated = auth.api.update_o_auth_client(
+    updated = auth.api.update_oauth_client(
       headers: {"cookie" => cookie},
       body: {client_id: client[:client_id], update: {client_name: "renamed"}}
     )
@@ -1455,9 +1455,9 @@ class BetterAuthPluginsOAuthProviderTest < Minitest::Test
   def test_oauth2_delete_client_post_with_client_id_body
     auth = build_auth
     cookie = sign_up_cookie(auth, email: "delete-paths@example.com")
-    client = auth.api.create_o_auth_client(headers: {"cookie" => cookie}, body: {redirect_uris: ["https://example.com/cb"]})
+    client = auth.api.create_oauth_client(headers: {"cookie" => cookie}, body: {redirect_uris: ["https://example.com/cb"]})
 
-    deleted = auth.api.delete_o_auth_client(headers: {"cookie" => cookie}, body: {client_id: client[:client_id]})
+    deleted = auth.api.delete_oauth_client(headers: {"cookie" => cookie}, body: {client_id: client[:client_id]})
 
     assert_equal({deleted: true}, deleted)
   end
@@ -1465,12 +1465,12 @@ class BetterAuthPluginsOAuthProviderTest < Minitest::Test
   def test_oauth2_public_client_endpoint_returns_public_fields_only
     auth = build_auth
     cookie = sign_up_cookie(auth, email: "public-fields@example.com")
-    client = auth.api.create_o_auth_client(
+    client = auth.api.create_oauth_client(
       headers: {"cookie" => cookie},
       body: {redirect_uris: ["https://example.com/cb"], client_name: "Public Test"}
     )
 
-    body = auth.api.get_o_auth_client_public(headers: {"cookie" => cookie}, query: {client_id: client[:client_id]})
+    body = auth.api.get_oauth_client_public(headers: {"cookie" => cookie}, query: {client_id: client[:client_id]})
 
     assert_equal "Public Test", body[:client_name]
     refute body.key?(:client_secret)
@@ -1483,7 +1483,7 @@ class BetterAuthPluginsOAuthProviderTest < Minitest::Test
     status, _headers, _body = auth.handler.call(rack_env("POST", "/api/auth/admin/oauth2/create-client", body: {redirect_uris: ["https://admin.example.com/cb"]}))
     assert_equal 403, status
 
-    client = auth.api.admin_create_o_auth_client(body: {redirect_uris: ["https://admin.example.com/cb"], client_secret_expires_at: 0})
+    client = auth.api.admin_create_oauth_client(body: {redirect_uris: ["https://admin.example.com/cb"], client_secret_expires_at: 0})
     assert_equal 0, client[:client_secret_expires_at]
     assert_equal ["https://admin.example.com/cb"], client[:redirect_uris]
   end
@@ -1491,9 +1491,9 @@ class BetterAuthPluginsOAuthProviderTest < Minitest::Test
   def test_rotate_client_secret_returns_full_response_with_expires_at
     auth = build_auth(prefix: {client_secret: "rot_"})
     cookie = sign_up_cookie(auth, email: "rotate-secret@example.com")
-    client = auth.api.create_o_auth_client(headers: {"cookie" => cookie}, body: {redirect_uris: ["https://example.com/cb"]})
+    client = auth.api.create_oauth_client(headers: {"cookie" => cookie}, body: {redirect_uris: ["https://example.com/cb"]})
 
-    rotated = auth.api.rotate_o_auth_client_secret(headers: {"cookie" => cookie}, body: {client_id: client[:client_id]})
+    rotated = auth.api.rotate_oauth_client_secret(headers: {"cookie" => cookie}, body: {client_id: client[:client_id]})
 
     assert_equal client[:client_id], rotated[:client_id]
     assert rotated[:client_secret].start_with?("rot_")
@@ -1504,7 +1504,7 @@ class BetterAuthPluginsOAuthProviderTest < Minitest::Test
     auth = build_auth(allow_dynamic_client_registration: false)
     cookie = sign_up_cookie(auth)
 
-    client = auth.api.create_o_auth_client(
+    client = auth.api.create_oauth_client(
       headers: {"cookie" => cookie},
       body: {
         redirect_uris: ["https://resource.example/callback"],
@@ -1529,7 +1529,7 @@ class BetterAuthPluginsOAuthProviderTest < Minitest::Test
     cookie = sign_up_cookie(auth)
 
     create_error = assert_raises(BetterAuth::APIError) do
-      auth.api.create_o_auth_client(
+      auth.api.create_oauth_client(
         headers: {"cookie" => cookie},
         body: {
           redirect_uris: ["https://resource.example/callback"],
@@ -1545,7 +1545,7 @@ class BetterAuthPluginsOAuthProviderTest < Minitest::Test
 
     restricted_auth = build_auth(client_privileges: ->(info) { info[:action] != "rotate" })
     restricted_cookie = sign_up_cookie(restricted_auth)
-    client = restricted_auth.api.create_o_auth_client(
+    client = restricted_auth.api.create_oauth_client(
       headers: {"cookie" => restricted_cookie},
       body: {
         redirect_uris: ["https://resource.example/callback"],
@@ -1558,7 +1558,7 @@ class BetterAuthPluginsOAuthProviderTest < Minitest::Test
     )
 
     rotate_error = assert_raises(BetterAuth::APIError) do
-      restricted_auth.api.rotate_o_auth_client_secret(
+      restricted_auth.api.rotate_oauth_client_secret(
         headers: {"cookie" => restricted_cookie},
         body: {client_id: client[:client_id]}
       )
@@ -1569,7 +1569,7 @@ class BetterAuthPluginsOAuthProviderTest < Minitest::Test
   def test_public_client_prelogin_returns_only_public_client_fields
     auth = build_auth(allow_public_client_prelogin: true)
     cookie = sign_up_cookie(auth)
-    client = auth.api.register_o_auth_client(
+    client = auth.api.register_oauth_client(
       headers: {"cookie" => cookie},
       body: {
         redirect_uris: ["https://resource.example/callback"],
@@ -1592,7 +1592,7 @@ class BetterAuthPluginsOAuthProviderTest < Minitest::Test
       }
     )
 
-    public_client = auth.api.get_o_auth_client_public_prelogin(body: {client_id: client[:client_id], oauth_query: signed_query})
+    public_client = auth.api.get_oauth_client_public_prelogin(body: {client_id: client[:client_id], oauth_query: signed_query})
 
     assert_equal client[:client_id], public_client[:client_id]
     assert_equal "Public View Client", public_client[:client_name]
@@ -1605,7 +1605,7 @@ class BetterAuthPluginsOAuthProviderTest < Minitest::Test
   def test_consent_management_lists_updates_and_deletes_user_consent
     auth = build_auth(scopes: ["openid", "profile"])
     cookie = sign_up_cookie(auth)
-    client = auth.api.register_o_auth_client(
+    client = auth.api.register_oauth_client(
       headers: {"cookie" => cookie},
       body: {
         redirect_uris: ["https://resource.example/callback"],
@@ -1618,27 +1618,27 @@ class BetterAuthPluginsOAuthProviderTest < Minitest::Test
     )
     issue_authorization_code_tokens(auth, cookie, client, scope: "openid profile")
 
-    listed = auth.api.list_o_auth_consents(headers: {"cookie" => cookie})
+    listed = auth.api.get_oauth_consents(headers: {"cookie" => cookie})
     assert_equal [client[:client_id]], listed.map { |consent| consent[:client_id] }
 
-    consent = auth.api.get_o_auth_consent(headers: {"cookie" => cookie}, query: {client_id: client[:client_id]})
+    consent = auth.api.get_oauth_consent(headers: {"cookie" => cookie}, query: {client_id: client[:client_id]})
     assert_equal "openid profile", consent[:scope]
 
-    updated = auth.api.update_o_auth_consent(
+    updated = auth.api.update_oauth_consent(
       headers: {"cookie" => cookie},
       body: {client_id: client[:client_id], scopes: ["openid"]}
     )
     assert_equal "openid", updated[:scope]
 
-    deleted = auth.api.delete_o_auth_consent(headers: {"cookie" => cookie}, body: {client_id: client[:client_id]})
+    deleted = auth.api.delete_oauth_consent(headers: {"cookie" => cookie}, body: {client_id: client[:client_id]})
     assert_equal({deleted: true}, deleted)
-    assert_equal [], auth.api.list_o_auth_consents(headers: {"cookie" => cookie})
+    assert_equal [], auth.api.get_oauth_consents(headers: {"cookie" => cookie})
   end
 
   def test_get_oauth_consent_uses_id_query_param
     auth = build_auth(scopes: ["openid", "profile"])
     cookie = sign_up_cookie(auth, email: "consent-id@example.com")
-    client = auth.api.register_o_auth_client(
+    client = auth.api.register_oauth_client(
       headers: {"cookie" => cookie},
       body: {
         redirect_uris: ["https://resource.example/callback"],
@@ -1651,7 +1651,7 @@ class BetterAuthPluginsOAuthProviderTest < Minitest::Test
     issue_authorization_code_tokens(auth, cookie, client, scope: "openid profile")
     consent_id = auth.context.adapter.find_one(model: "oauthConsent", where: [{field: "clientId", value: client[:client_id]}]).fetch("id")
 
-    consent = auth.api.get_o_auth_consent(headers: {"cookie" => cookie}, query: {id: consent_id})
+    consent = auth.api.get_oauth_consent(headers: {"cookie" => cookie}, query: {id: consent_id})
 
     assert_equal client[:client_id], consent[:client_id]
   end
@@ -1660,7 +1660,7 @@ class BetterAuthPluginsOAuthProviderTest < Minitest::Test
     auth = build_auth(scopes: ["openid", "profile"])
     cookie = sign_up_cookie(auth, email: "consents-list@example.com")
     2.times do |index|
-      client = auth.api.register_o_auth_client(
+      client = auth.api.register_oauth_client(
         headers: {"cookie" => cookie},
         body: {
           redirect_uris: ["https://resource#{index}.example/callback"],
@@ -1673,13 +1673,13 @@ class BetterAuthPluginsOAuthProviderTest < Minitest::Test
       issue_authorization_code_tokens(auth, cookie, client, scope: "openid profile", redirect_uri: "https://resource#{index}.example/callback")
     end
 
-    assert_equal 2, auth.api.get_o_auth_consents(headers: {"cookie" => cookie}).length
+    assert_equal 2, auth.api.get_oauth_consents(headers: {"cookie" => cookie}).length
   end
 
   def test_update_oauth_consent_post_with_id_envelope
     auth = build_auth(scopes: ["openid", "profile", "email"])
     cookie = sign_up_cookie(auth, email: "consent-update@example.com")
-    client = auth.api.register_o_auth_client(
+    client = auth.api.register_oauth_client(
       headers: {"cookie" => cookie},
       body: {
         redirect_uris: ["https://resource.example/callback"],
@@ -1692,7 +1692,7 @@ class BetterAuthPluginsOAuthProviderTest < Minitest::Test
     issue_authorization_code_tokens(auth, cookie, client, scope: "openid profile email")
     consent_id = auth.context.adapter.find_one(model: "oauthConsent", where: [{field: "clientId", value: client[:client_id]}]).fetch("id")
 
-    updated = auth.api.update_o_auth_consent(headers: {"cookie" => cookie}, body: {id: consent_id, update: {scopes: ["openid"]}})
+    updated = auth.api.update_oauth_consent(headers: {"cookie" => cookie}, body: {id: consent_id, update: {scopes: ["openid"]}})
 
     assert_equal ["openid"], updated[:scopes]
   end
@@ -1700,7 +1700,7 @@ class BetterAuthPluginsOAuthProviderTest < Minitest::Test
   def test_delete_oauth_consent_post_with_id_body
     auth = build_auth(scopes: ["openid", "profile"])
     cookie = sign_up_cookie(auth, email: "consent-delete@example.com")
-    client = auth.api.register_o_auth_client(
+    client = auth.api.register_oauth_client(
       headers: {"cookie" => cookie},
       body: {
         redirect_uris: ["https://resource.example/callback"],
@@ -1713,7 +1713,7 @@ class BetterAuthPluginsOAuthProviderTest < Minitest::Test
     issue_authorization_code_tokens(auth, cookie, client, scope: "openid profile")
     consent_id = auth.context.adapter.find_one(model: "oauthConsent", where: [{field: "clientId", value: client[:client_id]}]).fetch("id")
 
-    deleted = auth.api.delete_o_auth_consent(headers: {"cookie" => cookie}, body: {id: consent_id})
+    deleted = auth.api.delete_oauth_consent(headers: {"cookie" => cookie}, body: {id: consent_id})
 
     assert_equal({deleted: true}, deleted)
   end
@@ -1721,9 +1721,9 @@ class BetterAuthPluginsOAuthProviderTest < Minitest::Test
   def test_pairwise_subject_uses_sector_identifier_from_redirect_uris
     auth = build_auth(scopes: ["openid"], pairwise_secret: "pairwise-secret-with-enough-entropy-123")
     cookie = sign_up_cookie(auth, email: "pairwise-sector@example.com")
-    client_a = auth.api.admin_create_o_auth_client(body: pairwise_client_body("https://app.example.com/cb"))
-    client_b = auth.api.admin_create_o_auth_client(body: pairwise_client_body("https://app.example.com/other"))
-    client_c = auth.api.admin_create_o_auth_client(body: pairwise_client_body("https://other.example.com/cb"))
+    client_a = auth.api.admin_create_oauth_client(body: pairwise_client_body("https://app.example.com/cb"))
+    client_b = auth.api.admin_create_oauth_client(body: pairwise_client_body("https://app.example.com/other"))
+    client_c = auth.api.admin_create_oauth_client(body: pairwise_client_body("https://other.example.com/cb"))
 
     sub_a = pairwise_sub_for(auth, cookie, client_a, redirect_uri: "https://app.example.com/cb")
     sub_b = pairwise_sub_for(auth, cookie, client_b, redirect_uri: "https://app.example.com/other")
@@ -1736,7 +1736,7 @@ class BetterAuthPluginsOAuthProviderTest < Minitest::Test
   def test_refresh_token_replay_revokes_descendant_access_tokens
     auth = build_auth(scopes: ["openid", "offline_access"])
     cookie = sign_up_cookie(auth, email: "refresh-replay@example.com")
-    client = auth.api.register_o_auth_client(
+    client = auth.api.register_oauth_client(
       headers: {"cookie" => cookie},
       body: {
         redirect_uris: ["https://resource.example/callback"],
@@ -1747,12 +1747,12 @@ class BetterAuthPluginsOAuthProviderTest < Minitest::Test
       }
     )
     tokens = issue_authorization_code_tokens(auth, cookie, client, scope: "openid offline_access")
-    rotated = auth.api.o_auth2_token(body: refresh_grant_body(client, tokens[:refresh_token]))
+    rotated = auth.api.oauth2_token(body: refresh_grant_body(client, tokens[:refresh_token]))
 
-    assert_raises(BetterAuth::APIError) { auth.api.o_auth2_token(body: refresh_grant_body(client, tokens[:refresh_token])) }
+    assert_raises(BetterAuth::APIError) { auth.api.oauth2_token(body: refresh_grant_body(client, tokens[:refresh_token])) }
 
-    old_access = auth.api.o_auth2_introspect(body: introspect_body(client, tokens[:access_token]))
-    new_access = auth.api.o_auth2_introspect(body: introspect_body(client, rotated[:access_token]))
+    old_access = auth.api.oauth2_introspect(body: introspect_body(client, tokens[:access_token]))
+    new_access = auth.api.oauth2_introspect(body: introspect_body(client, rotated[:access_token]))
     assert_equal false, old_access[:active]
     assert_equal false, new_access[:active]
   end
@@ -1760,7 +1760,7 @@ class BetterAuthPluginsOAuthProviderTest < Minitest::Test
   def test_authorize_prompt_none_returns_consent_required_without_prior_consent
     auth = build_auth
     cookie = sign_up_cookie(auth)
-    client = auth.api.register_o_auth_client(
+    client = auth.api.register_oauth_client(
       headers: {"cookie" => cookie},
       body: {
         redirect_uris: ["https://resource.example/callback"],
@@ -1772,7 +1772,7 @@ class BetterAuthPluginsOAuthProviderTest < Minitest::Test
       }
     )
 
-    status, headers, = auth.api.o_auth2_authorize(
+    status, headers, = auth.api.oauth2_authorize(
       headers: {"cookie" => cookie},
       query: {
         response_type: "code",
@@ -1843,7 +1843,7 @@ class BetterAuthPluginsOAuthProviderTest < Minitest::Test
   end
 
   def issue_authorization_code_tokens(auth, cookie, client, scope:, redirect_uri: "https://resource.example/callback", nonce: nil)
-    status, headers, = auth.api.o_auth2_authorize(
+    status, headers, = auth.api.oauth2_authorize(
       headers: {"cookie" => cookie},
       query: {
         response_type: "code",
@@ -1860,12 +1860,12 @@ class BetterAuthPluginsOAuthProviderTest < Minitest::Test
     )
     assert_equal 302, status
     consent_code = Rack::Utils.parse_query(URI.parse(headers.fetch("location")).query).fetch("consent_code")
-    consent = auth.api.o_auth2_consent(
+    consent = auth.api.oauth2_consent(
       headers: {"cookie" => cookie},
       body: {accept: true, consent_code: consent_code}
     )
     code = Rack::Utils.parse_query(URI.parse(consent.fetch(:redirectURI)).query).fetch("code")
-    auth.api.o_auth2_token(
+    auth.api.oauth2_token(
       body: {
         grant_type: "authorization_code",
         code: code,

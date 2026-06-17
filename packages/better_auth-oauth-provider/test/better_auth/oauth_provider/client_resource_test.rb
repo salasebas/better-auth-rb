@@ -51,7 +51,7 @@ class OAuthProviderClientResourceTest < Minitest::Test
     client = create_client(auth, cookie, grant_types: ["client_credentials"], response_types: [], scope: "read")
     audience = "http://localhost:3000"
 
-    tokens = auth.api.o_auth2_token(
+    tokens = auth.api.oauth2_token(
       body: {
         grant_type: "client_credentials",
         client_id: client[:client_id],
@@ -77,7 +77,7 @@ class OAuthProviderClientResourceTest < Minitest::Test
     cookie = sign_up_cookie(auth, email: "resource-scope@example.com")
     client = create_client(auth, cookie, grant_types: ["client_credentials"], response_types: [], scope: "read")
     audience = "http://localhost:3000"
-    tokens = auth.api.o_auth2_token(
+    tokens = auth.api.oauth2_token(
       body: {
         grant_type: "client_credentials",
         client_id: client[:client_id],

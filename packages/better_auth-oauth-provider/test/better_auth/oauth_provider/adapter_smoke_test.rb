@@ -164,15 +164,15 @@ class OAuthProviderAdapterSmokeTest < Minitest::Test
     assert tokens[:access_token]
     assert tokens[:refresh_token]
 
-    active = auth.api.o_auth2_introspect(body: introspect_body(client, tokens[:access_token]))
+    active = auth.api.oauth2_introspect(body: introspect_body(client, tokens[:access_token]))
     assert_equal true, active[:active]
     assert_equal client[:client_id], active[:client_id]
 
-    refreshed = auth.api.o_auth2_token(body: refresh_grant_body(client, tokens[:refresh_token], scope: "openid read"))
+    refreshed = auth.api.oauth2_token(body: refresh_grant_body(client, tokens[:refresh_token], scope: "openid read"))
     assert refreshed[:access_token]
     assert_equal "openid read", refreshed[:scope]
 
-    revoked = auth.api.o_auth2_revoke(body: revoke_body(client, refreshed[:access_token], hint: "access_token"))
+    revoked = auth.api.oauth2_revoke(body: revoke_body(client, refreshed[:access_token], hint: "access_token"))
     assert_equal({revoked: true}, revoked)
   end
 

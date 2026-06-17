@@ -10,11 +10,11 @@ class OAuthProviderOauthClientEndpointsTest < Minitest::Test
     cookie = sign_up_cookie(auth)
     client = create_client(auth, cookie, client_name: "Original Client")
 
-    fetched = auth.api.get_o_auth_client(headers: {"cookie" => cookie}, query: {client_id: client[:client_id]})
-    listed = auth.api.get_o_auth_clients(headers: {"cookie" => cookie})
-    updated = auth.api.update_o_auth_client(headers: {"cookie" => cookie}, body: {client_id: client[:client_id], update: {client_name: "Updated Client"}})
-    rotated = auth.api.rotate_o_auth_client_secret(headers: {"cookie" => cookie}, body: {client_id: client[:client_id]})
-    deleted = auth.api.delete_o_auth_client(headers: {"cookie" => cookie}, body: {client_id: client[:client_id]})
+    fetched = auth.api.get_oauth_client(headers: {"cookie" => cookie}, query: {client_id: client[:client_id]})
+    listed = auth.api.get_oauth_clients(headers: {"cookie" => cookie})
+    updated = auth.api.update_oauth_client(headers: {"cookie" => cookie}, body: {client_id: client[:client_id], update: {client_name: "Updated Client"}})
+    rotated = auth.api.rotate_oauth_client_secret(headers: {"cookie" => cookie}, body: {client_id: client[:client_id]})
+    deleted = auth.api.delete_oauth_client(headers: {"cookie" => cookie}, body: {client_id: client[:client_id]})
 
     assert_equal "Original Client", fetched[:client_name]
     assert_includes listed.map { |item| item[:client_id] }, client[:client_id]
@@ -30,7 +30,7 @@ class OAuthProviderOauthClientEndpointsTest < Minitest::Test
     signed_query = signed_oauth_query(auth, client)
 
     disabled = assert_raises(BetterAuth::APIError) do
-      auth.api.get_o_auth_client_public_prelogin(body: {client_id: client[:client_id], oauth_query: signed_query})
+      auth.api.get_oauth_client_public_prelogin(body: {client_id: client[:client_id], oauth_query: signed_query})
     end
     assert_equal 400, disabled.status_code
 
@@ -39,16 +39,16 @@ class OAuthProviderOauthClientEndpointsTest < Minitest::Test
     enabled_client = create_client(enabled, enabled_cookie, scope: "openid", skip_consent: true)
 
     missing = assert_raises(BetterAuth::APIError) do
-      enabled.api.get_o_auth_client_public_prelogin(body: {client_id: enabled_client[:client_id]})
+      enabled.api.get_oauth_client_public_prelogin(body: {client_id: enabled_client[:client_id]})
     end
     assert_equal 401, missing.status_code
 
     invalid = assert_raises(BetterAuth::APIError) do
-      enabled.api.get_o_auth_client_public_prelogin(body: {client_id: enabled_client[:client_id], oauth_query: "client_id=#{enabled_client[:client_id]}&sig=bad"})
+      enabled.api.get_oauth_client_public_prelogin(body: {client_id: enabled_client[:client_id], oauth_query: "client_id=#{enabled_client[:client_id]}&sig=bad"})
     end
     assert_equal 401, invalid.status_code
 
-    public_client = enabled.api.get_o_auth_client_public_prelogin(
+    public_client = enabled.api.get_oauth_client_public_prelogin(
       body: {
         client_id: enabled_client[:client_id],
         oauth_query: signed_oauth_query(enabled, enabled_client)
@@ -64,7 +64,7 @@ class OAuthProviderOauthClientEndpointsTest < Minitest::Test
     client = create_client(auth, cookie, scope: "openid")
 
     error = assert_raises(BetterAuth::APIError) do
-      auth.api.update_o_auth_client(
+      auth.api.update_oauth_client(
         headers: {"cookie" => cookie},
         body: {
           client_id: client[:client_id],
@@ -83,7 +83,7 @@ class OAuthProviderOauthClientEndpointsTest < Minitest::Test
     client = create_client(auth, cookie, scope: "openid")
 
     error = assert_raises(BetterAuth::APIError) do
-      auth.api.admin_update_o_auth_client(
+      auth.api.admin_update_oauth_client(
         body: {
           client_id: client[:client_id],
           update: {

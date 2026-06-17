@@ -25,7 +25,7 @@ class OAuthProviderTokenFormattingTest < Minitest::Test
     tokens = issue_authorization_code_tokens(auth, cookie, client, scope: "openid offline_access")
 
     assert tokens[:refresh_token].include?("enc:")
-    refreshed = auth.api.o_auth2_token(body: refresh_grant_body(client, tokens[:refresh_token], scope: "openid"))
+    refreshed = auth.api.oauth2_token(body: refresh_grant_body(client, tokens[:refresh_token], scope: "openid"))
     assert refreshed[:access_token]
   end
 
@@ -39,7 +39,7 @@ class OAuthProviderTokenFormattingTest < Minitest::Test
     tokens = issue_authorization_code_tokens(auth, cookie, client, scope: "openid offline_access")
 
     assert tokens[:refresh_token]
-    active = auth.api.o_auth2_introspect(body: introspect_body(client, tokens[:refresh_token], hint: "refresh_token"))
+    active = auth.api.oauth2_introspect(body: introspect_body(client, tokens[:refresh_token], hint: "refresh_token"))
     assert_equal true, active[:active]
   end
 
@@ -51,7 +51,7 @@ class OAuthProviderTokenFormattingTest < Minitest::Test
     cookie = sign_up_cookie(auth, email: "custom-access@example.com")
     client = create_client(auth, cookie, grant_types: ["client_credentials"], response_types: [], scope: "read")
 
-    tokens = auth.api.o_auth2_token(
+    tokens = auth.api.oauth2_token(
       body: {
         grant_type: "client_credentials",
         client_id: client[:client_id],

@@ -26,7 +26,7 @@ auth = BetterAuth.auth(
 Dynamic registration is disabled by default. Enable it explicitly and call it with an authenticated session unless unauthenticated registration is also enabled.
 
 ```ruby
-client = auth.api.register_o_auth_client(
+client = auth.api.register_oauth_client(
   headers: {"cookie" => session_cookie},
   body: {
     client_name: "Example Client",
@@ -44,7 +44,7 @@ client = auth.api.register_o_auth_client(
 Authorization code clients use S256 PKCE by default.
 
 ```ruby
-tokens = auth.api.o_auth2_token(
+tokens = auth.api.oauth2_token(
   body: {
     grant_type: "authorization_code",
     code: params[:code],
@@ -63,31 +63,31 @@ By default, valid JWT access-token audiences are the provider issuer URL and, wh
 
 | Method | Path | Ruby API method |
 | --- | --- | --- |
-| `GET` | `/.well-known/oauth-authorization-server` | `auth.api.get_o_auth_server_config` |
-| `GET` | `/.well-known/openid-configuration` | `auth.api.get_open_id_config` |
-| `POST` | `/oauth2/register` | `auth.api.register_o_auth_client` |
-| `POST` | `/oauth2/create-client` | `auth.api.create_o_auth_client` |
-| `POST` | `/admin/oauth2/create-client` | `auth.api.admin_create_o_auth_client` |
-| `PATCH` | `/admin/oauth2/update-client` | `auth.api.admin_update_o_auth_client` |
-| `GET` | `/oauth2/get-client?client_id=...` | `auth.api.get_o_auth_client` |
-| `GET` | `/oauth2/get-clients` | `auth.api.get_o_auth_clients` |
-| `POST` | `/oauth2/update-client` | `auth.api.update_o_auth_client` |
-| `POST` | `/oauth2/delete-client` | `auth.api.delete_o_auth_client` |
-| `GET` | `/oauth2/public-client?client_id=...` | `auth.api.get_o_auth_client_public` |
-| `POST` | `/oauth2/public-client-prelogin` | `auth.api.get_o_auth_client_public_prelogin` |
-| `POST` | `/oauth2/client/rotate-secret` | `auth.api.rotate_o_auth_client_secret` |
-| `GET` | `/oauth2/authorize` | `auth.api.o_auth2_authorize` |
-| `POST` | `/oauth2/continue` | `auth.api.o_auth2_continue` |
-| `POST` | `/oauth2/consent` | `auth.api.o_auth2_consent` |
-| `GET` | `/oauth2/get-consent?id=...` | `auth.api.get_o_auth_consent` |
-| `GET` | `/oauth2/get-consents` | `auth.api.get_o_auth_consents` |
-| `POST` | `/oauth2/update-consent` | `auth.api.update_o_auth_consent` |
-| `POST` | `/oauth2/delete-consent` | `auth.api.delete_o_auth_consent` |
-| `POST` | `/oauth2/token` | `auth.api.o_auth2_token` |
-| `POST` | `/oauth2/introspect` | `auth.api.o_auth2_introspect` |
-| `POST` | `/oauth2/revoke` | `auth.api.o_auth2_revoke` |
-| `GET` | `/oauth2/userinfo` | `auth.api.o_auth2_user_info` |
-| `GET`, `POST` | `/oauth2/end-session` | `auth.api.o_auth2_end_session` |
+| `GET` | `/.well-known/oauth-authorization-server` | `auth.api.get_oauth_server_config` |
+| `GET` | `/.well-known/openid-configuration` | `auth.api.get_openid_config` |
+| `POST` | `/oauth2/register` | `auth.api.register_oauth_client` |
+| `POST` | `/oauth2/create-client` | `auth.api.create_oauth_client` |
+| `POST` | `/admin/oauth2/create-client` | `auth.api.admin_create_oauth_client` |
+| `PATCH` | `/admin/oauth2/update-client` | `auth.api.admin_update_oauth_client` |
+| `GET` | `/oauth2/get-client?client_id=...` | `auth.api.get_oauth_client` |
+| `GET` | `/oauth2/get-clients` | `auth.api.get_oauth_clients` |
+| `POST` | `/oauth2/update-client` | `auth.api.update_oauth_client` |
+| `POST` | `/oauth2/delete-client` | `auth.api.delete_oauth_client` |
+| `GET` | `/oauth2/public-client?client_id=...` | `auth.api.get_oauth_client_public` |
+| `POST` | `/oauth2/public-client-prelogin` | `auth.api.get_oauth_client_public_prelogin` |
+| `POST` | `/oauth2/client/rotate-secret` | `auth.api.rotate_oauth_client_secret` |
+| `GET` | `/oauth2/authorize` | `auth.api.oauth2_authorize` |
+| `POST` | `/oauth2/continue` | `auth.api.oauth2_continue` |
+| `POST` | `/oauth2/consent` | `auth.api.oauth2_consent` |
+| `GET` | `/oauth2/get-consent?id=...` | `auth.api.get_oauth_consent` |
+| `GET` | `/oauth2/get-consents` | `auth.api.get_oauth_consents` |
+| `POST` | `/oauth2/update-consent` | `auth.api.update_oauth_consent` |
+| `POST` | `/oauth2/delete-consent` | `auth.api.delete_oauth_consent` |
+| `POST` | `/oauth2/token` | `auth.api.oauth2_token` |
+| `POST` | `/oauth2/introspect` | `auth.api.oauth2_introspect` |
+| `POST` | `/oauth2/revoke` | `auth.api.oauth2_revoke` |
+| `GET` | `/oauth2/userinfo` | `auth.api.oauth2_user_info` |
+| `GET`, `POST` | `/oauth2/end-session` | `auth.api.oauth2_end_session` |
 
 Deprecated aliases remain for one minor release: `GET /oauth2/client/:id` -> `/oauth2/get-client`, `GET /oauth2/clients` -> `/oauth2/get-clients`, `PATCH /oauth2/client` -> `/oauth2/update-client`, `DELETE /oauth2/client` -> `/oauth2/delete-client`, `GET /oauth2/client` -> `/oauth2/public-client`, and `GET/PATCH/DELETE /oauth2/consent` plus `GET /oauth2/consents` -> the `get/update/delete/get-consents` consent routes.
 

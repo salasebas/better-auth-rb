@@ -70,7 +70,7 @@ module OAuthProviderFlowHelpers
   end
 
   def create_client(auth, cookie, overrides = {})
-    auth.api.create_o_auth_client(
+    auth.api.create_oauth_client(
       headers: {"cookie" => cookie},
       body: {
         redirect_uris: ["https://resource.example/callback"],
@@ -85,7 +85,7 @@ module OAuthProviderFlowHelpers
 
   def register_client(auth, cookie = nil, overrides = {})
     headers = cookie ? {"cookie" => cookie} : {}
-    auth.api.register_o_auth_client(
+    auth.api.register_oauth_client(
       headers: headers,
       body: {
         redirect_uris: ["https://resource.example/callback"],
@@ -111,7 +111,7 @@ module OAuthProviderFlowHelpers
       query[:code_challenge_method] = "S256"
     end
     query[:prompt] = prompt if prompt
-    auth.api.o_auth2_authorize(headers: {"cookie" => cookie}, query: query, as_response: true)
+    auth.api.oauth2_authorize(headers: {"cookie" => cookie}, query: query, as_response: true)
   end
 
   def extract_redirect_params(headers)
@@ -133,7 +133,7 @@ module OAuthProviderFlowHelpers
     assert_equal 302, status
     params = Rack::Utils.parse_query(URI.parse(headers.fetch("location")).query)
     if params["code"]
-      return auth.api.o_auth2_token(
+      return auth.api.oauth2_token(
         body: {
           grant_type: "authorization_code",
           code: params.fetch("code"),
@@ -149,7 +149,7 @@ module OAuthProviderFlowHelpers
     flunk("expected authorize redirect to include code or consent_code, got #{params.inspect}") unless params["consent_code"]
 
     consent_code = params.fetch("consent_code")
-    consent = auth.api.o_auth2_consent(
+    consent = auth.api.oauth2_consent(
       headers: {"cookie" => cookie},
       body: {accept: true, consent_code: consent_code}
     )
@@ -163,7 +163,7 @@ module OAuthProviderFlowHelpers
       code_verifier: verifier
     }
     token_body[:resource] = resource if resource
-    auth.api.o_auth2_token(body: token_body)
+    auth.api.oauth2_token(body: token_body)
   end
 
   def authorization_code_for(auth, cookie, client, scope:, redirect_uri: "https://resource.example/callback", verifier: pkce_verifier, prompt: nil)
@@ -174,7 +174,7 @@ module OAuthProviderFlowHelpers
 
     flunk("expected authorize redirect to include code or consent_code, got #{params.inspect}") unless params["consent_code"]
 
-    consent = auth.api.o_auth2_consent(headers: {"cookie" => cookie}, body: {accept: true, consent_code: params.fetch("consent_code")})
+    consent = auth.api.oauth2_consent(headers: {"cookie" => cookie}, body: {accept: true, consent_code: params.fetch("consent_code")})
     Rack::Utils.parse_query(URI.parse(consent.fetch(:redirectURI)).query).fetch("code")
   end
 

@@ -12,7 +12,7 @@ class OAuthProviderEndpointPairwiseTest < Minitest::Test
     client = create_client(auth, cookie, scope: "openid profile offline_access", skip_consent: true)
     tokens = issue_authorization_code_tokens(auth, cookie, client, scope: "openid profile offline_access")
 
-    active = auth.api.o_auth2_introspect(body: introspect_body(client, tokens[:access_token]))
+    active = auth.api.oauth2_introspect(body: introspect_body(client, tokens[:access_token]))
 
     assert_equal true, active[:active]
     assert_equal client[:client_id], active[:client_id]
@@ -27,7 +27,7 @@ class OAuthProviderEndpointPairwiseTest < Minitest::Test
     auth = build_auth(scopes: ["read"])
 
     error = assert_raises(BetterAuth::APIError) do
-      auth.api.o_auth2_introspect(body: {token: "missing"})
+      auth.api.oauth2_introspect(body: {token: "missing"})
     end
 
     assert_equal 401, error.status_code
@@ -41,9 +41,9 @@ class OAuthProviderEndpointPairwiseTest < Minitest::Test
     opaque = issue_authorization_code_tokens(auth, cookie, client, scope: "openid offline_access")
     jwt = issue_authorization_code_tokens(auth, cookie, client, scope: "openid offline_access read", resource: "https://api.example")
 
-    access_active = auth.api.o_auth2_introspect(body: introspect_body(client, opaque[:access_token], hint: nil))
-    refresh_active = auth.api.o_auth2_introspect(body: introspect_body(client, opaque[:refresh_token], hint: nil))
-    jwt_active = auth.api.o_auth2_introspect(body: introspect_body(client, jwt[:access_token], hint: nil))
+    access_active = auth.api.oauth2_introspect(body: introspect_body(client, opaque[:access_token], hint: nil))
+    refresh_active = auth.api.oauth2_introspect(body: introspect_body(client, opaque[:refresh_token], hint: nil))
+    jwt_active = auth.api.oauth2_introspect(body: introspect_body(client, jwt[:access_token], hint: nil))
 
     assert_equal true, access_active[:active]
     assert_equal "openid offline_access", access_active[:scope]
@@ -64,9 +64,9 @@ class OAuthProviderEndpointPairwiseTest < Minitest::Test
 
     auth.context.adapter.delete(model: "session", where: [{field: "userId", value: user.fetch("id")}])
 
-    assert_equal true, auth.api.o_auth2_introspect(body: introspect_body(client, opaque[:access_token], hint: nil))[:active]
-    assert_equal true, auth.api.o_auth2_introspect(body: introspect_body(client, opaque[:refresh_token], hint: nil))[:active]
-    assert_equal true, auth.api.o_auth2_introspect(body: introspect_body(client, jwt[:access_token], hint: nil))[:active]
+    assert_equal true, auth.api.oauth2_introspect(body: introspect_body(client, opaque[:access_token], hint: nil))[:active]
+    assert_equal true, auth.api.oauth2_introspect(body: introspect_body(client, opaque[:refresh_token], hint: nil))[:active]
+    assert_equal true, auth.api.oauth2_introspect(body: introspect_body(client, jwt[:access_token], hint: nil))[:active]
   end
 
   def test_revocation_rejects_token_type_hint_mismatches
@@ -76,12 +76,12 @@ class OAuthProviderEndpointPairwiseTest < Minitest::Test
     tokens = issue_authorization_code_tokens(auth, cookie, client, scope: "openid offline_access")
 
     access_hint = assert_raises(BetterAuth::APIError) do
-      auth.api.o_auth2_revoke(body: revoke_body(client, tokens[:refresh_token], hint: "access_token"))
+      auth.api.oauth2_revoke(body: revoke_body(client, tokens[:refresh_token], hint: "access_token"))
     end
     assert_equal 400, access_hint.status_code
 
     refresh_hint = assert_raises(BetterAuth::APIError) do
-      auth.api.o_auth2_revoke(body: revoke_body(client, tokens[:access_token], hint: "refresh_token"))
+      auth.api.oauth2_revoke(body: revoke_body(client, tokens[:access_token], hint: "refresh_token"))
     end
     assert_equal 400, refresh_hint.status_code
   end
@@ -90,7 +90,7 @@ class OAuthProviderEndpointPairwiseTest < Minitest::Test
     auth = build_auth(scopes: ["read"])
 
     error = assert_raises(BetterAuth::APIError) do
-      auth.api.o_auth2_revoke(body: {token: "missing"})
+      auth.api.oauth2_revoke(body: {token: "missing"})
     end
 
     assert_equal 401, error.status_code
@@ -104,12 +104,12 @@ class OAuthProviderEndpointPairwiseTest < Minitest::Test
     access_tokens = issue_authorization_code_tokens(auth, cookie, client, scope: "openid offline_access")
     refresh_tokens = issue_authorization_code_tokens(auth, cookie, client, scope: "openid offline_access")
 
-    assert_equal({revoked: true}, auth.api.o_auth2_revoke(body: revoke_body(client, access_tokens[:access_token], hint: nil)))
-    inactive_access = auth.api.o_auth2_introspect(body: introspect_body(client, access_tokens[:access_token], hint: nil))
+    assert_equal({revoked: true}, auth.api.oauth2_revoke(body: revoke_body(client, access_tokens[:access_token], hint: nil)))
+    inactive_access = auth.api.oauth2_introspect(body: introspect_body(client, access_tokens[:access_token], hint: nil))
     assert_equal false, inactive_access[:active]
 
-    assert_equal({revoked: true}, auth.api.o_auth2_revoke(body: revoke_body(client, refresh_tokens[:refresh_token], hint: nil)))
-    inactive_refresh = auth.api.o_auth2_introspect(body: introspect_body(client, refresh_tokens[:refresh_token], hint: nil))
+    assert_equal({revoked: true}, auth.api.oauth2_revoke(body: revoke_body(client, refresh_tokens[:refresh_token], hint: nil)))
+    inactive_refresh = auth.api.oauth2_introspect(body: introspect_body(client, refresh_tokens[:refresh_token], hint: nil))
     assert_equal false, inactive_refresh[:active]
   end
 
@@ -120,8 +120,8 @@ class OAuthProviderEndpointPairwiseTest < Minitest::Test
     hinted = issue_authorization_code_tokens(auth, cookie, client, scope: "openid read", resource: "https://api.example")
     unhinted = issue_authorization_code_tokens(auth, cookie, client, scope: "openid read", resource: "https://api.example")
 
-    assert_equal({revoked: true}, auth.api.o_auth2_revoke(body: revoke_body(client, hinted[:access_token], hint: "access_token")))
-    assert_equal({revoked: true}, auth.api.o_auth2_revoke(body: revoke_body(client, unhinted[:access_token], hint: nil)))
+    assert_equal({revoked: true}, auth.api.oauth2_revoke(body: revoke_body(client, hinted[:access_token], hint: "access_token")))
+    assert_equal({revoked: true}, auth.api.oauth2_revoke(body: revoke_body(client, unhinted[:access_token], hint: nil)))
   end
 
   def test_userinfo_supports_jwt_resource_access_token_when_openid_scope_present
@@ -130,7 +130,7 @@ class OAuthProviderEndpointPairwiseTest < Minitest::Test
     client = create_client(auth, cookie, scope: "openid profile", skip_consent: true)
     tokens = issue_authorization_code_tokens(auth, cookie, client, scope: "openid profile", resource: "https://api.example")
 
-    userinfo = auth.api.o_auth2_user_info(headers: {"authorization" => "Bearer #{tokens[:access_token]}"})
+    userinfo = auth.api.oauth2_user_info(headers: {"authorization" => "Bearer #{tokens[:access_token]}"})
 
     assert userinfo[:sub]
     assert_equal "OAuth Owner", userinfo[:name]
@@ -142,12 +142,12 @@ class OAuthProviderEndpointPairwiseTest < Minitest::Test
     client = create_client(auth, cookie, scope: "openid", enable_end_session: true, skip_consent: true)
 
     invalid = assert_raises(BetterAuth::APIError) do
-      auth.api.o_auth2_end_session(query: {id_token_hint: "not-a-jwt"})
+      auth.api.oauth2_end_session(query: {id_token_hint: "not-a-jwt"})
     end
     assert_equal 401, invalid.status_code
 
     tokens = issue_authorization_code_tokens(auth, cookie, client, scope: "openid")
-    assert_equal({status: true}, auth.api.o_auth2_end_session(query: {id_token_hint: tokens[:id_token]}))
+    assert_equal({status: true}, auth.api.oauth2_end_session(query: {id_token_hint: tokens[:id_token]}))
   end
 
   def test_dynamic_registration_cannot_enable_end_session
@@ -173,7 +173,7 @@ class OAuthProviderEndpointPairwiseTest < Minitest::Test
     without_secret = build_auth(scopes: ["openid"])
 
     no_secret = assert_raises(BetterAuth::APIError) do
-      without_secret.api.admin_create_o_auth_client(body: pairwise_client_body("https://app.example.com/cb"))
+      without_secret.api.admin_create_oauth_client(body: pairwise_client_body("https://app.example.com/cb"))
     end
     assert_equal 400, no_secret.status_code
 
@@ -182,11 +182,11 @@ class OAuthProviderEndpointPairwiseTest < Minitest::Test
     mixed_hosts = pairwise_client_body("https://app.example.com/cb").merge(redirect_uris: ["https://app.example.com/cb", "https://other.example.com/cb"])
 
     mixed = assert_raises(BetterAuth::APIError) do
-      with_secret.api.admin_create_o_auth_client(body: mixed_hosts)
+      with_secret.api.admin_create_oauth_client(body: mixed_hosts)
     end
     assert_equal 400, mixed.status_code
 
-    client = with_secret.api.admin_create_o_auth_client(body: pairwise_client_body("https://app.example.com/cb"))
+    client = with_secret.api.admin_create_oauth_client(body: pairwise_client_body("https://app.example.com/cb"))
     tokens = issue_authorization_code_tokens(with_secret, secret_cookie, client, scope: "openid", redirect_uri: "https://app.example.com/cb")
     payload = decode_id_token(tokens[:id_token], client)
 
@@ -196,8 +196,8 @@ class OAuthProviderEndpointPairwiseTest < Minitest::Test
   def test_pairwise_subject_is_same_for_clients_on_same_sector_host
     auth = build_auth(scopes: ["openid"], pairwise_secret: "pairwise-secret-with-enough-entropy-123")
     cookie = sign_up_cookie(auth)
-    client_a = auth.api.admin_create_o_auth_client(body: pairwise_client_body("https://sector.example.com/a/callback"))
-    client_b = auth.api.admin_create_o_auth_client(body: pairwise_client_body("https://sector.example.com/b/callback"))
+    client_a = auth.api.admin_create_oauth_client(body: pairwise_client_body("https://sector.example.com/a/callback"))
+    client_b = auth.api.admin_create_oauth_client(body: pairwise_client_body("https://sector.example.com/b/callback"))
 
     tokens_a = issue_authorization_code_tokens(auth, cookie, client_a, scope: "openid", redirect_uri: "https://sector.example.com/a/callback")
     tokens_b = issue_authorization_code_tokens(auth, cookie, client_b, scope: "openid", redirect_uri: "https://sector.example.com/b/callback")
@@ -210,7 +210,7 @@ class OAuthProviderEndpointPairwiseTest < Minitest::Test
   def test_pairwise_subject_is_preserved_after_refresh
     auth = build_auth(scopes: ["openid", "offline_access"], pairwise_secret: "pairwise-secret-with-enough-entropy-123")
     cookie = sign_up_cookie(auth)
-    client = auth.api.admin_create_o_auth_client(
+    client = auth.api.admin_create_oauth_client(
       body: pairwise_client_body("https://app.example.com/cb").merge(
         grant_types: ["authorization_code", "refresh_token"],
         scope: "openid offline_access"
@@ -218,7 +218,7 @@ class OAuthProviderEndpointPairwiseTest < Minitest::Test
     )
 
     tokens = issue_authorization_code_tokens(auth, cookie, client, scope: "openid offline_access", redirect_uri: "https://app.example.com/cb")
-    refreshed = auth.api.o_auth2_token(body: refresh_grant_body(client, tokens[:refresh_token]))
+    refreshed = auth.api.oauth2_token(body: refresh_grant_body(client, tokens[:refresh_token]))
     original_sub = decode_id_token(tokens[:id_token], client).fetch("sub")
     refreshed_sub = decode_id_token(refreshed[:id_token], client).fetch("sub")
 
@@ -232,7 +232,7 @@ class OAuthProviderEndpointPairwiseTest < Minitest::Test
       pairwise_secret: "pairwise-secret-with-enough-entropy-123"
     )
     cookie = sign_up_cookie(auth)
-    client = auth.api.admin_create_o_auth_client(body: pairwise_client_body("https://app.example.com/cb").merge(scope: "openid read"))
+    client = auth.api.admin_create_oauth_client(body: pairwise_client_body("https://app.example.com/cb").merge(scope: "openid read"))
 
     tokens = issue_authorization_code_tokens(auth, cookie, client, scope: "openid read", redirect_uri: "https://app.example.com/cb", resource: "https://api.example")
     id_payload = decode_id_token(tokens[:id_token], client)
@@ -249,8 +249,8 @@ class OAuthProviderEndpointPairwiseTest < Minitest::Test
     end
     assert_match(/pairwise_secret/i, short.message)
 
-    public_only = build_auth(scopes: ["openid"]).api.get_open_id_config
-    pairwise = build_auth(scopes: ["openid"], pairwise_secret: "pairwise-secret-with-enough-entropy-123").api.get_open_id_config
+    public_only = build_auth(scopes: ["openid"]).api.get_openid_config
+    pairwise = build_auth(scopes: ["openid"], pairwise_secret: "pairwise-secret-with-enough-entropy-123").api.get_openid_config
 
     assert_equal ["public"], public_only[:subject_types_supported]
     assert_equal ["public", "pairwise"], pairwise[:subject_types_supported]

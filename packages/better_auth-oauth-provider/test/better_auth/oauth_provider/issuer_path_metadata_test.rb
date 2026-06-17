@@ -24,7 +24,7 @@ class OAuthProviderIssuerPathMetadataTest < Minitest::Test
       ]
     )
 
-    default_metadata = auth.api.get_open_id_config
+    default_metadata = auth.api.get_openid_config
     expected_issuer = default_metadata[:issuer]
 
     status, _headers, body = auth.handler.call(

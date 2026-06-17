@@ -11,8 +11,8 @@ class OAuthProviderMetadataUtilitiesTest < Minitest::Test
   def test_metadata_matches_upstream_core_fields_and_disable_jwt_plugin
     auth = build_auth(scopes: ["openid", "profile", "email", "offline_access"], disable_jwt_plugin: true)
 
-    metadata = auth.api.get_open_id_config
-    oauth_metadata = auth.api.get_o_auth_server_config
+    metadata = auth.api.get_openid_config
+    oauth_metadata = auth.api.get_oauth_server_config
 
     assert_equal metadata[:issuer], oauth_metadata[:issuer]
     assert_equal "http://localhost:3000/api/auth/oauth2/authorize", metadata[:authorization_endpoint]
@@ -47,10 +47,10 @@ class OAuthProviderMetadataUtilitiesTest < Minitest::Test
       }
     )
 
-    metadata = auth.api.get_open_id_config
+    metadata = auth.api.get_openid_config
     assert_equal ["email"], metadata[:scopes_supported]
     assert_equal advertised_claims, metadata[:claims_supported]
-    assert_equal metadata[:scopes_supported], auth.api.get_o_auth_server_config[:scopes_supported]
+    assert_equal metadata[:scopes_supported], auth.api.get_oauth_server_config[:scopes_supported]
 
     error = assert_raises(BetterAuth::APIError) do
       build_auth(scopes: ["openid"], advertised_metadata: {scopes_supported: ["create:test"]})

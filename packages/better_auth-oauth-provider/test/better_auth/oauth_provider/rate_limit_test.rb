@@ -38,7 +38,7 @@ class OAuthProviderRateLimitTest < Minitest::Test
 
   def test_token_endpoint_rate_limit_is_enforced
     auth = build_rate_limited_auth({token: {window: 60, max: 3}})
-    client = auth.api.admin_create_o_auth_client(
+    client = auth.api.admin_create_oauth_client(
       body: {
         redirect_uris: ["https://resource.example/callback"],
         token_endpoint_auth_method: "client_secret_post",
@@ -100,7 +100,7 @@ class OAuthProviderRateLimitTest < Minitest::Test
 
   def test_disabled_token_endpoint_rate_limit_is_not_enforced
     auth = build_rate_limited_auth({token: false})
-    client = auth.api.admin_create_o_auth_client(
+    client = auth.api.admin_create_oauth_client(
       body: {
         redirect_uris: ["https://resource.example/callback"],
         token_endpoint_auth_method: "client_secret_post",
@@ -129,7 +129,7 @@ class OAuthProviderRateLimitTest < Minitest::Test
   private
 
   def machine_client(auth)
-    auth.api.admin_create_o_auth_client(
+    auth.api.admin_create_oauth_client(
       body: {
         redirect_uris: ["https://resource.example/callback"],
         token_endpoint_auth_method: "client_secret_post",

@@ -12,7 +12,7 @@ class OAuthProviderTokenTest < Minitest::Test
     code = authorization_code_for(auth, cookie, client, scope: "openid")
     credentials = Base64.strict_encode64("#{client[:client_id]}:#{client[:client_secret]}")
 
-    tokens = auth.api.o_auth2_token(
+    tokens = auth.api.oauth2_token(
       headers: {"authorization" => "Basic #{credentials}"},
       body: {
         grant_type: "authorization_code",
@@ -34,7 +34,7 @@ class OAuthProviderTokenTest < Minitest::Test
     credentials = Base64.strict_encode64("#{post[:client_id]}:#{post[:client_secret]}")
 
     body_error = assert_raises(BetterAuth::APIError) do
-      auth.api.o_auth2_token(
+      auth.api.oauth2_token(
         body: {
           grant_type: "client_credentials",
           client_id: basic[:client_id],
@@ -44,7 +44,7 @@ class OAuthProviderTokenTest < Minitest::Test
       )
     end
     basic_error = assert_raises(BetterAuth::APIError) do
-      auth.api.o_auth2_token(
+      auth.api.oauth2_token(
         headers: {"authorization" => "Basic #{credentials}"},
         body: {
           grant_type: "client_credentials",
@@ -62,7 +62,7 @@ class OAuthProviderTokenTest < Minitest::Test
   def test_public_client_rejects_secret_credentials
     auth = build_auth(scopes: ["openid"])
     cookie = sign_up_cookie(auth)
-    client = auth.api.admin_create_o_auth_client(
+    client = auth.api.admin_create_oauth_client(
       body: {
         redirect_uris: ["com.example.app:/callback"],
         token_endpoint_auth_method: "none",
@@ -76,7 +76,7 @@ class OAuthProviderTokenTest < Minitest::Test
     code = authorization_code_for(auth, cookie, client, scope: "openid", redirect_uri: "com.example.app:/callback")
 
     error = assert_raises(BetterAuth::APIError) do
-      auth.api.o_auth2_token(
+      auth.api.oauth2_token(
         body: {
           grant_type: "authorization_code",
           code: code,
@@ -94,7 +94,7 @@ class OAuthProviderTokenTest < Minitest::Test
 
   def test_token_endpoint_rejects_expired_client_secret
     auth = build_auth(scopes: ["read"])
-    client = auth.api.admin_create_o_auth_client(
+    client = auth.api.admin_create_oauth_client(
       body: {
         redirect_uris: ["https://resource.example/callback"],
         token_endpoint_auth_method: "client_secret_post",
@@ -106,7 +106,7 @@ class OAuthProviderTokenTest < Minitest::Test
     )
 
     error = assert_raises(BetterAuth::APIError) do
-      auth.api.o_auth2_token(
+      auth.api.oauth2_token(
         body: {
           grant_type: "client_credentials",
           client_id: client[:client_id],
@@ -124,7 +124,7 @@ class OAuthProviderTokenTest < Minitest::Test
     auth = build_auth(scopes: ["read"])
 
     error = assert_raises(BetterAuth::APIError) do
-      auth.api.o_auth2_token(
+      auth.api.oauth2_token(
         headers: {"authorization" => "Basic #{Base64.strict_encode64("missing-colon")}"},
         body: {grant_type: "client_credentials", scope: "read"}
       )
@@ -139,7 +139,7 @@ class OAuthProviderTokenTest < Minitest::Test
     cookie = sign_up_cookie(auth)
     client = create_client(auth, cookie, grant_types: ["client_credentials"], response_types: [], scope: "read")
 
-    status, headers, = auth.api.o_auth2_token(
+    status, headers, = auth.api.oauth2_token(
       body: {
         grant_type: "client_credentials",
         client_id: client[:client_id],
@@ -163,7 +163,7 @@ class OAuthProviderTokenTest < Minitest::Test
     auth.context.adapter.delete(model: "session", where: [{field: "id", value: session.fetch(:session).fetch("id")}])
 
     error = assert_raises(BetterAuth::APIError) do
-      auth.api.o_auth2_token(
+      auth.api.oauth2_token(
         body: {
           grant_type: "authorization_code",
           code: code,
@@ -188,7 +188,7 @@ class OAuthProviderTokenTest < Minitest::Test
     auth.context.adapter.update(model: "session", where: [{field: "id", value: session.fetch(:session).fetch("id")}], update: {expiresAt: Time.now - 60})
 
     error = assert_raises(BetterAuth::APIError) do
-      auth.api.o_auth2_token(
+      auth.api.oauth2_token(
         body: {
           grant_type: "authorization_code",
           code: code,
@@ -213,7 +213,7 @@ class OAuthProviderTokenTest < Minitest::Test
     client_code = authorization_code_for(auth, cookie, client, scope: "openid")
 
     redirect_error = assert_raises(BetterAuth::APIError) do
-      auth.api.o_auth2_token(
+      auth.api.oauth2_token(
         body: {
           grant_type: "authorization_code",
           code: redirect_code,
@@ -225,7 +225,7 @@ class OAuthProviderTokenTest < Minitest::Test
       )
     end
     client_error = assert_raises(BetterAuth::APIError) do
-      auth.api.o_auth2_token(
+      auth.api.oauth2_token(
         body: {
           grant_type: "authorization_code",
           code: client_code,
@@ -249,7 +249,7 @@ class OAuthProviderTokenTest < Minitest::Test
     client = create_client(auth, cookie, scope: "openid", skip_consent: true)
 
     missing_code = assert_raises(BetterAuth::APIError) do
-      auth.api.o_auth2_token(
+      auth.api.oauth2_token(
         body: {
           grant_type: "authorization_code",
           redirect_uri: "https://resource.example/callback",
@@ -260,7 +260,7 @@ class OAuthProviderTokenTest < Minitest::Test
       )
     end
     missing_grant = assert_raises(BetterAuth::APIError) do
-      auth.api.o_auth2_token(
+      auth.api.oauth2_token(
         body: {
           client_id: client[:client_id],
           client_secret: client[:client_secret]
@@ -269,7 +269,7 @@ class OAuthProviderTokenTest < Minitest::Test
     end
     auth.context.adapter.update(model: "oauthClient", where: [{field: "clientId", value: client[:client_id]}], update: {disabled: true})
     disabled = assert_raises(BetterAuth::APIError) do
-      auth.api.o_auth2_token(
+      auth.api.oauth2_token(
         body: {
           grant_type: "client_credentials",
           client_id: client[:client_id],
@@ -337,7 +337,7 @@ class OAuthProviderTokenTest < Minitest::Test
     auth = build_auth(scopes: ["read"])
 
     error = assert_raises(BetterAuth::APIError) do
-      auth.api.o_auth2_token(body: ["not", "an", "object"])
+      auth.api.oauth2_token(body: ["not", "an", "object"])
     end
 
     assert_equal 400, error.status_code
@@ -350,7 +350,7 @@ class OAuthProviderTokenTest < Minitest::Test
     client = create_client(auth, cookie, scope: "read")
 
     error = assert_raises(BetterAuth::APIError) do
-      auth.api.o_auth2_token(
+      auth.api.oauth2_token(
         body: {
           grant_type: "password",
           client_id: client[:client_id],
@@ -369,7 +369,7 @@ class OAuthProviderTokenTest < Minitest::Test
     client = create_client(auth, cookie, grant_types: ["client_credentials"], response_types: [], scope: "openid profile email offline_access read")
 
     error = assert_raises(BetterAuth::APIError) do
-      auth.api.o_auth2_token(
+      auth.api.oauth2_token(
         body: {
           grant_type: "client_credentials",
           client_id: client[:client_id],
@@ -389,7 +389,7 @@ class OAuthProviderTokenTest < Minitest::Test
     client = create_client(auth, cookie, grant_types: ["client_credentials"], response_types: [], scope: "read write")
     auth.context.adapter.update(model: "oauthClient", where: [{field: "clientId", value: client[:client_id]}], update: {scopes: nil})
 
-    tokens = auth.api.o_auth2_token(
+    tokens = auth.api.oauth2_token(
       body: {
         grant_type: "client_credentials",
         client_id: client[:client_id],
@@ -406,7 +406,7 @@ class OAuthProviderTokenTest < Minitest::Test
     client = create_client(auth, cookie, grant_types: ["client_credentials"], response_types: [], scope: "read write")
     auth.context.adapter.update(model: "oauthClient", where: [{field: "clientId", value: client[:client_id]}], update: {scopes: []})
 
-    tokens = auth.api.o_auth2_token(
+    tokens = auth.api.oauth2_token(
       body: {
         grant_type: "client_credentials",
         client_id: client[:client_id],
@@ -423,7 +423,7 @@ class OAuthProviderTokenTest < Minitest::Test
     client = create_client(auth, cookie, grant_types: ["client_credentials"], response_types: [], scope: "read")
 
     error = assert_raises(BetterAuth::APIError) do
-      auth.api.o_auth2_token(
+      auth.api.oauth2_token(
         body: {
           grant_type: "client_credentials",
           client_id: client[:client_id],
@@ -468,7 +468,7 @@ class OAuthProviderTokenTest < Minitest::Test
     cookie = sign_up_cookie(auth, email: "jwt-access@example.com")
     client = create_client(auth, cookie, grant_types: ["client_credentials"], response_types: [], scope: "read")
 
-    tokens = auth.api.o_auth2_token(
+    tokens = auth.api.oauth2_token(
       body: {
         grant_type: "client_credentials",
         client_id: client[:client_id],
@@ -478,7 +478,7 @@ class OAuthProviderTokenTest < Minitest::Test
       }
     )
     _payload, header = JWT.decode(tokens[:access_token], nil, false)
-    active = auth.api.o_auth2_introspect(body: introspect_body(client, tokens[:access_token], hint: "access_token"))
+    active = auth.api.oauth2_introspect(body: introspect_body(client, tokens[:access_token], hint: "access_token"))
 
     assert_equal "EdDSA", header["alg"]
     assert_equal true, active[:active]

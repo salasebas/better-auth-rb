@@ -8,7 +8,7 @@ class OAuthProviderPkceOptionalTest < Minitest::Test
   def test_confidential_client_can_opt_out_of_pkce_for_authorization_code
     auth = build_auth(scopes: ["openid"])
     cookie = sign_up_cookie(auth)
-    client = auth.api.admin_create_o_auth_client(
+    client = auth.api.admin_create_oauth_client(
       body: {
         redirect_uris: ["https://resource.example/callback"],
         token_endpoint_auth_method: "client_secret_post",
@@ -19,7 +19,7 @@ class OAuthProviderPkceOptionalTest < Minitest::Test
     )
     code = authorization_code_for(auth, cookie, client, scope: "openid", verifier: nil)
 
-    tokens = auth.api.o_auth2_token(
+    tokens = auth.api.oauth2_token(
       body: {
         grant_type: "authorization_code",
         code: code,

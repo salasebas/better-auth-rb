@@ -11,7 +11,7 @@ class OAuthProviderOauthClientEndpointsPrivilegesTest < Minitest::Test
     create_client(auth, cookie)
 
     error = assert_raises(BetterAuth::APIError) do
-      auth.api.get_o_auth_clients(headers: {"cookie" => cookie})
+      auth.api.get_oauth_clients(headers: {"cookie" => cookie})
     end
 
     assert_equal 401, error.status_code

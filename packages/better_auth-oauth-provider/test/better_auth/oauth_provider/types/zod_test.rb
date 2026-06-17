@@ -23,7 +23,7 @@ class OAuthProviderTypesZodTest < Minitest::Test
     auth = build_auth(scopes: ["openid"], allow_unauthenticated_client_registration: true)
 
     error = assert_raises(BetterAuth::APIError) do
-      auth.api.register_o_auth_client(
+      auth.api.register_oauth_client(
         body: {
           redirect_uris: ["javascript:alert(1)"],
           grant_types: ["authorization_code"],

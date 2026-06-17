@@ -10,7 +10,7 @@ class OAuthProviderAuthorizeTest < Minitest::Test
     cookie = sign_up_cookie(auth)
     client = create_client(auth, cookie, scope: "openid")
 
-    status, headers, = auth.api.o_auth2_authorize(
+    status, headers, = auth.api.oauth2_authorize(
       headers: {"cookie" => cookie},
       query: {
         response_type: "token",

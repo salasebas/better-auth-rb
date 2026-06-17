@@ -21,6 +21,6 @@ class OAuthProviderJwtPluginRequirementTest < Minitest::Test
 
   def test_disable_jwt_plugin_allows_init_without_jwt
     auth = build_auth(scopes: ["openid"], disable_jwt_plugin: true)
-    assert auth.api.get_open_id_config[:issuer]
+    assert auth.api.get_openid_config[:issuer]
   end
 end

@@ -13,7 +13,7 @@ class OAuthProviderOrganizationIntegrationTest < Minitest::Test
     cookie = sign_up_cookie(auth, email: "org-owner@example.com")
     org_cookie, organization = create_active_organization(auth, cookie, name: "My Org", slug: "my-org")
 
-    client = auth.api.register_o_auth_client(
+    client = auth.api.register_oauth_client(
       headers: {"cookie" => org_cookie},
       body: {
         redirect_uris: ["https://resource.example/callback"],
@@ -26,8 +26,8 @@ class OAuthProviderOrganizationIntegrationTest < Minitest::Test
 
     assert_nil client[:user_id]
     assert_equal organization.fetch("id"), client[:reference_id]
-    assert_equal [client[:client_id]], auth.api.get_o_auth_clients(headers: {"cookie" => org_cookie}).map { |entry| entry[:client_id] }
-    assert_equal client[:client_id], auth.api.get_o_auth_client(headers: {"cookie" => org_cookie}, query: {client_id: client[:client_id]})[:client_id]
+    assert_equal [client[:client_id]], auth.api.get_oauth_clients(headers: {"cookie" => org_cookie}).map { |entry| entry[:client_id] }
+    assert_equal client[:client_id], auth.api.get_oauth_client(headers: {"cookie" => org_cookie}, query: {client_id: client[:client_id]})[:client_id]
   end
 
   def test_post_login_consent_reference_tracks_organization_selection
@@ -47,7 +47,7 @@ class OAuthProviderOrganizationIntegrationTest < Minitest::Test
     cookie = sign_up_cookie(auth, email: "org-consent-owner@example.com")
     user = auth.api.get_session(headers: {"cookie" => cookie}).fetch(:user)
     organization = auth.api.create_organization(body: {name: "Consent Org", slug: "consent-org", userId: user.fetch("id")})
-    client = auth.api.admin_create_o_auth_client(
+    client = auth.api.admin_create_oauth_client(
       body: {
         redirect_uris: ["https://resource.example/callback"],
         token_endpoint_auth_method: "client_secret_post",
@@ -63,14 +63,14 @@ class OAuthProviderOrganizationIntegrationTest < Minitest::Test
     assert_equal "/select-organization", select_uri.path
 
     active_cookie = set_active_organization_cookie(auth, cookie, organization.fetch("id"))
-    continued = auth.api.o_auth2_continue(
+    continued = auth.api.oauth2_continue(
       headers: {"cookie" => active_cookie},
       body: {postLogin: true, oauth_query: select_uri.query}
     )
     consent_params = Rack::Utils.parse_query(URI.parse(continued.fetch(:url)).query)
     assert consent_params.fetch("consent_code")
 
-    consent = auth.api.o_auth2_consent(
+    consent = auth.api.oauth2_consent(
       headers: {"cookie" => active_cookie},
       body: {accept: true, consent_code: consent_params.fetch("consent_code")}
     )
@@ -117,7 +117,7 @@ class OAuthProviderOrganizationIntegrationTest < Minitest::Test
     user = auth.api.get_session(headers: {"cookie" => cookie}).fetch(:user)
     organization = auth.api.create_organization(body: {name: "Team Org", slug: "team-org", userId: user.fetch("id")})
     team = auth.api.create_team(headers: {"cookie" => cookie}, body: {organizationId: organization.fetch("id"), name: "Engineering"})
-    client = auth.api.admin_create_o_auth_client(
+    client = auth.api.admin_create_oauth_client(
       body: {
         redirect_uris: ["https://resource.example/callback"],
         token_endpoint_auth_method: "client_secret_post",
@@ -137,12 +137,12 @@ class OAuthProviderOrganizationIntegrationTest < Minitest::Test
     assert_equal organization.fetch("id"), session.fetch(:session).fetch("activeOrganizationId")
     assert_equal team.fetch("id"), session.fetch(:session).fetch("activeTeamId")
 
-    continued = auth.api.o_auth2_continue(
+    continued = auth.api.oauth2_continue(
       headers: {"cookie" => team_cookie},
       body: {postLogin: true, oauth_query: select_uri.query}
     )
     consent_params = Rack::Utils.parse_query(URI.parse(continued.fetch(:url)).query)
-    consent = auth.api.o_auth2_consent(
+    consent = auth.api.oauth2_consent(
       headers: {"cookie" => team_cookie},
       body: {accept: true, consent_code: consent_params.fetch("consent_code")}
     )
