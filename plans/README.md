@@ -10,7 +10,7 @@ Status values: TODO | IN PROGRESS | DONE | BLOCKED | REJECTED.
 
 | Plan | Title | Depends on | Status |
 | --- | --- | --- | --- |
-| 019 | Core i18n plugin (`BetterAuth::Plugins.i18n`) | - | TODO |
+| 019 | Core i18n plugin (`BetterAuth::Plugins.i18n`) | - | DONE |
 | 019 | OAuth provider unified parity | - | TODO |
 
 ## Docs Parity Initiative (020–024)

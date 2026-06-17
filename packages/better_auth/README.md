@@ -163,6 +163,28 @@ auth = BetterAuth.auth(
 )
 ```
 
+### i18n
+
+Translate server error messages by locale. This plugin is server-side only: clients receive translated error JSON from the existing HTTP routes, and there is no Ruby browser client plugin.
+
+```ruby
+auth = BetterAuth.auth(
+  secret: ENV.fetch("BETTER_AUTH_SECRET"),
+  database: :memory,
+  plugins: [
+    BetterAuth::Plugins.i18n(
+      translations: {
+        "fr" => {
+          "INVALID_EMAIL_OR_PASSWORD" => "Identifiants invalides"
+        }
+      },
+      detection: ["cookie", "header"],
+      locale_cookie: "lang"
+    )
+  ]
+)
+```
+
 ### JavaScript Client
 
 Ruby Better Auth exposes the same HTTP route surface. Frontend apps should use the upstream Better Auth JavaScript client and point it at the Ruby server:

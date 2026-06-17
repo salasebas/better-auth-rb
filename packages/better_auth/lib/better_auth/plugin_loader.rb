@@ -40,7 +40,8 @@ module BetterAuth
       sso: "plugins/sso",
       scim: "plugins/scim",
       stripe: "plugins/stripe",
-      expo: "plugins/expo"
+      expo: "plugins/expo",
+      i18n: "plugins/i18n"
     }.freeze
 
     PLUGIN_DEPENDENCIES = {
@@ -88,7 +89,8 @@ module BetterAuth
       "sso" => :sso,
       "scim" => :scim,
       "stripe" => :stripe,
-      "expo" => :expo
+      "expo" => :expo,
+      "i18n" => :i18n
     }.freeze
 
     NESTED_MODULE_LOADERS = {

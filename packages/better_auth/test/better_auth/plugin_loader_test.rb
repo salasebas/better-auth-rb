@@ -12,7 +12,8 @@ class BetterAuthPluginLoaderTest < Minitest::Test
       oauth_protocol: BetterAuth::Plugins.plugin_loaded?(:oauth_protocol),
       oidc_provider_constant: BetterAuth::Plugins.const_defined?(:OIDCProvider, false),
       bearer: BetterAuth::Plugins.plugin_loaded?(:bearer),
-      open_api: BetterAuth::Plugins.plugin_loaded?(:open_api)
+      open_api: BetterAuth::Plugins.plugin_loaded?(:open_api),
+      i18n: BetterAuth::Plugins.plugin_loaded?(:i18n)
     }
     puts loaded.map { |key, value| "#{key}=#{value}" }.join("\n")
   RUBY
@@ -24,6 +25,19 @@ class BetterAuthPluginLoaderTest < Minitest::Test
     assert_equal "false", output.fetch(:oidc_provider_constant)
     assert_equal "false", output.fetch(:bearer)
     assert_equal "true", output.fetch(:open_api)
+    assert_equal "false", output.fetch(:i18n)
+  end
+
+  def test_i18n_loads_only_when_factory_is_called
+    output = run_isolated_script(<<~RUBY)
+      require "better_auth"
+      raise "i18n should not be loaded at boot" if BetterAuth::Plugins.plugin_loaded?(:i18n)
+      plugin = BetterAuth::Plugins.i18n(translations: {"en" => {"INVALID_EMAIL_OR_PASSWORD" => "Invalid"}})
+      raise "i18n should be loaded" unless BetterAuth::Plugins.plugin_loaded?(:i18n)
+      raise "expected plugin instance" unless plugin.is_a?(BetterAuth::Plugin)
+      puts "ok"
+    RUBY
+    assert_equal "ok\n", output
   end
 
   def test_oidc_provider_loads_only_when_factory_is_called
