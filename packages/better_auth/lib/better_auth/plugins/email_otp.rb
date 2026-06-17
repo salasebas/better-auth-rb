@@ -29,7 +29,6 @@ module BetterAuth
           verify_email_otp: verify_email_otp_endpoint(config),
           sign_in_email_otp: sign_in_email_otp_endpoint(config),
           request_password_reset_email_otp: request_password_reset_email_otp_endpoint(config),
-          forget_password_email_otp: forget_password_email_otp_endpoint(config),
           reset_password_email_otp: reset_password_email_otp_endpoint(config),
           request_email_change_email_otp: request_email_change_email_otp_endpoint(config),
           change_email_email_otp: change_email_email_otp_endpoint(config)
@@ -453,32 +452,6 @@ module BetterAuth
       end
     end
 
-    def forget_password_email_otp_endpoint(config)
-      Endpoint.new(
-        path: "/forget-password/email-otp",
-        method: "POST",
-        metadata: {
-          openapi: {
-            operationId: "forgetPasswordEmailOTP",
-            description: "Request a password reset OTP by email",
-            requestBody: OpenAPI.json_request_body(
-              OpenAPI.object_schema(
-                {
-                  email: {type: "string"}
-                },
-                required: ["email"]
-              )
-            ),
-            responses: {
-              "200" => OpenAPI.json_response("Password reset OTP requested", OpenAPI.status_response_schema)
-            }
-          }
-        }
-      ) do |ctx|
-        email_otp_password_reset_request(ctx, config)
-      end
-    end
-
     def reset_password_email_otp_endpoint(config)
       Endpoint.new(
         path: "/email-otp/reset-password",
@@ -763,7 +736,6 @@ module BetterAuth
         /sign-in/email-otp
         /email-otp/request-password-reset
         /email-otp/reset-password
-        /forget-password/email-otp
         /email-otp/request-email-change
         /email-otp/change-email
       ].map do |path|

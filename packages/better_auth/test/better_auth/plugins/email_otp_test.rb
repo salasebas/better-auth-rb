@@ -362,6 +362,12 @@ class BetterAuthPluginsEmailOTPTest < Minitest::Test
     assert_match(/\A[0-9a-f]{32}\z/, auth.api.sign_in_email(body: {email: "reset-otp@example.com", password: "newpassword123"})[:token])
   end
 
+  def test_deprecated_forget_password_email_otp_route_is_not_routed
+    auth = build_auth(plugins: [BetterAuth::Plugins.email_otp])
+
+    assert_equal 404, auth.call(rack_json_env("/api/auth/forget-password/email-otp", {email: "reset-otp@example.com"})).first
+  end
+
   def test_send_verification_on_sign_up_uses_configured_delivery_callback
     sent = []
     auth = build_auth(

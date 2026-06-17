@@ -284,7 +284,6 @@ class BetterAuthPluginsOpenAPITest < Minitest::Test
         request_email_change_email_otp: "requestEmailChangeOTP",
         change_email_email_otp: "changeEmailWithEmailOTP",
         request_password_reset_email_otp: "requestPasswordResetEmailOTP",
-        forget_password_email_otp: "forgetPasswordEmailOTP",
         reset_password_email_otp: "resetPasswordEmailOTP"
       },
       BetterAuth::Plugins.siwe => {
