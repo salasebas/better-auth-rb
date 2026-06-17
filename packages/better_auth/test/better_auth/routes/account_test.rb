@@ -18,13 +18,13 @@ class BetterAuthRoutesAccountTest < Minitest::Test
     refute github.key?("accessToken")
   end
 
-  def test_list_user_accounts_alias_matches_upstream_api_name
+  def test_list_accounts_alias_matches_upstream_api_name
     auth = build_auth
     cookie = sign_up_cookie(auth, email: "upstream-accounts@example.com")
     user_id = auth.api.get_session(headers: {"cookie" => cookie})[:user]["id"]
     auth.context.internal_adapter.create_account(userId: user_id, providerId: "github", accountId: "gh-upstream", scope: "repo")
 
-    accounts = auth.api.list_user_accounts(headers: {"cookie" => cookie})
+    accounts = auth.api.list_accounts(headers: {"cookie" => cookie})
 
     github = accounts.find { |account| account["providerId"] == "github" }
     assert_equal "gh-upstream", github["accountId"]
