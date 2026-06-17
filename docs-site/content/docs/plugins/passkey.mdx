@@ -35,8 +35,8 @@ passkey = auth.api.verify_passkey_registration(headers: { "cookie" => request.en
 
 | Method | Path | Ruby API method |
 | --- | --- | --- |
-| `GET` | `/passkey/generate-register-options` | `auth.api.generate_passkey_registration_options` |
-| `GET` | `/passkey/generate-authenticate-options` | `auth.api.generate_passkey_authentication_options` |
+| `POST` | `/passkey/generate-register-options` | `auth.api.generate_passkey_registration_options` |
+| `POST` | `/passkey/generate-authenticate-options` | `auth.api.generate_passkey_authentication_options` |
 | `POST` | `/passkey/verify-registration` | `auth.api.verify_passkey_registration` |
 | `POST` | `/passkey/verify-authentication` | `auth.api.verify_passkey_authentication` |
 | `GET` | `/passkey/list-user-passkeys` | `auth.api.list_passkeys` |

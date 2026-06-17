@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require "json"
+require "stringio"
 require "rack/mock_request"
 require_relative "support"
 
@@ -19,7 +20,14 @@ class BetterAuthPasskeyRackTest < Minitest::Test
       ]
     )
 
-    response = Rack::MockRequest.new(auth).get("/api/auth/passkey/generate-register-options?context=rack-context")
+    response = Rack::MockRequest.new(auth).post(
+      "/api/auth/passkey/generate-register-options",
+      {
+        "CONTENT_TYPE" => "application/json",
+        "HTTP_ORIGIN" => ORIGIN,
+        "rack.input" => StringIO.new(JSON.generate({context: "rack-context"}))
+      }
+    )
     body = JSON.parse(response.body)
     verification = auth.context.adapter.find_many(model: "verification").last
     stored = JSON.parse(verification.fetch("value"))

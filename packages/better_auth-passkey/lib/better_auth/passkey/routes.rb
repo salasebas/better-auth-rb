@@ -22,11 +22,16 @@ module BetterAuth
           openapi: {
             operationId: "generatePasskeyRegistrationOptions",
             description: "Generate registration options for a new passkey",
-            parameters: [
-              BetterAuth::OpenAPI.query_parameter("authenticatorAttachment", schema: {type: "string", enum: ["platform", "cross-platform"]}, description: "Type of authenticator to use for registration"),
-              BetterAuth::OpenAPI.query_parameter("name", description: "Optional custom name for the passkey"),
-              BetterAuth::OpenAPI.query_parameter("context", description: "Optional context for passkey-first registration flows")
-            ],
+            requestBody: BetterAuth::OpenAPI.json_request_body(
+              BetterAuth::OpenAPI.object_schema(
+                {
+                  authenticatorAttachment: {type: "string", enum: ["platform", "cross-platform"], description: "Type of authenticator to use for registration"},
+                  name: {type: "string", description: "Optional custom name for the passkey"},
+                  context: {type: "string", description: "Optional context for passkey-first registration flows"}
+                }
+              ),
+              required: false
+            ),
             responses: {
               "200" => BetterAuth::OpenAPI.json_response("Success", passkey_options_schema)
             }
@@ -61,6 +66,7 @@ module BetterAuth
           openapi: {
             operationId: "passkeyGenerateAuthenticateOptions",
             description: "Generate authentication options for a passkey",
+            requestBody: BetterAuth::OpenAPI.empty_request_body,
             responses: {
               "200" => BetterAuth::OpenAPI.json_response("Success", passkey_options_schema)
             }

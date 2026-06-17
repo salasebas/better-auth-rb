@@ -147,6 +147,11 @@ module EndpointInventory
   end
 
   def infer_endpoint_key(source, line)
+    prefix = source.lines[0...line - 1].reverse.find { |entry| entry.match?(/\A\s*(?:def\s+self\.)?[a-z0-9_]+_endpoint\s*\(/i) }
+    if prefix
+      return prefix[/\A\s*(?:def\s+self\.)?([a-z0-9_]+)_endpoint\s*\(/i, 1]
+    end
+
     prefix = source.lines[0...line - 1].reverse.find { |entry| entry.match?(/\A\s*(?:def\s+self\.)?[a-z0-9_]+(?:_endpoint)?\s*\(/i) }
     return nil unless prefix
 
@@ -353,12 +358,11 @@ module EndpointInventory
         BetterAuth::Plugins.dub,
         BetterAuth::Plugins.oauth_proxy,
         BetterAuth::Plugins.expo,
-        BetterAuth::Plugins.organization,
+        BetterAuth::Plugins.organization(teams: {enabled: true}, dynamic_access_control: {enabled: true}),
         BetterAuth::Plugins.admin,
         BetterAuth::Plugins.api_key,
         BetterAuth::Plugins.passkey,
         BetterAuth::Plugins.oauth_provider(login_page: "/", consent_page: "/oauth2/consent"),
-        BetterAuth::Plugins.oidc_provider(login_page: "/"),
         BetterAuth::Plugins.scim,
         BetterAuth::Plugins.sso,
         BetterAuth::Plugins.stripe(
@@ -366,7 +370,6 @@ module EndpointInventory
           subscription: {enabled: true, plans: [{name: "example", price_id: "price_example"}]}
         ),
         BetterAuth::Plugins.device_authorization,
-        BetterAuth::Plugins.mcp(login_page: "/"),
         BetterAuth::Plugins.two_factor(issuer: "inventory", otp_options: {send_otp: delivery}),
         BetterAuth::Plugins.captcha(secret_key: "secret", provider: "google-recaptcha", endpoints: ["/sign-up/email"], verifier: ->(_params) { {success: true} }),
         BetterAuth::Plugins.have_i_been_pwned(range_lookup: ->(_prefix) { "" }),
@@ -468,7 +471,7 @@ module EndpointInventory
     static_rows.each do |row|
       row.fetch(:methods).each do |method|
         key = [row[:path], method]
-        index[key] = row.merge(method: method)
+        index[key] = enrich_ruby_api_fields(row.merge(method: method))
       end
     end
 
@@ -477,21 +480,51 @@ module EndpointInventory
       key = [row[:path], method]
       existing = index[key]
       index[key] = if existing
-        existing.merge(row).tap do |merged|
-          merged[:file] ||= existing[:file]
-          merged[:line] ||= existing[:line]
-          merged[:body_fields] = prefer_richer(existing[:body_fields], row[:body_fields])
-          merged[:query_params] = prefer_richer(existing[:query_params], row[:query_params])
-          merged[:path_params] = (existing[:path_params] + row[:path_params]).uniq { |entry| entry.is_a?(Hash) ? entry[:name] : entry }
-          merged[:header_params] = prefer_richer(existing[:header_params], row[:header_params])
-          merged[:source] = "static+runtime"
-        end
+        enrich_ruby_api_fields(
+          existing.merge(row).tap do |merged|
+            merged[:file] ||= existing[:file]
+            merged[:line] ||= existing[:line]
+            merged[:body_fields] = prefer_richer(existing[:body_fields], row[:body_fields])
+            merged[:query_params] = prefer_richer(existing[:query_params], row[:query_params])
+            merged[:path_params] = (existing[:path_params] + row[:path_params]).uniq { |entry| entry.is_a?(Hash) ? entry[:name] : entry }
+            merged[:header_params] = prefer_richer(existing[:header_params], row[:header_params])
+            merged[:source] = "static+runtime"
+          end
+        )
       else
-        row.merge(method: method)
+        enrich_ruby_api_fields(row.merge(method: method))
       end
     end
 
     index.values.sort_by { |row| [row[:path], row[:method], row[:plugin_id].to_s, row[:endpoint_key].to_s] }
+  end
+
+  def enrich_ruby_api_fields(row)
+    method_name = ruby_api_method_name(row[:endpoint_key])
+    row.merge(
+      ruby_api_method: method_name,
+      ruby_api_call: method_name ? "auth.api.#{method_name}" : nil
+    )
+  end
+
+  # Mirrors BetterAuth::API#normalize_method_name for endpoint registry keys.
+  def ruby_api_method_name(endpoint_key)
+    key = endpoint_registry_key(endpoint_key)
+    return nil if key.nil? || key.empty?
+
+    key
+      .gsub(/([a-z\d])([A-Z])/, '\1_\2')
+      .tr("-", "_")
+      .downcase
+  end
+
+  def endpoint_registry_key(endpoint_key)
+    return nil if endpoint_key.nil?
+
+    value = endpoint_key.to_s.strip
+    return nil if value.empty? || value == "-"
+
+    value.sub(/_endpoint\z/i, "")
   end
 
   def prefer_richer(left, right)
@@ -524,11 +557,11 @@ module EndpointInventory
     lines << ""
     lines << "## Routes"
     lines << ""
-    lines << "| Method | Path | Plugin | Endpoint key | Query | Body | Path params | Source | Definition |"
-    lines << "| --- | --- | --- | --- | --- | --- | --- | --- | --- |"
+    lines << "| Method | Path | Ruby API | Plugin | Endpoint key | Query | Body | Path params | Source | Definition |"
+    lines << "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |"
 
     rows.each do |row|
-      lines << "| #{row[:method]} | `#{row[:path]}` | #{row[:plugin_id] || row[:plugin_hint] || "-"} | #{row[:endpoint_key] || "-"} | #{format_params(row[:query_params])} | #{format_body(row)} | #{format_path_params(row[:path_params])} | #{row[:source]} | #{format_definition(row)} |"
+      lines << "| #{row[:method]} | `#{row[:path]}` | #{format_ruby_api(row)} | #{row[:plugin_id] || row[:plugin_hint] || "-"} | #{row[:endpoint_key] || "-"} | #{format_params(row[:query_params])} | #{format_body(row)} | #{format_path_params(row[:path_params])} | #{row[:source]} | #{format_definition(row)} |"
     end
 
     lines << ""
@@ -536,6 +569,7 @@ module EndpointInventory
     lines << ""
     lines << "- **Body** lists JSON/form fields when OpenAPI metadata or `request_body_schema` helpers expose them. Endpoints with dynamic schemas may show `-`."
     lines << "- **Query** and **Path params** include OpenAPI parameters and `:segments` from the route template."
+    lines << "- **Ruby API** maps each route to the in-process server helper on `auth.api`, using the same method names as `BetterAuth::API` (`auth.api.sign_up_email`, etc.)."
     lines << "- **Server-only** endpoints (metadata `SERVER_ONLY`) are intended for `auth.api`, not browser clients."
     lines << "- Re-run: `ruby scripts/generate-endpoint-inventory.rb`"
     lines << ""
@@ -589,6 +623,11 @@ module EndpointInventory
     else
       "-"
     end
+  end
+
+  def format_ruby_api(row)
+    call = row[:ruby_api_call]
+    call ? "`#{call}`" : "-"
   end
 end
 

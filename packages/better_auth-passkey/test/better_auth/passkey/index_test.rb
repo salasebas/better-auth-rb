@@ -13,7 +13,9 @@ class BetterAuthPasskeyIndexTest < Minitest::Test
     assert_equal "better-auth-passkey", plugin.options.fetch(:advanced).fetch(:web_authn_challenge_cookie)
 
     assert_equal "/passkey/generate-register-options", plugin.endpoints.fetch(:generate_passkey_registration_options).path
+    assert_equal "POST", plugin.endpoints.fetch(:generate_passkey_registration_options).methods.first
     assert_equal "/passkey/generate-authenticate-options", plugin.endpoints.fetch(:generate_passkey_authentication_options).path
+    assert_equal "POST", plugin.endpoints.fetch(:generate_passkey_authentication_options).methods.first
     assert_equal "/passkey/verify-registration", plugin.endpoints.fetch(:verify_passkey_registration).path
     assert_equal "/passkey/verify-authentication", plugin.endpoints.fetch(:verify_passkey_authentication).path
     assert_equal "/passkey/list-user-passkeys", plugin.endpoints.fetch(:list_passkeys).path

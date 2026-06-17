@@ -1,66 +1,44 @@
 {
-  "generated_at": "2026-06-17T04:07:55Z",
-  "route_count": 239,
+  "generated_at": "2026-06-17T05:20:14Z",
+  "route_count": 220,
   "routes": [
     {
       "path": "/.well-known/oauth-authorization-server",
       "methods": [
         "GET"
       ],
-      "file": "packages/better_auth/lib/better_auth/plugins/mcp.rb",
-      "line": 65,
-      "endpoint_key": "get_mcp_o_auth_config",
-      "plugin_hint": "mcp",
+      "plugin_id": "oauth-provider",
+      "endpoint_key": "get_o_auth_server_config",
       "body_fields": [],
       "query_params": [],
       "path_params": [],
       "header_params": [],
       "disable_body": false,
       "server_only": false,
-      "source": "static+runtime",
+      "operation_id": null,
+      "source": "runtime",
       "method": "GET",
-      "plugin_id": "mcp",
-      "operation_id": null
-    },
-    {
-      "path": "/.well-known/oauth-protected-resource",
-      "methods": [
-        "GET"
-      ],
-      "file": "packages/better_auth/lib/better_auth/plugins/mcp.rb",
-      "line": 71,
-      "endpoint_key": "get_mcp_protected_resource",
-      "plugin_hint": "mcp",
-      "body_fields": [],
-      "query_params": [],
-      "path_params": [],
-      "header_params": [],
-      "disable_body": false,
-      "server_only": false,
-      "source": "static+runtime",
-      "method": "GET",
-      "plugin_id": "mcp",
-      "operation_id": null
+      "ruby_api_method": "get_o_auth_server_config",
+      "ruby_api_call": "auth.api.get_o_auth_server_config"
     },
     {
       "path": "/.well-known/openid-configuration",
       "methods": [
         "GET"
       ],
-      "file": "packages/better_auth/lib/better_auth/plugins/oidc_provider.rb",
-      "line": 101,
+      "plugin_id": "oauth-provider",
       "endpoint_key": "get_open_id_config",
-      "plugin_hint": "oidc_provider",
       "body_fields": [],
       "query_params": [],
       "path_params": [],
       "header_params": [],
       "disable_body": false,
       "server_only": false,
-      "source": "static+runtime",
+      "operation_id": null,
+      "source": "runtime",
       "method": "GET",
-      "plugin_id": "oidc-provider",
-      "operation_id": null
+      "ruby_api_method": "get_open_id_config",
+      "ruby_api_call": "auth.api.get_open_id_config"
     },
     {
       "path": "/account-info",
@@ -85,6 +63,8 @@
       "server_only": false,
       "source": "static+runtime",
       "method": "GET",
+      "ruby_api_method": "account_info",
+      "ruby_api_call": "auth.api.account_info",
       "plugin_id": "core",
       "operation_id": "accountInfo"
     },
@@ -121,6 +101,8 @@
       "server_only": false,
       "source": "static+runtime",
       "method": "POST",
+      "ruby_api_method": "ban_user",
+      "ruby_api_call": "auth.api.ban_user",
       "plugin_id": "admin",
       "operation_id": "banUser"
     },
@@ -167,6 +149,8 @@
       "server_only": false,
       "source": "static+runtime",
       "method": "POST",
+      "ruby_api_method": "create_user",
+      "ruby_api_call": "auth.api.create_user",
       "plugin_id": "admin",
       "operation_id": "createUser"
     },
@@ -203,6 +187,8 @@
       "server_only": false,
       "source": "static+runtime",
       "method": "GET",
+      "ruby_api_method": "get_user",
+      "ruby_api_call": "auth.api.get_user",
       "plugin_id": "admin",
       "operation_id": "getUser"
     },
@@ -239,6 +225,8 @@
       "server_only": false,
       "source": "static+runtime",
       "method": "POST",
+      "ruby_api_method": "user_has_permission",
+      "ruby_api_call": "auth.api.user_has_permission",
       "plugin_id": "admin",
       "operation_id": "hasPermission"
     },
@@ -265,6 +253,8 @@
       "server_only": false,
       "source": "static+runtime",
       "method": "POST",
+      "ruby_api_method": "impersonate_user",
+      "ruby_api_call": "auth.api.impersonate_user",
       "plugin_id": "admin",
       "operation_id": "impersonateUser"
     },
@@ -291,6 +281,8 @@
       "server_only": false,
       "source": "static+runtime",
       "method": "POST",
+      "ruby_api_method": "list_user_sessions",
+      "ruby_api_call": "auth.api.list_user_sessions",
       "plugin_id": "admin",
       "operation_id": "adminListUserSessions"
     },
@@ -362,6 +354,8 @@
       "server_only": false,
       "source": "static+runtime",
       "method": "GET",
+      "ruby_api_method": "list_users",
+      "ruby_api_call": "auth.api.list_users",
       "plugin_id": "admin",
       "operation_id": "listUsers"
     },
@@ -371,7 +365,7 @@
         "POST"
       ],
       "file": "packages/better_auth-oauth-provider/lib/better_auth/plugins/oauth_provider/oauth_client/endpoints.rb",
-      "line": 124,
+      "line": 127,
       "endpoint_key": "admin_create_o_auth_client",
       "plugin_hint": "better_auth/plugins/oauth_provider",
       "body_fields": [],
@@ -382,6 +376,8 @@
       "server_only": true,
       "source": "static+runtime",
       "method": "POST",
+      "ruby_api_method": "admin_create_o_auth_client",
+      "ruby_api_call": "auth.api.admin_create_o_auth_client",
       "plugin_id": "oauth-provider",
       "operation_id": null
     },
@@ -391,7 +387,7 @@
         "PATCH"
       ],
       "file": "packages/better_auth-oauth-provider/lib/better_auth/plugins/oauth_provider/oauth_client/endpoints.rb",
-      "line": 153,
+      "line": 157,
       "endpoint_key": "admin_update_o_auth_client",
       "plugin_hint": "better_auth/plugins/oauth_provider",
       "body_fields": [],
@@ -402,6 +398,8 @@
       "server_only": true,
       "source": "static+runtime",
       "method": "PATCH",
+      "ruby_api_method": "admin_update_o_auth_client",
+      "ruby_api_call": "auth.api.admin_update_o_auth_client",
       "plugin_id": "oauth-provider",
       "operation_id": null
     },
@@ -428,6 +426,8 @@
       "server_only": false,
       "source": "static+runtime",
       "method": "POST",
+      "ruby_api_method": "remove_user",
+      "ruby_api_call": "auth.api.remove_user",
       "plugin_id": "admin",
       "operation_id": "removeUser"
     },
@@ -454,6 +454,8 @@
       "server_only": false,
       "source": "static+runtime",
       "method": "POST",
+      "ruby_api_method": "revoke_user_session",
+      "ruby_api_call": "auth.api.revoke_user_session",
       "plugin_id": "admin",
       "operation_id": "revokeUserSession"
     },
@@ -480,6 +482,8 @@
       "server_only": false,
       "source": "static+runtime",
       "method": "POST",
+      "ruby_api_method": "revoke_user_sessions",
+      "ruby_api_call": "auth.api.revoke_user_sessions",
       "plugin_id": "admin",
       "operation_id": "revokeUserSessions"
     },
@@ -511,6 +515,8 @@
       "server_only": false,
       "source": "static+runtime",
       "method": "POST",
+      "ruby_api_method": "set_role",
+      "ruby_api_call": "auth.api.set_role",
       "plugin_id": "admin",
       "operation_id": "setUserRole"
     },
@@ -542,6 +548,8 @@
       "server_only": false,
       "source": "static+runtime",
       "method": "POST",
+      "ruby_api_method": "set_user_password",
+      "ruby_api_call": "auth.api.set_user_password",
       "plugin_id": "admin",
       "operation_id": "setUserPassword"
     },
@@ -562,6 +570,8 @@
       "server_only": false,
       "source": "static+runtime",
       "method": "POST",
+      "ruby_api_method": "stop_impersonating",
+      "ruby_api_call": "auth.api.stop_impersonating",
       "plugin_id": "admin",
       "operation_id": "stopImpersonating"
     },
@@ -588,6 +598,8 @@
       "server_only": false,
       "source": "static+runtime",
       "method": "POST",
+      "ruby_api_method": "unban_user",
+      "ruby_api_call": "auth.api.unban_user",
       "plugin_id": "admin",
       "operation_id": "unbanUser"
     },
@@ -619,6 +631,8 @@
       "server_only": false,
       "source": "static+runtime",
       "method": "POST",
+      "ruby_api_method": "admin_update_user",
+      "ruby_api_call": "auth.api.admin_update_user",
       "plugin_id": "admin",
       "operation_id": "adminUpdateUser"
     },
@@ -708,7 +722,9 @@
       "server_only": false,
       "operation_id": "postApiKeyCreate",
       "source": "runtime",
-      "method": "POST"
+      "method": "POST",
+      "ruby_api_method": "create_api_key",
+      "ruby_api_call": "auth.api.create_api_key"
     },
     {
       "path": "/api-key/delete",
@@ -736,7 +752,9 @@
       "server_only": false,
       "operation_id": "postApiKeyDelete",
       "source": "runtime",
-      "method": "POST"
+      "method": "POST",
+      "ruby_api_method": "delete_api_key",
+      "ruby_api_call": "auth.api.delete_api_key"
     },
     {
       "path": "/api-key/delete-all-expired-api-keys",
@@ -753,7 +771,9 @@
       "server_only": false,
       "operation_id": "postApiKeyDeleteAllExpiredApiKeys",
       "source": "runtime",
-      "method": "POST"
+      "method": "POST",
+      "ruby_api_method": "delete_all_expired_api_keys",
+      "ruby_api_call": "auth.api.delete_all_expired_api_keys"
     },
     {
       "path": "/api-key/get",
@@ -781,7 +801,9 @@
       "server_only": false,
       "operation_id": "getApiKeyGet",
       "source": "runtime",
-      "method": "GET"
+      "method": "GET",
+      "ruby_api_method": "get_api_key",
+      "ruby_api_call": "auth.api.get_api_key"
     },
     {
       "path": "/api-key/list",
@@ -829,7 +851,9 @@
       "server_only": false,
       "operation_id": "getApiKeyList",
       "source": "runtime",
-      "method": "GET"
+      "method": "GET",
+      "ruby_api_method": "list_api_keys",
+      "ruby_api_call": "auth.api.list_api_keys"
     },
     {
       "path": "/api-key/update",
@@ -917,7 +941,9 @@
       "server_only": false,
       "operation_id": "postApiKeyUpdate",
       "source": "runtime",
-      "method": "POST"
+      "method": "POST",
+      "ruby_api_method": "update_api_key",
+      "ruby_api_call": "auth.api.update_api_key"
     },
     {
       "path": "/api-key/verify",
@@ -950,7 +976,9 @@
       "server_only": false,
       "operation_id": "postApiKeyVerify",
       "source": "runtime",
-      "method": "POST"
+      "method": "POST",
+      "ruby_api_method": "verify_api_key",
+      "ruby_api_call": "auth.api.verify_api_key"
     },
     {
       "path": "/callback/:id",
@@ -971,6 +999,8 @@
       "server_only": false,
       "source": "static+runtime",
       "method": "GET",
+      "ruby_api_method": "callback_oauth",
+      "ruby_api_call": "auth.api.callback_oauth",
       "plugin_id": "core",
       "operation_id": "callbackOAuth"
     },
@@ -993,6 +1023,8 @@
       "server_only": false,
       "source": "static+runtime",
       "method": "POST",
+      "ruby_api_method": "callback_oauth",
+      "ruby_api_call": "auth.api.callback_oauth",
       "plugin_id": "core",
       "operation_id": "callbackOAuth"
     },
@@ -1024,6 +1056,8 @@
       "server_only": false,
       "source": "static+runtime",
       "method": "POST",
+      "ruby_api_method": "change_email",
+      "ruby_api_call": "auth.api.change_email",
       "plugin_id": "core",
       "operation_id": "changeEmail"
     },
@@ -1060,6 +1094,8 @@
       "server_only": false,
       "source": "static+runtime",
       "method": "POST",
+      "ruby_api_method": "change_password",
+      "ruby_api_call": "auth.api.change_password",
       "plugin_id": "core",
       "operation_id": "changePassword"
     },
@@ -1080,6 +1116,8 @@
       "server_only": false,
       "source": "static+runtime",
       "method": "POST",
+      "ruby_api_method": "delete_anonymous_user",
+      "ruby_api_call": "auth.api.delete_anonymous_user",
       "plugin_id": "anonymous",
       "operation_id": "deleteAnonymousUser"
     },
@@ -1116,6 +1154,8 @@
       "server_only": false,
       "source": "static+runtime",
       "method": "POST",
+      "ruby_api_method": "delete_user",
+      "ruby_api_call": "auth.api.delete_user",
       "plugin_id": "core",
       "operation_id": "deleteUser"
     },
@@ -1147,6 +1187,8 @@
       "server_only": false,
       "source": "static+runtime",
       "method": "GET",
+      "ruby_api_method": "delete_user_callback",
+      "ruby_api_call": "auth.api.delete_user_callback",
       "plugin_id": "core",
       "operation_id": "deleteUserCallback"
     },
@@ -1167,6 +1209,8 @@
       "server_only": false,
       "source": "static+runtime",
       "method": "GET",
+      "ruby_api_method": "device_verify",
+      "ruby_api_call": "auth.api.device_verify",
       "plugin_id": "device-authorization",
       "operation_id": "getDeviceVerification"
     },
@@ -1182,12 +1226,7 @@
       "body_fields": [
         {
           "name": "userCode",
-          "required": false,
-          "type": "string"
-        },
-        {
-          "name": "user_code",
-          "required": false,
+          "required": true,
           "type": "string"
         }
       ],
@@ -1198,6 +1237,8 @@
       "server_only": false,
       "source": "static+runtime",
       "method": "POST",
+      "ruby_api_method": "device_approve",
+      "ruby_api_call": "auth.api.device_approve",
       "plugin_id": "device-authorization",
       "operation_id": "approveDevice"
     },
@@ -1229,6 +1270,8 @@
       "server_only": false,
       "source": "static+runtime",
       "method": "POST",
+      "ruby_api_method": "device_code",
+      "ruby_api_call": "auth.api.device_code",
       "plugin_id": "device-authorization",
       "operation_id": "requestDeviceCode"
     },
@@ -1244,12 +1287,7 @@
       "body_fields": [
         {
           "name": "userCode",
-          "required": false,
-          "type": "string"
-        },
-        {
-          "name": "user_code",
-          "required": false,
+          "required": true,
           "type": "string"
         }
       ],
@@ -1260,6 +1298,8 @@
       "server_only": false,
       "source": "static+runtime",
       "method": "POST",
+      "ruby_api_method": "device_deny",
+      "ruby_api_call": "auth.api.device_deny",
       "plugin_id": "device-authorization",
       "operation_id": "denyDevice"
     },
@@ -1296,6 +1336,8 @@
       "server_only": false,
       "source": "static+runtime",
       "method": "POST",
+      "ruby_api_method": "device_token",
+      "ruby_api_call": "auth.api.device_token",
       "plugin_id": "device-authorization",
       "operation_id": "exchangeDeviceToken"
     },
@@ -1327,6 +1369,8 @@
       "server_only": false,
       "source": "static+runtime",
       "method": "POST",
+      "ruby_api_method": "dub_link",
+      "ruby_api_call": "auth.api.dub_link",
       "plugin_id": "dub",
       "operation_id": "dubLink"
     },
@@ -1336,7 +1380,7 @@
         "POST"
       ],
       "file": "packages/better_auth/lib/better_auth/plugins/email_otp.rb",
-      "line": 386,
+      "line": 385,
       "endpoint_key": "change_email_email_otp",
       "plugin_hint": "email_otp",
       "body_fields": [
@@ -1358,6 +1402,8 @@
       "server_only": false,
       "source": "static+runtime",
       "method": "POST",
+      "ruby_api_method": "change_email_email_otp",
+      "ruby_api_call": "auth.api.change_email_email_otp",
       "plugin_id": "email-otp",
       "operation_id": "changeEmailWithEmailOTP"
     },
@@ -1367,7 +1413,7 @@
         "POST"
       ],
       "file": "packages/better_auth/lib/better_auth/plugins/email_otp.rb",
-      "line": 186,
+      "line": 185,
       "endpoint_key": "check_verification_otp",
       "plugin_hint": "email_otp",
       "body_fields": [
@@ -1394,6 +1440,8 @@
       "server_only": false,
       "source": "static+runtime",
       "method": "POST",
+      "ruby_api_method": "check_verification_otp",
+      "ruby_api_call": "auth.api.check_verification_otp",
       "plugin_id": "email-otp",
       "operation_id": "checkVerificationOTP"
     },
@@ -1403,7 +1451,7 @@
         "GET"
       ],
       "file": "packages/better_auth/lib/better_auth/plugins/email_otp.rb",
-      "line": 135,
+      "line": 134,
       "endpoint_key": "get_verification_otp",
       "plugin_hint": "email_otp",
       "body_fields": [],
@@ -1425,6 +1473,8 @@
       "server_only": false,
       "source": "static+runtime",
       "method": "GET",
+      "ruby_api_method": "get_verification_otp",
+      "ruby_api_call": "auth.api.get_verification_otp",
       "plugin_id": "email-otp",
       "operation_id": "getVerificationOTP"
     },
@@ -1434,7 +1484,7 @@
         "POST"
       ],
       "file": "packages/better_auth/lib/better_auth/plugins/email_otp.rb",
-      "line": 339,
+      "line": 338,
       "endpoint_key": "request_email_change_email_otp",
       "plugin_hint": "email_otp",
       "body_fields": [
@@ -1456,6 +1506,8 @@
       "server_only": false,
       "source": "static+runtime",
       "method": "POST",
+      "ruby_api_method": "request_email_change_email_otp",
+      "ruby_api_call": "auth.api.request_email_change_email_otp",
       "plugin_id": "email-otp",
       "operation_id": "requestEmailChangeOTP"
     },
@@ -1465,7 +1517,7 @@
         "POST"
       ],
       "file": "packages/better_auth/lib/better_auth/plugins/email_otp.rb",
-      "line": 431,
+      "line": 430,
       "endpoint_key": "request_password_reset_email_otp",
       "plugin_hint": "email_otp",
       "body_fields": [
@@ -1482,6 +1534,8 @@
       "server_only": false,
       "source": "static+runtime",
       "method": "POST",
+      "ruby_api_method": "request_password_reset_email_otp",
+      "ruby_api_call": "auth.api.request_password_reset_email_otp",
       "plugin_id": "email-otp",
       "operation_id": "requestPasswordResetEmailOTP"
     },
@@ -1491,7 +1545,7 @@
         "POST"
       ],
       "file": "packages/better_auth/lib/better_auth/plugins/email_otp.rb",
-      "line": 483,
+      "line": 456,
       "endpoint_key": "reset_password_email_otp",
       "plugin_hint": "email_otp",
       "body_fields": [
@@ -1518,6 +1572,8 @@
       "server_only": false,
       "source": "static+runtime",
       "method": "POST",
+      "ruby_api_method": "reset_password_email_otp",
+      "ruby_api_call": "auth.api.reset_password_email_otp",
       "plugin_id": "email-otp",
       "operation_id": "resetPasswordEmailOTP"
     },
@@ -1527,7 +1583,7 @@
         "POST"
       ],
       "file": "packages/better_auth/lib/better_auth/plugins/email_otp.rb",
-      "line": 80,
+      "line": 79,
       "endpoint_key": "send_verification_otp",
       "plugin_hint": "email_otp",
       "body_fields": [
@@ -1549,6 +1605,8 @@
       "server_only": false,
       "source": "static+runtime",
       "method": "POST",
+      "ruby_api_method": "send_verification_otp",
+      "ruby_api_call": "auth.api.send_verification_otp",
       "plugin_id": "email-otp",
       "operation_id": "sendVerificationOTP"
     },
@@ -1558,7 +1616,7 @@
         "POST"
       ],
       "file": "packages/better_auth/lib/better_auth/plugins/email_otp.rb",
-      "line": 223,
+      "line": 222,
       "endpoint_key": "verify_email_otp",
       "plugin_hint": "email_otp",
       "body_fields": [
@@ -1580,6 +1638,8 @@
       "server_only": false,
       "source": "static+runtime",
       "method": "POST",
+      "ruby_api_method": "verify_email_otp",
+      "ruby_api_call": "auth.api.verify_email_otp",
       "plugin_id": "email-otp",
       "operation_id": "verifyEmailOTP"
     },
@@ -1600,6 +1660,8 @@
       "server_only": false,
       "source": "static+runtime",
       "method": "GET",
+      "ruby_api_method": "error",
+      "ruby_api_call": "auth.api.error",
       "plugin_id": "core",
       "operation_id": "getError"
     },
@@ -1631,34 +1693,10 @@
       "server_only": false,
       "source": "static+runtime",
       "method": "GET",
+      "ruby_api_method": "expo_authorization_proxy",
+      "ruby_api_call": "auth.api.expo_authorization_proxy",
       "plugin_id": "expo",
       "operation_id": "expoAuthorizationProxy"
-    },
-    {
-      "path": "/forget-password/email-otp",
-      "methods": [
-        "POST"
-      ],
-      "file": "packages/better_auth/lib/better_auth/plugins/email_otp.rb",
-      "line": 457,
-      "endpoint_key": "forget_password_email_otp",
-      "plugin_hint": "email_otp",
-      "body_fields": [
-        {
-          "name": "email",
-          "required": true,
-          "type": "string"
-        }
-      ],
-      "query_params": [],
-      "path_params": [],
-      "header_params": [],
-      "disable_body": false,
-      "server_only": false,
-      "source": "static+runtime",
-      "method": "POST",
-      "plugin_id": "email-otp",
-      "operation_id": "forgetPasswordEmailOTP"
     },
     {
       "path": "/get-access-token",
@@ -1693,6 +1731,8 @@
       "server_only": false,
       "source": "static+runtime",
       "method": "POST",
+      "ruby_api_method": "get_access_token",
+      "ruby_api_call": "auth.api.get_access_token",
       "plugin_id": "core",
       "operation_id": "getAccessToken"
     },
@@ -1713,6 +1753,8 @@
       "server_only": false,
       "source": "static+runtime",
       "method": "GET",
+      "ruby_api_method": "get_session",
+      "ruby_api_call": "auth.api.get_session",
       "plugin_id": "core",
       "operation_id": "getSession"
     },
@@ -1733,6 +1775,8 @@
       "server_only": false,
       "source": "static+runtime",
       "method": "POST",
+      "ruby_api_method": "get_session",
+      "ruby_api_call": "auth.api.get_session",
       "plugin_id": "core",
       "operation_id": "getSession"
     },
@@ -1759,6 +1803,8 @@
       "server_only": false,
       "source": "static+runtime",
       "method": "POST",
+      "ruby_api_method": "is_username_available",
+      "ruby_api_call": "auth.api.is_username_available",
       "plugin_id": "username",
       "operation_id": "isUsernameAvailable"
     },
@@ -1777,7 +1823,9 @@
       "server_only": false,
       "operation_id": "getJSONWebKeySet",
       "source": "runtime",
-      "method": "GET"
+      "method": "GET",
+      "ruby_api_method": "get_jwks",
+      "ruby_api_call": "auth.api.get_jwks"
     },
     {
       "path": "/link-social",
@@ -1827,6 +1875,8 @@
       "server_only": false,
       "source": "static+runtime",
       "method": "POST",
+      "ruby_api_method": "link_social_account",
+      "ruby_api_call": "auth.api.link_social_account",
       "plugin_id": "core",
       "operation_id": "linkSocialAccount"
     },
@@ -1847,6 +1897,8 @@
       "server_only": false,
       "source": "static+runtime",
       "method": "GET",
+      "ruby_api_method": "list_user_accounts",
+      "ruby_api_call": "auth.api.list_user_accounts",
       "plugin_id": "core",
       "operation_id": "listUserAccounts"
     },
@@ -1867,6 +1919,8 @@
       "server_only": false,
       "source": "static+runtime",
       "method": "GET",
+      "ruby_api_method": "list_sessions",
+      "ruby_api_call": "auth.api.list_sessions",
       "plugin_id": "core",
       "operation_id": "listSessions"
     },
@@ -1898,220 +1952,10 @@
       "server_only": false,
       "source": "static+runtime",
       "method": "GET",
+      "ruby_api_method": "magic_link_verify",
+      "ruby_api_call": "auth.api.magic_link_verify",
       "plugin_id": "magic-link",
       "operation_id": "magicLinkVerify"
-    },
-    {
-      "path": "/mcp/authorize",
-      "methods": [
-        "GET"
-      ],
-      "file": "packages/better_auth/lib/better_auth/plugins/mcp/legacy_aliases.rb",
-      "line": 15,
-      "endpoint_key": "legacy_mcp_o_auth_authorize",
-      "plugin_hint": "legacy_aliases",
-      "body_fields": [],
-      "query_params": [],
-      "path_params": [],
-      "header_params": [],
-      "disable_body": false,
-      "server_only": false,
-      "source": "static+runtime",
-      "method": "GET",
-      "plugin_id": "mcp",
-      "operation_id": "legacyMcpOAuthAuthorize"
-    },
-    {
-      "path": "/mcp/get-session",
-      "methods": [
-        "GET"
-      ],
-      "file": "packages/better_auth/lib/better_auth/plugins/mcp.rb",
-      "line": 111,
-      "endpoint_key": "get_mcp_session",
-      "plugin_hint": "mcp",
-      "body_fields": [],
-      "query_params": [],
-      "path_params": [],
-      "header_params": [],
-      "disable_body": false,
-      "server_only": false,
-      "source": "static+runtime",
-      "method": "GET",
-      "plugin_id": "mcp",
-      "operation_id": "getMcpSession"
-    },
-    {
-      "path": "/mcp/jwks",
-      "methods": [
-        "GET"
-      ],
-      "file": "packages/better_auth/lib/better_auth/plugins/mcp/legacy_aliases.rb",
-      "line": 37,
-      "endpoint_key": "legacy_mcp_jwks",
-      "plugin_hint": "legacy_aliases",
-      "body_fields": [],
-      "query_params": [],
-      "path_params": [],
-      "header_params": [],
-      "disable_body": false,
-      "server_only": false,
-      "source": "static+runtime",
-      "method": "GET",
-      "plugin_id": "mcp",
-      "operation_id": "legacyMcpJSONWebKeySet"
-    },
-    {
-      "path": "/mcp/register",
-      "methods": [
-        "POST"
-      ],
-      "file": "packages/better_auth/lib/better_auth/plugins/mcp/legacy_aliases.rb",
-      "line": 9,
-      "endpoint_key": "legacy_mcp_register",
-      "plugin_hint": "legacy_aliases",
-      "body_fields": [
-        {
-          "name": "client_name",
-          "required": false,
-          "type": "string"
-        },
-        {
-          "name": "client_uri",
-          "required": false,
-          "type": "string"
-        },
-        {
-          "name": "contacts",
-          "required": false,
-          "type": "array"
-        },
-        {
-          "name": "grant_types",
-          "required": false,
-          "type": "array"
-        },
-        {
-          "name": "logo_uri",
-          "required": false,
-          "type": "string"
-        },
-        {
-          "name": "metadata",
-          "required": false,
-          "type": "object"
-        },
-        {
-          "name": "redirect_uris",
-          "required": true,
-          "type": "array"
-        },
-        {
-          "name": "response_types",
-          "required": false,
-          "type": "array"
-        },
-        {
-          "name": "scope",
-          "required": false,
-          "type": "string"
-        }
-      ],
-      "query_params": [],
-      "path_params": [],
-      "header_params": [],
-      "disable_body": false,
-      "server_only": false,
-      "source": "static+runtime",
-      "method": "POST",
-      "plugin_id": "mcp",
-      "operation_id": "legacyRegisterMcpClient"
-    },
-    {
-      "path": "/mcp/token",
-      "methods": [
-        "POST"
-      ],
-      "file": "packages/better_auth/lib/better_auth/plugins/mcp/legacy_aliases.rb",
-      "line": 21,
-      "endpoint_key": "legacy_mcp_o_auth_token",
-      "plugin_hint": "legacy_aliases",
-      "body_fields": [
-        {
-          "name": "client_id",
-          "required": false,
-          "type": "string"
-        },
-        {
-          "name": "client_secret",
-          "required": false,
-          "type": "string"
-        },
-        {
-          "name": "code",
-          "required": false,
-          "type": "string"
-        },
-        {
-          "name": "code_verifier",
-          "required": false,
-          "type": "string"
-        },
-        {
-          "name": "grant_type",
-          "required": true,
-          "type": "string"
-        },
-        {
-          "name": "redirect_uri",
-          "required": false,
-          "type": "string"
-        },
-        {
-          "name": "refresh_token",
-          "required": false,
-          "type": "string"
-        },
-        {
-          "name": "resource",
-          "required": false,
-          "type": ""
-        },
-        {
-          "name": "scope",
-          "required": false,
-          "type": "string"
-        }
-      ],
-      "query_params": [],
-      "path_params": [],
-      "header_params": [],
-      "disable_body": false,
-      "server_only": false,
-      "source": "static+runtime",
-      "method": "POST",
-      "plugin_id": "mcp",
-      "operation_id": "legacyMcpOAuthToken"
-    },
-    {
-      "path": "/mcp/userinfo",
-      "methods": [
-        "GET"
-      ],
-      "file": "packages/better_auth/lib/better_auth/plugins/mcp/legacy_aliases.rb",
-      "line": 31,
-      "endpoint_key": "legacy_mcp_o_auth_user_info",
-      "plugin_hint": "legacy_aliases",
-      "body_fields": [],
-      "query_params": [],
-      "path_params": [],
-      "header_params": [],
-      "disable_body": false,
-      "server_only": false,
-      "source": "static+runtime",
-      "method": "GET",
-      "plugin_id": "mcp",
-      "operation_id": "legacyMcpOAuthUserinfo"
     },
     {
       "path": "/multi-session/list-device-sessions",
@@ -2130,6 +1974,8 @@
       "server_only": false,
       "source": "static+runtime",
       "method": "GET",
+      "ruby_api_method": "list_device_sessions",
+      "ruby_api_call": "auth.api.list_device_sessions",
       "plugin_id": "multi-session",
       "operation_id": "listDeviceSessions"
     },
@@ -2156,6 +2002,8 @@
       "server_only": false,
       "source": "static+runtime",
       "method": "POST",
+      "ruby_api_method": "revoke_device_session",
+      "ruby_api_call": "auth.api.revoke_device_session",
       "plugin_id": "multi-session",
       "operation_id": "revokeDeviceSession"
     },
@@ -2182,6 +2030,8 @@
       "server_only": false,
       "source": "static+runtime",
       "method": "POST",
+      "ruby_api_method": "set_active_session",
+      "ruby_api_call": "auth.api.set_active_session",
       "plugin_id": "multi-session",
       "operation_id": "setActiveSession"
     },
@@ -2213,6 +2063,8 @@
       "server_only": false,
       "source": "static+runtime",
       "method": "GET",
+      "ruby_api_method": "o_auth_proxy",
+      "ruby_api_call": "auth.api.o_auth_proxy",
       "plugin_id": "oauth-proxy",
       "operation_id": "oauthProxyCallback"
     },
@@ -2221,10 +2073,10 @@
       "methods": [
         "GET"
       ],
-      "file": "packages/better_auth/lib/better_auth/plugins/oidc_provider.rb",
-      "line": 236,
-      "endpoint_key": "mcp_o_auth_authorize",
-      "plugin_hint": "oidc_provider",
+      "file": "packages/better_auth-oauth-provider/lib/better_auth/plugins/oauth_provider/authorize.rb",
+      "line": 24,
+      "endpoint_key": "o_auth2_authorize",
+      "plugin_hint": "better_auth/plugins/oauth_provider",
       "body_fields": [],
       "query_params": [],
       "path_params": [],
@@ -2233,8 +2085,10 @@
       "server_only": false,
       "source": "static+runtime",
       "method": "GET",
-      "plugin_id": "mcp",
-      "operation_id": "mcpOAuthAuthorize"
+      "ruby_api_method": "o_auth2_authorize",
+      "ruby_api_call": "auth.api.o_auth2_authorize",
+      "plugin_id": "oauth-provider",
+      "operation_id": "getOauth2Authorize"
     },
     {
       "path": "/oauth2/callback/:providerId",
@@ -2255,218 +2109,10 @@
       "server_only": false,
       "source": "static+runtime",
       "method": "GET",
+      "ruby_api_method": "o_auth2_callback",
+      "ruby_api_call": "auth.api.o_auth2_callback",
       "plugin_id": "generic-oauth",
       "operation_id": "oauth2Callback"
-    },
-    {
-      "path": "/oauth2/client",
-      "methods": [
-        "DELETE"
-      ],
-      "file": "packages/better_auth-oauth-provider/lib/better_auth/plugins/oauth_provider/oauth_client/endpoints.rb",
-      "line": 232,
-      "endpoint_key": "legacy_delete_o_auth_client",
-      "plugin_hint": "better_auth/plugins/oauth_provider",
-      "body_fields": [],
-      "query_params": [],
-      "path_params": [],
-      "header_params": [],
-      "disable_body": false,
-      "server_only": false,
-      "source": "static+runtime",
-      "method": "DELETE",
-      "plugin_id": "oauth-provider",
-      "operation_id": "deleteOauth2Client"
-    },
-    {
-      "path": "/oauth2/client",
-      "methods": [
-        "GET"
-      ],
-      "file": "packages/better_auth-oauth-provider/lib/better_auth/plugins/oauth_provider/oauth_client/endpoints.rb",
-      "line": 200,
-      "endpoint_key": "legacy_get_o_auth_client_public",
-      "plugin_hint": "better_auth/plugins/oauth_provider",
-      "body_fields": [],
-      "query_params": [],
-      "path_params": [],
-      "header_params": [],
-      "disable_body": false,
-      "server_only": false,
-      "source": "static+runtime",
-      "method": "GET",
-      "plugin_id": "oauth-provider",
-      "operation_id": "getOauth2Client"
-    },
-    {
-      "path": "/oauth2/client",
-      "methods": [
-        "PATCH"
-      ],
-      "file": "packages/better_auth-oauth-provider/lib/better_auth/plugins/oauth_provider/oauth_client/endpoints.rb",
-      "line": 218,
-      "endpoint_key": "legacy_update_o_auth_client",
-      "plugin_hint": "better_auth/plugins/oauth_provider",
-      "body_fields": [
-        {
-          "name": "client_id",
-          "required": true,
-          "type": "string"
-        },
-        {
-          "name": "update",
-          "required": true,
-          "type": "object"
-        }
-      ],
-      "query_params": [],
-      "path_params": [],
-      "header_params": [],
-      "disable_body": false,
-      "server_only": false,
-      "source": "static+runtime",
-      "method": "PATCH",
-      "plugin_id": "oauth-provider",
-      "operation_id": "patchOauth2Client"
-    },
-    {
-      "path": "/oauth2/client/:id",
-      "methods": [
-        "DELETE"
-      ],
-      "file": "packages/better_auth/lib/better_auth/plugins/oidc_provider.rb",
-      "line": 227,
-      "endpoint_key": "delete_o_auth_application",
-      "plugin_hint": "oidc_provider",
-      "body_fields": [],
-      "query_params": [],
-      "path_params": [
-        "id"
-      ],
-      "header_params": [],
-      "disable_body": false,
-      "server_only": false,
-      "source": "static+runtime",
-      "method": "DELETE",
-      "plugin_id": "oidc-provider",
-      "operation_id": "deleteOAuthApplication"
-    },
-    {
-      "path": "/oauth2/client/:id",
-      "methods": [
-        "GET"
-      ],
-      "file": "packages/better_auth/lib/better_auth/plugins/oidc_provider.rb",
-      "line": 164,
-      "endpoint_key": "get_o_auth_client",
-      "plugin_hint": "oidc_provider",
-      "body_fields": [],
-      "query_params": [],
-      "path_params": [
-        "id"
-      ],
-      "header_params": [],
-      "disable_body": false,
-      "server_only": false,
-      "source": "static+runtime",
-      "method": "GET",
-      "plugin_id": "oidc-provider",
-      "operation_id": "getOAuthClient"
-    },
-    {
-      "path": "/oauth2/client/:id",
-      "methods": [
-        "PATCH"
-      ],
-      "file": "packages/better_auth/lib/better_auth/plugins/oidc_provider.rb",
-      "line": 181,
-      "endpoint_key": "update_o_auth_application",
-      "plugin_hint": "oidc_provider",
-      "body_fields": [
-        {
-          "name": "client_name",
-          "required": false,
-          "type": "string"
-        },
-        {
-          "name": "client_uri",
-          "required": false,
-          "type": "string"
-        },
-        {
-          "name": "grant_types",
-          "required": false,
-          "type": "array"
-        },
-        {
-          "name": "logo_uri",
-          "required": false,
-          "type": "string"
-        },
-        {
-          "name": "metadata",
-          "required": false,
-          "type": "object"
-        },
-        {
-          "name": "post_logout_redirect_uris",
-          "required": false,
-          "type": "array"
-        },
-        {
-          "name": "redirect_uris",
-          "required": false,
-          "type": "array"
-        },
-        {
-          "name": "response_types",
-          "required": false,
-          "type": "array"
-        },
-        {
-          "name": "scope",
-          "required": false,
-          "type": "string"
-        },
-        {
-          "name": "scopes",
-          "required": false,
-          "type": "array"
-        }
-      ],
-      "query_params": [],
-      "path_params": [
-        "id"
-      ],
-      "header_params": [],
-      "disable_body": false,
-      "server_only": false,
-      "source": "static+runtime",
-      "method": "PATCH",
-      "plugin_id": "oidc-provider",
-      "operation_id": "updateOAuthApplication"
-    },
-    {
-      "path": "/oauth2/client/:id/rotate-secret",
-      "methods": [
-        "POST"
-      ],
-      "file": "packages/better_auth/lib/better_auth/plugins/oidc_provider.rb",
-      "line": 209,
-      "endpoint_key": "rotate_o_auth_application_secret",
-      "plugin_hint": "oidc_provider",
-      "body_fields": [],
-      "query_params": [],
-      "path_params": [
-        "id"
-      ],
-      "header_params": [],
-      "disable_body": false,
-      "server_only": false,
-      "source": "static+runtime",
-      "method": "POST",
-      "plugin_id": "oidc-provider",
-      "operation_id": "rotateOAuthApplicationSecret"
     },
     {
       "path": "/oauth2/client/rotate-secret",
@@ -2474,7 +2120,7 @@
         "POST"
       ],
       "file": "packages/better_auth-oauth-provider/lib/better_auth/plugins/oauth_provider/oauth_client/endpoints.rb",
-      "line": 167,
+      "line": 171,
       "endpoint_key": "rotate_o_auth_client_secret",
       "plugin_hint": "better_auth/plugins/oauth_provider",
       "body_fields": [
@@ -2491,28 +2137,10 @@
       "server_only": false,
       "source": "static+runtime",
       "method": "POST",
+      "ruby_api_method": "rotate_o_auth_client_secret",
+      "ruby_api_call": "auth.api.rotate_o_auth_client_secret",
       "plugin_id": "oauth-provider",
       "operation_id": "postOauth2ClientRotateSecret"
-    },
-    {
-      "path": "/oauth2/clients",
-      "methods": [
-        "GET"
-      ],
-      "file": "packages/better_auth/lib/better_auth/plugins/oidc_provider.rb",
-      "line": 173,
-      "endpoint_key": "list_o_auth_applications",
-      "plugin_hint": "oidc_provider",
-      "body_fields": [],
-      "query_params": [],
-      "path_params": [],
-      "header_params": [],
-      "disable_body": false,
-      "server_only": false,
-      "source": "static+runtime",
-      "method": "GET",
-      "plugin_id": "oidc-provider",
-      "operation_id": "listOAuthApplications"
     },
     {
       "path": "/oauth2/consent",
@@ -2521,7 +2149,7 @@
       ],
       "file": "packages/better_auth-oauth-provider/lib/better_auth/plugins/oauth_provider/oauth_consent/endpoints.rb",
       "line": 120,
-      "endpoint_key": "legacy_delete_o_auth_consent",
+      "endpoint_key": "oauth_find_user_consent",
       "plugin_hint": "better_auth/plugins/oauth_provider",
       "body_fields": [],
       "query_params": [],
@@ -2529,10 +2157,10 @@
       "header_params": [],
       "disable_body": false,
       "server_only": false,
-      "source": "static+runtime",
+      "source": "static",
       "method": "DELETE",
-      "plugin_id": "oauth-provider",
-      "operation_id": "deleteOauth2Consent"
+      "ruby_api_method": "oauth_find_user_consent",
+      "ruby_api_call": "auth.api.oauth_find_user_consent"
     },
     {
       "path": "/oauth2/consent",
@@ -2541,7 +2169,7 @@
       ],
       "file": "packages/better_auth-oauth-provider/lib/better_auth/plugins/oauth_provider/oauth_consent/endpoints.rb",
       "line": 91,
-      "endpoint_key": "legacy_get_o_auth_consent",
+      "endpoint_key": "oauth_find_user_consent",
       "plugin_hint": "better_auth/plugins/oauth_provider",
       "body_fields": [],
       "query_params": [],
@@ -2549,10 +2177,10 @@
       "header_params": [],
       "disable_body": false,
       "server_only": false,
-      "source": "static+runtime",
+      "source": "static",
       "method": "GET",
-      "plugin_id": "oauth-provider",
-      "operation_id": "getOauth2Consent"
+      "ruby_api_method": "oauth_find_user_consent",
+      "ruby_api_call": "auth.api.oauth_find_user_consent"
     },
     {
       "path": "/oauth2/consent",
@@ -2561,54 +2189,28 @@
       ],
       "file": "packages/better_auth-oauth-provider/lib/better_auth/plugins/oauth_provider/oauth_consent/endpoints.rb",
       "line": 101,
-      "endpoint_key": "legacy_update_o_auth_consent",
+      "endpoint_key": "oauth_find_user_consent",
       "plugin_hint": "better_auth/plugins/oauth_provider",
-      "body_fields": [
-        {
-          "name": "client_id",
-          "required": false,
-          "type": "string"
-        },
-        {
-          "name": "id",
-          "required": false,
-          "type": "string"
-        },
-        {
-          "name": "scope",
-          "required": false,
-          "type": "string"
-        },
-        {
-          "name": "scopes",
-          "required": false,
-          "type": "array"
-        },
-        {
-          "name": "update",
-          "required": false,
-          "type": "object"
-        }
-      ],
+      "body_fields": [],
       "query_params": [],
       "path_params": [],
       "header_params": [],
       "disable_body": false,
       "server_only": false,
-      "source": "static+runtime",
+      "source": "static",
       "method": "PATCH",
-      "plugin_id": "oauth-provider",
-      "operation_id": "patchOauth2Consent"
+      "ruby_api_method": "oauth_find_user_consent",
+      "ruby_api_call": "auth.api.oauth_find_user_consent"
     },
     {
       "path": "/oauth2/consent",
       "methods": [
         "POST"
       ],
-      "file": "packages/better_auth/lib/better_auth/plugins/oidc_provider.rb",
-      "line": 326,
-      "endpoint_key": "o_auth_consent",
-      "plugin_hint": "oidc_provider",
+      "file": "packages/better_auth-oauth-provider/lib/better_auth/plugins/oauth_provider/consent.rb",
+      "line": 8,
+      "endpoint_key": "o_auth2_consent",
+      "plugin_hint": "better_auth/plugins/oauth_provider",
       "body_fields": [
         {
           "name": "accept",
@@ -2638,8 +2240,10 @@
       "server_only": false,
       "source": "static+runtime",
       "method": "POST",
-      "plugin_id": "mcp",
-      "operation_id": "mcpOAuthConsent"
+      "ruby_api_method": "o_auth2_consent",
+      "ruby_api_call": "auth.api.o_auth2_consent",
+      "plugin_id": "oauth-provider",
+      "operation_id": "postOauth2Consent"
     },
     {
       "path": "/oauth2/consents",
@@ -2648,7 +2252,7 @@
       ],
       "file": "packages/better_auth-oauth-provider/lib/better_auth/plugins/oauth_provider/oauth_consent/endpoints.rb",
       "line": 83,
-      "endpoint_key": "legacy_list_o_auth_consents",
+      "endpoint_key": "oauth_find_user_consent",
       "plugin_hint": "better_auth/plugins/oauth_provider",
       "body_fields": [],
       "query_params": [],
@@ -2656,10 +2260,10 @@
       "header_params": [],
       "disable_body": false,
       "server_only": false,
-      "source": "static+runtime",
+      "source": "static",
       "method": "GET",
-      "plugin_id": "oauth-provider",
-      "operation_id": "getOauth2Consents"
+      "ruby_api_method": "oauth_find_user_consent",
+      "ruby_api_call": "auth.api.oauth_find_user_consent"
     },
     {
       "path": "/oauth2/continue",
@@ -2687,11 +2291,6 @@
           "type": "boolean"
         },
         {
-          "name": "post_login",
-          "required": false,
-          "type": "boolean"
-        },
-        {
           "name": "selected",
           "required": false,
           "type": "boolean"
@@ -2704,6 +2303,8 @@
       "server_only": false,
       "source": "static+runtime",
       "method": "POST",
+      "ruby_api_method": "o_auth2_continue",
+      "ruby_api_call": "auth.api.o_auth2_continue",
       "plugin_id": "oauth-provider",
       "operation_id": "postOauth2Continue"
     },
@@ -2731,11 +2332,6 @@
           "name": "contacts",
           "required": false,
           "type": "array"
-        },
-        {
-          "name": "enableEndSession",
-          "required": false,
-          "type": "boolean"
         },
         {
           "name": "enable_end_session",
@@ -2773,11 +2369,6 @@
           "type": "array"
         },
         {
-          "name": "requirePKCE",
-          "required": false,
-          "type": "boolean"
-        },
-        {
           "name": "require_pkce",
           "required": false,
           "type": "boolean"
@@ -2798,11 +2389,6 @@
           "type": "array"
         },
         {
-          "name": "skipConsent",
-          "required": false,
-          "type": "boolean"
-        },
-        {
           "name": "skip_consent",
           "required": false,
           "type": "boolean"
@@ -2819,11 +2405,6 @@
         },
         {
           "name": "software_version",
-          "required": false,
-          "type": "string"
-        },
-        {
-          "name": "subjectType",
           "required": false,
           "type": "string"
         },
@@ -2855,6 +2436,8 @@
       "server_only": false,
       "source": "static+runtime",
       "method": "POST",
+      "ruby_api_method": "create_o_auth_client",
+      "ruby_api_call": "auth.api.create_o_auth_client",
       "plugin_id": "oauth-provider",
       "operation_id": "postOauth2CreateClient"
     },
@@ -2864,7 +2447,7 @@
         "POST"
       ],
       "file": "packages/better_auth-oauth-provider/lib/better_auth/plugins/oauth_provider/oauth_client/endpoints.rb",
-      "line": 94,
+      "line": 95,
       "endpoint_key": "delete_o_auth_client",
       "plugin_hint": "better_auth/plugins/oauth_provider",
       "body_fields": [
@@ -2881,6 +2464,8 @@
       "server_only": false,
       "source": "static+runtime",
       "method": "POST",
+      "ruby_api_method": "delete_o_auth_client",
+      "ruby_api_call": "auth.api.delete_o_auth_client",
       "plugin_id": "oauth-provider",
       "operation_id": "postOauth2DeleteClient"
     },
@@ -2912,6 +2497,8 @@
       "server_only": false,
       "source": "static+runtime",
       "method": "POST",
+      "ruby_api_method": "delete_o_auth_consent",
+      "ruby_api_call": "auth.api.delete_o_auth_consent",
       "plugin_id": "oauth-provider",
       "operation_id": "postOauth2DeleteConsent"
     },
@@ -2974,6 +2561,8 @@
       "server_only": false,
       "source": "static+runtime",
       "method": "GET",
+      "ruby_api_method": "o_auth2_end_session",
+      "ruby_api_call": "auth.api.o_auth2_end_session",
       "plugin_id": "oauth-provider",
       "operation_id": "getOauth2EndSession"
     },
@@ -3036,132 +2625,10 @@
       "server_only": false,
       "source": "static+runtime",
       "method": "POST",
+      "ruby_api_method": "o_auth2_end_session",
+      "ruby_api_call": "auth.api.o_auth2_end_session",
       "plugin_id": "oauth-provider",
       "operation_id": "getOauth2EndSession"
-    },
-    {
-      "path": "/oauth2/endsession",
-      "methods": [
-        "GET"
-      ],
-      "file": "packages/better_auth/lib/better_auth/plugins/oidc_provider.rb",
-      "line": 437,
-      "endpoint_key": "end_session",
-      "plugin_hint": "oidc_provider",
-      "body_fields": [
-        {
-          "name": "client_id",
-          "required": false,
-          "type": "string"
-        },
-        {
-          "name": "id_token_hint",
-          "required": false,
-          "type": "string"
-        },
-        {
-          "name": "post_logout_redirect_uri",
-          "required": false,
-          "type": "string"
-        },
-        {
-          "name": "state",
-          "required": false,
-          "type": "string"
-        }
-      ],
-      "query_params": [
-        {
-          "name": "id_token_hint",
-          "required": false,
-          "type": "string"
-        },
-        {
-          "name": "client_id",
-          "required": false,
-          "type": "string"
-        },
-        {
-          "name": "post_logout_redirect_uri",
-          "required": false,
-          "type": "string"
-        },
-        {
-          "name": "state",
-          "required": false,
-          "type": "string"
-        }
-      ],
-      "path_params": [],
-      "header_params": [],
-      "disable_body": false,
-      "server_only": false,
-      "source": "static+runtime",
-      "method": "GET",
-      "plugin_id": "oidc-provider",
-      "operation_id": "oauth2EndSession"
-    },
-    {
-      "path": "/oauth2/endsession",
-      "methods": [
-        "POST"
-      ],
-      "file": "packages/better_auth/lib/better_auth/plugins/oidc_provider.rb",
-      "line": 437,
-      "endpoint_key": "end_session",
-      "plugin_hint": "oidc_provider",
-      "body_fields": [
-        {
-          "name": "client_id",
-          "required": false,
-          "type": "string"
-        },
-        {
-          "name": "id_token_hint",
-          "required": false,
-          "type": "string"
-        },
-        {
-          "name": "post_logout_redirect_uri",
-          "required": false,
-          "type": "string"
-        },
-        {
-          "name": "state",
-          "required": false,
-          "type": "string"
-        }
-      ],
-      "query_params": [
-        {
-          "name": "id_token_hint",
-          "required": false,
-          "type": "string"
-        },
-        {
-          "name": "client_id",
-          "required": false,
-          "type": "string"
-        },
-        {
-          "name": "post_logout_redirect_uri",
-          "required": false,
-          "type": "string"
-        },
-        {
-          "name": "state",
-          "required": false,
-          "type": "string"
-        }
-      ],
-      "path_params": [],
-      "header_params": [],
-      "disable_body": false,
-      "server_only": false,
-      "source": "static+runtime",
-      "method": "POST",
-      "plugin_id": "oidc-provider",
-      "operation_id": "oauth2EndSession"
     },
     {
       "path": "/oauth2/get-client",
@@ -3169,7 +2636,7 @@
         "GET"
       ],
       "file": "packages/better_auth-oauth-provider/lib/better_auth/plugins/oauth_provider/oauth_client/endpoints.rb",
-      "line": 32,
+      "line": 33,
       "endpoint_key": "get_o_auth_client",
       "plugin_hint": "better_auth/plugins/oauth_provider",
       "body_fields": [],
@@ -3180,6 +2647,8 @@
       "server_only": false,
       "source": "static+runtime",
       "method": "GET",
+      "ruby_api_method": "get_o_auth_client",
+      "ruby_api_call": "auth.api.get_o_auth_client",
       "plugin_id": "oauth-provider",
       "operation_id": "getOauth2GetClient"
     },
@@ -3189,7 +2658,7 @@
         "GET"
       ],
       "file": "packages/better_auth-oauth-provider/lib/better_auth/plugins/oauth_provider/oauth_client/endpoints.rb",
-      "line": 80,
+      "line": 81,
       "endpoint_key": "list_o_auth_clients",
       "plugin_hint": "better_auth/plugins/oauth_provider",
       "body_fields": [],
@@ -3200,6 +2669,8 @@
       "server_only": false,
       "source": "static+runtime",
       "method": "GET",
+      "ruby_api_method": "list_o_auth_clients",
+      "ruby_api_call": "auth.api.list_o_auth_clients",
       "plugin_id": "oauth-provider",
       "operation_id": "getOauth2GetClients"
     },
@@ -3220,6 +2691,8 @@
       "server_only": false,
       "source": "static+runtime",
       "method": "GET",
+      "ruby_api_method": "get_o_auth_consent",
+      "ruby_api_call": "auth.api.get_o_auth_consent",
       "plugin_id": "oauth-provider",
       "operation_id": "getOauth2GetConsent"
     },
@@ -3240,6 +2713,8 @@
       "server_only": false,
       "source": "static+runtime",
       "method": "GET",
+      "ruby_api_method": "list_o_auth_consents",
+      "ruby_api_call": "auth.api.list_o_auth_consents",
       "plugin_id": "oauth-provider",
       "operation_id": "getOauth2GetConsents"
     },
@@ -3248,10 +2723,10 @@
       "methods": [
         "POST"
       ],
-      "file": "packages/better_auth/lib/better_auth/plugins/oidc_provider.rb",
-      "line": 402,
-      "endpoint_key": "mcp_o_auth_introspect",
-      "plugin_hint": "oidc_provider",
+      "file": "packages/better_auth-oauth-provider/lib/better_auth/plugins/oauth_provider/introspect.rb",
+      "line": 8,
+      "endpoint_key": "o_auth2_introspect",
+      "plugin_hint": "better_auth/plugins/oauth_provider",
       "body_fields": [
         {
           "name": "token",
@@ -3271,28 +2746,10 @@
       "server_only": false,
       "source": "static+runtime",
       "method": "POST",
-      "plugin_id": "mcp",
-      "operation_id": "mcpOAuthIntrospect"
-    },
-    {
-      "path": "/oauth2/jwks",
-      "methods": [
-        "GET"
-      ],
-      "file": "packages/better_auth/lib/better_auth/plugins/mcp.rb",
-      "line": 117,
-      "endpoint_key": "mcp_jwks",
-      "plugin_hint": "mcp",
-      "body_fields": [],
-      "query_params": [],
-      "path_params": [],
-      "header_params": [],
-      "disable_body": false,
-      "server_only": false,
-      "source": "static+runtime",
-      "method": "GET",
-      "plugin_id": "mcp",
-      "operation_id": "getMcpJSONWebKeySet"
+      "ruby_api_method": "o_auth2_introspect",
+      "ruby_api_call": "auth.api.o_auth2_introspect",
+      "plugin_id": "oauth-provider",
+      "operation_id": "postOauth2Introspect"
     },
     {
       "path": "/oauth2/link",
@@ -3310,17 +2767,7 @@
           "type": "object"
         },
         {
-          "name": "additional_data",
-          "required": false,
-          "type": "object"
-        },
-        {
           "name": "callbackURL",
-          "required": false,
-          "type": "string"
-        },
-        {
-          "name": "callback_url",
           "required": false,
           "type": "string"
         },
@@ -3330,17 +2777,7 @@
           "type": "boolean"
         },
         {
-          "name": "disable_redirect",
-          "required": false,
-          "type": "boolean"
-        },
-        {
           "name": "errorCallbackURL",
-          "required": false,
-          "type": "string"
-        },
-        {
-          "name": "error_callback_url",
           "required": false,
           "type": "string"
         },
@@ -3350,27 +2787,12 @@
           "type": "string"
         },
         {
-          "name": "new_user_callback_url",
-          "required": false,
-          "type": "string"
-        },
-        {
           "name": "providerId",
           "required": false,
           "type": "string"
         },
         {
-          "name": "provider_id",
-          "required": false,
-          "type": "string"
-        },
-        {
           "name": "requestSignUp",
-          "required": false,
-          "type": "boolean"
-        },
-        {
-          "name": "request_sign_up",
           "required": false,
           "type": "boolean"
         },
@@ -3387,6 +2809,8 @@
       "server_only": false,
       "source": "static+runtime",
       "method": "POST",
+      "ruby_api_method": "o_auth2_link_account",
+      "ruby_api_call": "auth.api.o_auth2_link_account",
       "plugin_id": "generic-oauth",
       "operation_id": "linkOAuth2"
     },
@@ -3396,7 +2820,7 @@
         "GET"
       ],
       "file": "packages/better_auth-oauth-provider/lib/better_auth/plugins/oauth_provider/oauth_client/endpoints.rb",
-      "line": 45,
+      "line": 46,
       "endpoint_key": "get_o_auth_client_public",
       "plugin_hint": "better_auth/plugins/oauth_provider",
       "body_fields": [],
@@ -3407,6 +2831,8 @@
       "server_only": false,
       "source": "static+runtime",
       "method": "GET",
+      "ruby_api_method": "get_o_auth_client_public",
+      "ruby_api_call": "auth.api.get_o_auth_client_public",
       "plugin_id": "oauth-provider",
       "operation_id": "getOauth2PublicClient"
     },
@@ -3416,7 +2842,7 @@
         "POST"
       ],
       "file": "packages/better_auth-oauth-provider/lib/better_auth/plugins/oauth_provider/oauth_client/endpoints.rb",
-      "line": 57,
+      "line": 58,
       "endpoint_key": "get_o_auth_client_public_prelogin",
       "plugin_hint": "better_auth/plugins/oauth_provider",
       "body_fields": [
@@ -3438,6 +2864,8 @@
       "server_only": false,
       "source": "static+runtime",
       "method": "POST",
+      "ruby_api_method": "get_o_auth_client_public_prelogin",
+      "ruby_api_call": "auth.api.get_o_auth_client_public_prelogin",
       "plugin_id": "oauth-provider",
       "operation_id": "postOauth2PublicClientPrelogin"
     },
@@ -3446,10 +2874,10 @@
       "methods": [
         "POST"
       ],
-      "file": "packages/better_auth/lib/better_auth/plugins/oidc_provider.rb",
-      "line": 131,
-      "endpoint_key": "mcp_register",
-      "plugin_hint": "oidc_provider",
+      "file": "packages/better_auth-oauth-provider/lib/better_auth/plugins/oauth_provider/register.rb",
+      "line": 8,
+      "endpoint_key": "register_o_auth_client",
+      "plugin_hint": "better_auth/plugins/oauth_provider",
       "body_fields": [
         {
           "name": "client_name",
@@ -3465,11 +2893,6 @@
           "name": "contacts",
           "required": false,
           "type": "array"
-        },
-        {
-          "name": "enableEndSession",
-          "required": false,
-          "type": "boolean"
         },
         {
           "name": "enable_end_session",
@@ -3507,11 +2930,6 @@
           "type": "array"
         },
         {
-          "name": "requirePKCE",
-          "required": false,
-          "type": "boolean"
-        },
-        {
           "name": "require_pkce",
           "required": false,
           "type": "boolean"
@@ -3532,11 +2950,6 @@
           "type": "array"
         },
         {
-          "name": "skipConsent",
-          "required": false,
-          "type": "boolean"
-        },
-        {
           "name": "skip_consent",
           "required": false,
           "type": "boolean"
@@ -3553,11 +2966,6 @@
         },
         {
           "name": "software_version",
-          "required": false,
-          "type": "string"
-        },
-        {
-          "name": "subjectType",
           "required": false,
           "type": "string"
         },
@@ -3589,18 +2997,20 @@
       "server_only": false,
       "source": "static+runtime",
       "method": "POST",
-      "plugin_id": "mcp",
-      "operation_id": "registerMcpClient"
+      "ruby_api_method": "register_o_auth_client",
+      "ruby_api_call": "auth.api.register_o_auth_client",
+      "plugin_id": "oauth-provider",
+      "operation_id": "postOauth2Register"
     },
     {
       "path": "/oauth2/revoke",
       "methods": [
         "POST"
       ],
-      "file": "packages/better_auth/lib/better_auth/plugins/oidc_provider.rb",
-      "line": 422,
-      "endpoint_key": "mcp_o_auth_revoke",
-      "plugin_hint": "oidc_provider",
+      "file": "packages/better_auth-oauth-provider/lib/better_auth/plugins/oauth_provider/revoke.rb",
+      "line": 8,
+      "endpoint_key": "o_auth2_revoke",
+      "plugin_hint": "better_auth/plugins/oauth_provider",
       "body_fields": [
         {
           "name": "token",
@@ -3620,18 +3030,20 @@
       "server_only": false,
       "source": "static+runtime",
       "method": "POST",
-      "plugin_id": "mcp",
-      "operation_id": "mcpOAuthRevoke"
+      "ruby_api_method": "o_auth2_revoke",
+      "ruby_api_call": "auth.api.o_auth2_revoke",
+      "plugin_id": "oauth-provider",
+      "operation_id": "postOauth2Revoke"
     },
     {
       "path": "/oauth2/token",
       "methods": [
         "POST"
       ],
-      "file": "packages/better_auth/lib/better_auth/plugins/oidc_provider.rb",
-      "line": 356,
-      "endpoint_key": "mcp_o_auth_token",
-      "plugin_hint": "oidc_provider",
+      "file": "packages/better_auth-oauth-provider/lib/better_auth/plugins/oauth_provider/token.rb",
+      "line": 8,
+      "endpoint_key": "o_auth2_token",
+      "plugin_hint": "better_auth/plugins/oauth_provider",
       "body_fields": [
         {
           "name": "client_id",
@@ -3686,8 +3098,10 @@
       "server_only": false,
       "source": "static+runtime",
       "method": "POST",
-      "plugin_id": "mcp",
-      "operation_id": "mcpOAuthToken"
+      "ruby_api_method": "o_auth2_token",
+      "ruby_api_call": "auth.api.o_auth2_token",
+      "plugin_id": "oauth-provider",
+      "operation_id": "postOauth2Token"
     },
     {
       "path": "/oauth2/update-client",
@@ -3695,7 +3109,7 @@
         "POST"
       ],
       "file": "packages/better_auth-oauth-provider/lib/better_auth/plugins/oauth_provider/oauth_client/endpoints.rb",
-      "line": 107,
+      "line": 109,
       "endpoint_key": "update_o_auth_client",
       "plugin_hint": "better_auth/plugins/oauth_provider",
       "body_fields": [
@@ -3717,6 +3131,8 @@
       "server_only": false,
       "source": "static+runtime",
       "method": "POST",
+      "ruby_api_method": "update_o_auth_client",
+      "ruby_api_call": "auth.api.update_o_auth_client",
       "plugin_id": "oauth-provider",
       "operation_id": "postOauth2UpdateClient"
     },
@@ -3763,6 +3179,8 @@
       "server_only": false,
       "source": "static+runtime",
       "method": "POST",
+      "ruby_api_method": "update_o_auth_consent",
+      "ruby_api_call": "auth.api.update_o_auth_consent",
       "plugin_id": "oauth-provider",
       "operation_id": "postOauth2UpdateConsent"
     },
@@ -3771,10 +3189,10 @@
       "methods": [
         "GET"
       ],
-      "file": "packages/better_auth/lib/better_auth/plugins/oidc_provider.rb",
-      "line": 396,
-      "endpoint_key": "mcp_o_auth_user_info",
-      "plugin_hint": "oidc_provider",
+      "file": "packages/better_auth-oauth-provider/lib/better_auth/plugins/oauth_provider/userinfo.rb",
+      "line": 8,
+      "endpoint_key": "o_auth2_user_info",
+      "plugin_hint": "better_auth/plugins/oauth_provider",
       "body_fields": [],
       "query_params": [],
       "path_params": [],
@@ -3783,8 +3201,10 @@
       "server_only": false,
       "source": "static+runtime",
       "method": "GET",
-      "plugin_id": "mcp",
-      "operation_id": "mcpOAuthUserinfo"
+      "ruby_api_method": "o_auth2_user_info",
+      "ruby_api_call": "auth.api.o_auth2_user_info",
+      "plugin_id": "oauth-provider",
+      "operation_id": "getOauth2Userinfo"
     },
     {
       "path": "/ok",
@@ -3803,6 +3223,8 @@
       "server_only": false,
       "source": "static+runtime",
       "method": "GET",
+      "ruby_api_method": "ok",
+      "ruby_api_call": "auth.api.ok",
       "plugin_id": "core",
       "operation_id": "getOk"
     },
@@ -3829,6 +3251,8 @@
       "server_only": false,
       "source": "static+runtime",
       "method": "POST",
+      "ruby_api_method": "one_tap_callback",
+      "ruby_api_call": "auth.api.one_tap_callback",
       "plugin_id": "one-tap",
       "operation_id": "oneTapCallback"
     },
@@ -3849,6 +3273,8 @@
       "server_only": false,
       "source": "static+runtime",
       "method": "GET",
+      "ruby_api_method": "generate_one_time_token",
+      "ruby_api_call": "auth.api.generate_one_time_token",
       "plugin_id": "one-time-token",
       "operation_id": "generateOneTimeToken"
     },
@@ -3875,6 +3301,8 @@
       "server_only": false,
       "source": "static+runtime",
       "method": "POST",
+      "ruby_api_method": "verify_one_time_token",
+      "ruby_api_call": "auth.api.verify_one_time_token",
       "plugin_id": "one-time-token",
       "operation_id": "verifyOneTimeToken"
     },
@@ -3884,7 +3312,7 @@
         "GET"
       ],
       "file": "packages/better_auth/lib/better_auth/plugins/open_api.rb",
-      "line": 237,
+      "line": 240,
       "endpoint_key": "generate_open_api_schema",
       "plugin_hint": "open_api",
       "body_fields": [],
@@ -3895,6 +3323,8 @@
       "server_only": false,
       "source": "static+runtime",
       "method": "GET",
+      "ruby_api_method": "generate_open_api_schema",
+      "ruby_api_call": "auth.api.generate_open_api_schema",
       "plugin_id": "open-api",
       "operation_id": "getOpenApiGenerateSchema"
     },
@@ -3917,11 +3347,6 @@
           "name": "invitationId",
           "required": false,
           "type": "string"
-        },
-        {
-          "name": "invitation_id",
-          "required": false,
-          "type": "string"
         }
       ],
       "query_params": [],
@@ -3931,6 +3356,8 @@
       "server_only": false,
       "source": "static+runtime",
       "method": "POST",
+      "ruby_api_method": "accept_invitation",
+      "ruby_api_call": "auth.api.accept_invitation",
       "plugin_id": "organization",
       "operation_id": "acceptOrganizationInvitation"
     },
@@ -3950,22 +3377,12 @@
           "type": "string"
         },
         {
-          "name": "organization_id",
-          "required": false,
-          "type": "string"
-        },
-        {
           "name": "role",
           "required": false,
           "type": ""
         },
         {
           "name": "userId",
-          "required": false,
-          "type": "string"
-        },
-        {
-          "name": "user_id",
           "required": false,
           "type": "string"
         }
@@ -3977,6 +3394,8 @@
       "server_only": false,
       "source": "static+runtime",
       "method": "POST",
+      "ruby_api_method": "add_member",
+      "ruby_api_call": "auth.api.add_member",
       "plugin_id": "organization",
       "operation_id": "addOrganizationMember"
     },
@@ -3987,16 +3406,31 @@
       ],
       "file": "packages/better_auth/lib/better_auth/plugins/organization.rb",
       "line": 650,
-      "endpoint_key": "run_org_hook",
+      "endpoint_key": "add_team_member",
       "plugin_hint": "organization",
-      "body_fields": [],
+      "body_fields": [
+        {
+          "name": "teamId",
+          "required": false,
+          "type": "string"
+        },
+        {
+          "name": "userId",
+          "required": false,
+          "type": "string"
+        }
+      ],
       "query_params": [],
       "path_params": [],
       "header_params": [],
       "disable_body": false,
       "server_only": false,
-      "source": "static",
-      "method": "POST"
+      "source": "static+runtime",
+      "method": "POST",
+      "ruby_api_method": "add_team_member",
+      "ruby_api_call": "auth.api.add_team_member",
+      "plugin_id": "organization",
+      "operation_id": "addTeamMember"
     },
     {
       "path": "/organization/cancel-invitation",
@@ -4012,11 +3446,6 @@
           "name": "invitationId",
           "required": false,
           "type": "string"
-        },
-        {
-          "name": "invitation_id",
-          "required": false,
-          "type": "string"
         }
       ],
       "query_params": [],
@@ -4026,6 +3455,8 @@
       "server_only": false,
       "source": "static+runtime",
       "method": "POST",
+      "ruby_api_method": "cancel_invitation",
+      "ruby_api_call": "auth.api.cancel_invitation",
       "plugin_id": "organization",
       "operation_id": "cancelOrganizationInvitation"
     },
@@ -4052,6 +3483,8 @@
       "server_only": false,
       "source": "static+runtime",
       "method": "POST",
+      "ruby_api_method": "check_organization_slug",
+      "ruby_api_call": "auth.api.check_organization_slug",
       "plugin_id": "organization",
       "operation_id": "checkOrganizationSlug"
     },
@@ -4067,11 +3500,6 @@
       "body_fields": [
         {
           "name": "keepCurrentActiveOrganization",
-          "required": false,
-          "type": "boolean"
-        },
-        {
-          "name": "keep_current_active_organization",
           "required": false,
           "type": "boolean"
         },
@@ -4099,9 +3527,52 @@
           "name": "userId",
           "required": false,
           "type": "string"
+        }
+      ],
+      "query_params": [],
+      "path_params": [],
+      "header_params": [],
+      "disable_body": false,
+      "server_only": false,
+      "source": "static+runtime",
+      "method": "POST",
+      "ruby_api_method": "create_organization",
+      "ruby_api_call": "auth.api.create_organization",
+      "plugin_id": "organization",
+      "operation_id": "createOrganization"
+    },
+    {
+      "path": "/organization/create-role",
+      "methods": [
+        "POST"
+      ],
+      "file": "packages/better_auth/lib/better_auth/plugins/organization.rb",
+      "line": 683,
+      "endpoint_key": "create_org_role",
+      "plugin_hint": "organization",
+      "body_fields": [
+        {
+          "name": "organizationId",
+          "required": false,
+          "type": "string"
         },
         {
-          "name": "user_id",
+          "name": "permission",
+          "required": false,
+          "type": "object"
+        },
+        {
+          "name": "permissions",
+          "required": false,
+          "type": "object"
+        },
+        {
+          "name": "role",
+          "required": false,
+          "type": "string"
+        },
+        {
+          "name": "roleName",
           "required": false,
           "type": "string"
         }
@@ -4113,26 +3584,10 @@
       "server_only": false,
       "source": "static+runtime",
       "method": "POST",
+      "ruby_api_method": "create_org_role",
+      "ruby_api_call": "auth.api.create_org_role",
       "plugin_id": "organization",
-      "operation_id": "createOrganization"
-    },
-    {
-      "path": "/organization/create-role",
-      "methods": [
-        "POST"
-      ],
-      "file": "packages/better_auth/lib/better_auth/plugins/organization.rb",
-      "line": 683,
-      "endpoint_key": "run_org_hook",
-      "plugin_hint": "organization",
-      "body_fields": [],
-      "query_params": [],
-      "path_params": [],
-      "header_params": [],
-      "disable_body": false,
-      "server_only": false,
-      "source": "static",
-      "method": "POST"
+      "operation_id": "createOrganizationRole"
     },
     {
       "path": "/organization/create-team",
@@ -4141,16 +3596,31 @@
       ],
       "file": "packages/better_auth/lib/better_auth/plugins/organization.rb",
       "line": 554,
-      "endpoint_key": "run_org_hook",
+      "endpoint_key": "create_team",
       "plugin_hint": "organization",
-      "body_fields": [],
+      "body_fields": [
+        {
+          "name": "name",
+          "required": false,
+          "type": "string"
+        },
+        {
+          "name": "organizationId",
+          "required": false,
+          "type": "string"
+        }
+      ],
       "query_params": [],
       "path_params": [],
       "header_params": [],
       "disable_body": false,
       "server_only": false,
-      "source": "static",
-      "method": "POST"
+      "source": "static+runtime",
+      "method": "POST",
+      "ruby_api_method": "create_team",
+      "ruby_api_call": "auth.api.create_team",
+      "plugin_id": "organization",
+      "operation_id": "createOrganizationTeam"
     },
     {
       "path": "/organization/delete",
@@ -4171,14 +3641,47 @@
           "name": "organizationSlug",
           "required": false,
           "type": "string"
-        },
+        }
+      ],
+      "query_params": [],
+      "path_params": [],
+      "header_params": [],
+      "disable_body": false,
+      "server_only": false,
+      "source": "static+runtime",
+      "method": "POST",
+      "ruby_api_method": "delete_organization",
+      "ruby_api_call": "auth.api.delete_organization",
+      "plugin_id": "organization",
+      "operation_id": "deleteOrganization"
+    },
+    {
+      "path": "/organization/delete-role",
+      "methods": [
+        "POST"
+      ],
+      "file": "packages/better_auth/lib/better_auth/plugins/organization.rb",
+      "line": 750,
+      "endpoint_key": "delete_org_role",
+      "plugin_hint": "organization",
+      "body_fields": [
         {
-          "name": "organization_id",
+          "name": "organizationId",
           "required": false,
           "type": "string"
         },
         {
-          "name": "organization_slug",
+          "name": "role",
+          "required": false,
+          "type": "string"
+        },
+        {
+          "name": "roleId",
+          "required": false,
+          "type": "string"
+        },
+        {
+          "name": "roleName",
           "required": false,
           "type": "string"
         }
@@ -4190,26 +3693,10 @@
       "server_only": false,
       "source": "static+runtime",
       "method": "POST",
+      "ruby_api_method": "delete_org_role",
+      "ruby_api_call": "auth.api.delete_org_role",
       "plugin_id": "organization",
-      "operation_id": "deleteOrganization"
-    },
-    {
-      "path": "/organization/delete-role",
-      "methods": [
-        "POST"
-      ],
-      "file": "packages/better_auth/lib/better_auth/plugins/organization.rb",
-      "line": 750,
-      "endpoint_key": "run_org_hook",
-      "plugin_hint": "organization",
-      "body_fields": [],
-      "query_params": [],
-      "path_params": [],
-      "header_params": [],
-      "disable_body": false,
-      "server_only": false,
-      "source": "static",
-      "method": "POST"
+      "operation_id": "deleteOrganizationRole"
     },
     {
       "path": "/organization/get-active-member",
@@ -4228,6 +3715,8 @@
       "server_only": false,
       "source": "static+runtime",
       "method": "GET",
+      "ruby_api_method": "get_active_member",
+      "ruby_api_call": "auth.api.get_active_member",
       "plugin_id": "organization",
       "operation_id": "getActiveOrganizationMember"
     },
@@ -4248,6 +3737,8 @@
       "server_only": false,
       "source": "static+runtime",
       "method": "GET",
+      "ruby_api_method": "get_active_member_role",
+      "ruby_api_call": "auth.api.get_active_member_role",
       "plugin_id": "organization",
       "operation_id": "getActiveOrganizationMemberRole"
     },
@@ -4268,6 +3759,8 @@
       "server_only": false,
       "source": "static+runtime",
       "method": "GET",
+      "ruby_api_method": "get_full_organization",
+      "ruby_api_call": "auth.api.get_full_organization",
       "plugin_id": "organization",
       "operation_id": "getOrganization"
     },
@@ -4288,6 +3781,8 @@
       "server_only": false,
       "source": "static+runtime",
       "method": "GET",
+      "ruby_api_method": "get_invitation",
+      "ruby_api_call": "auth.api.get_invitation",
       "plugin_id": "organization",
       "operation_id": "getOrganizationInvitation"
     },
@@ -4298,7 +3793,7 @@
       ],
       "file": "packages/better_auth/lib/better_auth/plugins/organization.rb",
       "line": 713,
-      "endpoint_key": "run_org_hook",
+      "endpoint_key": "get_org_role",
       "plugin_hint": "organization",
       "body_fields": [],
       "query_params": [],
@@ -4306,8 +3801,12 @@
       "header_params": [],
       "disable_body": false,
       "server_only": false,
-      "source": "static",
-      "method": "GET"
+      "source": "static+runtime",
+      "method": "GET",
+      "ruby_api_method": "get_org_role",
+      "ruby_api_call": "auth.api.get_org_role",
+      "plugin_id": "organization",
+      "operation_id": "getOrganizationRole"
     },
     {
       "path": "/organization/has-permission",
@@ -4321,11 +3820,6 @@
       "body_fields": [
         {
           "name": "organizationId",
-          "required": false,
-          "type": "string"
-        },
-        {
-          "name": "organization_id",
           "required": false,
           "type": "string"
         },
@@ -4347,6 +3841,8 @@
       "server_only": false,
       "source": "static+runtime",
       "method": "POST",
+      "ruby_api_method": "has_permission",
+      "ruby_api_call": "auth.api.has_permission",
       "plugin_id": "organization",
       "operation_id": "hasOrganizationPermission"
     },
@@ -4376,16 +3872,6 @@
           "type": "string"
         },
         {
-          "name": "organization_id",
-          "required": false,
-          "type": "string"
-        },
-        {
-          "name": "organization_slug",
-          "required": false,
-          "type": "string"
-        },
-        {
           "name": "role",
           "required": false,
           "type": ""
@@ -4399,16 +3885,6 @@
           "name": "teamIds",
           "required": false,
           "type": "array"
-        },
-        {
-          "name": "team_id",
-          "required": false,
-          "type": "string"
-        },
-        {
-          "name": "team_ids",
-          "required": false,
-          "type": "array"
         }
       ],
       "query_params": [],
@@ -4418,6 +3894,8 @@
       "server_only": false,
       "source": "static+runtime",
       "method": "POST",
+      "ruby_api_method": "create_invitation",
+      "ruby_api_call": "auth.api.create_invitation",
       "plugin_id": "organization",
       "operation_id": "createOrganizationInvitation"
     },
@@ -4435,11 +3913,6 @@
           "name": "organizationId",
           "required": false,
           "type": "string"
-        },
-        {
-          "name": "organization_id",
-          "required": false,
-          "type": "string"
         }
       ],
       "query_params": [],
@@ -4449,6 +3922,8 @@
       "server_only": false,
       "source": "static+runtime",
       "method": "POST",
+      "ruby_api_method": "leave_organization",
+      "ruby_api_call": "auth.api.leave_organization",
       "plugin_id": "organization",
       "operation_id": "leaveOrganization"
     },
@@ -4469,6 +3944,8 @@
       "server_only": false,
       "source": "static+runtime",
       "method": "GET",
+      "ruby_api_method": "list_organizations",
+      "ruby_api_call": "auth.api.list_organizations",
       "plugin_id": "organization",
       "operation_id": "listOrganizations"
     },
@@ -4489,6 +3966,8 @@
       "server_only": false,
       "source": "static+runtime",
       "method": "GET",
+      "ruby_api_method": "list_invitations",
+      "ruby_api_call": "auth.api.list_invitations",
       "plugin_id": "organization",
       "operation_id": "listOrganizationInvitations"
     },
@@ -4509,6 +3988,8 @@
       "server_only": false,
       "source": "static+runtime",
       "method": "GET",
+      "ruby_api_method": "list_members",
+      "ruby_api_call": "auth.api.list_members",
       "plugin_id": "organization",
       "operation_id": "listOrganizationMembers"
     },
@@ -4519,7 +4000,7 @@
       ],
       "file": "packages/better_auth/lib/better_auth/plugins/organization.rb",
       "line": 702,
-      "endpoint_key": "run_org_hook",
+      "endpoint_key": "list_org_roles",
       "plugin_hint": "organization",
       "body_fields": [],
       "query_params": [],
@@ -4527,8 +4008,12 @@
       "header_params": [],
       "disable_body": false,
       "server_only": false,
-      "source": "static",
-      "method": "GET"
+      "source": "static+runtime",
+      "method": "GET",
+      "ruby_api_method": "list_org_roles",
+      "ruby_api_call": "auth.api.list_org_roles",
+      "plugin_id": "organization",
+      "operation_id": "listOrganizationRoles"
     },
     {
       "path": "/organization/list-team-members",
@@ -4537,7 +4022,7 @@
       ],
       "file": "packages/better_auth/lib/better_auth/plugins/organization.rb",
       "line": 638,
-      "endpoint_key": "run_org_hook",
+      "endpoint_key": "list_team_members",
       "plugin_hint": "organization",
       "body_fields": [],
       "query_params": [],
@@ -4545,8 +4030,12 @@
       "header_params": [],
       "disable_body": false,
       "server_only": false,
-      "source": "static",
-      "method": "GET"
+      "source": "static+runtime",
+      "method": "GET",
+      "ruby_api_method": "list_team_members",
+      "ruby_api_call": "auth.api.list_team_members",
+      "plugin_id": "organization",
+      "operation_id": "listTeamMembers"
     },
     {
       "path": "/organization/list-teams",
@@ -4555,7 +4044,7 @@
       ],
       "file": "packages/better_auth/lib/better_auth/plugins/organization.rb",
       "line": 574,
-      "endpoint_key": "run_org_hook",
+      "endpoint_key": "list_organization_teams",
       "plugin_hint": "organization",
       "body_fields": [],
       "query_params": [],
@@ -4563,8 +4052,12 @@
       "header_params": [],
       "disable_body": false,
       "server_only": false,
-      "source": "static",
-      "method": "GET"
+      "source": "static+runtime",
+      "method": "GET",
+      "ruby_api_method": "list_organization_teams",
+      "ruby_api_call": "auth.api.list_organization_teams",
+      "plugin_id": "organization",
+      "operation_id": "listOrganizationTeams"
     },
     {
       "path": "/organization/list-user-invitations",
@@ -4583,6 +4076,8 @@
       "server_only": false,
       "source": "static+runtime",
       "method": "GET",
+      "ruby_api_method": "list_user_invitations",
+      "ruby_api_call": "auth.api.list_user_invitations",
       "plugin_id": "organization",
       "operation_id": "listUserInvitations"
     },
@@ -4593,7 +4088,7 @@
       ],
       "file": "packages/better_auth/lib/better_auth/plugins/organization.rb",
       "line": 630,
-      "endpoint_key": "run_org_hook",
+      "endpoint_key": "list_user_teams",
       "plugin_hint": "organization",
       "body_fields": [],
       "query_params": [],
@@ -4601,8 +4096,12 @@
       "header_params": [],
       "disable_body": false,
       "server_only": false,
-      "source": "static",
-      "method": "GET"
+      "source": "static+runtime",
+      "method": "GET",
+      "ruby_api_method": "list_user_teams",
+      "ruby_api_call": "auth.api.list_user_teams",
+      "plugin_id": "organization",
+      "operation_id": "listUserTeams"
     },
     {
       "path": "/organization/reject-invitation",
@@ -4618,11 +4117,6 @@
           "name": "invitationId",
           "required": false,
           "type": "string"
-        },
-        {
-          "name": "invitation_id",
-          "required": false,
-          "type": "string"
         }
       ],
       "query_params": [],
@@ -4632,6 +4126,8 @@
       "server_only": false,
       "source": "static+runtime",
       "method": "POST",
+      "ruby_api_method": "reject_invitation",
+      "ruby_api_call": "auth.api.reject_invitation",
       "plugin_id": "organization",
       "operation_id": "rejectOrganizationInvitation"
     },
@@ -4651,27 +4147,12 @@
           "type": "string"
         },
         {
-          "name": "member_id",
-          "required": false,
-          "type": "string"
-        },
-        {
           "name": "organizationId",
           "required": false,
           "type": "string"
         },
         {
-          "name": "organization_id",
-          "required": false,
-          "type": "string"
-        },
-        {
           "name": "userId",
-          "required": false,
-          "type": "string"
-        },
-        {
-          "name": "user_id",
           "required": false,
           "type": "string"
         }
@@ -4683,6 +4164,8 @@
       "server_only": false,
       "source": "static+runtime",
       "method": "POST",
+      "ruby_api_method": "remove_member",
+      "ruby_api_call": "auth.api.remove_member",
       "plugin_id": "organization",
       "operation_id": "removeOrganizationMember"
     },
@@ -4693,16 +4176,26 @@
       ],
       "file": "packages/better_auth/lib/better_auth/plugins/organization.rb",
       "line": 596,
-      "endpoint_key": "run_org_hook",
+      "endpoint_key": "remove_team",
       "plugin_hint": "organization",
-      "body_fields": [],
+      "body_fields": [
+        {
+          "name": "teamId",
+          "required": false,
+          "type": "string"
+        }
+      ],
       "query_params": [],
       "path_params": [],
       "header_params": [],
       "disable_body": false,
       "server_only": false,
-      "source": "static",
-      "method": "POST"
+      "source": "static+runtime",
+      "method": "POST",
+      "ruby_api_method": "remove_team",
+      "ruby_api_call": "auth.api.remove_team",
+      "plugin_id": "organization",
+      "operation_id": "removeOrganizationTeam"
     },
     {
       "path": "/organization/remove-team-member",
@@ -4711,16 +4204,31 @@
       ],
       "file": "packages/better_auth/lib/better_auth/plugins/organization.rb",
       "line": 671,
-      "endpoint_key": "run_org_hook",
+      "endpoint_key": "remove_team_member",
       "plugin_hint": "organization",
-      "body_fields": [],
+      "body_fields": [
+        {
+          "name": "teamId",
+          "required": false,
+          "type": "string"
+        },
+        {
+          "name": "userId",
+          "required": false,
+          "type": "string"
+        }
+      ],
       "query_params": [],
       "path_params": [],
       "header_params": [],
       "disable_body": false,
       "server_only": false,
-      "source": "static",
-      "method": "POST"
+      "source": "static+runtime",
+      "method": "POST",
+      "ruby_api_method": "remove_team_member",
+      "ruby_api_call": "auth.api.remove_team_member",
+      "plugin_id": "organization",
+      "operation_id": "removeTeamMember"
     },
     {
       "path": "/organization/set-active",
@@ -4741,14 +4249,32 @@
           "name": "organizationSlug",
           "required": false,
           "type": "string"
-        },
+        }
+      ],
+      "query_params": [],
+      "path_params": [],
+      "header_params": [],
+      "disable_body": false,
+      "server_only": false,
+      "source": "static+runtime",
+      "method": "POST",
+      "ruby_api_method": "set_active_organization",
+      "ruby_api_call": "auth.api.set_active_organization",
+      "plugin_id": "organization",
+      "operation_id": "setActiveOrganization"
+    },
+    {
+      "path": "/organization/set-active-team",
+      "methods": [
+        "POST"
+      ],
+      "file": "packages/better_auth/lib/better_auth/plugins/organization.rb",
+      "line": 612,
+      "endpoint_key": "set_active_team",
+      "plugin_hint": "organization",
+      "body_fields": [
         {
-          "name": "organization_id",
-          "required": false,
-          "type": "string"
-        },
-        {
-          "name": "organization_slug",
+          "name": "teamId",
           "required": false,
           "type": "string"
         }
@@ -4760,26 +4286,10 @@
       "server_only": false,
       "source": "static+runtime",
       "method": "POST",
+      "ruby_api_method": "set_active_team",
+      "ruby_api_call": "auth.api.set_active_team",
       "plugin_id": "organization",
-      "operation_id": "setActiveOrganization"
-    },
-    {
-      "path": "/organization/set-active-team",
-      "methods": [
-        "POST"
-      ],
-      "file": "packages/better_auth/lib/better_auth/plugins/organization.rb",
-      "line": 612,
-      "endpoint_key": "run_org_hook",
-      "plugin_hint": "organization",
-      "body_fields": [],
-      "query_params": [],
-      "path_params": [],
-      "header_params": [],
-      "disable_body": false,
-      "server_only": false,
-      "source": "static",
-      "method": "POST"
+      "operation_id": "setActiveOrganizationTeam"
     },
     {
       "path": "/organization/update",
@@ -4822,16 +4332,6 @@
           "type": "string"
         },
         {
-          "name": "organization_id",
-          "required": false,
-          "type": "string"
-        },
-        {
-          "name": "organization_slug",
-          "required": false,
-          "type": "string"
-        },
-        {
           "name": "slug",
           "required": false,
           "type": "string"
@@ -4844,6 +4344,8 @@
       "server_only": false,
       "source": "static+runtime",
       "method": "POST",
+      "ruby_api_method": "update_organization",
+      "ruby_api_call": "auth.api.update_organization",
       "plugin_id": "organization",
       "operation_id": "updateOrganization"
     },
@@ -4863,17 +4365,7 @@
           "type": "string"
         },
         {
-          "name": "member_id",
-          "required": false,
-          "type": "string"
-        },
-        {
           "name": "organizationId",
-          "required": false,
-          "type": "string"
-        },
-        {
-          "name": "organization_id",
           "required": false,
           "type": "string"
         },
@@ -4886,9 +4378,62 @@
           "name": "userId",
           "required": false,
           "type": "string"
+        }
+      ],
+      "query_params": [],
+      "path_params": [],
+      "header_params": [],
+      "disable_body": false,
+      "server_only": false,
+      "source": "static+runtime",
+      "method": "POST",
+      "ruby_api_method": "update_member_role",
+      "ruby_api_call": "auth.api.update_member_role",
+      "plugin_id": "organization",
+      "operation_id": "updateOrganizationMemberRole"
+    },
+    {
+      "path": "/organization/update-role",
+      "methods": [
+        "POST"
+      ],
+      "file": "packages/better_auth/lib/better_auth/plugins/organization.rb",
+      "line": 725,
+      "endpoint_key": "update_org_role",
+      "plugin_hint": "organization",
+      "body_fields": [
+        {
+          "name": "data",
+          "required": false,
+          "type": "object"
         },
         {
-          "name": "user_id",
+          "name": "organizationId",
+          "required": false,
+          "type": "string"
+        },
+        {
+          "name": "permission",
+          "required": false,
+          "type": "object"
+        },
+        {
+          "name": "permissions",
+          "required": false,
+          "type": "object"
+        },
+        {
+          "name": "role",
+          "required": false,
+          "type": "string"
+        },
+        {
+          "name": "roleId",
+          "required": false,
+          "type": "string"
+        },
+        {
+          "name": "roleName",
           "required": false,
           "type": "string"
         }
@@ -4900,26 +4445,10 @@
       "server_only": false,
       "source": "static+runtime",
       "method": "POST",
+      "ruby_api_method": "update_org_role",
+      "ruby_api_call": "auth.api.update_org_role",
       "plugin_id": "organization",
-      "operation_id": "updateOrganizationMemberRole"
-    },
-    {
-      "path": "/organization/update-role",
-      "methods": [
-        "POST"
-      ],
-      "file": "packages/better_auth/lib/better_auth/plugins/organization.rb",
-      "line": 725,
-      "endpoint_key": "run_org_hook",
-      "plugin_hint": "organization",
-      "body_fields": [],
-      "query_params": [],
-      "path_params": [],
-      "header_params": [],
-      "disable_body": false,
-      "server_only": false,
-      "source": "static",
-      "method": "POST"
+      "operation_id": "updateOrganizationRole"
     },
     {
       "path": "/organization/update-team",
@@ -4928,16 +4457,31 @@
       ],
       "file": "packages/better_auth/lib/better_auth/plugins/organization.rb",
       "line": 584,
-      "endpoint_key": "run_org_hook",
+      "endpoint_key": "update_team",
       "plugin_hint": "organization",
-      "body_fields": [],
+      "body_fields": [
+        {
+          "name": "name",
+          "required": false,
+          "type": "string"
+        },
+        {
+          "name": "teamId",
+          "required": false,
+          "type": "string"
+        }
+      ],
       "query_params": [],
       "path_params": [],
       "header_params": [],
       "disable_body": false,
       "server_only": false,
-      "source": "static",
-      "method": "POST"
+      "source": "static+runtime",
+      "method": "POST",
+      "ruby_api_method": "update_team",
+      "ruby_api_call": "auth.api.update_team",
+      "plugin_id": "organization",
+      "operation_id": "updateOrganizationTeam"
     },
     {
       "path": "/passkey/delete-passkey",
@@ -4962,13 +4506,15 @@
       "server_only": false,
       "source": "static+runtime",
       "method": "POST",
+      "ruby_api_method": "delete_passkey",
+      "ruby_api_call": "auth.api.delete_passkey",
       "plugin_id": "passkey",
       "operation_id": "postPasskeyDeletePasskey"
     },
     {
       "path": "/passkey/generate-authenticate-options",
       "methods": [
-        "GET"
+        "POST"
       ],
       "file": "packages/better_auth-passkey/lib/better_auth/passkey/routes/authentication.rb",
       "line": 13,
@@ -4981,28 +4527,24 @@
       "disable_body": false,
       "server_only": false,
       "source": "static+runtime",
-      "method": "GET",
+      "method": "POST",
+      "ruby_api_method": "generate_passkey_authentication_options",
+      "ruby_api_call": "auth.api.generate_passkey_authentication_options",
       "plugin_id": "passkey",
       "operation_id": "passkeyGenerateAuthenticateOptions"
     },
     {
       "path": "/passkey/generate-register-options",
       "methods": [
-        "GET"
+        "POST"
       ],
       "file": "packages/better_auth-passkey/lib/better_auth/passkey/routes/registration.rb",
       "line": 13,
       "endpoint_key": "generate_passkey_registration_options",
       "plugin_hint": "better_auth/passkey/routes",
-      "body_fields": [],
-      "query_params": [
+      "body_fields": [
         {
           "name": "authenticatorAttachment",
-          "required": false,
-          "type": "string"
-        },
-        {
-          "name": "name",
           "required": false,
           "type": "string"
         },
@@ -5010,14 +4552,22 @@
           "name": "context",
           "required": false,
           "type": "string"
+        },
+        {
+          "name": "name",
+          "required": false,
+          "type": "string"
         }
       ],
+      "query_params": [],
       "path_params": [],
       "header_params": [],
       "disable_body": false,
       "server_only": false,
       "source": "static+runtime",
-      "method": "GET",
+      "method": "POST",
+      "ruby_api_method": "generate_passkey_registration_options",
+      "ruby_api_call": "auth.api.generate_passkey_registration_options",
       "plugin_id": "passkey",
       "operation_id": "generatePasskeyRegistrationOptions"
     },
@@ -5038,6 +4588,8 @@
       "server_only": false,
       "source": "static+runtime",
       "method": "GET",
+      "ruby_api_method": "list_passkeys",
+      "ruby_api_call": "auth.api.list_passkeys",
       "plugin_id": "passkey",
       "operation_id": "getPasskeyListUserPasskeys"
     },
@@ -5069,6 +4621,8 @@
       "server_only": false,
       "source": "static+runtime",
       "method": "POST",
+      "ruby_api_method": "update_passkey",
+      "ruby_api_call": "auth.api.update_passkey",
       "plugin_id": "passkey",
       "operation_id": "postPasskeyUpdatePasskey"
     },
@@ -5095,6 +4649,8 @@
       "server_only": false,
       "source": "static+runtime",
       "method": "POST",
+      "ruby_api_method": "verify_passkey_authentication",
+      "ruby_api_call": "auth.api.verify_passkey_authentication",
       "plugin_id": "passkey",
       "operation_id": "passkeyVerifyAuthentication"
     },
@@ -5126,6 +4682,8 @@
       "server_only": false,
       "source": "static+runtime",
       "method": "POST",
+      "ruby_api_method": "verify_passkey_registration",
+      "ruby_api_call": "auth.api.verify_passkey_registration",
       "plugin_id": "passkey",
       "operation_id": "passkeyVerifyRegistration"
     },
@@ -5152,6 +4710,8 @@
       "server_only": false,
       "source": "static+runtime",
       "method": "POST",
+      "ruby_api_method": "request_password_reset_phone_number",
+      "ruby_api_call": "auth.api.request_password_reset_phone_number",
       "plugin_id": "phone-number",
       "operation_id": "requestPasswordResetPhoneNumber"
     },
@@ -5188,6 +4748,8 @@
       "server_only": false,
       "source": "static+runtime",
       "method": "POST",
+      "ruby_api_method": "reset_password_phone_number",
+      "ruby_api_call": "auth.api.reset_password_phone_number",
       "plugin_id": "phone-number",
       "operation_id": "resetPasswordPhoneNumber"
     },
@@ -5214,6 +4776,8 @@
       "server_only": false,
       "source": "static+runtime",
       "method": "POST",
+      "ruby_api_method": "send_phone_number_otp",
+      "ruby_api_call": "auth.api.send_phone_number_otp",
       "plugin_id": "phone-number",
       "operation_id": "sendPhoneNumberOTP"
     },
@@ -5255,6 +4819,8 @@
       "server_only": false,
       "source": "static+runtime",
       "method": "POST",
+      "ruby_api_method": "verify_phone_number",
+      "ruby_api_call": "auth.api.verify_phone_number",
       "plugin_id": "phone-number",
       "operation_id": "verifyPhoneNumber"
     },
@@ -5273,7 +4839,9 @@
       "server_only": false,
       "operation_id": null,
       "source": "runtime",
-      "method": "GET"
+      "method": "GET",
+      "ruby_api_method": "open_api_reference",
+      "ruby_api_call": "auth.api.open_api_reference"
     },
     {
       "path": "/refresh-token",
@@ -5308,6 +4876,8 @@
       "server_only": false,
       "source": "static+runtime",
       "method": "POST",
+      "ruby_api_method": "refresh_token",
+      "ruby_api_call": "auth.api.refresh_token",
       "plugin_id": "core",
       "operation_id": "refreshToken"
     },
@@ -5339,6 +4909,8 @@
       "server_only": false,
       "source": "static+runtime",
       "method": "POST",
+      "ruby_api_method": "request_password_reset",
+      "ruby_api_call": "auth.api.request_password_reset",
       "plugin_id": "core",
       "operation_id": "requestPasswordReset"
     },
@@ -5370,6 +4942,8 @@
       "server_only": false,
       "source": "static+runtime",
       "method": "POST",
+      "ruby_api_method": "reset_password",
+      "ruby_api_call": "auth.api.reset_password",
       "plugin_id": "core",
       "operation_id": "resetPassword"
     },
@@ -5398,6 +4972,8 @@
       "server_only": false,
       "source": "static+runtime",
       "method": "GET",
+      "ruby_api_method": "request_password_reset_callback",
+      "ruby_api_call": "auth.api.request_password_reset_callback",
       "plugin_id": "core",
       "operation_id": "requestPasswordResetCallback"
     },
@@ -5418,6 +4994,8 @@
       "server_only": false,
       "source": "static+runtime",
       "method": "POST",
+      "ruby_api_method": "revoke_other_sessions",
+      "ruby_api_call": "auth.api.revoke_other_sessions",
       "plugin_id": "core",
       "operation_id": "revokeOtherSessions"
     },
@@ -5444,6 +5022,8 @@
       "server_only": false,
       "source": "static+runtime",
       "method": "POST",
+      "ruby_api_method": "revoke_session",
+      "ruby_api_call": "auth.api.revoke_session",
       "plugin_id": "core",
       "operation_id": "revokeSession"
     },
@@ -5464,6 +5044,8 @@
       "server_only": false,
       "source": "static+runtime",
       "method": "POST",
+      "ruby_api_method": "revoke_sessions",
+      "ruby_api_call": "auth.api.revoke_sessions",
       "plugin_id": "core",
       "operation_id": "revokeSessions"
     },
@@ -5490,6 +5072,8 @@
       "server_only": false,
       "source": "static+runtime",
       "method": "POST",
+      "ruby_api_method": "delete_scim_provider_connection",
+      "ruby_api_call": "auth.api.delete_scim_provider_connection",
       "plugin_id": "scim",
       "operation_id": "postScimDeleteProviderConnection"
     },
@@ -5521,6 +5105,8 @@
       "server_only": false,
       "source": "static+runtime",
       "method": "POST",
+      "ruby_api_method": "generate_scim_token",
+      "ruby_api_call": "auth.api.generate_scim_token",
       "plugin_id": "scim",
       "operation_id": "postScimGenerateToken"
     },
@@ -5541,6 +5127,8 @@
       "server_only": false,
       "source": "static+runtime",
       "method": "GET",
+      "ruby_api_method": "get_scim_provider_connection",
+      "ruby_api_call": "auth.api.get_scim_provider_connection",
       "plugin_id": "scim",
       "operation_id": "getScimGetProviderConnection"
     },
@@ -5561,6 +5149,8 @@
       "server_only": false,
       "source": "static+runtime",
       "method": "GET",
+      "ruby_api_method": "list_scim_provider_connections",
+      "ruby_api_call": "auth.api.list_scim_provider_connections",
       "plugin_id": "scim",
       "operation_id": "getScimListProviderConnections"
     },
@@ -5581,6 +5171,8 @@
       "server_only": false,
       "source": "static+runtime",
       "method": "GET",
+      "ruby_api_method": "get_scim_resource_types",
+      "ruby_api_call": "auth.api.get_scim_resource_types",
       "plugin_id": "scim",
       "operation_id": "getScimV2Resourcetypes"
     },
@@ -5603,6 +5195,8 @@
       "server_only": false,
       "source": "static+runtime",
       "method": "GET",
+      "ruby_api_method": "get_scim_resource_type",
+      "ruby_api_call": "auth.api.get_scim_resource_type",
       "plugin_id": "scim",
       "operation_id": "getScimV2ResourcetypesResourcetypeid"
     },
@@ -5623,6 +5217,8 @@
       "server_only": false,
       "source": "static+runtime",
       "method": "GET",
+      "ruby_api_method": "get_scim_schemas",
+      "ruby_api_call": "auth.api.get_scim_schemas",
       "plugin_id": "scim",
       "operation_id": "getScimV2Schemas"
     },
@@ -5645,6 +5241,8 @@
       "server_only": false,
       "source": "static+runtime",
       "method": "GET",
+      "ruby_api_method": "get_scim_schema",
+      "ruby_api_call": "auth.api.get_scim_schema",
       "plugin_id": "scim",
       "operation_id": "getScimV2SchemasSchemaid"
     },
@@ -5665,6 +5263,8 @@
       "server_only": false,
       "source": "static+runtime",
       "method": "GET",
+      "ruby_api_method": "get_scim_service_provider_config",
+      "ruby_api_call": "auth.api.get_scim_service_provider_config",
       "plugin_id": "scim",
       "operation_id": "getScimV2Serviceproviderconfig"
     },
@@ -5685,6 +5285,8 @@
       "server_only": false,
       "source": "static+runtime",
       "method": "GET",
+      "ruby_api_method": "list_scim_users",
+      "ruby_api_call": "auth.api.list_scim_users",
       "plugin_id": "scim",
       "operation_id": "getScimV2Users"
     },
@@ -5705,6 +5307,8 @@
       "server_only": false,
       "source": "static+runtime",
       "method": "POST",
+      "ruby_api_method": "create_scim_user",
+      "ruby_api_call": "auth.api.create_scim_user",
       "plugin_id": "scim",
       "operation_id": "postScimV2Users"
     },
@@ -5727,6 +5331,8 @@
       "server_only": false,
       "source": "static+runtime",
       "method": "DELETE",
+      "ruby_api_method": "delete_scim_user",
+      "ruby_api_call": "auth.api.delete_scim_user",
       "plugin_id": "scim",
       "operation_id": "deleteScimV2UsersUserid"
     },
@@ -5749,6 +5355,8 @@
       "server_only": false,
       "source": "static+runtime",
       "method": "GET",
+      "ruby_api_method": "get_scim_user",
+      "ruby_api_call": "auth.api.get_scim_user",
       "plugin_id": "scim",
       "operation_id": "getScimV2UsersUserid"
     },
@@ -5771,6 +5379,8 @@
       "server_only": false,
       "source": "static+runtime",
       "method": "PATCH",
+      "ruby_api_method": "patch_scim_user",
+      "ruby_api_call": "auth.api.patch_scim_user",
       "plugin_id": "scim",
       "operation_id": "patchScimV2UsersUserid"
     },
@@ -5793,6 +5403,8 @@
       "server_only": false,
       "source": "static+runtime",
       "method": "PUT",
+      "ruby_api_method": "update_scim_user",
+      "ruby_api_call": "auth.api.update_scim_user",
       "plugin_id": "scim",
       "operation_id": "putScimV2UsersUserid"
     },
@@ -5824,6 +5436,8 @@
       "server_only": false,
       "source": "static+runtime",
       "method": "POST",
+      "ruby_api_method": "send_verification_email",
+      "ruby_api_call": "auth.api.send_verification_email",
       "plugin_id": "core",
       "operation_id": "sendVerificationEmail"
     },
@@ -5850,6 +5464,8 @@
       "server_only": false,
       "source": "static+runtime",
       "method": "POST",
+      "ruby_api_method": "set_password",
+      "ruby_api_call": "auth.api.set_password",
       "plugin_id": "core",
       "operation_id": "setPassword"
     },
@@ -5870,6 +5486,8 @@
       "server_only": false,
       "source": "static+runtime",
       "method": "POST",
+      "ruby_api_method": "sign_in_anonymous",
+      "ruby_api_call": "auth.api.sign_in_anonymous",
       "plugin_id": "anonymous",
       "operation_id": "signInAnonymous"
     },
@@ -5911,6 +5529,8 @@
       "server_only": false,
       "source": "static+runtime",
       "method": "POST",
+      "ruby_api_method": "sign_in_email",
+      "ruby_api_call": "auth.api.sign_in_email",
       "plugin_id": "core",
       "operation_id": "signInEmail"
     },
@@ -5920,7 +5540,7 @@
         "POST"
       ],
       "file": "packages/better_auth/lib/better_auth/plugins/email_otp.rb",
-      "line": 283,
+      "line": 282,
       "endpoint_key": "sign_in_email_otp",
       "plugin_hint": "email_otp",
       "body_fields": [
@@ -5942,6 +5562,8 @@
       "server_only": false,
       "source": "static+runtime",
       "method": "POST",
+      "ruby_api_method": "sign_in_email_otp",
+      "ruby_api_call": "auth.api.sign_in_email_otp",
       "plugin_id": "email-otp",
       "operation_id": "signInEmailOTP"
     },
@@ -5993,6 +5615,8 @@
       "server_only": false,
       "source": "static+runtime",
       "method": "POST",
+      "ruby_api_method": "sign_in_magic_link",
+      "ruby_api_call": "auth.api.sign_in_magic_link",
       "plugin_id": "magic-link",
       "operation_id": "signInMagicLink"
     },
@@ -6012,17 +5636,7 @@
           "type": "object"
         },
         {
-          "name": "additional_data",
-          "required": false,
-          "type": "object"
-        },
-        {
           "name": "callbackURL",
-          "required": false,
-          "type": "string"
-        },
-        {
-          "name": "callback_url",
           "required": false,
           "type": "string"
         },
@@ -6032,17 +5646,7 @@
           "type": "boolean"
         },
         {
-          "name": "disable_redirect",
-          "required": false,
-          "type": "boolean"
-        },
-        {
           "name": "errorCallbackURL",
-          "required": false,
-          "type": "string"
-        },
-        {
-          "name": "error_callback_url",
           "required": false,
           "type": "string"
         },
@@ -6052,27 +5656,12 @@
           "type": "string"
         },
         {
-          "name": "new_user_callback_url",
-          "required": false,
-          "type": "string"
-        },
-        {
           "name": "providerId",
           "required": false,
           "type": "string"
         },
         {
-          "name": "provider_id",
-          "required": false,
-          "type": "string"
-        },
-        {
           "name": "requestSignUp",
-          "required": false,
-          "type": "boolean"
-        },
-        {
-          "name": "request_sign_up",
           "required": false,
           "type": "boolean"
         },
@@ -6089,6 +5678,8 @@
       "server_only": false,
       "source": "static+runtime",
       "method": "POST",
+      "ruby_api_method": "sign_in_with_oauth2",
+      "ruby_api_call": "auth.api.sign_in_with_oauth2",
       "plugin_id": "generic-oauth",
       "operation_id": "signInOAuth2"
     },
@@ -6125,6 +5716,8 @@
       "server_only": false,
       "source": "static+runtime",
       "method": "POST",
+      "ruby_api_method": "sign_in_phone_number",
+      "ruby_api_call": "auth.api.sign_in_phone_number",
       "plugin_id": "phone-number",
       "operation_id": "signInPhoneNumber"
     },
@@ -6196,6 +5789,8 @@
       "server_only": false,
       "source": "static+runtime",
       "method": "POST",
+      "ruby_api_method": "sign_in_social",
+      "ruby_api_call": "auth.api.sign_in_social",
       "plugin_id": "core",
       "operation_id": "socialSignIn"
     },
@@ -6252,6 +5847,8 @@
       "server_only": false,
       "source": "static+runtime",
       "method": "POST",
+      "ruby_api_method": "sign_in_sso",
+      "ruby_api_call": "auth.api.sign_in_sso",
       "plugin_id": "sso",
       "operation_id": "postSignInSso"
     },
@@ -6293,6 +5890,8 @@
       "server_only": false,
       "source": "static+runtime",
       "method": "POST",
+      "ruby_api_method": "sign_in_username",
+      "ruby_api_call": "auth.api.sign_in_username",
       "plugin_id": "username",
       "operation_id": "signInUsername"
     },
@@ -6313,6 +5912,8 @@
       "server_only": false,
       "source": "static+runtime",
       "method": "POST",
+      "ruby_api_method": "sign_out",
+      "ruby_api_call": "auth.api.sign_out",
       "plugin_id": "core",
       "operation_id": "signOut"
     },
@@ -6364,6 +5965,8 @@
       "server_only": false,
       "source": "static+runtime",
       "method": "POST",
+      "ruby_api_method": "sign_up_email",
+      "ruby_api_call": "auth.api.sign_up_email",
       "plugin_id": "core",
       "operation_id": "signUpWithEmailAndPassword"
     },
@@ -6395,6 +5998,8 @@
       "server_only": false,
       "source": "static+runtime",
       "method": "POST",
+      "ruby_api_method": "get_siwe_nonce",
+      "ruby_api_call": "auth.api.get_siwe_nonce",
       "plugin_id": "siwe",
       "operation_id": "getSiweNonce"
     },
@@ -6441,6 +6046,8 @@
       "server_only": false,
       "source": "static+runtime",
       "method": "POST",
+      "ruby_api_method": "verify_siwe_message",
+      "ruby_api_call": "auth.api.verify_siwe_message",
       "plugin_id": "siwe",
       "operation_id": "verifySiweMessage"
     },
@@ -6461,6 +6068,8 @@
       "server_only": false,
       "source": "static+runtime",
       "method": "GET",
+      "ruby_api_method": "callback_sso_shared",
+      "ruby_api_call": "auth.api.callback_sso_shared",
       "plugin_id": "sso",
       "operation_id": "getSsoCallback"
     },
@@ -6483,6 +6092,8 @@
       "server_only": false,
       "source": "static+runtime",
       "method": "GET",
+      "ruby_api_method": "callback_sso",
+      "ruby_api_call": "auth.api.callback_sso",
       "plugin_id": "sso",
       "operation_id": "getSsoCallbackProviderid"
     },
@@ -6509,6 +6120,8 @@
       "server_only": false,
       "source": "static+runtime",
       "method": "POST",
+      "ruby_api_method": "delete_sso_provider",
+      "ruby_api_call": "auth.api.delete_sso_provider",
       "plugin_id": "sso",
       "operation_id": "postSsoDeleteProvider"
     },
@@ -6529,6 +6142,8 @@
       "server_only": false,
       "source": "static+runtime",
       "method": "GET",
+      "ruby_api_method": "get_sso_provider",
+      "ruby_api_call": "auth.api.get_sso_provider",
       "plugin_id": "sso",
       "operation_id": "getSsoGetProvider"
     },
@@ -6549,6 +6164,8 @@
       "server_only": false,
       "source": "static+runtime",
       "method": "GET",
+      "ruby_api_method": "list_sso_providers",
+      "ruby_api_call": "auth.api.list_sso_providers",
       "plugin_id": "sso",
       "operation_id": "getSsoProviders"
     },
@@ -6605,6 +6222,8 @@
       "server_only": false,
       "source": "static+runtime",
       "method": "POST",
+      "ruby_api_method": "register_sso_provider",
+      "ruby_api_call": "auth.api.register_sso_provider",
       "plugin_id": "sso",
       "operation_id": "postSsoRegister"
     },
@@ -6624,7 +6243,9 @@
       "disable_body": false,
       "server_only": false,
       "source": "static",
-      "method": "POST"
+      "method": "POST",
+      "ruby_api_method": "sso_redirect",
+      "ruby_api_call": "auth.api.sso_redirect"
     },
     {
       "path": "/sso/saml2/callback/:providerId",
@@ -6676,6 +6297,8 @@
       "server_only": false,
       "source": "static+runtime",
       "method": "GET",
+      "ruby_api_method": "callback_sso_saml",
+      "ruby_api_call": "auth.api.callback_sso_saml",
       "plugin_id": "sso",
       "operation_id": "getSsoSaml2CallbackProviderid"
     },
@@ -6729,6 +6352,8 @@
       "server_only": false,
       "source": "static+runtime",
       "method": "POST",
+      "ruby_api_method": "callback_sso_saml",
+      "ruby_api_call": "auth.api.callback_sso_saml",
       "plugin_id": "sso",
       "operation_id": "getSsoSaml2CallbackProviderid"
     },
@@ -6757,6 +6382,8 @@
       "server_only": false,
       "source": "static+runtime",
       "method": "POST",
+      "ruby_api_method": "initiate_slo",
+      "ruby_api_call": "auth.api.initiate_slo",
       "plugin_id": "sso",
       "operation_id": "postSsoSaml2LogoutProviderid"
     },
@@ -6810,6 +6437,8 @@
       "server_only": false,
       "source": "static+runtime",
       "method": "POST",
+      "ruby_api_method": "acs",
+      "ruby_api_call": "auth.api.acs",
       "plugin_id": "sso",
       "operation_id": "postSsoSaml2SpAcsProviderid"
     },
@@ -6830,6 +6459,8 @@
       "server_only": false,
       "source": "static+runtime",
       "method": "GET",
+      "ruby_api_method": "sp_metadata",
+      "ruby_api_call": "auth.api.sp_metadata",
       "plugin_id": "sso",
       "operation_id": "getSsoSaml2SpMetadata"
     },
@@ -6883,6 +6514,8 @@
       "server_only": false,
       "source": "static+runtime",
       "method": "GET",
+      "ruby_api_method": "slo",
+      "ruby_api_call": "auth.api.slo",
       "plugin_id": "sso",
       "operation_id": "getSsoSaml2SpSloProviderid"
     },
@@ -6936,6 +6569,8 @@
       "server_only": false,
       "source": "static+runtime",
       "method": "POST",
+      "ruby_api_method": "slo",
+      "ruby_api_call": "auth.api.slo",
       "plugin_id": "sso",
       "operation_id": "getSsoSaml2SpSloProviderid"
     },
@@ -6992,6 +6627,8 @@
       "server_only": false,
       "source": "static+runtime",
       "method": "POST",
+      "ruby_api_method": "update_sso_provider",
+      "ruby_api_call": "auth.api.update_sso_provider",
       "plugin_id": "sso",
       "operation_id": "postSsoUpdateProvider"
     },
@@ -7011,7 +6648,9 @@
       "disable_body": false,
       "server_only": false,
       "source": "static",
-      "method": "POST"
+      "method": "POST",
+      "ruby_api_method": "sso_redirect",
+      "ruby_api_call": "auth.api.sso_redirect"
     },
     {
       "path": "/stripe/webhook",
@@ -7028,7 +6667,9 @@
       "server_only": false,
       "operation_id": null,
       "source": "runtime",
-      "method": "POST"
+      "method": "POST",
+      "ruby_api_method": "stripe_webhook",
+      "ruby_api_call": "auth.api.stripe_webhook"
     },
     {
       "path": "/subscription/billing-portal",
@@ -7037,7 +6678,33 @@
       ],
       "plugin_id": "stripe",
       "endpoint_key": "create_billing_portal",
-      "body_fields": [],
+      "body_fields": [
+        {
+          "name": "customerType",
+          "required": false,
+          "type": "string"
+        },
+        {
+          "name": "disableRedirect",
+          "required": false,
+          "type": "boolean"
+        },
+        {
+          "name": "locale",
+          "required": false,
+          "type": "string"
+        },
+        {
+          "name": "referenceId",
+          "required": false,
+          "type": "string"
+        },
+        {
+          "name": "returnUrl",
+          "required": false,
+          "type": "string"
+        }
+      ],
       "query_params": [],
       "path_params": [],
       "header_params": [],
@@ -7045,7 +6712,9 @@
       "server_only": false,
       "operation_id": "createBillingPortal",
       "source": "runtime",
-      "method": "POST"
+      "method": "POST",
+      "ruby_api_method": "create_billing_portal",
+      "ruby_api_call": "auth.api.create_billing_portal"
     },
     {
       "path": "/subscription/cancel",
@@ -7054,7 +6723,33 @@
       ],
       "plugin_id": "stripe",
       "endpoint_key": "cancel_subscription",
-      "body_fields": [],
+      "body_fields": [
+        {
+          "name": "customerType",
+          "required": false,
+          "type": "string"
+        },
+        {
+          "name": "disableRedirect",
+          "required": false,
+          "type": "boolean"
+        },
+        {
+          "name": "referenceId",
+          "required": false,
+          "type": "string"
+        },
+        {
+          "name": "returnUrl",
+          "required": false,
+          "type": "string"
+        },
+        {
+          "name": "subscriptionId",
+          "required": false,
+          "type": "string"
+        }
+      ],
       "query_params": [],
       "path_params": [],
       "header_params": [],
@@ -7062,7 +6757,9 @@
       "server_only": false,
       "operation_id": "cancelSubscription",
       "source": "runtime",
-      "method": "POST"
+      "method": "POST",
+      "ruby_api_method": "cancel_subscription",
+      "ruby_api_call": "auth.api.cancel_subscription"
     },
     {
       "path": "/subscription/cancel/callback",
@@ -7072,14 +6769,27 @@
       "plugin_id": "stripe",
       "endpoint_key": "cancel_subscription_callback",
       "body_fields": [],
-      "query_params": [],
+      "query_params": [
+        {
+          "name": "callbackURL",
+          "required": false,
+          "type": "string"
+        },
+        {
+          "name": "subscriptionId",
+          "required": false,
+          "type": "string"
+        }
+      ],
       "path_params": [],
       "header_params": [],
       "disable_body": false,
       "server_only": false,
       "operation_id": "cancelSubscriptionCallback",
       "source": "runtime",
-      "method": "GET"
+      "method": "GET",
+      "ruby_api_method": "cancel_subscription_callback",
+      "ruby_api_call": "auth.api.cancel_subscription_callback"
     },
     {
       "path": "/subscription/list",
@@ -7089,14 +6799,27 @@
       "plugin_id": "stripe",
       "endpoint_key": "list_active_subscriptions",
       "body_fields": [],
-      "query_params": [],
+      "query_params": [
+        {
+          "name": "customerType",
+          "required": false,
+          "type": "string"
+        },
+        {
+          "name": "referenceId",
+          "required": false,
+          "type": "string"
+        }
+      ],
       "path_params": [],
       "header_params": [],
       "disable_body": false,
       "server_only": false,
       "operation_id": "listActiveSubscriptions",
       "source": "runtime",
-      "method": "GET"
+      "method": "GET",
+      "ruby_api_method": "list_active_subscriptions",
+      "ruby_api_call": "auth.api.list_active_subscriptions"
     },
     {
       "path": "/subscription/restore",
@@ -7105,7 +6828,23 @@
       ],
       "plugin_id": "stripe",
       "endpoint_key": "restore_subscription",
-      "body_fields": [],
+      "body_fields": [
+        {
+          "name": "customerType",
+          "required": false,
+          "type": "string"
+        },
+        {
+          "name": "referenceId",
+          "required": false,
+          "type": "string"
+        },
+        {
+          "name": "subscriptionId",
+          "required": false,
+          "type": "string"
+        }
+      ],
       "query_params": [],
       "path_params": [],
       "header_params": [],
@@ -7113,7 +6852,9 @@
       "server_only": false,
       "operation_id": "restoreSubscription",
       "source": "runtime",
-      "method": "POST"
+      "method": "POST",
+      "ruby_api_method": "restore_subscription",
+      "ruby_api_call": "auth.api.restore_subscription"
     },
     {
       "path": "/subscription/success",
@@ -7123,14 +6864,27 @@
       "plugin_id": "stripe",
       "endpoint_key": "subscription_success",
       "body_fields": [],
-      "query_params": [],
+      "query_params": [
+        {
+          "name": "callbackURL",
+          "required": false,
+          "type": "string"
+        },
+        {
+          "name": "checkoutSessionId",
+          "required": false,
+          "type": "string"
+        }
+      ],
       "path_params": [],
       "header_params": [],
       "disable_body": false,
       "server_only": false,
       "operation_id": "subscriptionSuccess",
       "source": "runtime",
-      "method": "GET"
+      "method": "GET",
+      "ruby_api_method": "subscription_success",
+      "ruby_api_call": "auth.api.subscription_success"
     },
     {
       "path": "/subscription/upgrade",
@@ -7139,7 +6893,73 @@
       ],
       "plugin_id": "stripe",
       "endpoint_key": "upgrade_subscription",
-      "body_fields": [],
+      "body_fields": [
+        {
+          "name": "annual",
+          "required": false,
+          "type": "boolean"
+        },
+        {
+          "name": "cancelUrl",
+          "required": false,
+          "type": "string"
+        },
+        {
+          "name": "customerType",
+          "required": false,
+          "type": "string"
+        },
+        {
+          "name": "disableRedirect",
+          "required": false,
+          "type": "boolean"
+        },
+        {
+          "name": "locale",
+          "required": false,
+          "type": "string"
+        },
+        {
+          "name": "metadata",
+          "required": false,
+          "type": "object"
+        },
+        {
+          "name": "plan",
+          "required": true,
+          "type": "string"
+        },
+        {
+          "name": "referenceId",
+          "required": false,
+          "type": "string"
+        },
+        {
+          "name": "returnUrl",
+          "required": false,
+          "type": "string"
+        },
+        {
+          "name": "scheduleAtPeriodEnd",
+          "required": false,
+          "type": "boolean"
+        },
+        {
+          "name": "seats",
+          "required": false,
+          "type": "integer"
+        },
+        {
+          "name": "subscriptionId",
+          "required": false,
+          "type": "string"
+        },
+        {
+          "name": "successUrl",
+          "required": false,
+          "type": "string"
+        }
+      ],
       "query_params": [],
       "path_params": [],
       "header_params": [],
@@ -7147,7 +6967,9 @@
       "server_only": false,
       "operation_id": "upgradeSubscription",
       "source": "runtime",
-      "method": "POST"
+      "method": "POST",
+      "ruby_api_method": "upgrade_subscription",
+      "ruby_api_call": "auth.api.upgrade_subscription"
     },
     {
       "path": "/token",
@@ -7166,6 +6988,8 @@
       "server_only": false,
       "source": "static+runtime",
       "method": "GET",
+      "ruby_api_method": "get_token",
+      "ruby_api_call": "auth.api.get_token",
       "plugin_id": "jwt",
       "operation_id": "getJSONWebToken"
     },
@@ -7192,6 +7016,8 @@
       "server_only": false,
       "source": "static+runtime",
       "method": "POST",
+      "ruby_api_method": "generate_totp",
+      "ruby_api_call": "auth.api.generate_totp",
       "plugin_id": "two-factor",
       "operation_id": "generateTOTP"
     },
@@ -7218,6 +7044,8 @@
       "server_only": false,
       "source": "static+runtime",
       "method": "POST",
+      "ruby_api_method": "disable_two_factor",
+      "ruby_api_call": "auth.api.disable_two_factor",
       "plugin_id": "two-factor",
       "operation_id": "disableTwoFactor"
     },
@@ -7249,6 +7077,8 @@
       "server_only": false,
       "source": "static+runtime",
       "method": "POST",
+      "ruby_api_method": "enable_two_factor",
+      "ruby_api_call": "auth.api.enable_two_factor",
       "plugin_id": "two-factor",
       "operation_id": "enableTwoFactor"
     },
@@ -7275,6 +7105,8 @@
       "server_only": false,
       "source": "static+runtime",
       "method": "POST",
+      "ruby_api_method": "generate_backup_codes",
+      "ruby_api_call": "auth.api.generate_backup_codes",
       "plugin_id": "two-factor",
       "operation_id": "generateBackupCodes"
     },
@@ -7301,6 +7133,8 @@
       "server_only": false,
       "source": "static+runtime",
       "method": "POST",
+      "ruby_api_method": "get_totp_uri",
+      "ruby_api_call": "auth.api.get_totp_uri",
       "plugin_id": "two-factor",
       "operation_id": "getTOTPURI"
     },
@@ -7321,6 +7155,8 @@
       "server_only": false,
       "source": "static+runtime",
       "method": "POST",
+      "ruby_api_method": "send_two_factor_otp",
+      "ruby_api_call": "auth.api.send_two_factor_otp",
       "plugin_id": "two-factor",
       "operation_id": "sendTwoFactorOTP"
     },
@@ -7345,17 +7181,7 @@
           "type": "boolean"
         },
         {
-          "name": "disable_session",
-          "required": false,
-          "type": "boolean"
-        },
-        {
           "name": "trustDevice",
-          "required": false,
-          "type": "boolean"
-        },
-        {
-          "name": "trust_device",
           "required": false,
           "type": "boolean"
         }
@@ -7367,6 +7193,8 @@
       "server_only": false,
       "source": "static+runtime",
       "method": "POST",
+      "ruby_api_method": "verify_backup_code",
+      "ruby_api_call": "auth.api.verify_backup_code",
       "plugin_id": "two-factor",
       "operation_id": "verifyBackupCode"
     },
@@ -7389,11 +7217,6 @@
           "name": "trustDevice",
           "required": false,
           "type": "boolean"
-        },
-        {
-          "name": "trust_device",
-          "required": false,
-          "type": "boolean"
         }
       ],
       "query_params": [],
@@ -7403,6 +7226,8 @@
       "server_only": false,
       "source": "static+runtime",
       "method": "POST",
+      "ruby_api_method": "verify_two_factor_otp",
+      "ruby_api_call": "auth.api.verify_two_factor_otp",
       "plugin_id": "two-factor",
       "operation_id": "verifyTwoFactorOTP"
     },
@@ -7425,11 +7250,6 @@
           "name": "trustDevice",
           "required": false,
           "type": "boolean"
-        },
-        {
-          "name": "trust_device",
-          "required": false,
-          "type": "boolean"
         }
       ],
       "query_params": [],
@@ -7439,6 +7259,8 @@
       "server_only": false,
       "source": "static+runtime",
       "method": "POST",
+      "ruby_api_method": "verify_totp",
+      "ruby_api_call": "auth.api.verify_totp",
       "plugin_id": "two-factor",
       "operation_id": "verifyTOTP"
     },
@@ -7470,6 +7292,8 @@
       "server_only": false,
       "source": "static+runtime",
       "method": "POST",
+      "ruby_api_method": "unlink_account",
+      "ruby_api_call": "auth.api.unlink_account",
       "plugin_id": "core",
       "operation_id": "unlinkAccount"
     },
@@ -7490,6 +7314,8 @@
       "server_only": false,
       "source": "static+runtime",
       "method": "POST",
+      "ruby_api_method": "update_session",
+      "ruby_api_call": "auth.api.update_session",
       "plugin_id": "core",
       "operation_id": "updateSession"
     },
@@ -7521,6 +7347,8 @@
       "server_only": false,
       "source": "static+runtime",
       "method": "POST",
+      "ruby_api_method": "update_user",
+      "ruby_api_call": "auth.api.update_user",
       "plugin_id": "core",
       "operation_id": "updateUser"
     },
@@ -7552,6 +7380,8 @@
       "server_only": false,
       "source": "static+runtime",
       "method": "GET",
+      "ruby_api_method": "verify_email",
+      "ruby_api_call": "auth.api.verify_email",
       "plugin_id": "core",
       "operation_id": "verifyEmail"
     },
@@ -7578,6 +7408,8 @@
       "server_only": false,
       "source": "static+runtime",
       "method": "POST",
+      "ruby_api_method": "verify_password",
+      "ruby_api_call": "auth.api.verify_password",
       "plugin_id": "core",
       "operation_id": "verifyPassword"
     }

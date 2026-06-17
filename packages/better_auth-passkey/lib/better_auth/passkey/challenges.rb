@@ -9,6 +9,12 @@ module BetterAuth
 
       module_function
 
+      def challenge_context(ctx)
+        body = ctx.respond_to?(:body) ? BetterAuth::Passkey::Utils.normalize_hash(ctx.body) : {}
+        query = ctx.respond_to?(:query) ? BetterAuth::Passkey::Utils.normalize_hash(ctx.query) : {}
+        body.merge(query)[:context]
+      end
+
       def store_challenge(ctx, config, challenge, user_id)
         user_data = user_id.is_a?(Hash) ? user_id : {id: user_id}
         verification_token = Crypto.random_string(32)
@@ -19,7 +25,7 @@ module BetterAuth
           value: JSON.generate({
             expectedChallenge: challenge,
             userData: user_data,
-            context: BetterAuth::Passkey::Utils.normalize_hash(ctx.query)[:context]
+            context: challenge_context(ctx)
           }),
           expiresAt: Time.now + CHALLENGE_MAX_AGE
         )

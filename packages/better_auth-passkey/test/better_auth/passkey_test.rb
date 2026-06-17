@@ -812,7 +812,13 @@ class BetterAuthPluginsPasskeyTest < Minitest::Test
   end
 
   def meaningful_schema?(schema)
-    schema.is_a?(Hash) && (schema[:additionalProperties] || schema[:$ref] || schema[:items] || schema[:properties]&.any?)
+    schema.is_a?(Hash) && (
+      schema[:additionalProperties] ||
+      schema[:$ref] ||
+      schema[:items] ||
+      schema[:properties]&.any? ||
+      schema[:type] == "object"
+    )
   end
 
   def build_passkey_ctx(base_url:)

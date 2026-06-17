@@ -10,20 +10,20 @@ module BetterAuth
         module_function
 
         def generate_passkey_registration_options_endpoint(config)
-          Endpoint.new(path: "/passkey/generate-register-options", method: "GET", metadata: Routes.openapi_for(:generate_registration_options)) do |ctx|
-            query = Utils.normalize_hash(ctx.query)
-            Utils.validate_authenticator_attachment!(query[:authenticator_attachment])
-            user = Utils.resolve_registration_user(config, ctx, query)
+          Endpoint.new(path: "/passkey/generate-register-options", method: "POST", metadata: Routes.openapi_for(:generate_registration_options)) do |ctx|
+            params = Utils.normalize_hash(ctx.query).merge(Utils.normalize_hash(ctx.body))
+            Utils.validate_authenticator_attachment!(params[:authenticator_attachment])
+            user = Utils.resolve_registration_user(config, ctx, params)
             relying_party = Utils.relying_party(config, ctx)
             existing = ctx.context.adapter.find_many(model: "passkey", where: [{field: "userId", value: user.fetch("id")}])
             options = WebAuthn::Credential.options_for_create(
               user: {
                 id: Crypto.random_string(32).downcase,
-                name: query[:name].to_s.empty? ? (user["email"] || user["name"] || user["id"]) : query[:name].to_s,
+                name: params[:name].to_s.empty? ? (user["email"] || user["name"] || user["id"]) : params[:name].to_s,
                 display_name: user["displayName"] || user["display_name"] || user["email"] || user["name"] || user["id"]
               },
               exclude: existing.map { |passkey| Credentials.credential_id(passkey) },
-              authenticator_selection: Utils.authenticator_selection(config, query),
+              authenticator_selection: Utils.authenticator_selection(config, params),
               extensions: Utils.resolve_extensions(config.dig(:registration, :extensions), ctx),
               relying_party: relying_party
             )

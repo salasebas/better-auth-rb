@@ -51,6 +51,7 @@ module BetterAuthPasskeyTestSupport
   end
 
   def rack_env(method, path, body: "", query: "", headers: {})
+    headers = {"HTTP_ORIGIN" => ORIGIN}.merge(headers) if method.to_s.upcase == "POST"
     {
       "REQUEST_METHOD" => method,
       "PATH_INFO" => path,
