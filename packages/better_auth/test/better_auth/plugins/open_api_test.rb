@@ -20,7 +20,7 @@ class BetterAuthPluginsOpenAPITest < Minitest::Test
       }
     )
 
-    schema = auth.api.generate_open_api_schema
+    schema = auth.api.generate_openapi_schema
 
     assert_equal "3.1.1", schema[:openapi]
     assert_equal "Better Auth", schema.dig(:info, :title)
@@ -54,7 +54,7 @@ class BetterAuthPluginsOpenAPITest < Minitest::Test
   def test_open_api_base_path_inventory_matches_upstream_snapshot
     auth = build_auth(plugins: [BetterAuth::Plugins.open_api])
 
-    schema = auth.api.generate_open_api_schema
+    schema = auth.api.generate_openapi_schema
 
     assert_equal(
       [
@@ -96,7 +96,7 @@ class BetterAuthPluginsOpenAPITest < Minitest::Test
   def test_open_api_base_routes_have_upstream_rich_schemas
     auth = build_auth(plugins: [BetterAuth::Plugins.open_api])
 
-    schema = auth.api.generate_open_api_schema
+    schema = auth.api.generate_openapi_schema
 
     assert_equal(
       {
@@ -155,7 +155,7 @@ class BetterAuthPluginsOpenAPITest < Minitest::Test
   def test_open_api_model_schema_matches_upstream_field_metadata
     auth = build_auth(plugins: [BetterAuth::Plugins.open_api])
 
-    schema = auth.api.generate_open_api_schema
+    schema = auth.api.generate_openapi_schema
 
     assert_equal(
       {type: "boolean", default: false, readOnly: true},
@@ -172,7 +172,7 @@ class BetterAuthPluginsOpenAPITest < Minitest::Test
   def test_open_api_uses_upstream_31_nullable_request_body_shapes
     auth = build_auth(plugins: [BetterAuth::Plugins.open_api])
 
-    schema = auth.api.generate_open_api_schema
+    schema = auth.api.generate_openapi_schema
     social_body = schema.dig(:paths, "/sign-in/social", :post, :requestBody, :content, "application/json", :schema)
     id_token = social_body.dig(:properties, :idToken)
 
@@ -189,7 +189,7 @@ class BetterAuthPluginsOpenAPITest < Minitest::Test
   def test_open_api_uses_upstream_31_nullable_get_session_response_shape
     auth = build_auth(plugins: [BetterAuth::Plugins.open_api])
 
-    schema = auth.api.generate_open_api_schema
+    schema = auth.api.generate_openapi_schema
     get_session = schema.dig(:paths, "/get-session", :post, :responses, "200", :content, "application/json", :schema)
 
     assert_equal ["object", "null"], get_session[:type]
@@ -209,9 +209,7 @@ class BetterAuthPluginsOpenAPITest < Minitest::Test
       get_access_token: "getAccessToken",
       get_session: "getSession",
       link_social: "linkSocialAccount",
-      link_social_account: "linkSocialAccount",
       list_accounts: "listUserAccounts",
-      list_user_accounts: "listUserAccounts",
       list_sessions: "listSessions",
       refresh_token: "refreshToken",
       request_password_reset: "requestPasswordReset",
@@ -403,8 +401,8 @@ class BetterAuthPluginsOpenAPITest < Minitest::Test
       },
       BetterAuth::Plugins.generic_oauth(config: []) => {
         sign_in_with_oauth2: "signInOAuth2",
-        o_auth2_callback: "oauth2Callback",
-        o_auth2_link_account: "linkOAuth2"
+        oauth2_callback: "oauth2Callback",
+        oauth2_link_account: "linkOAuth2"
       },
       BetterAuth::Plugins.device_authorization => {
         device_code: "requestDeviceCode",
@@ -414,7 +412,7 @@ class BetterAuthPluginsOpenAPITest < Minitest::Test
         device_deny: "denyDevice"
       },
       BetterAuth::Plugins.oauth_proxy => {
-        o_auth_proxy: "oauthProxyCallback"
+        oauth_proxy: "oauthProxyCallback"
       }
     }.each do |plugin, routes|
       routes.each do |route, operation_id|
@@ -461,7 +459,7 @@ class BetterAuthPluginsOpenAPITest < Minitest::Test
   def test_open_api_unwraps_default_values_and_boolean_types
     auth = build_auth(plugins: [BetterAuth::Plugins.open_api])
 
-    schema = auth.api.generate_open_api_schema
+    schema = auth.api.generate_openapi_schema
     sign_in = schema.dig(:paths, "/sign-in/email", :post, :requestBody, :content, "application/json", :schema, :properties)
     sign_up = schema.dig(:paths, "/sign-up/email", :post, :requestBody, :content, "application/json", :schema, :properties)
 
@@ -474,7 +472,7 @@ class BetterAuthPluginsOpenAPITest < Minitest::Test
   def test_open_api_matches_upstream_change_email_schema
     auth = build_auth(plugins: [BetterAuth::Plugins.open_api])
 
-    schema = auth.api.generate_open_api_schema
+    schema = auth.api.generate_openapi_schema
     operation = schema.dig(:paths, "/change-email", :post)
     body_schema = operation.dig(:requestBody, :content, "application/json", :schema)
 
@@ -502,7 +500,7 @@ class BetterAuthPluginsOpenAPITest < Minitest::Test
   def test_open_api_matches_upstream_change_password_schema
     auth = build_auth(plugins: [BetterAuth::Plugins.open_api])
 
-    schema = auth.api.generate_open_api_schema
+    schema = auth.api.generate_openapi_schema
     operation = schema.dig(:paths, "/change-password", :post)
     body_schema = operation.dig(:requestBody, :content, "application/json", :schema)
     response_schema = operation.dig(:responses, "200", :content, "application/json", :schema)
@@ -533,7 +531,7 @@ class BetterAuthPluginsOpenAPITest < Minitest::Test
   def test_open_api_adds_default_operation_metadata_and_path_parameters
     auth = build_auth(plugins: [BetterAuth::Plugins.open_api])
 
-    schema = auth.api.generate_open_api_schema
+    schema = auth.api.generate_openapi_schema
     callback = schema.dig(:paths, "/callback/{id}", :get)
 
     assert callback
@@ -583,14 +581,14 @@ class BetterAuthPluginsOpenAPITest < Minitest::Test
       plugins: [BetterAuth::Plugins.open_api]
     )
 
-    schema = auth.api.generate_open_api_schema
+    schema = auth.api.generate_openapi_schema
 
     refute_includes schema[:paths].keys, "/sign-in/social"
   end
 
   def test_open_api_schema_excludes_removed_core_provider_plugins
     auth = build_auth(plugins: [BetterAuth::Plugins.open_api])
-    schema = auth.api.generate_open_api_schema
+    schema = auth.api.generate_openapi_schema
     paths = schema[:paths].keys
 
     refute paths.any? { |path| path.start_with?("/mcp/") }

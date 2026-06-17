@@ -169,8 +169,8 @@ class BetterAuthPluginsDubTest < Minitest::Test
       }
     )
 
-    assert_includes auth.api.endpoints.keys, :dub_o_auth2_callback
-    assert_equal "/oauth2/callback/:providerId", auth.api.endpoints.fetch(:dub_o_auth2_callback).path
+    assert_includes auth.api.endpoints.keys, :dub_oauth2_callback
+    assert_equal "/oauth2/callback/:providerId", auth.api.endpoints.fetch(:dub_oauth2_callback).path
   end
 
   private

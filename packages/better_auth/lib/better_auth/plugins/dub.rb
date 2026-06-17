@@ -8,7 +8,7 @@ module BetterAuth
       config = normalize_hash(options)
       oauth_plugin = dub_oauth_plugin(config[:oauth])
       endpoints = {dub_link: dub_link_endpoint(oauth_plugin)}
-      endpoints[:dub_o_auth2_callback] = oauth_plugin.endpoints.fetch(:o_auth2_callback) if oauth_plugin
+      endpoints[:dub_oauth2_callback] = oauth_plugin.endpoints.fetch(:oauth2_callback) if oauth_plugin
 
       Plugin.new(
         id: "dub",
@@ -73,7 +73,7 @@ module BetterAuth
         Routes.validate_auth_callback_url!(ctx.context, callback_url, "callbackURL")
 
         ctx.body = body.merge(provider_id: "dub", callback_url: callback_url)
-        oauth_plugin.endpoints.fetch(:o_auth2_link_account).call(ctx)
+        oauth_plugin.endpoints.fetch(:oauth2_link_account).call(ctx)
       end
     end
 

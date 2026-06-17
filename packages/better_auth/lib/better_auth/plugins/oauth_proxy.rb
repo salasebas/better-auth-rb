@@ -14,7 +14,7 @@ module BetterAuth
       Plugin.new(
         id: "oauth-proxy",
         endpoints: {
-          o_auth_proxy: oauth_proxy_endpoint(config)
+          oauth_proxy: oauth_proxy_endpoint(config)
         },
         hooks: {
           before: [

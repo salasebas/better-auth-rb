@@ -60,7 +60,7 @@ class BetterAuthPluginsOAuthProxyTest < Minitest::Test
     }
     encrypted = BetterAuth::Crypto.symmetric_encrypt(key: auth.context.secret, data: JSON.generate(payload))
 
-    status, headers, _body = auth.api.o_auth_proxy(
+    status, headers, _body = auth.api.oauth_proxy(
       query: {callbackURL: "/dashboard", cookies: encrypted},
       as_response: true
     )
@@ -80,7 +80,7 @@ class BetterAuthPluginsOAuthProxyTest < Minitest::Test
     }
     encrypted = BetterAuth::Crypto.symmetric_encrypt(key: proxy_secret, data: JSON.generate(payload))
 
-    status, headers, _body = auth.api.o_auth_proxy(
+    status, headers, _body = auth.api.oauth_proxy(
       query: {callbackURL: "/dashboard", cookies: encrypted},
       as_response: true
     )
@@ -96,12 +96,12 @@ class BetterAuthPluginsOAuthProxyTest < Minitest::Test
       data: JSON.generate({cookies: "sessionid=abcd1234", timestamp: ((Time.now - 10).to_f * 1000).to_i})
     )
 
-    status, headers, _body = auth.api.o_auth_proxy(query: {callbackURL: "/dashboard", cookies: expired}, as_response: true)
+    status, headers, _body = auth.api.oauth_proxy(query: {callbackURL: "/dashboard", cookies: expired}, as_response: true)
 
     assert_equal 302, status
     assert_includes URI.decode_www_form_component(headers.fetch("location")), "Payload expired or invalid"
 
-    status, headers, _body = auth.api.o_auth_proxy(query: {callbackURL: "/dashboard", cookies: "bad"}, as_response: true)
+    status, headers, _body = auth.api.oauth_proxy(query: {callbackURL: "/dashboard", cookies: "bad"}, as_response: true)
     assert_equal 302, status
     assert_includes URI.decode_www_form_component(headers.fetch("location")), "Invalid cookies or secret"
 
@@ -109,7 +109,7 @@ class BetterAuthPluginsOAuthProxyTest < Minitest::Test
       key: auth.context.secret,
       data: JSON.generate({timestamp: (Time.now.to_f * 1000).to_i})
     )
-    status, headers, _body = auth.api.o_auth_proxy(query: {callbackURL: "/dashboard", cookies: missing_cookies}, as_response: true)
+    status, headers, _body = auth.api.oauth_proxy(query: {callbackURL: "/dashboard", cookies: missing_cookies}, as_response: true)
     assert_equal 302, status
     assert_includes URI.decode_www_form_component(headers.fetch("location")), "Invalid payload structure"
   end
@@ -123,7 +123,7 @@ class BetterAuthPluginsOAuthProxyTest < Minitest::Test
     encrypted = BetterAuth::Crypto.symmetric_encrypt(key: auth.context.secret, data: JSON.generate(payload))
 
     error = assert_raises(BetterAuth::APIError) do
-      auth.api.o_auth_proxy(query: {callbackURL: "https://evil.example/dashboard", cookies: encrypted})
+      auth.api.oauth_proxy(query: {callbackURL: "https://evil.example/dashboard", cookies: encrypted})
     end
 
     assert_equal 403, error.status_code
@@ -164,7 +164,7 @@ class BetterAuthPluginsOAuthProxyTest < Minitest::Test
     sign_in = auth.api.sign_in_with_oauth2(body: {providerId: "custom", callbackURL: "/dashboard"})
     encrypted_state = Rack::Utils.parse_query(URI.parse(sign_in[:url]).query).fetch("state")
 
-    status, headers, _body = auth.api.o_auth2_callback(
+    status, headers, _body = auth.api.oauth2_callback(
       params: {providerId: "custom"},
       query: {code: "oauth-code", state: encrypted_state},
       as_response: true

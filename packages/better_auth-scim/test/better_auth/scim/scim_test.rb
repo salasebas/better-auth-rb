@@ -17,7 +17,7 @@ class BetterAuthPluginsScimTest < Minitest::Test
     refute plugin.endpoints.fetch(:generate_scim_token).metadata.fetch(:hide, false)
 
     auth = build_auth(plugins: [BetterAuth::Plugins.scim, BetterAuth::Plugins.open_api])
-    paths = auth.api.generate_open_api_schema.fetch(:paths)
+    paths = auth.api.generate_openapi_schema.fetch(:paths)
 
     assert paths.key?("/scim/generate-token")
     refute paths.key?("/scim/v2/Users")

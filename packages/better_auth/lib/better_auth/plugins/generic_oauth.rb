@@ -37,8 +37,8 @@ module BetterAuth
         },
         endpoints: {
           sign_in_with_oauth2: sign_in_with_oauth2_endpoint(config),
-          o_auth2_callback: o_auth2_callback_endpoint(config),
-          o_auth2_link_account: o_auth2_link_account_endpoint(config)
+          oauth2_callback: oauth2_callback_endpoint(config),
+          oauth2_link_account: oauth2_link_account_endpoint(config)
         },
         error_codes: GENERIC_OAUTH_ERROR_CODES,
         options: config
@@ -235,7 +235,7 @@ module BetterAuth
       end
     end
 
-    def o_auth2_link_account_endpoint(config)
+    def oauth2_link_account_endpoint(config)
       Endpoint.new(
         path: "/oauth2/link",
         method: "POST",
@@ -266,7 +266,7 @@ module BetterAuth
       end
     end
 
-    def o_auth2_callback_endpoint(config)
+    def oauth2_callback_endpoint(config)
       Endpoint.new(
         path: "/oauth2/callback/:providerId",
         method: "GET",

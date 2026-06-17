@@ -238,7 +238,7 @@ module BetterAuth
       Plugin.new(
         id: "open-api",
         endpoints: {
-          generate_open_api_schema: Endpoint.new(path: "/open-api/generate-schema", method: "GET") do |ctx|
+          generate_openapi_schema: Endpoint.new(path: "/open-api/generate-schema", method: "GET") do |ctx|
             ctx.json(open_api_schema(ctx.context))
           end,
           open_api_reference: Endpoint.new(path: config[:path], method: "GET", metadata: {hide: true}) do |ctx|

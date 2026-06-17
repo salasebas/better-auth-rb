@@ -178,7 +178,7 @@ class BetterAuthPluginsLastLoginMethodTest < Minitest::Test
     )
     generic_sign_in = generic.api.sign_in_with_oauth2(body: {providerId: "my-provider", callbackURL: "/dashboard"})
     generic_state = Rack::Utils.parse_query(URI.parse(generic_sign_in[:url]).query).fetch("state")
-    _generic_status, generic_headers, = generic.api.o_auth2_callback(
+    _generic_status, generic_headers, = generic.api.oauth2_callback(
       params: {providerId: "my-provider"},
       query: {code: "code", state: generic_state},
       as_response: true

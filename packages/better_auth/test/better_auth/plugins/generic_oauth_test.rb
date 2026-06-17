@@ -11,7 +11,7 @@ class BetterAuthPluginsGenericOAuthTest < Minitest::Test
   def test_oauth2_callback_endpoint_is_get_only_like_upstream
     auth = build_auth
 
-    assert_equal ["GET"], auth.api.endpoints.fetch(:o_auth2_callback).methods
+    assert_equal ["GET"], auth.api.endpoints.fetch(:oauth2_callback).methods
   end
 
   def test_sign_in_oauth2_generates_authorization_url_with_state_and_scopes
@@ -78,7 +78,7 @@ class BetterAuthPluginsGenericOAuthTest < Minitest::Test
       state = params.fetch("state")
 
       assert_equal "S256", params.fetch("code_challenge_method")
-      auth.api.o_auth2_callback(
+      auth.api.oauth2_callback(
         params: {providerId: "custom"},
         query: {code: "oauth-code", state: state},
         headers: {"cookie" => cookie_header(headers.fetch("set-cookie"))},
@@ -109,7 +109,7 @@ class BetterAuthPluginsGenericOAuthTest < Minitest::Test
       refute params.key?("code_challenge")
       refute params.key?("code_challenge_method")
 
-      auth.api.o_auth2_callback(
+      auth.api.oauth2_callback(
         params: {providerId: "custom"},
         query: {code: "oauth-code", state: params.fetch("state")},
         headers: {"cookie" => cookie_header(headers.fetch("set-cookie"))},
@@ -123,7 +123,7 @@ class BetterAuthPluginsGenericOAuthTest < Minitest::Test
   def test_callback_without_state_redirects_to_restart_error
     auth = build_auth(on_api_error: {error_url: "/error"})
 
-    status, headers, = auth.api.o_auth2_callback(
+    status, headers, = auth.api.oauth2_callback(
       params: {providerId: "custom"},
       query: {code: "oauth-code"},
       as_response: true
@@ -141,7 +141,7 @@ class BetterAuthPluginsGenericOAuthTest < Minitest::Test
     sign_in = auth.api.sign_in_with_oauth2(body: {providerId: "custom", callbackURL: "/dashboard"})
     state = Rack::Utils.parse_query(URI.parse(sign_in[:url]).query).fetch("state")
 
-    status, headers, _body = auth.api.o_auth2_callback(
+    status, headers, _body = auth.api.oauth2_callback(
       params: {providerId: "custom"},
       query: {code: "oauth-code", state: state},
       as_response: true
@@ -167,7 +167,7 @@ class BetterAuthPluginsGenericOAuthTest < Minitest::Test
     )
     state = Rack::Utils.parse_query(URI.parse(JSON.parse(body.join).fetch("url")).query).fetch("state")
 
-    status, callback_headers, = auth.api.o_auth2_callback(
+    status, callback_headers, = auth.api.oauth2_callback(
       params: {providerId: "custom"},
       query: {code: "oauth-code", state: state},
       headers: {"cookie" => cookie_header(headers.fetch("set-cookie"))},
@@ -205,7 +205,7 @@ class BetterAuthPluginsGenericOAuthTest < Minitest::Test
     sign_in = auth.api.sign_in_with_oauth2(body: {providerId: "custom", callbackURL: "/dashboard", newUserCallbackURL: "/welcome"})
     state = Rack::Utils.parse_query(URI.parse(sign_in[:url]).query).fetch("state")
 
-    status, headers, _body = auth.api.o_auth2_callback(
+    status, headers, _body = auth.api.oauth2_callback(
       params: {providerId: "custom"},
       query: {code: "oauth-code", state: state},
       as_response: true
@@ -227,7 +227,7 @@ class BetterAuthPluginsGenericOAuthTest < Minitest::Test
 
     sign_in = auth.api.sign_in_with_oauth2(body: {providerId: "custom", callbackURL: "/dashboard", newUserCallbackURL: "/welcome"})
     state = Rack::Utils.parse_query(URI.parse(sign_in[:url]).query).fetch("state")
-    status, headers, _body = auth.api.o_auth2_callback(
+    status, headers, _body = auth.api.oauth2_callback(
       params: {providerId: "custom"},
       query: {code: "oauth-code", state: state},
       as_response: true
@@ -242,7 +242,7 @@ class BetterAuthPluginsGenericOAuthTest < Minitest::Test
 
     second_sign_in = auth.api.sign_in_with_oauth2(body: {providerId: "custom", callbackURL: "/dashboard"})
     second_state = Rack::Utils.parse_query(URI.parse(second_sign_in[:url]).query).fetch("state")
-    status, headers, _body = auth.api.o_auth2_callback(
+    status, headers, _body = auth.api.oauth2_callback(
       params: {providerId: "custom"},
       query: {code: "oauth-code", state: second_state},
       as_response: true
@@ -263,7 +263,7 @@ class BetterAuthPluginsGenericOAuthTest < Minitest::Test
     sign_in = auth.api.sign_in_with_oauth2(body: {providerId: "custom", callbackURL: "/dashboard"})
     state = Rack::Utils.parse_query(URI.parse(sign_in[:url]).query).fetch("state")
 
-    status, _headers, _body = auth.api.o_auth2_callback(
+    status, _headers, _body = auth.api.oauth2_callback(
       params: {providerId: "custom"},
       query: {code: "oauth-code", state: state},
       as_response: true
@@ -309,7 +309,7 @@ class BetterAuthPluginsGenericOAuthTest < Minitest::Test
     assert_equal 200, status
     assert_includes headers.fetch("set-cookie"), "better-auth.state="
 
-    callback_status, callback_headers, = auth.api.o_auth2_callback(
+    callback_status, callback_headers, = auth.api.oauth2_callback(
       params: {providerId: "custom"},
       query: {code: "oauth-code", state: state},
       headers: {"cookie" => cookie_header(headers.fetch("set-cookie"))},
@@ -346,7 +346,7 @@ class BetterAuthPluginsGenericOAuthTest < Minitest::Test
     assert_equal 200, status
     assert_includes headers.fetch("set-cookie"), "better-auth.oauth_state="
 
-    callback_status, callback_headers, = auth.api.o_auth2_callback(
+    callback_status, callback_headers, = auth.api.oauth2_callback(
       params: {providerId: "custom"},
       query: {code: "oauth-code", state: state},
       headers: {"cookie" => cookie_header(headers.fetch("set-cookie"))},
@@ -379,7 +379,7 @@ class BetterAuthPluginsGenericOAuthTest < Minitest::Test
       ]
     )
 
-    callback_status, callback_headers, = new_auth.api.o_auth2_callback(
+    callback_status, callback_headers, = new_auth.api.oauth2_callback(
       params: {providerId: "custom"},
       query: {code: "oauth-code", state: state},
       headers: {"cookie" => cookie_header(headers.fetch("set-cookie"))},
@@ -398,7 +398,7 @@ class BetterAuthPluginsGenericOAuthTest < Minitest::Test
     )
     state = Rack::Utils.parse_query(URI.parse(JSON.parse(body.join).fetch("url")).query).fetch("state")
 
-    callback_status, callback_headers, = auth.api.o_auth2_callback(
+    callback_status, callback_headers, = auth.api.oauth2_callback(
       params: {providerId: "custom"},
       query: {code: "oauth-code", state: "#{state}-tampered"},
       headers: {"cookie" => cookie_header(headers.fetch("set-cookie"))},
@@ -420,7 +420,7 @@ class BetterAuthPluginsGenericOAuthTest < Minitest::Test
     )
     state = Rack::Utils.parse_query(URI.parse(JSON.parse(body.join).fetch("url")).query).fetch("state")
 
-    callback_status, callback_headers, = auth.api.o_auth2_callback(
+    callback_status, callback_headers, = auth.api.oauth2_callback(
       params: {providerId: "custom"},
       query: {code: "oauth-code", state: state},
       as_response: true
@@ -434,7 +434,7 @@ class BetterAuthPluginsGenericOAuthTest < Minitest::Test
     disabled = build_auth(disable_implicit_sign_up: true)
     sign_in = disabled.api.sign_in_with_oauth2(body: {providerId: "custom", callbackURL: "/dashboard", errorCallbackURL: "/error"})
     state = Rack::Utils.parse_query(URI.parse(sign_in[:url]).query).fetch("state")
-    status, headers, _body = disabled.api.o_auth2_callback(params: {providerId: "custom"}, query: {code: "oauth-code", state: state}, as_response: true)
+    status, headers, _body = disabled.api.oauth2_callback(params: {providerId: "custom"}, query: {code: "oauth-code", state: state}, as_response: true)
 
     assert_equal 302, status
     assert_equal "/error?error=signup_disabled", headers.fetch("location")
@@ -442,7 +442,7 @@ class BetterAuthPluginsGenericOAuthTest < Minitest::Test
     requested = build_auth(disable_implicit_sign_up: true)
     sign_in = requested.api.sign_in_with_oauth2(body: {providerId: "custom", callbackURL: "/dashboard", errorCallbackURL: "/error", requestSignUp: true})
     state = Rack::Utils.parse_query(URI.parse(sign_in[:url]).query).fetch("state")
-    status, headers, _body = requested.api.o_auth2_callback(params: {providerId: "custom"}, query: {code: "oauth-code", state: state}, as_response: true)
+    status, headers, _body = requested.api.oauth2_callback(params: {providerId: "custom"}, query: {code: "oauth-code", state: state}, as_response: true)
 
     assert_equal 302, status
     assert_equal "/dashboard", headers.fetch("location")
@@ -468,11 +468,11 @@ class BetterAuthPluginsGenericOAuthTest < Minitest::Test
 
     first = auth.api.sign_in_with_oauth2(body: {providerId: "custom", callbackURL: "/dashboard"})
     first_state = Rack::Utils.parse_query(URI.parse(first[:url]).query).fetch("state")
-    auth.api.o_auth2_callback(params: {providerId: "custom"}, query: {code: "oauth-code", state: first_state}, as_response: true)
+    auth.api.oauth2_callback(params: {providerId: "custom"}, query: {code: "oauth-code", state: first_state}, as_response: true)
 
     second = auth.api.sign_in_with_oauth2(body: {providerId: "custom", callbackURL: "/dashboard"})
     second_state = Rack::Utils.parse_query(URI.parse(second[:url]).query).fetch("state")
-    auth.api.o_auth2_callback(params: {providerId: "custom"}, query: {code: "oauth-code", state: second_state}, as_response: true)
+    auth.api.oauth2_callback(params: {providerId: "custom"}, query: {code: "oauth-code", state: second_state}, as_response: true)
 
     user = auth.context.internal_adapter.find_user_by_email("override@example.com")[:user]
     assert_equal "Updated Name", user.fetch("name")
@@ -482,13 +482,13 @@ class BetterAuthPluginsGenericOAuthTest < Minitest::Test
   def test_link_account_generates_link_state_and_callback_links_to_current_user
     auth = build_auth(user_info: {id: "linked-sub", email: "link@example.com", name: "Linked User"})
     cookie = sign_up_cookie(auth, email: "link@example.com")
-    link = auth.api.o_auth2_link_account(
+    link = auth.api.oauth2_link_account(
       headers: {"cookie" => cookie},
       body: {providerId: "custom", callbackURL: "/settings", scopes: ["files"]}
     )
     state = Rack::Utils.parse_query(URI.parse(link[:url]).query).fetch("state")
 
-    status, headers, _body = auth.api.o_auth2_callback(
+    status, headers, _body = auth.api.oauth2_callback(
       params: {providerId: "custom"},
       query: {code: "oauth-code", state: state},
       as_response: true
@@ -512,7 +512,7 @@ class BetterAuthPluginsGenericOAuthTest < Minitest::Test
 
     sign_in = auth.api.sign_in_with_oauth2(body: {providerId: "custom", errorCallbackURL: "/error"})
     state = Rack::Utils.parse_query(URI.parse(sign_in[:url]).query).fetch("state")
-    status, headers, _body = auth.api.o_auth2_callback(
+    status, headers, _body = auth.api.oauth2_callback(
       params: {providerId: "custom"},
       query: {code: "oauth-code", state: state, iss: "https://wrong.example.com"},
       as_response: true
@@ -534,7 +534,7 @@ class BetterAuthPluginsGenericOAuthTest < Minitest::Test
     )
     state = Rack::Utils.parse_query(URI.parse(JSON.parse(body.join).fetch("url")).query).fetch("state")
 
-    callback_status, callback_headers, = auth.api.o_auth2_callback(
+    callback_status, callback_headers, = auth.api.oauth2_callback(
       params: {providerId: "custom"},
       query: {code: "oauth-code", state: state},
       headers: {"cookie" => cookie_header(headers.fetch("set-cookie"))},
@@ -568,7 +568,7 @@ class BetterAuthPluginsGenericOAuthTest < Minitest::Test
       )
       state = Rack::Utils.parse_query(URI.parse(JSON.parse(body.join).fetch("url")).query).fetch("state")
 
-      callback_status, callback_headers, = auth.api.o_auth2_callback(
+      callback_status, callback_headers, = auth.api.oauth2_callback(
         params: {providerId: "custom"},
         query: {code: "oauth-code", state: state},
         headers: {"cookie" => cookie_header(headers.fetch("set-cookie"))},
@@ -635,7 +635,7 @@ class BetterAuthPluginsGenericOAuthTest < Minitest::Test
     auth = build_auth(user_info: {id: "info-sub", email: "info@example.com", name: "Info User", emailVerified: true})
     sign_in = auth.api.sign_in_with_oauth2(body: {providerId: "custom", callbackURL: "/dashboard"})
     state = Rack::Utils.parse_query(URI.parse(sign_in[:url]).query).fetch("state")
-    _status, headers, = auth.api.o_auth2_callback(
+    _status, headers, = auth.api.oauth2_callback(
       params: {providerId: "custom"},
       query: {code: "oauth-code", state: state},
       as_response: true
@@ -670,7 +670,7 @@ class BetterAuthPluginsGenericOAuthTest < Minitest::Test
         as_response: true
       )
       state = Rack::Utils.parse_query(URI.parse(JSON.parse(sign_in_body.join).fetch("url")).query).fetch("state")
-      _callback_status, callback_headers, = auth.api.o_auth2_callback(
+      _callback_status, callback_headers, = auth.api.oauth2_callback(
         params: {providerId: "custom"},
         query: {code: "oauth-code", state: state},
         headers: {"cookie" => cookie_header(sign_in_headers.fetch("set-cookie"))},
@@ -710,7 +710,7 @@ class BetterAuthPluginsGenericOAuthTest < Minitest::Test
         as_response: true
       )
       state = Rack::Utils.parse_query(URI.parse(JSON.parse(sign_in_body.join).fetch("url")).query).fetch("state")
-      _callback_status, callback_headers, = auth.api.o_auth2_callback(
+      _callback_status, callback_headers, = auth.api.oauth2_callback(
         params: {providerId: "custom"},
         query: {code: "oauth-code", state: state},
         headers: {"cookie" => cookie_header(sign_in_headers.fetch("set-cookie"))},
@@ -752,7 +752,7 @@ class BetterAuthPluginsGenericOAuthTest < Minitest::Test
         as_response: true
       )
       state = Rack::Utils.parse_query(URI.parse(JSON.parse(sign_in_body.join).fetch("url")).query).fetch("state")
-      _callback_status, callback_headers, = auth.api.o_auth2_callback(
+      _callback_status, callback_headers, = auth.api.oauth2_callback(
         params: {providerId: "custom"},
         query: {code: "oauth-code", state: state},
         headers: {"cookie" => cookie_header(sign_in_headers.fetch("set-cookie"))},
@@ -789,7 +789,7 @@ class BetterAuthPluginsGenericOAuthTest < Minitest::Test
         as_response: true
       )
       state = Rack::Utils.parse_query(URI.parse(JSON.parse(sign_in_body.join).fetch("url")).query).fetch("state")
-      _callback_status, callback_headers, = auth.api.o_auth2_callback(
+      _callback_status, callback_headers, = auth.api.oauth2_callback(
         params: {providerId: "custom"},
         query: {code: "oauth-code", state: state},
         headers: {"cookie" => cookie_header(sign_in_headers.fetch("set-cookie"))},
