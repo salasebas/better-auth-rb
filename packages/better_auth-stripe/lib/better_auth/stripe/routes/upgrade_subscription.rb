@@ -7,7 +7,7 @@ module BetterAuth
         module_function
 
         def endpoint(config)
-          BetterAuth::Endpoint.new(path: "/subscription/upgrade", method: "POST", metadata: {openapi: {operationId: "upgradeSubscription"}}) do |ctx|
+          BetterAuth::Endpoint.new(path: "/subscription/upgrade", method: "POST", metadata: {openapi: BetterAuth::Stripe::OpenAPI.upgrade_subscription_metadata}) do |ctx|
             session = BetterAuth::Routes.current_session(ctx)
             body = BetterAuth::Plugins.normalize_hash(ctx.body)
             BetterAuth::Stripe::Middleware.validate_trusted_urls!(ctx, body, success_url: "successUrl", cancel_url: "cancelUrl", return_url: "returnUrl")

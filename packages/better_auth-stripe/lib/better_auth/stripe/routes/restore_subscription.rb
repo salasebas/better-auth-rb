@@ -7,7 +7,7 @@ module BetterAuth
         module_function
 
         def endpoint(config)
-          BetterAuth::Endpoint.new(path: "/subscription/restore", method: "POST", metadata: {openapi: {operationId: "restoreSubscription"}}) do |ctx|
+          BetterAuth::Endpoint.new(path: "/subscription/restore", method: "POST", metadata: {openapi: BetterAuth::Stripe::OpenAPI.restore_subscription_metadata}) do |ctx|
             session = BetterAuth::Routes.current_session(ctx)
             body = BetterAuth::Plugins.normalize_hash(ctx.body)
             customer_type = BetterAuth::Plugins.stripe_customer_type!(body)
