@@ -369,8 +369,7 @@ module BetterAuth
                 oauth_query: {type: "string", description: "Signed OAuth query string"},
                 selected: {type: "boolean", description: "Continue after account selection"},
                 created: {type: "boolean", description: "Continue after account creation"},
-                postLogin: {type: "boolean", description: "Continue after post-login flow"},
-                post_login: {type: "boolean", description: "Continue after post-login flow"}
+                postLogin: {type: "boolean", description: "Continue after post-login flow"}
               },
               required: ["oauth_query"]
             )
@@ -505,13 +504,9 @@ module BetterAuth
           scopes: {type: "array", items: {type: "string"}},
           type: {type: "string", enum: ["web", "native", "user-agent-based"]},
           require_pkce: {type: "boolean"},
-          requirePKCE: {type: "boolean"},
           subject_type: {type: "string", enum: ["public", "pairwise"]},
-          subjectType: {type: "string", enum: ["public", "pairwise"]},
           enable_end_session: {type: "boolean"},
-          enableEndSession: {type: "boolean"},
           skip_consent: {type: "boolean"},
-          skipConsent: {type: "boolean"},
           metadata: {type: "object", additionalProperties: true}
         },
         required: ["redirect_uris"]

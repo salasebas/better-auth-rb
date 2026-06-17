@@ -2,6 +2,10 @@
 
 module BetterAuth
   module OpenAPI
+    # Better Auth action endpoints advertise upstream camelCase JSON field names in
+    # OpenAPI and generated inventories. Runtime may still accept Ruby snake_case
+    # aliases via normalize_hash and route validation.
+
     module_function
 
     def object_schema(properties, required: [])

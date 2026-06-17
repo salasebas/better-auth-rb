@@ -218,9 +218,9 @@ module BetterAuth
             requestBody: OpenAPI.json_request_body(
               OpenAPI.object_schema(
                 {
-                  user_code: {type: "string", description: "User code shown on the device"},
                   userCode: {type: "string", description: "User code shown on the device"}
-                }
+                },
+                required: ["userCode"]
               )
             ),
             responses: {
@@ -247,9 +247,9 @@ module BetterAuth
             requestBody: OpenAPI.json_request_body(
               OpenAPI.object_schema(
                 {
-                  user_code: {type: "string", description: "User code shown on the device"},
                   userCode: {type: "string", description: "User code shown on the device"}
-                }
+                },
+                required: ["userCode"]
               )
             ),
             responses: {

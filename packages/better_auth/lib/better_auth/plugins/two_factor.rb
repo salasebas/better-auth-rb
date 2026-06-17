@@ -317,9 +317,9 @@ module BetterAuth
       when "generateTOTP"
         OpenAPI.object_schema({secret: {type: "string"}}, required: ["secret"])
       when "verifyTOTP", "verifyTwoFactorOTP"
-        OpenAPI.object_schema({code: {type: "string"}, trustDevice: {type: "boolean"}, trust_device: {type: "boolean"}}, required: ["code"])
+        OpenAPI.object_schema({code: {type: "string"}, trustDevice: {type: "boolean"}}, required: ["code"])
       when "verifyBackupCode"
-        OpenAPI.object_schema({code: {type: "string"}, disableSession: {type: "boolean"}, disable_session: {type: "boolean"}, trustDevice: {type: "boolean"}, trust_device: {type: "boolean"}}, required: ["code"])
+        OpenAPI.object_schema({code: {type: "string"}, disableSession: {type: "boolean"}, trustDevice: {type: "boolean"}}, required: ["code"])
       when "sendTwoFactorOTP"
         OpenAPI.empty_request_body.dig(:content, "application/json", :schema)
       else

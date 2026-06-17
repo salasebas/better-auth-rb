@@ -358,20 +358,13 @@ module BetterAuth
       OpenAPI.object_schema(
         {
           providerId: {type: "string", description: "OAuth provider ID"},
-          provider_id: {type: "string", description: "OAuth provider ID"},
           callbackURL: {type: "string", description: "URL to redirect to after success"},
-          callback_url: {type: "string", description: "URL to redirect to after success"},
           errorCallbackURL: {type: "string", description: "URL to redirect to after error"},
-          error_callback_url: {type: "string", description: "URL to redirect to after error"},
           newUserCallbackURL: {type: "string", description: "URL to redirect to for new users"},
-          new_user_callback_url: {type: "string", description: "URL to redirect to for new users"},
           requestSignUp: {type: "boolean", description: "Whether this request is a sign-up flow"},
-          request_sign_up: {type: "boolean", description: "Whether this request is a sign-up flow"},
           scopes: {type: "array", items: {type: "string"}, description: "Additional OAuth scopes"},
           disableRedirect: {type: "boolean", description: "Return the URL instead of redirecting"},
-          disable_redirect: {type: "boolean", description: "Return the URL instead of redirecting"},
-          additionalData: {type: "object", additionalProperties: true},
-          additional_data: {type: "object", additionalProperties: true}
+          additionalData: {type: "object", additionalProperties: true}
         }
       )
     end
