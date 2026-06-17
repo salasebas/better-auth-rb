@@ -5,6 +5,7 @@ node_modules
 .env.local
 .DS_Store
 next-env.d.ts
+*.tsbuildinfo
 
 # Build-time sync target (populated by scripts/sync-beta-content.ts)
 content/docs-beta/*

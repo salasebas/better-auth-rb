@@ -23,7 +23,7 @@ Recommended order: **019 (done) → 025**.
 | 026 | Upstream docs deprecation audit & skip-legacy verification | - | TODO |
 | 027 | Endpoint contract cleanup | 026 | DONE |
 | 028 | Stable resource-oriented HTTP API | 027 | TODO |
-| 029 | Upstream `auth.api` naming parity (Ruby idiomatic) | 027 | TODO |
+| 029 | Upstream `auth.api` naming parity (Ruby idiomatic) | 027 | DONE |
 
 ## Docs Parity Initiative (020–025)
 

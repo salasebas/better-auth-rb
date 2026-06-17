@@ -79,6 +79,9 @@ task :ci do
   ].map { |path| %(require "#{path}") }.join("; ")
   sh %(bundle exec ruby -Itest -e '#{workspace_test_requires}')
 
+  puts "\n🧪 Running endpoint registry parity test..."
+  sh "bundle exec ruby -Ipackages/better_auth/test -Ipackages/better_auth/lib packages/better_auth/test/better_auth/endpoint_registry_parity_test.rb"
+
   # Per-package tests
   puts "\n🧪 Running tests in packages/better_auth..."
   cd "packages/better_auth" do
