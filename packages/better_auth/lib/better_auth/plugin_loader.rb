@@ -29,10 +29,8 @@ module BetterAuth
       admin_schema: "plugins/admin/schema",
       admin: "plugins/admin",
       oauth_protocol: "plugins/oauth_protocol",
-      oidc_provider: "plugins/oidc_provider",
       oauth_provider: "plugins/oauth_provider",
       device_authorization: "plugins/device_authorization",
-      mcp: "plugins/mcp",
       two_factor: "plugins/two_factor",
       captcha: "plugins/captcha",
       have_i_been_pwned: "plugins/have_i_been_pwned",
@@ -47,8 +45,6 @@ module BetterAuth
       organization: %i[organization_schema access],
       admin_schema: %i[organization_schema],
       admin: %i[admin_schema access],
-      oidc_provider: %i[oauth_protocol],
-      mcp: %i[oauth_protocol],
       device_authorization: %i[oauth_protocol]
     }.freeze
 
@@ -77,10 +73,8 @@ module BetterAuth
       "passkey" => :passkey,
       "organization" => :organization,
       "admin" => :admin,
-      "oidc-provider" => :oidc_provider,
       "oauth-provider" => :oauth_provider,
       "device-authorization" => :device_authorization,
-      "mcp" => :mcp,
       "two-factor" => :two_factor,
       "captcha" => :captcha,
       "have-i-been-pwned" => :have_i_been_pwned,
@@ -92,10 +86,8 @@ module BetterAuth
     }.freeze
 
     NESTED_MODULE_LOADERS = {
-      OIDCProvider: :oidc_provider,
       OAuthProtocol: :oauth_protocol,
       JWT: :jwt,
-      MCP: :mcp,
       OrganizationSchema: :organization_schema,
       AdminSchema: :admin_schema
     }.freeze

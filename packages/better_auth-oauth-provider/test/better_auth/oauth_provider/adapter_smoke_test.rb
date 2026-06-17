@@ -145,7 +145,10 @@ class OAuthProviderAdapterSmokeTest < Minitest::Test
       database: database,
       email_and_password: {enabled: true},
       session: {cookie_cache: {enabled: false}},
-      plugins: [oauth_provider_smoke_plugin]
+      plugins: [
+        BetterAuth::Plugins.jwt(jwks: {key_pair_config: {alg: "EdDSA"}}),
+        oauth_provider_smoke_plugin
+      ]
     )
     cookie = sign_up_cookie(auth, email: "adapter-smoke@example.com")
     client = create_client(
@@ -186,7 +189,10 @@ class OAuthProviderAdapterSmokeTest < Minitest::Test
       database: :memory,
       email_and_password: {enabled: true},
       session: {cookie_cache: {enabled: false}},
-      plugins: [oauth_provider_smoke_plugin]
+      plugins: [
+        BetterAuth::Plugins.jwt(jwks: {key_pair_config: {alg: "EdDSA"}}),
+        oauth_provider_smoke_plugin
+      ]
     )
     BetterAuth::Schema::SQL.create_statements(config, dialect: dialect).join("\n")
   end
@@ -197,7 +203,10 @@ class OAuthProviderAdapterSmokeTest < Minitest::Test
       database: :memory,
       email_and_password: {enabled: true},
       session: {cookie_cache: {enabled: false}},
-      plugins: [oauth_provider_smoke_plugin]
+      plugins: [
+        BetterAuth::Plugins.jwt(jwks: {key_pair_config: {alg: "EdDSA"}}),
+        oauth_provider_smoke_plugin
+      ]
     )
     BetterAuth::Schema::SQL.create_statements(sql_config, dialect: dialect).each do |statement|
       case dialect

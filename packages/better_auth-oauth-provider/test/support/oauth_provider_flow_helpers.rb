@@ -10,14 +10,42 @@ module OAuthProviderFlowHelpers
   SECRET = "phase-eleven-secret-with-enough-entropy-123"
 
   def build_auth(options = {})
+    opts = options.dup
+    disable_jwt = opts[:disable_jwt_plugin] == true
+    base_url = opts.delete(:base_url) || "http://localhost:3000"
+    secret = opts.delete(:secret) || SECRET
+    database = opts.delete(:database) || :memory
+    secondary_storage = opts.delete(:secondary_storage)
+    session = opts.delete(:session)
+
+    oauth_options = {
+      scopes: ["read", "write"],
+      allow_dynamic_client_registration: true
+    }.merge(opts)
+
+    plugins = []
+    unless disable_jwt
+      jwt_options = {jwks: {key_pair_config: {alg: "EdDSA"}}}
+      if (jwt_config = oauth_options.delete(:jwt))
+        jwt_options[:jwt] = jwt_config
+      end
+      plugins << BetterAuth::Plugins.jwt(jwt_options)
+      issuer = jwt_options.dig(:jwt, :issuer)
+      if issuer && !oauth_options.key?(:issuer_path)
+        path = URI.parse(issuer.to_s).path
+        oauth_options[:issuer_path] = path unless path.empty? || path == "/"
+      end
+    end
+    plugins << BetterAuth::Plugins.oauth_provider(oauth_options)
+
     BetterAuth.auth(
-      base_url: options.delete(:base_url) || "http://localhost:3000",
-      secret: options.delete(:secret) || SECRET,
-      database: options.delete(:database) || :memory,
-      secondary_storage: options.delete(:secondary_storage),
-      session: options.delete(:session),
+      base_url: base_url,
+      secret: secret,
+      database: database,
+      secondary_storage: secondary_storage,
+      session: session,
       email_and_password: {enabled: true},
-      plugins: [BetterAuth::Plugins.oauth_provider({scopes: ["read", "write"], allow_dynamic_client_registration: true}.merge(options))]
+      plugins: plugins
     )
   end
 
@@ -180,6 +208,8 @@ module OAuthProviderFlowHelpers
   end
 
   def decode_id_token(token, client)
+    JWT.decode(token, nil, false).first
+  rescue JWT::DecodeError
     key = OpenSSL::HMAC.hexdigest("SHA256", SECRET, "oidc.id_token.#{client[:client_id]}")
     JWT.decode(token, key, true, algorithm: "HS256").first
   end

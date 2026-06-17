@@ -1,6 +1,6 @@
-# Better Auth OAuth Provider
+# Better Auth OAuth 2.1 Provider
 
-External OAuth provider plugin package for `better_auth`.
+Canonical Ruby provider surface for OAuth 2.1, OIDC compatibility, MCP/resource-server helpers, and dynamic client registration.
 
 Upstream ships OAuth provider as `@better-auth/oauth-provider`, separate from core plugin exports. This gem mirrors that boundary for Ruby while keeping Ruby option names snake_case and upstream-compatible HTTP paths and JSON keys.
 
@@ -132,6 +132,14 @@ Common options accepted by `BetterAuth::Plugins.oauth_provider`:
 - `disable_jwt_plugin`
 - `store`
 
+## JWT plugin
+
+When `disable_jwt_plugin` is false (the default), register `BetterAuth::Plugins.jwt`
+**before** `BetterAuth::Plugins.oauth_provider` in the plugins array. Auth init fails
+with `jwt_config` if the JWT plugin is missing — oauth-provider does **not** auto-enable
+it. Set `disable_jwt_plugin: true` only for legacy HS256-only deployments that intentionally
+omit the JWT plugin.
+
 `store_client_secret` defaults to `"hashed"`. Set `store_client_secret: "plain"` only when migrating an existing app that still depends on plaintext client secrets. `store_tokens` defaults to `"hashed"` for opaque access tokens, refresh tokens, and authorization codes; custom hash callbacks may be supplied with `hash: ->(token, type) { ... }`.
 
 Token, introspection, and revocation client authentication is method-strict: `client_secret_basic` clients must authenticate with HTTP Basic credentials, `client_secret_post` clients must use body credentials, and public clients cannot authenticate to introspection or revocation. Authorization-code clients receive refresh tokens only when the granted scope includes `offline_access`.
@@ -175,13 +183,19 @@ Then drop the legacy access-token and consent columns. Rails apps using `better_
 
 When the JWT plugin is registered, JWT access tokens and ID tokens use the JWT plugin's configured `jwks.key_pair_config.alg`, defaulting to `EdDSA` like upstream, and discovery metadata publishes the active JWKS URI. If the JWT plugin is not registered, or `disable_jwt_plugin: true` is set, Ruby intentionally falls back to HS256 for compatibility; with hashed client-secret storage, that fallback uses a server-derived per-client key.
 
-Upstream `oauthProviderResourceClient` and MCP protected-resource helpers remain future API-boundary work for Ruby. This gem currently hardens authorization-server behavior only.
+Upstream `oauthProviderResourceClient` and MCP protected-resource helpers are available through `BetterAuth::Plugins::OAuthProvider::ClientResource` and `BetterAuth::Plugins::OAuthProvider::MCP`.
 
 Route OpenAPI metadata blocks from upstream TypeScript are intentionally not ported into this package. Use the Ruby `open_api` plugin for generated OpenAPI output.
 
 The upstream `@better-auth/oauth-provider/client`, React/Solid client plugins, dashboard UI, and browser helpers are not ported. Ruby apps call the JSON endpoints directly or wrap `auth.api.*`.
 
-OIDC provider remains a core `better_auth` plugin because upstream still exposes it from `better-auth/plugins`. OAuth provider is the newer standalone provider package.
+Core `BetterAuth::Plugins.oidc_provider` and `BetterAuth::Plugins.mcp` were removed. Configure provider behavior exclusively through `BetterAuth::Plugins.oauth_provider` from this gem.
+
+## Migration from removed core plugins
+
+- Replace `BetterAuth::Plugins.oidc_provider(...)` with `BetterAuth::Plugins.oauth_provider(...)` after adding `gem "better_auth-oauth-provider"` and `require "better_auth/oauth_provider"`.
+- Replace `BetterAuth::Plugins.mcp(...)` with `BetterAuth::Plugins.oauth_provider(...)` and use `/oauth2/*` routes plus `OAuthProvider::MCP.mcp_handler` for resource-server bearer challenges.
+- Legacy `/mcp/*` routes are not supported. Use OAuth Provider token and introspection endpoints instead of `/mcp/get-session`.
 
 ## Development
 

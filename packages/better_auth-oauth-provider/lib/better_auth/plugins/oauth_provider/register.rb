@@ -37,7 +37,8 @@ module BetterAuth
           dynamic_registration: true,
           pairwise_secret: config[:pairwise_secret],
           strip_client_metadata: true,
-          reference_id: oauth_client_reference(config, session)
+          reference_id: oauth_client_reference(config, session),
+          **oauth_client_create_options(config)
         )
         ctx.json(client, status: 201, headers: {"Cache-Control" => "no-store", "Pragma" => "no-cache"})
       end

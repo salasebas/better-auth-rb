@@ -330,15 +330,11 @@ module BetterAuth
         },
         "plugins/mcp/mcp.test.ts" => {
           owner: [
-            "better_auth/plugins/mcp/authorization_test.rb",
-            "better_auth/plugins/mcp/metadata_test.rb",
-            "better_auth/plugins/mcp/token_test.rb",
-            "better_auth/plugins/mcp/userinfo_test.rb",
-            "better_auth/plugins/mcp/resource_handler_test.rb"
+            "../../better_auth-oauth-provider/test/better_auth/oauth_provider/mcp_test.rb"
           ],
           status: :covered,
-          plan: "006",
-          notes: "MCP server plugin covered across mcp/*_test.rb files"
+          plan: "019",
+          notes: "MCP/resource-server behavior covered by oauth-provider package"
         },
         "plugins/multi-session/multi-session.test.ts" => {
           owner: "better_auth/plugins/multi_session_test.rb",
@@ -353,16 +349,16 @@ module BetterAuth
           notes: "OAuth proxy plugin covered in oauth_proxy_test"
         },
         "plugins/oidc-provider/oidc.test.ts" => {
-          owner: "better_auth/plugins/oidc_provider_test.rb",
+          owner: "../../better_auth-oauth-provider/test/better_auth/oauth_provider_test.rb",
           status: :covered,
-          plan: "006",
-          notes: "OIDC provider plugin covered in oidc_provider_test"
+          plan: "019",
+          notes: "OIDC provider behavior superseded by oauth-provider package"
         },
         "plugins/oidc-provider/utils/prompt.test.ts" => {
-          owner: "better_auth/plugins/oidc_provider_test.rb",
+          owner: "../../better_auth-oauth-provider/test/better_auth/oauth_provider/prompt_test.rb",
           status: :covered,
-          plan: "006",
-          notes: "OIDC prompt utilities covered in oidc_provider_test"
+          plan: "019",
+          notes: "OIDC prompt utilities covered by oauth-provider package"
         },
         "plugins/one-time-token/one-time-token.test.ts" => {
           owner: "better_auth/plugins/one_time_token_test.rb",
@@ -486,7 +482,11 @@ module BetterAuth
       end
 
       def owner_exists?(relative_path)
-        File.file?(File.join(TEST_ROOT, relative_path))
+        candidates = [
+          File.join(TEST_ROOT, relative_path),
+          File.expand_path(relative_path, TEST_ROOT)
+        ]
+        candidates.any? { |path| File.file?(path) }
       end
     end
   end

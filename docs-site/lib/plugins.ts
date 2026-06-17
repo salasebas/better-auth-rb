@@ -85,15 +85,10 @@ const pluginMeta: Record<
 		tagline: "Multi-tenant organizations with roles and invitations",
 	},
 	// Enterprise
-	"oidc-provider": {
-		category: "Enterprise",
-		icon: "Globe",
-		tagline: "OpenID Connect provider for federated identity",
-	},
 	"oauth-provider": {
 		category: "Enterprise",
 		icon: "Server",
-		tagline: "Turn your app into a full OAuth 2.0 provider",
+		tagline: "OAuth 2.1 provider with OIDC compatibility and MCP/resource-server helpers",
 	},
 	sso: {
 		category: "Enterprise",

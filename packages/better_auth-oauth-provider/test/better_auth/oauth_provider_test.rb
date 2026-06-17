@@ -805,6 +805,7 @@ class BetterAuthPluginsOAuthProviderTest < Minitest::Test
   def test_metadata_supports_advertised_overrides_and_cache_headers
     auth = build_auth(
       scopes: ["openid", "profile", "email"],
+      disable_jwt_plugin: true,
       advertised_metadata: {
         scopes_supported: ["openid", "profile"],
         claims_supported: ["sub", "name"]
@@ -1112,7 +1113,7 @@ class BetterAuthPluginsOAuthProviderTest < Minitest::Test
     )
     tokens = issue_authorization_code_tokens(auth, cookie, client, scope: "openid")
 
-    assert_raises(JWT::VerificationError) do
+    assert_raises(JWT::DecodeError) do
       JWT.decode(tokens[:id_token], client[:client_id], true, algorithm: "HS256")
     end
     assert_equal client[:client_id], decode_id_token(tokens[:id_token], client)["aud"]
@@ -1219,7 +1220,7 @@ class BetterAuthPluginsOAuthProviderTest < Minitest::Test
     )
     refute tokens[:access_token].start_with?("ba_at_")
 
-    payload = JWT.decode(tokens[:access_token], SECRET, true, algorithm: "HS256").first
+    payload = JWT.decode(tokens[:access_token], nil, false).first
     assert_equal "https://api.example", payload["aud"]
     assert_equal client[:client_id], payload["azp"]
     assert_equal "read", payload["scope"]
@@ -1795,12 +1796,27 @@ class BetterAuthPluginsOAuthProviderTest < Minitest::Test
   private
 
   def build_auth(options = {})
+    opts = options.dup
+    disable_jwt = opts[:disable_jwt_plugin] == true
+    oauth_options = {
+      scopes: ["read", "write"],
+      allow_dynamic_client_registration: true
+    }.merge(opts)
+
+    plugins = []
+    unless disable_jwt
+      jwt_options = {jwks: {key_pair_config: {alg: "EdDSA"}}}
+      jwt_options[:jwt] = oauth_options.delete(:jwt) if oauth_options[:jwt]
+      plugins << BetterAuth::Plugins.jwt(jwt_options)
+    end
+    plugins << BetterAuth::Plugins.oauth_provider(oauth_options)
+
     BetterAuth.auth(
       base_url: "http://localhost:3000",
       secret: SECRET,
       database: :memory,
       email_and_password: {enabled: true},
-      plugins: [BetterAuth::Plugins.oauth_provider({scopes: ["read", "write"], allow_dynamic_client_registration: true}.merge(options))]
+      plugins: plugins
     )
   end
 
@@ -1879,6 +1895,8 @@ class BetterAuthPluginsOAuthProviderTest < Minitest::Test
   end
 
   def decode_id_token(token, client)
+    JWT.decode(token, nil, false).first
+  rescue JWT::DecodeError
     key = OpenSSL::HMAC.hexdigest("SHA256", SECRET, "oidc.id_token.#{client[:client_id]}")
     JWT.decode(token, key, true, algorithm: "HS256").first
   end

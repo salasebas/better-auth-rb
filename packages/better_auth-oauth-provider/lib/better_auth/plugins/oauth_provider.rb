@@ -64,12 +64,25 @@ module BetterAuth
 
       oauth_provider_validate_config!(config, raw_options)
 
+      trusted = raw_options[:cached_trusted_clients] || raw_options[:cachedTrustedClients]
+      config[:cached_trusted_clients] = if trusted.is_a?(Set)
+        trusted
+      else
+        Set.new(Array(trusted).map(&:to_s))
+      end
+
+      endpoints = oauth_provider_endpoints(config)
+      issuer_path = oauth_resolve_issuer_path(config)
+      if issuer_path
+        endpoints = endpoints.merge(oauth_issuer_path_metadata_endpoints(config, issuer_path))
+      end
+
       Plugin.new(
         id: "oauth-provider",
         version: BetterAuth::OAuthProvider::VERSION,
         init: oauth_provider_init(config),
         hooks: oauth_provider_hooks(config),
-        endpoints: oauth_provider_endpoints(config),
+        endpoints: endpoints,
         schema: oauth_provider_schema,
         rate_limit: oauth_provider_rate_limits(config),
         options: config
@@ -187,6 +200,10 @@ module BetterAuth
         if context.options.secondary_storage && !context.options.session[:store_session_in_database]
           raise APIError.new("BAD_REQUEST", message: "OAuth Provider requires session.store_session_in_database when using secondary storage")
         end
+        unless config[:disable_jwt_plugin]
+          jwt_plugin = context.options.plugins.find { |entry| entry.id == "jwt" }
+          raise BetterAuth::Error, "jwt_config" unless jwt_plugin
+        end
         nil
       end
     end
@@ -212,15 +229,6 @@ module BetterAuth
         get_o_auth_consent: oauth_get_consent_endpoint,
         update_o_auth_consent: oauth_update_consent_endpoint,
         delete_o_auth_consent: oauth_delete_consent_endpoint,
-        legacy_get_o_auth_client: oauth_legacy_get_client_endpoint(config),
-        legacy_get_o_auth_client_public: oauth_legacy_get_client_public_endpoint(config),
-        legacy_list_o_auth_clients: oauth_legacy_list_clients_endpoint(config),
-        legacy_update_o_auth_client: oauth_legacy_update_client_endpoint(config),
-        legacy_delete_o_auth_client: oauth_legacy_delete_client_endpoint(config),
-        legacy_list_o_auth_consents: oauth_legacy_list_consents_endpoint,
-        legacy_get_o_auth_consent: oauth_legacy_get_consent_endpoint,
-        legacy_update_o_auth_consent: oauth_legacy_update_consent_endpoint,
-        legacy_delete_o_auth_consent: oauth_legacy_delete_consent_endpoint,
         o_auth2_authorize: oauth_authorize_endpoint(config),
         o_auth2_continue: oauth_continue_endpoint(config),
         o_auth2_consent: oauth_consent_endpoint(config),

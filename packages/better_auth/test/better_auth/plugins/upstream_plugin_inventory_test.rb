@@ -27,7 +27,6 @@ class BetterAuthPluginsUpstreamInventoryTest < Minitest::Test
     end
 
     assert_empty coverage.select { |_plugin, category| category.nil? }
-    assert_equal :submodule_test, coverage.fetch("mcp")
     assert_equal :protocol_helper_test, coverage.fetch("oauth_protocol")
     external_shim_tested.each do |plugin|
       assert_equal :external_shim_test, coverage.fetch(plugin)

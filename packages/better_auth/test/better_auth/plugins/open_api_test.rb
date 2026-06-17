@@ -416,29 +416,6 @@ class BetterAuthPluginsOpenAPITest < Minitest::Test
       },
       BetterAuth::Plugins.oauth_proxy => {
         o_auth_proxy: "oauthProxyCallback"
-      },
-      BetterAuth::Plugins.oidc_provider(__skip_deprecation_warning: true) => {
-        register_o_auth_application: "registerOAuthApplication",
-        get_o_auth_client: "getOAuthClient",
-        list_o_auth_applications: "listOAuthApplications",
-        update_o_auth_application: "updateOAuthApplication",
-        rotate_o_auth_application_secret: "rotateOAuthApplicationSecret",
-        delete_o_auth_application: "deleteOAuthApplication",
-        o_auth2_authorize: "oauth2Authorize",
-        o_auth_consent: "oauth2Consent",
-        o_auth2_token: "oauth2Token",
-        o_auth2_user_info: "oauth2Userinfo",
-        o_auth2_introspect: "oauth2Introspect",
-        o_auth2_revoke: "oauth2Revoke",
-        end_session: "oauth2EndSession"
-      },
-      BetterAuth::Plugins.mcp => {
-        mcp_register: "registerMcpClient",
-        mcp_o_auth_authorize: "mcpOAuthAuthorize",
-        mcp_o_auth_token: "mcpOAuthToken",
-        mcp_o_auth_user_info: "mcpOAuthUserinfo",
-        get_mcp_session: "getMcpSession",
-        mcp_jwks: "getMcpJSONWebKeySet"
       }
     }.each do |plugin, routes|
       routes.each do |route, operation_id|
@@ -612,6 +589,15 @@ class BetterAuthPluginsOpenAPITest < Minitest::Test
     refute_includes schema[:paths].keys, "/sign-in/social"
   end
 
+  def test_open_api_schema_excludes_removed_core_provider_plugins
+    auth = build_auth(plugins: [BetterAuth::Plugins.open_api])
+    schema = auth.api.generate_open_api_schema
+    paths = schema[:paths].keys
+
+    refute paths.any? { |path| path.start_with?("/mcp/") }
+    refute_includes paths, "/oauth2/authorize"
+  end
+
   def test_visible_core_plugin_endpoints_have_rich_open_api_metadata
     plugins = [
       BetterAuth::Plugins.admin,
@@ -623,10 +609,8 @@ class BetterAuthPluginsOpenAPITest < Minitest::Test
       BetterAuth::Plugins.generic_oauth(config: []),
       BetterAuth::Plugins.jwt,
       BetterAuth::Plugins.magic_link,
-      BetterAuth::Plugins.mcp,
       BetterAuth::Plugins.multi_session,
       BetterAuth::Plugins.oauth_proxy,
-      BetterAuth::Plugins.oidc_provider(__skip_deprecation_warning: true),
       BetterAuth::Plugins.one_tap,
       BetterAuth::Plugins.one_time_token,
       BetterAuth::Plugins.organization(teams: {enabled: true}, dynamic_access_control: {enabled: true}),

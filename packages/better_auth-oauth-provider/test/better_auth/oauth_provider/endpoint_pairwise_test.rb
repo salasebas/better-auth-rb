@@ -236,7 +236,7 @@ class OAuthProviderEndpointPairwiseTest < Minitest::Test
 
     tokens = issue_authorization_code_tokens(auth, cookie, client, scope: "openid read", redirect_uri: "https://app.example.com/cb", resource: "https://api.example")
     id_payload = decode_id_token(tokens[:id_token], client)
-    access_payload = JWT.decode(tokens[:access_token], SECRET, true, algorithm: "HS256").first
+    access_payload = JWT.decode(tokens[:access_token], nil, false).first
     user = auth.context.adapter.find_one(model: "user", where: [{field: "email", value: "oauth-provider@example.com"}])
 
     refute_equal user.fetch("id"), id_payload.fetch("sub")

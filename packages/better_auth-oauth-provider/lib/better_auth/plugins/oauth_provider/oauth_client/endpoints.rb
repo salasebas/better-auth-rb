@@ -22,7 +22,8 @@ module BetterAuth
           admin: false,
           pairwise_secret: config[:pairwise_secret],
           strip_client_metadata: true,
-          reference_id: oauth_client_reference(config, session)
+          reference_id: oauth_client_reference(config, session),
+          **oauth_client_create_options(config)
         )
         ctx.json(client, status: 201, headers: {"Cache-Control" => "no-store", "Pragma" => "no-cache"})
       end
@@ -33,7 +34,7 @@ module BetterAuth
         session = Routes.current_session(ctx)
         oauth_assert_client_privilege!(ctx, config, session, "read")
         query = OAuthProtocol.stringify_keys(ctx.query)
-        client = OAuthProtocol.find_client(ctx, "oauthClient", query["client_id"])
+        client = oauth_find_client(ctx, config, query["client_id"])
         raise APIError.new("NOT_FOUND", message: "client not found") unless client
         oauth_assert_owned_client!(client, session, config)
 
@@ -41,11 +42,11 @@ module BetterAuth
       end
     end
 
-    def oauth_get_client_public_endpoint(_config)
+    def oauth_get_client_public_endpoint(config)
       Endpoint.new(path: "/oauth2/public-client", method: "GET") do |ctx|
         Routes.current_session(ctx, allow_nil: true)
         query = OAuthProtocol.stringify_keys(ctx.query)
-        client = OAuthProtocol.find_client(ctx, "oauthClient", query["client_id"])
+        client = oauth_find_client(ctx, config, query["client_id"])
         raise APIError.new("NOT_FOUND", message: "client not found") unless client
         raise APIError.new("NOT_FOUND", message: "client not found") if OAuthProtocol.stringify_keys(client)["disabled"]
 
@@ -68,7 +69,7 @@ module BetterAuth
           raise APIError.new("UNAUTHORIZED", body: {error: "invalid_signature"})
         end
 
-        client = OAuthProtocol.find_client(ctx, "oauthClient", input["client_id"])
+        client = oauth_find_client(ctx, config, input["client_id"])
         raise APIError.new("NOT_FOUND", message: "client not found") unless client
         raise APIError.new("NOT_FOUND", message: "client not found") if OAuthProtocol.stringify_keys(client)["disabled"]
 
@@ -95,7 +96,8 @@ module BetterAuth
         session = Routes.current_session(ctx)
         oauth_assert_client_privilege!(ctx, config, session, "delete")
         body = OAuthProtocol.stringify_keys(ctx.body)
-        client = OAuthProtocol.find_client(ctx, "oauthClient", body["client_id"])
+        oauth_assert_trusted_client_mutable!(body["client_id"], config)
+        client = oauth_find_client(ctx, config, body["client_id"])
         raise APIError.new("NOT_FOUND", message: "client not found") unless client
         oauth_assert_owned_client!(client, session, config)
         ctx.context.adapter.delete(model: "oauthClient", where: [{field: "clientId", value: body["client_id"]}])
@@ -108,7 +110,8 @@ module BetterAuth
         session = Routes.current_session(ctx)
         oauth_assert_client_privilege!(ctx, config, session, "update")
         body = OAuthProtocol.stringify_keys(ctx.body)
-        client = OAuthProtocol.find_client(ctx, "oauthClient", body["client_id"])
+        oauth_assert_trusted_client_mutable!(body["client_id"], config)
+        client = oauth_find_client(ctx, config, body["client_id"])
         raise APIError.new("NOT_FOUND", message: "client not found") unless client
         oauth_assert_owned_client!(client, session, config)
 
@@ -143,7 +146,8 @@ module BetterAuth
           admin: true,
           pairwise_secret: config[:pairwise_secret],
           strip_client_metadata: true,
-          reference_id: oauth_client_reference(config, session)
+          reference_id: oauth_client_reference(config, session),
+          **oauth_client_create_options(config)
         )
         ctx.json(client, status: 201, headers: {"Cache-Control" => "no-store", "Pragma" => "no-cache"})
       end
@@ -152,7 +156,7 @@ module BetterAuth
     def oauth_admin_update_client_endpoint(config)
       Endpoint.new(path: "/admin/oauth2/update-client", method: "PATCH", metadata: {server_only: true}) do |ctx|
         body = OAuthProtocol.stringify_keys(ctx.body)
-        client = OAuthProtocol.find_client(ctx, "oauthClient", body["client_id"])
+        client = oauth_find_client(ctx, config, body["client_id"])
         raise APIError.new("NOT_FOUND", message: "client not found") unless client
 
         update_source = OAuthProtocol.stringify_keys(body["update"] || {})
@@ -168,13 +172,15 @@ module BetterAuth
         session = Routes.current_session(ctx)
         oauth_assert_client_privilege!(ctx, config, session, "rotate")
         body = OAuthProtocol.stringify_keys(ctx.body)
-        client = OAuthProtocol.find_client(ctx, "oauthClient", body["client_id"])
+        oauth_assert_trusted_client_mutable!(body["client_id"], config)
+        client = oauth_find_client(ctx, config, body["client_id"])
         raise APIError.new("NOT_FOUND", message: "client not found") unless client
         oauth_assert_owned_client!(client, session, config)
         client_data = OAuthProtocol.stringify_keys(client)
         raise APIError.new("BAD_REQUEST", message: "public clients cannot rotate secrets") if client_data["public"] || client_data["tokenEndpointAuthMethod"] == "none"
 
-        client_secret = Crypto.random_string(32)
+        generator = config[:generate_client_secret] || config[:generateClientSecret]
+        client_secret = generator.respond_to?(:call) ? generator.call : Crypto.random_string(32)
         updated = ctx.context.adapter.update(
           model: "oauthClient",
           where: [{field: "clientId", value: body["client_id"]}],
@@ -182,62 +188,6 @@ module BetterAuth
         )
         response = OAuthProtocol.client_response(updated, include_secret: false)
         ctx.json(response.merge(client_secret: OAuthProtocol.apply_prefix(client_secret, config[:prefix], :client_secret), client_secret_expires_at: client_data["clientSecretExpiresAt"] || 0))
-      end
-    end
-
-    def oauth_legacy_get_client_endpoint(config)
-      Endpoint.new(path: "/oauth2/client/:id", method: "GET") do |ctx|
-        session = Routes.current_session(ctx)
-        oauth_assert_client_privilege!(ctx, config, session, "read")
-        client = OAuthProtocol.find_client(ctx, "oauthClient", ctx.params["id"] || ctx.params[:id])
-        raise APIError.new("NOT_FOUND", message: "client not found") unless client
-        oauth_assert_owned_client!(client, session, config)
-        ctx.json(OAuthProtocol.client_response(client, include_secret: false))
-      end
-    end
-
-    def oauth_legacy_get_client_public_endpoint(_config)
-      Endpoint.new(path: "/oauth2/client", method: "GET") do |ctx|
-        query = OAuthProtocol.stringify_keys(ctx.query)
-        client = OAuthProtocol.find_client(ctx, "oauthClient", query["client_id"])
-        raise APIError.new("NOT_FOUND", message: "client not found") unless client
-        ctx.json(OAuthProtocol.client_response(client, include_secret: false))
-      end
-    end
-
-    def oauth_legacy_list_clients_endpoint(config)
-      Endpoint.new(path: "/oauth2/clients", method: "GET") do |ctx|
-        session = Routes.current_session(ctx)
-        oauth_assert_client_privilege!(ctx, config, session, "list")
-        clients = ctx.context.adapter.find_many(model: "oauthClient", where: [{field: "userId", value: session[:user]["id"]}])
-        ctx.json(clients.map { |client| OAuthProtocol.client_response(client, include_secret: false) })
-      end
-    end
-
-    def oauth_legacy_update_client_endpoint(config)
-      Endpoint.new(path: "/oauth2/client", method: "PATCH", metadata: oauth_openapi_for(:update_client)) do |ctx|
-        session = Routes.current_session(ctx)
-        oauth_assert_client_privilege!(ctx, config, session, "update")
-        body = OAuthProtocol.stringify_keys(ctx.body)
-        client = OAuthProtocol.find_client(ctx, "oauthClient", body["client_id"])
-        raise APIError.new("NOT_FOUND", message: "client not found") unless client
-        oauth_assert_owned_client!(client, session, config)
-        update = oauth_client_update_data(OAuthProtocol.stringify_keys(body["update"] || body))
-        updated = update.empty? ? client : ctx.context.adapter.update(model: "oauthClient", where: [{field: "clientId", value: body["client_id"]}], update: update.merge(updatedAt: Time.now))
-        ctx.json(OAuthProtocol.client_response(updated, include_secret: false))
-      end
-    end
-
-    def oauth_legacy_delete_client_endpoint(config)
-      Endpoint.new(path: "/oauth2/client", method: "DELETE") do |ctx|
-        session = Routes.current_session(ctx)
-        oauth_assert_client_privilege!(ctx, config, session, "delete")
-        body = OAuthProtocol.stringify_keys(ctx.body)
-        client = OAuthProtocol.find_client(ctx, "oauthClient", body["client_id"])
-        raise APIError.new("NOT_FOUND", message: "client not found") unless client
-        oauth_assert_owned_client!(client, session, config)
-        ctx.context.adapter.delete(model: "oauthClient", where: [{field: "clientId", value: body["client_id"]}])
-        ctx.json({deleted: true})
       end
     end
   end

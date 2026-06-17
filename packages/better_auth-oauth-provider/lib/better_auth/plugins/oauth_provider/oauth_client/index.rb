@@ -29,6 +29,39 @@ module BetterAuth
       raise APIError.new("UNAUTHORIZED") unless allowed
     end
 
+    def oauth_assert_trusted_client_mutable!(client_id, config)
+      trusted = config[:cached_trusted_clients]
+      return unless trusted.is_a?(Set) && trusted.include?(client_id.to_s)
+
+      raise APIError.new(
+        "INTERNAL_SERVER_ERROR",
+        message: "trusted clients must be updated manually",
+        body: {error: "invalid_client", error_description: "trusted clients must be updated manually"}
+      )
+    end
+
+    def oauth_find_client(ctx, config, client_id)
+      OAuthProtocol.find_client(ctx, "oauthClient", client_id, cached_trusted_clients: config[:cached_trusted_clients])
+    end
+
+    def oauth_client_create_options(config)
+      {
+        generate_client_id: config[:generate_client_id] || config[:generateClientId],
+        generate_client_secret: config[:generate_client_secret] || config[:generateClientSecret],
+        client_registration_client_secret_expiration: config[:client_registration_client_secret_expiration] || config[:clientRegistrationClientSecretExpiration]
+      }.compact
+    end
+
+    def oauth_token_options(config)
+      {
+        prefix: config[:prefix],
+        format_refresh_token: config[:format_refresh_token] || config[:formatRefreshToken],
+        generate_opaque_access_token: config[:generate_opaque_access_token] || config[:generateOpaqueAccessToken],
+        generate_refresh_token: config[:generate_refresh_token] || config[:generateRefreshToken],
+        store_tokens: config[:store_tokens]
+      }
+    end
+
     def oauth_client_reference(config, session)
       return nil unless session && config[:client_reference].respond_to?(:call)
 

@@ -149,6 +149,7 @@ class OAuthProviderRateLimitTest < Minitest::Test
       session: session,
       rate_limit: rate_limit,
       plugins: [
+        BetterAuth::Plugins.jwt(jwks: {key_pair_config: {alg: "EdDSA"}}),
         BetterAuth::Plugins.oauth_provider(
           scopes: ["read"],
           allow_dynamic_client_registration: true,

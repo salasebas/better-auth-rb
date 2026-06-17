@@ -1,11 +1,13 @@
 # frozen_string_literal: true
 
+require "uri"
+
 module BetterAuth
   module Plugins
     module_function
 
-    def oauth_server_metadata_endpoint(config)
-      Endpoint.new(path: "/.well-known/oauth-authorization-server", method: "GET", metadata: {hide: true}) do |ctx|
+    def oauth_server_metadata_endpoint(config, path: "/.well-known/oauth-authorization-server")
+      Endpoint.new(path: path, method: "GET", metadata: {hide: true}) do |ctx|
         base = OAuthProtocol.endpoint_base(ctx)
         metadata = {
           issuer: OAuthProvider.validate_issuer_url(OAuthProtocol.issuer(ctx)),
@@ -30,8 +32,8 @@ module BetterAuth
       end
     end
 
-    def oauth_openid_metadata_endpoint(config)
-      Endpoint.new(path: "/.well-known/openid-configuration", method: "GET", metadata: {hide: true}) do |ctx|
+    def oauth_openid_metadata_endpoint(config, path: "/.well-known/openid-configuration")
+      Endpoint.new(path: path, method: "GET", metadata: {hide: true}) do |ctx|
         unless OAuthProtocol.parse_scopes(config[:scopes]).include?("openid")
           raise APIError.new("NOT_FOUND", message: "openid is not enabled")
         end
@@ -107,6 +109,60 @@ module BetterAuth
 
     def oauth_prompt_values
       ["login", "consent", "create", "select_account", "none"]
+    end
+
+    def oauth_resolve_issuer_path(config)
+      return nil if config[:disable_jwt_plugin]
+
+      explicit = config[:issuer_path]
+      return normalize_issuer_path(explicit) unless explicit.to_s.empty?
+
+      issuer = config.dig(:jwt, :issuer)
+      return normalize_issuer_path(URI.parse(issuer.to_s).path) unless issuer.to_s.empty?
+
+      nil
+    rescue URI::InvalidURIError
+      nil
+    end
+
+    def normalize_issuer_path(path)
+      value = path.to_s
+      return nil if value.empty? || value == "/"
+
+      value.start_with?("/") ? value : "/#{value}"
+    end
+
+    def oauth_issuer_path_metadata_endpoints(config, issuer_path)
+      normalized = normalize_issuer_path(issuer_path)
+      return {} unless normalized
+
+      openid_path = oauth_openid_configuration_issuer_path(normalized, config[:base_path])
+
+      {
+        get_o_auth_server_config_issuer_path: oauth_server_metadata_endpoint(
+          config,
+          path: "/.well-known/oauth-authorization-server#{normalized}"
+        ),
+        get_open_id_config_issuer_path: oauth_openid_metadata_endpoint(
+          config,
+          path: openid_path
+        )
+      }
+    end
+
+    def oauth_openid_configuration_issuer_path(issuer_path, base_path = nil)
+      base = (base_path || BetterAuth::Configuration::DEFAULT_BASE_PATH).to_s
+      relative = if base.empty?
+        issuer_path
+      elsif issuer_path.start_with?("#{base}/")
+        issuer_path.delete_prefix(base)
+      elsif issuer_path == base
+        ""
+      else
+        issuer_path
+      end
+
+      "#{relative}/.well-known/openid-configuration"
     end
   end
 end

@@ -60,7 +60,16 @@ module BetterAuth
       createAccessControl: :access
     }.freeze
 
+    REMOVED_PLUGIN_FACTORIES = {
+      oidc_provider: "BetterAuth::Plugins.oauth_provider (require \"better_auth/oauth_provider\")",
+      mcp: "BetterAuth::Plugins.oauth_provider (require \"better_auth/oauth_provider\")"
+    }.freeze
+
     def method_missing(name, ...)
+      if (replacement = REMOVED_PLUGIN_FACTORIES[name.to_sym])
+        raise ArgumentError, "BetterAuth::Plugins.#{name} was removed. Use #{replacement} instead."
+      end
+
       if (loader = plugin_loader_for_method(name))
         load_plugin!(loader)
         return public_send(name, ...) if respond_to?(name, true)
@@ -79,6 +88,8 @@ module BetterAuth
     end
 
     def respond_to_missing?(name, include_private = false)
+      return false if REMOVED_PLUGIN_FACTORIES.key?(name.to_sym)
+
       PLUGIN_FACTORY_LOADERS.key?(name.to_sym) || !plugin_loader_for_method(name).nil? || super
     end
 

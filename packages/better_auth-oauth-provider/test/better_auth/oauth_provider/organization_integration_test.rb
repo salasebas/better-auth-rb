@@ -170,6 +170,7 @@ class OAuthProviderOrganizationIntegrationTest < Minitest::Test
       email_and_password: {enabled: true},
       plugins: [
         BetterAuth::Plugins.organization(organization_options),
+        BetterAuth::Plugins.jwt(jwks: {key_pair_config: {alg: "EdDSA"}}),
         BetterAuth::Plugins.oauth_provider({
           scopes: ["openid"],
           allow_dynamic_client_registration: true

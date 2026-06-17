@@ -19,4 +19,24 @@ class OAuthProviderPairwiseTest < Minitest::Test
 
     assert_equal sub_a, sub_b
   end
+
+  def test_pairwise_multi_host_redirects_require_sector_identifier_uri
+    auth = build_auth(scopes: ["openid"], pairwise_secret: "pairwise-secret-with-enough-entropy-123")
+
+    error = assert_raises(BetterAuth::APIError) do
+      auth.api.admin_create_o_auth_client(
+        body: {
+          redirect_uris: [
+            "https://sector-a.example.com/callback",
+            "https://sector-b.example.com/callback"
+          ],
+          subject_type: "pairwise",
+          scope: "openid"
+        }
+      )
+    end
+
+    assert_equal 400, error.status_code
+    assert_match(/sector_identifier_uri/, error.message)
+  end
 end

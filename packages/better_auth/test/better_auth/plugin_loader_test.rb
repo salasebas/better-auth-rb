@@ -8,9 +8,12 @@ class BetterAuthPluginLoaderTest < Minitest::Test
     $LOAD_PATH.unshift ARGV.fetch(0)
     require "better_auth"
     loaded = {
-      oidc_provider: BetterAuth::Plugins.plugin_loaded?(:oidc_provider),
-      oauth_protocol: BetterAuth::Plugins.plugin_loaded?(:oauth_protocol),
+      oauth_provider: BetterAuth::Plugins.respond_to?(:oauth_provider),
+      oidc_provider: BetterAuth::Plugins.respond_to?(:oidc_provider),
+      mcp: BetterAuth::Plugins.respond_to?(:mcp),
       oidc_provider_constant: BetterAuth::Plugins.const_defined?(:OIDCProvider, false),
+      mcp_constant: BetterAuth::Plugins.const_defined?(:MCP, false),
+      oauth_protocol: BetterAuth::Plugins.plugin_loaded?(:oauth_protocol),
       bearer: BetterAuth::Plugins.plugin_loaded?(:bearer),
       open_api: BetterAuth::Plugins.plugin_loaded?(:open_api)
     }
@@ -19,24 +22,26 @@ class BetterAuthPluginLoaderTest < Minitest::Test
 
   def test_core_boot_loads_open_api_but_not_other_plugins
     output = run_isolated_boot_script
+    assert_equal "true", output.fetch(:oauth_provider)
     assert_equal "false", output.fetch(:oidc_provider)
-    assert_equal "false", output.fetch(:oauth_protocol)
+    assert_equal "false", output.fetch(:mcp)
     assert_equal "false", output.fetch(:oidc_provider_constant)
+    assert_equal "false", output.fetch(:mcp_constant)
+    assert_equal "false", output.fetch(:oauth_protocol)
     assert_equal "false", output.fetch(:bearer)
     assert_equal "true", output.fetch(:open_api)
   end
 
-  def test_oidc_provider_loads_only_when_factory_is_called
-    output = run_isolated_script(<<~RUBY)
-      require "better_auth"
-      raise "oidc_provider should not be loaded at boot" if BetterAuth::Plugins.plugin_loaded?(:oidc_provider)
-      BetterAuth::Plugins.oidc_provider(__skip_deprecation_warning: true)
-      raise "oidc_provider should be loaded" unless BetterAuth::Plugins.plugin_loaded?(:oidc_provider)
-      raise "oauth_protocol should be loaded" unless BetterAuth::Plugins.plugin_loaded?(:oauth_protocol)
-      raise "OIDCProvider should be defined" unless BetterAuth::Plugins.const_defined?(:OIDCProvider, false)
-      puts "ok"
-    RUBY
-    assert_equal "ok\n", output
+  def test_removed_oidc_provider_factory_raises_migration_error
+    error = assert_raises(ArgumentError) { BetterAuth::Plugins.oidc_provider }
+    assert_match(/oidc_provider was removed/i, error.message)
+    assert_match(/oauth_provider/i, error.message)
+  end
+
+  def test_removed_mcp_factory_raises_migration_error
+    error = assert_raises(ArgumentError) { BetterAuth::Plugins.mcp }
+    assert_match(/mcp was removed/i, error.message)
+    assert_match(/oauth_provider/i, error.message)
   end
 
   def test_plugin_factory_method_missing_loads_plugin_file

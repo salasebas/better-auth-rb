@@ -105,15 +105,19 @@ module BetterAuth
         value.to_s.split(",").map(&:strip).reject(&:empty?)
       end
 
-      def create_client(ctx, model:, body:, owner_session: nil, default_auth_method: "client_secret_basic", store_client_secret: "plain", unauthenticated: false, default_scopes: nil, allowed_scopes: nil, prefix: {}, dynamic_registration: false, admin: false, pairwise_secret: nil, strip_client_metadata: false, reference_id: nil)
+      def create_client(ctx, model:, body:, owner_session: nil, default_auth_method: "client_secret_basic", store_client_secret: "plain", unauthenticated: false, default_scopes: nil, allowed_scopes: nil, prefix: {}, dynamic_registration: false, admin: false, pairwise_secret: nil, strip_client_metadata: false, reference_id: nil, generate_client_id: nil, generate_client_secret: nil, client_registration_client_secret_expiration: nil)
         body = request_body!(body || {})
         requested_auth_method = body["token_endpoint_auth_method"] || default_auth_method
         validate_client_metadata_enums!(requested_auth_method, body)
         validate_admin_only_fields!(body, admin: admin)
         auth_method = unauthenticated ? "none" : requested_auth_method
         public_client = auth_method == "none"
-        client_id = Crypto.random_string(32)
-        client_secret = public_client ? nil : Crypto.random_string(32)
+        client_id = generate_client_id.respond_to?(:call) ? generate_client_id.call : Crypto.random_string(32)
+        client_secret = if public_client
+          nil
+        else
+          generate_client_secret.respond_to?(:call) ? generate_client_secret.call : Crypto.random_string(32)
+        end
         redirects = Array(body["redirect_uris"]).map(&:to_s)
         raise APIError.new("BAD_REQUEST", message: "redirect_uris is required") if redirects.empty?
         redirects.each { |uri| validate_safe_url!(uri, field: "redirect_uris") }
@@ -146,6 +150,12 @@ module BetterAuth
         else
           body["type"] || (public_client ? nil : "web")
         end
+        issued_at = Time.now.to_i
+        secret_expires_at = if client_secret && dynamic_registration && !client_registration_client_secret_expiration.nil?
+          resolve_client_secret_expires_at(client_registration_client_secret_expiration, issued_at)
+        elsif admin
+          body["client_secret_expires_at"] || 0
+        end
         data = {
           "clientId" => client_id,
           "clientSecret" => client_secret ? store_client_secret_value(ctx, client_secret, store_client_secret) : nil,
@@ -163,7 +173,7 @@ module BetterAuth
           "redirectUris" => redirects,
           "redirectUrls" => redirects.join(","),
           "postLogoutRedirectUris" => Array(body["post_logout_redirect_uris"]).map(&:to_s),
-          "clientSecretExpiresAt" => admin ? (body["client_secret_expires_at"] || 0) : nil,
+          "clientSecretExpiresAt" => secret_expires_at,
           "tokenEndpointAuthMethod" => auth_method,
           "grantTypes" => grant_types,
           "responseTypes" => response_types,
@@ -183,7 +193,10 @@ module BetterAuth
           client_id_issued_at: Time.now.to_i
         ).compact
         response[:require_pkce] = require_pkce unless require_pkce.nil?
-        response[:client_secret_expires_at] = 0 if client_secret
+        if client_secret
+          expires = stringify_keys(created || {})["clientSecretExpiresAt"] || secret_expires_at
+          response[:client_secret_expires_at] = timestamp_seconds(expires) || 0
+        end
         response
       end
 
@@ -265,7 +278,12 @@ module BetterAuth
         raise APIError.new("BAD_REQUEST", message: "pairwise subject_type requires pairwise_secret") if pairwise_secret.to_s.empty?
 
         hosts = redirects.map { |uri| URI.parse(uri).host }.uniq
-        raise APIError.new("BAD_REQUEST", message: "pairwise redirect_uris must share the same host") if hosts.length > 1
+        if hosts.length > 1
+          raise APIError.new(
+            "BAD_REQUEST",
+            message: "pairwise clients with redirect_uris on different hosts require a sector_identifier_uri, which is not yet supported. All redirect_uris must share the same host."
+          )
+        end
       rescue URI::InvalidURIError
         raise APIError.new("BAD_REQUEST", message: "invalid redirect_uris")
       end
@@ -334,8 +352,17 @@ module BetterAuth
         end
       end
 
-      def find_client(ctx, model, client_id)
-        ctx.context.adapter.find_one(model: model, where: [{field: "clientId", value: client_id.to_s}])
+      def find_client(ctx, model, client_id, cached_trusted_clients: nil)
+        client_id = client_id.to_s
+        if (cached = trusted_client_cache[client_id])
+          return cached
+        end
+
+        client = ctx.context.adapter.find_one(model: model, where: [{field: "clientId", value: client_id}])
+        if client && cached_trusted_clients&.include?(client_id)
+          trusted_client_cache[client_id] = client
+        end
+        client
       end
 
       def authenticate_client!(ctx, model, store_client_secret: "plain", prefix: {}, require_confidential: false)
@@ -452,7 +479,7 @@ module BetterAuth
         true
       end
 
-      def issue_tokens(ctx, store, model:, client:, session:, scopes:, include_refresh: false, issuer: nil, jwt_audience: nil, access_token_expires_in: 3600, refresh_token_expires_in: 2_592_000, id_token_expires_in: 3600, id_token_signer: nil, prefix: {}, audience: nil, grant_type: nil, custom_token_response_fields: nil, custom_access_token_claims: nil, custom_id_token_claims: nil, jwt_access_token: false, use_jwt_plugin: false, pairwise_secret: nil, nonce: nil, auth_time: nil, reference_id: nil, filter_id_token_claims_by_scope: false, store_tokens: "hashed")
+      def issue_tokens(ctx, store, model:, client:, session:, scopes:, include_refresh: false, issuer: nil, jwt_audience: nil, access_token_expires_in: 3600, refresh_token_expires_in: 2_592_000, id_token_expires_in: 3600, id_token_signer: nil, prefix: {}, audience: nil, grant_type: nil, custom_token_response_fields: nil, custom_access_token_claims: nil, custom_id_token_claims: nil, jwt_access_token: false, use_jwt_plugin: false, pairwise_secret: nil, nonce: nil, auth_time: nil, reference_id: nil, filter_id_token_claims_by_scope: false, store_tokens: "hashed", generate_opaque_access_token: nil, generate_refresh_token: nil, format_refresh_token: nil)
         data = stringify_keys(session || {})
         user = stringify_keys(data["user"] || data[:user] || {})
         session_data = stringify_keys(data["session"] || data[:session] || {})
@@ -460,9 +487,11 @@ module BetterAuth
         subject = subject_identifier(user["id"], client_data, pairwise_secret)
         token_auth_time = auth_time || session_auth_time({"session" => session_data})
         token_reference_id = reference_id || client_data["referenceId"]
-        access_token_value = Crypto.random_string(32)
-        refresh_token_value = include_refresh ? Crypto.random_string(32) : nil
-        refresh_token = refresh_token_value ? apply_prefix(refresh_token_value, prefix, :refresh_token) : nil
+        access_token_value = generate_opaque_access_token.respond_to?(:call) ? generate_opaque_access_token.call : Crypto.random_string(32)
+        refresh_token_value = if include_refresh
+          generate_refresh_token.respond_to?(:call) ? generate_refresh_token.call : Crypto.random_string(32)
+        end
+        refresh_token = refresh_token_value ? encode_refresh_token(refresh_token_value, prefix: prefix, format_refresh_token: format_refresh_token, session_id: session_data["id"]) : nil
         scope = scope_string(scopes)
         expires_at = Time.now + access_token_expires_in.to_i
         access_token = if jwt_access_token && audience
@@ -536,9 +565,10 @@ module BetterAuth
         response
       end
 
-      def refresh_tokens(ctx, store, model:, client:, refresh_token:, scopes: nil, issuer: nil, access_token_expires_in: 3600, refresh_token_expires_in: 2_592_000, id_token_expires_in: 3600, id_token_signer: nil, prefix: {}, audience: nil, custom_token_response_fields: nil, custom_access_token_claims: nil, custom_id_token_claims: nil, jwt_access_token: false, use_jwt_plugin: false, pairwise_secret: nil, filter_id_token_claims_by_scope: false, store_tokens: "hashed")
-        refresh_token_value = strip_prefix(refresh_token, prefix, :refresh_token)
-        data = refresh_token_value ? store[:refresh_tokens][refresh_token_value] : nil
+      def refresh_tokens(ctx, store, model:, client:, refresh_token:, scopes: nil, issuer: nil, access_token_expires_in: 3600, refresh_token_expires_in: 2_592_000, id_token_expires_in: 3600, id_token_signer: nil, prefix: {}, audience: nil, custom_token_response_fields: nil, custom_access_token_claims: nil, custom_id_token_claims: nil, jwt_access_token: false, use_jwt_plugin: false, pairwise_secret: nil, filter_id_token_claims_by_scope: false, store_tokens: "hashed", generate_opaque_access_token: nil, generate_refresh_token: nil, format_refresh_token: nil)
+        refresh_token_value = decode_refresh_token(refresh_token, prefix: prefix, format_refresh_token: format_refresh_token)
+        raise APIError.new("BAD_REQUEST", message: "invalid_grant") if refresh_token_value.to_s.empty?
+        data = store[:refresh_tokens][refresh_token_value]
         raise APIError.new("BAD_REQUEST", message: "invalid_grant") unless data
         if data["revoked"]
           revoke_refresh_family!(ctx, store, data)
@@ -583,7 +613,10 @@ module BetterAuth
           auth_time: data["authTime"],
           reference_id: data["referenceId"],
           filter_id_token_claims_by_scope: filter_id_token_claims_by_scope,
-          store_tokens: store_tokens
+          store_tokens: store_tokens,
+          generate_opaque_access_token: generate_opaque_access_token,
+          generate_refresh_token: generate_refresh_token,
+          format_refresh_token: format_refresh_token
         )
       end
 
@@ -616,8 +649,7 @@ module BetterAuth
           "exp" => expires_at.to_i
         ).compact
         if use_jwt_plugin
-          signed = sign_oauth_jwt(ctx, payload, issuer: issuer_value, audience: audience)
-          return signed if signed
+          return sign_oauth_jwt!(ctx, payload, issuer: issuer_value, audience: audience)
         end
 
         ::JWT.encode(payload, ctx.context.secret, "HS256")
@@ -694,9 +726,12 @@ module BetterAuth
         )
       end
 
-      def find_token_by_hint(store, token, hint, prefix: {})
+      def find_token_by_hint(store, token, hint, prefix: {}, format_refresh_token: nil)
         access = -> { (value = strip_prefix(token, prefix, :access_token)) && store[:tokens][value] }
-        refresh = -> { (value = strip_prefix(token, prefix, :refresh_token)) && store[:refresh_tokens][value] }
+        refresh = lambda {
+          value = decode_refresh_token(token, prefix: prefix, format_refresh_token: format_refresh_token)
+          value && store[:refresh_tokens][value]
+        }
 
         case hint.to_s
         when "access_token"
@@ -744,6 +779,65 @@ module BetterAuth
 
       def apply_prefix(value, prefix, kind)
         "#{token_prefix(prefix, kind)}#{value}"
+      end
+
+      def encode_refresh_token(token_value, prefix:, format_refresh_token: nil, session_id: nil)
+        formatted = if format_refresh_token.is_a?(Hash) && format_refresh_token[:encrypt].respond_to?(:call)
+          format_refresh_token[:encrypt].call(token_value, session_id)
+        else
+          token_value
+        end
+        apply_prefix(formatted, prefix, :refresh_token)
+      end
+
+      def decode_refresh_token(token, prefix:, format_refresh_token: nil)
+        value = strip_prefix(token, prefix, :refresh_token)
+        return nil if value.nil?
+
+        if format_refresh_token.is_a?(Hash) && format_refresh_token[:decrypt].respond_to?(:call)
+          decrypted = format_refresh_token[:decrypt].call(value)
+          if decrypted.is_a?(Hash)
+            decrypted[:token] || decrypted["token"]
+          else
+            decrypted.to_s
+          end
+        else
+          value
+        end
+      end
+
+      def trusted_client_cache
+        @trusted_client_cache ||= {}
+      end
+
+      def resolve_client_secret_expires_at(value, issued_at)
+        return value.to_i if value.is_a?(Numeric)
+        return value.to_i if value.is_a?(Time)
+
+        seconds = timestamp_seconds(value)
+        return seconds if seconds && !value.is_a?(String)
+
+        issued_at.to_i + parse_duration(value.to_s)
+      rescue TypeError
+        0
+      end
+
+      def parse_duration(value)
+        match = value.strip.match(/\A(-?\d+)\s*(s|sec|secs|second|seconds|m|min|mins|minute|minutes|h|hr|hrs|hour|hours|d|day|days|w|week|weeks|y|yr|yrs|year|years)(?:\s+from now|\s+ago)?\z/i)
+        raise TypeError, "Invalid time string" unless match
+
+        amount = match[1].to_i
+        amount = -amount if value.include?("ago")
+        unit = match[2].downcase
+        multiplier = case unit
+        when "s", "sec", "secs", "second", "seconds" then 1
+        when "m", "min", "mins", "minute", "minutes" then 60
+        when "h", "hr", "hrs", "hour", "hours" then 3600
+        when "d", "day", "days" then 86_400
+        when "w", "week", "weeks" then 604_800
+        else 31_557_600
+        end
+        amount * multiplier
       end
 
       def strip_prefix(value, prefix, kind)
@@ -796,8 +890,7 @@ module BetterAuth
         return signer.call(ctx, payload) if signer.respond_to?(:call)
 
         if use_jwt_plugin && ctx
-          signed = sign_oauth_jwt(ctx, payload, issuer: issuer_value, audience: audience)
-          return signed if signed
+          return sign_oauth_jwt!(ctx, payload, issuer: issuer_value, audience: audience)
         end
 
         Crypto.sign_jwt(
@@ -836,6 +929,15 @@ module BetterAuth
         return nil unless config
 
         BetterAuth::Plugins.sign_jwt_payload(ctx, stringify_keys(payload), config)
+      end
+
+      def sign_oauth_jwt!(ctx, payload, issuer:, audience:)
+        raise BetterAuth::Error, "jwt_config" unless jwt_plugin_options(ctx)
+
+        signed = sign_oauth_jwt(ctx, payload, issuer: issuer, audience: audience)
+        raise BetterAuth::Error, "jwt_config" unless signed
+
+        signed
       end
 
       def verify_oauth_jwt(ctx, token, issuer:, hs256_secret:)

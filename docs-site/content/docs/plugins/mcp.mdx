@@ -1,71 +1,57 @@
 ---
 title: MCP
-description: OAuth endpoints for MCP clients.
+description: MCP OAuth support moved to OAuth Provider.
 ---
 
-OAuth endpoints for MCP clients.
+MCP OAuth behavior is provided by the OAuth Provider plugin.
 
 <Callout type="info">
-This page documents the current Ruby port behavior. Ruby uses snake_case option names and `auth.api` method names; HTTP paths and JSON keys keep the upstream wire shape where implemented.
+The standalone core `BetterAuth::Plugins.mcp` plugin was removed. Use `BetterAuth::Plugins.oauth_provider` from the `better_auth-oauth-provider` gem instead.
 </Callout>
 
-<Callout type="warn">
-Some UI or provider-specific setup from upstream is app-provided in Ruby. The protocol endpoints below are implemented, but you must supply your own pages, callbacks, client objects, or provider metadata where noted by the option names.
-</Callout>
+## Migration
 
-## Configure
+1. Add the OAuth Provider gem:
+
+```ruby
+gem "better_auth-oauth-provider"
+```
+
+2. Require the plugin entrypoint and configure OAuth Provider:
 
 ```ruby title="config/auth.rb"
 require "better_auth"
+require "better_auth/oauth_provider"
 
 auth = BetterAuth.auth(
   secret: ENV.fetch("BETTER_AUTH_SECRET"),
-  base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
+  base_url: ENV.fetch("BETTER_AUTH_URL", "https://auth.example.com/api/auth"),
   plugins: [
-    BetterAuth::Plugins.mcp(resource: "https://api.example.com/mcp", login_page: "/login")
+    BetterAuth::Plugins.oauth_provider(
+      scopes: ["openid", "profile", "email", "offline_access"],
+      valid_audiences: ["https://api.example.com"]
+    )
   ]
 )
 ```
 
-## Usage
+3. Protect MCP/resource-server routes with the OAuth Provider MCP helper:
 
-```ruby title="server.rb"
-server = auth.api.get_mcp_o_auth_config
-resource = auth.api.get_mcp_protected_resource
-
-token = auth.api.mcp_o_auth_token(
-  body: {
-    grant_type: "authorization_code",
-    code: params[:code],
-    client_id: client_id
+```ruby
+handler = BetterAuth::Plugins::OAuthProvider::MCP.mcp_handler(
+  resource: "urn:api",
+  resource_metadata_mappings: {
+    "urn:api" => "https://api.example.com/.well-known/oauth-protected-resource"
+  },
+  verifier: ->(token) {
+    BetterAuth::Plugins::OAuthProvider::ClientResource.verify_access_token(
+      token,
+      verify_options: {audience: "https://api.example.com", issuer: ENV.fetch("BETTER_AUTH_URL")},
+      resource: "urn:api",
+      resource_metadata_mappings: {"urn:api" => "https://api.example.com/.well-known/oauth-protected-resource"}
+    )
   }
-)
+) { |_request, claims| claims }
 ```
 
-## Routes
-
-| Method | Path | Ruby API method |
-| --- | --- | --- |
-| `GET` | `/.well-known/oauth-authorization-server` | `auth.api.get_mcp_o_auth_config` |
-| `GET` | `/.well-known/oauth-protected-resource` | `auth.api.get_mcp_protected_resource` |
-| `POST` | `/mcp/register` | `auth.api.mcp_register` |
-| `GET` | `/mcp/authorize` | `auth.api.mcp_o_auth_authorize` |
-| `POST` | `/mcp/token` | `auth.api.mcp_o_auth_token` |
-| `GET` | `/mcp/userinfo` | `auth.api.mcp_o_auth_user_info` |
-
-## Options
-
-Current Ruby options accepted by `BetterAuth::Plugins.mcp`:
-
-- `scopes`
-- `oidc_config`
-- `resource`
-- `login_page`
-- `store`
-
-## Support Notes
-
-- The examples above are based on Ruby plugin source and tests in `packages/better_auth`.
-- If an upstream section is not represented here, treat it as not yet documented or not yet supported by the Ruby port until the matching Ruby implementation exists.
-
-{/* Upstream guide is preserved in reference/upstream-src/1.6.9/repository/docs/content/docs/plugins/mcp.mdx. */}
+See the [OAuth Provider](/docs/plugins/oauth-provider) guide for the full OAuth 2.1, OIDC, dynamic registration, introspection, and resource-server surface.

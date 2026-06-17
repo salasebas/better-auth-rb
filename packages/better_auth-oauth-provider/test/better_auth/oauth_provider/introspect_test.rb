@@ -74,4 +74,47 @@ class OAuthProviderIntrospectTest < Minitest::Test
     assert_equal 401, error.status_code
     assert_match(/invalid_client/, error.message)
   end
+
+  def test_introspect_unknown_token_is_inactive
+    auth = build_auth(scopes: ["openid"])
+    cookie = sign_up_cookie(auth)
+    client = create_client(auth, cookie, scope: "openid", skip_consent: true)
+
+    response = auth.api.o_auth2_introspect(body: introspect_body(client, "unknown-token-value"))
+
+    assert_equal false, response[:active]
+  end
+
+  def test_introspect_jwt_access_token
+    auth = build_auth(scopes: ["read"])
+    cookie = sign_up_cookie(auth, email: "introspect-jwt@example.com")
+    client = create_client(auth, cookie, grant_types: ["client_credentials"], response_types: [], scope: "read")
+    tokens = auth.api.o_auth2_token(
+      body: {
+        grant_type: "client_credentials",
+        client_id: client[:client_id],
+        client_secret: client[:client_secret],
+        scope: "read",
+        resource: "http://localhost:3000"
+      }
+    )
+
+    response = auth.api.o_auth2_introspect(body: introspect_body(client, tokens[:access_token], hint: "access_token"))
+
+    assert_equal true, response[:active]
+    assert_equal "read", response[:scope]
+    assert_equal client[:client_id], response[:client_id]
+  end
+
+  def test_introspect_expired_opaque_token_is_inactive
+    auth = build_auth(scopes: ["openid"], access_token_expires_in: 1)
+    cookie = sign_up_cookie(auth, email: "introspect-expired@example.com")
+    client = create_client(auth, cookie, scope: "openid", skip_consent: true)
+    tokens = issue_authorization_code_tokens(auth, cookie, client, scope: "openid")
+    sleep 2
+
+    response = auth.api.o_auth2_introspect(body: introspect_body(client, tokens[:access_token]))
+
+    assert_equal false, response[:active]
+  end
 end

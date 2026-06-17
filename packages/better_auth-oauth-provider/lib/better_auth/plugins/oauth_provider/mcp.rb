@@ -48,6 +48,27 @@ module BetterAuth
           )
         end
 
+        def mcp_handler_with_verifier(verify_options:, resource_metadata_mappings: {}, ctx: nil, scopes: nil, jwks_url: nil, remote_verify: nil, &handler)
+          audience = verify_options[:audience] || verify_options["audience"]
+          mcp_handler(
+            resource: audience,
+            resource_metadata_mappings: resource_metadata_mappings,
+            verifier: lambda do |token|
+              ClientResource.verify_access_token(
+                token,
+                verify_options: verify_options,
+                scopes: scopes,
+                jwks_url: jwks_url,
+                remote_verify: remote_verify,
+                ctx: ctx,
+                resource: audience,
+                resource_metadata_mappings: resource_metadata_mappings
+              )
+            end,
+            &handler
+          )
+        end
+
         def mcp_handler(resource:, verifier:, resource_metadata_mappings: {}, &handler)
           lambda do |request|
             authorization = request.respond_to?(:headers) ? request.headers["authorization"] : nil

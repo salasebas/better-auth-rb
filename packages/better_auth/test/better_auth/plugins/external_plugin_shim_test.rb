@@ -23,6 +23,18 @@ class ExternalPluginShimTest < Minitest::Test
     assert_external_plugin_shim(:api_key, "better_auth-api-key", "better_auth/api_key")
   end
 
+  def test_oidc_provider_is_not_an_external_plugin_shim
+    error = assert_raises(ArgumentError) { BetterAuth::Plugins.oidc_provider }
+    assert_match(/oidc_provider was removed/i, error.message)
+    assert_match(/oauth_provider/i, error.message)
+  end
+
+  def test_mcp_is_not_an_external_plugin_shim
+    error = assert_raises(ArgumentError) { BetterAuth::Plugins.mcp }
+    assert_match(/mcp was removed/i, error.message)
+    assert_match(/oauth_provider/i, error.message)
+  end
+
   private
 
   def assert_external_plugin_shim(method_name, gem_name, require_path)

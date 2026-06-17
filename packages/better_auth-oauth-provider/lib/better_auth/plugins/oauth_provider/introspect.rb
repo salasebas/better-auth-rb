@@ -10,7 +10,7 @@ module BetterAuth
         client_id = OAuthProtocol.stringify_keys(client)["clientId"]
         body = OAuthProtocol.stringify_keys(ctx.body)
         token_value = body["token"].to_s.sub(/\ABearer\s+/i, "")
-        token = OAuthProtocol.find_token_by_hint(config[:store], token_value, body["token_type_hint"], prefix: config[:prefix])
+        token = OAuthProtocol.find_token_by_hint(config[:store], token_value, body["token_type_hint"], prefix: config[:prefix], format_refresh_token: config[:format_refresh_token] || config[:formatRefreshToken])
         active = token && token["clientId"].to_s == client_id.to_s && !token["revoked"] && (!token["expiresAt"] || token["expiresAt"] > Time.now)
         if active
           next ctx.json({
