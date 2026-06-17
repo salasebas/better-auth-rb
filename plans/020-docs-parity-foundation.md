@@ -7,7 +7,7 @@
 > `plans/README.md` unless a reviewer tells you they maintain the index.
 >
 > **Drift check (run first)**:
-> `git diff --stat 0d19370..HEAD -- docs-site/scripts docs-site/content/docs docs-site/AGENTS.md docs-site/components/docs`
+> `git diff --stat 2ce7a4a..HEAD -- docs-site/scripts docs-site/content/docs docs-site/AGENTS.md docs-site/components/docs docs-site/components/sidebar-content.tsx docs-site/lib/plugins.ts`
 > If any in-scope file changed since this plan was written, compare the
 > "Current state" excerpts against the live code before proceeding; on a
 > mismatch, treat it as a STOP condition.
@@ -19,19 +19,27 @@
 - **Risk**: LOW
 - **Depends on**: none
 - **Category**: docs
-- **Planned at**: commit `0d19370`, 2026-06-15
+- **Planned at**: commit `2ce7a4a`, 2026-06-16
 
 ## Why this matters
 
-RubyAuth's docs site has ~130 MDX pages but most plugin and concept pages are
-38-line stubs that say "see plugin tests." Upstream Better Auth v1.6.9 has
-~178 pages with full API reference, configuration tables, and examples. Users
-cannot adopt plugins or adapters without parity docs adapted to Ruby.
+RubyAuth's docs site already has substantial documentation, but the remaining
+parity work needs a strict source-of-truth workflow. Upstream Better Auth v1.6.9
+has full MDX pages with API reference, configuration tables, and examples; the
+Ruby port must not replace those pages with short summaries.
 
 This plan creates the repeatable pipeline (upstream fetch, page inventory,
 mechanical transforms, Ruby example rules) that plans 021–025 execute against.
 Without it, each page will be ported inconsistently and client-only TypeScript
 sections will leak into Ruby docs.
+
+The central rule for the executor: for every supported upstream-backed page,
+literally copy and paste the upstream MDX from the current target under
+`reference/upstream-src/1.6.9/repository/docs/content/docs/`, keep the same
+content, headings, tables, callouts, and order, and only change examples,
+commands, imports, package names, unsupported/client-only sections, and
+Ruby-specific notes. If a copied example is badly formatted, fix the code fence
+and indentation; do not rewrite the prose around it.
 
 ## Current state
 
@@ -48,23 +56,28 @@ sections will leak into Ruby docs.
   - `docs-site/content/docs/installation.mdx` (~255 lines, Rails/Rack tabs)
   - `docs-site/content/docs/adapters/postgresql.mdx`
   - `docs-site/content/docs/authentication/github.mdx`
-- Stub pattern to replace (32 plugin pages, ~38 lines each):
-
-```mdx
-# docs-site/content/docs/plugins/2fa.mdx (representative stub)
-## Installation
-```ruby
-BetterAuth.auth(... plugins: [BetterAuth::Plugins.two_factor(...)] )
-```
-## Usage
-See the plugin tests under `packages/better_auth/test/better_auth/plugins/`
-```
-
-- Inventory vs upstream v1.6.9 (automated line-count compare):
-  - **OK**: 72 pages (mostly auth providers, error stubs, integrations)
-  - **STUB**: 32 pages (<50 lines, upstream >100) — almost all plugins
-  - **THIN**: 18 pages (<33% upstream lines) — concepts, basic-usage, options
-  - **MISSING**: 56 upstream pages not present locally
+- Reconciled 2026-06-16 line-count audit against upstream v1.6.9:
+  - **Adapters**: current pages are already OK-ish by line count
+    (`postgresql` 197 local vs 189 upstream, `mysql` 202 vs 100,
+    `sqlite` 189 vs 134, `mssql` 177 vs 131, `mongo` 190 vs 61).
+    Plan 023 should verify copy-first fidelity and formatting, not blindly
+    replace working pages.
+  - **Concepts**: most are OK-ish, but `concepts/database.mdx` (400 vs 1024),
+    `concepts/plugins.mdx` (273 vs 674), and
+    `concepts/session-management.mdx` (232 vs 574) remain thin.
+  - **Authentication**: almost all providers are OK-ish;
+    `authentication/email-password.mdx` remains thin (166 vs 533).
+  - **Plugins**: most supported plugin pages remain thin; examples include
+    `organization` (68 vs 2516), `sso` (68 vs 1740), `oauth-provider`
+    (193 vs 2146), `admin` (66 vs 839), `device-authorization`
+    (63 vs 647), `email-otp` (62 vs 467), and `2fa` (94 vs 608).
+    `stripe` (860 vs 1095) and `username` (369 vs 361) are already close.
+  - **Reference/guides**: `options`, `security`, `resources`, `faq`,
+    `contributing`, and the three current guides are still thin.
+- Unsupported docs must not be listed as supported even when code or old pages
+  exist: upstream `plugins/oidc-provider`, local `plugins/mcp.mdx`,
+  `plugins/test-utils.mdx`, client-only pages, JS framework integrations,
+  upstream infrastructure, and non-Stripe payment plugins.
 
 - MDX components available (`docs-site/components/docs/mdx-components.tsx`):
   `APIMethod`, `GenerateSecret`, `DatabaseSchema`, `RubyAuthDisclaimer`, etc.
@@ -87,6 +100,9 @@ See the plugin tests under `packages/better_auth/test/better_auth/plugins/`
 - `docs-site/scripts/docs-parity-manifest.json` (create)
 - `docs-site/scripts/docs-parity-rules.md` (create — transform cookbook)
 - `docs-site/AGENTS.md` (append parity workflow section)
+- `docs-site/components/sidebar-content.tsx` and `docs-site/lib/plugins.ts`
+  only for manifest-driven cleanup of unsupported docs links/metadata
+  (`mcp`, `oidc-provider`, `test-utils`)
 
 **Out of scope**:
 - Editing individual MDX content pages (plans 021–024)
@@ -141,6 +157,7 @@ Populate using this classification:
 | `skip_client` | Do not create — client-only (see exclusion list below) |
 | `skip_upstream_product` | Do not create — Better Auth hosted infra / TS-only ORMs |
 | `skip_unported` | Stub page saying "not yet ported" OR omit from sidebar |
+| `remove_if_local` | Delete/omit any local page and navigation because the feature is unsupported |
 | `keep_local` | Ruby-only page; do not overwrite (integrations/*) |
 | `merge_local` | Port upstream but preserve Ruby integration sections |
 
@@ -172,11 +189,15 @@ content from those files, append sections to
   with a top-level `<UnderDevelopment>` noting RubyAuth does not ship these
   drivers — users need a custom adapter (link to `guides/create-a-db-adapter`)
 
-**Exclusion list (`skip_unported`)** — no Ruby implementation at v1.6.9 parity:
+**Exclusion list (`skip_unported` / `remove_if_local`)** — no supported Ruby docs target:
 - `plugins/agent-auth.mdx`
 - `plugins/autumn.mdx`, `plugins/chargebee.mdx`, `plugins/creem.mdx`,
   `plugins/dodopayments.mdx`, `plugins/polar.mdx`
 - `plugins/test-utils.mdx`
+- `plugins/mcp.mdx` — explicitly unsupported for docs/public support; remove
+  local page and plugin listing even though old core code/tests exist
+- `plugins/oidc-provider.mdx` — explicitly unsupported for docs/public support;
+  do not create this page, and remove stale metadata from `docs-site/lib/plugins.ts`
 
 **`keep_local`** (9 pages — do not overwrite):
 - `integrations/{rails,hanami,sinatra,roda,grape,rack}.mdx`
@@ -193,7 +214,6 @@ content from those files, append sections to
 | `plugins/scim.mdx` | `better_auth-scim` | `better_auth/scim` |
 | `plugins/stripe.mdx` | `better_auth-stripe` | `better_auth/stripe` |
 | `plugins/oauth-provider.mdx` | `better_auth-oauth-provider` | `better_auth/oauth_provider` |
-| `plugins/mcp.mdx` | `better_auth` (core) | `better_auth/plugins/mcp` |
 | `plugins/i18n.mdx` | `better_auth` (core) | depends on plan 019 |
 
 **Verify**: `node -e "JSON.parse(require('fs').readFileSync('docs-site/scripts/docs-parity-manifest.json'))"` → exit 0; manifest has an entry for every upstream `.mdx` slug.
@@ -202,26 +222,29 @@ content from those files, append sections to
 
 Create `docs-site/scripts/docs-parity-rules.md` with these mandatory rules:
 
-#### 3a. Copy-first workflow (mandatory — do NOT rewrite from scratch)
+#### 3a. Literal upstream copy workflow (mandatory — do NOT rewrite from scratch)
 
-**The default mistake to avoid:** rewriting pages as short Ruby summaries. Current
-local adapter pages are ~50–70 lines; upstream is ~100–190+ with joins, schema
-tables, and troubleshooting. The executor must **preserve upstream prose, headings,
-tables, callouts, and section order** unless the section is client-only.
+**The default mistake to avoid:** rewriting pages as short Ruby summaries. The
+executor must **literally copy and paste** upstream MDX, preserving upstream
+prose, headings, tables, callouts, examples around the examples being replaced,
+and section order unless the section is client-only or explicitly unsupported.
 
 For each `port` page:
 
-1. **Copy verbatim** upstream file:
+1. **Copy verbatim** the upstream file:
    `reference/upstream-src/1.6.9/repository/docs/content/docs/<slug>`
    → `docs-site/content/docs/<slug>` (overwrite local content)
 2. Run mechanical transforms (Step 3b) — product names, CLI commands, links
-3. Replace **only** TypeScript/JavaScript code blocks with Ruby from tests
-4. Delete client-only sections — do not delete server sections
+3. Replace **only** TypeScript/JavaScript code blocks with Ruby from tests or
+   HTTP/curl examples for the same endpoint
+4. Delete client-only or unsupported sections — do not delete server sections
 5. Add `<RubyAuthDisclaimer />` after frontmatter where `installation.mdx` does
 6. Add `<UnderDevelopment>` when Ruby lacks parity for a **specific upstream section**
    (programmatic migrations, a Kysely community dialect) — keep surrounding prose
+7. Run a formatting pass over code fences: matching fence language, no nested
+   unclosed fences, no broken indentation, no leftover `[!code ...]` markers
 
-**Line-count sanity check after port (before Ruby example pass):**
+**Line-count sanity check after port (after unsupported/client-only removals):**
 
 | Page kind | Expect after copy + client removal |
 |-----------|-------------------------------------|
@@ -292,6 +315,35 @@ Replace framework tabs as follows:
 
 **Verify**: rules file exists and includes all tables above.
 
+### Step 3.5: Record current-site audit in the manifest
+
+In `docs-site/scripts/docs-parity-manifest.json`, each entry must include the
+current local status so later executors do not redo completed documentation:
+
+```json
+{
+  "slug": "plugins/organization.mdx",
+  "action": "port",
+  "current_local_lines": 68,
+  "upstream_lines": 2516,
+  "status": "thin",
+  "supported": true
+}
+```
+
+Use `status: "ok_existing"` only after manual review confirms the page follows
+the literal upstream copy rule, not just because the local line count is high.
+Use `supported: false` and `action: "remove_if_local"` for `plugins/mcp.mdx`,
+`plugins/oidc-provider.mdx`, and `plugins/test-utils.mdx`.
+
+**Verify**:
+
+```bash
+node -e 'const m=JSON.parse(require("fs").readFileSync("docs-site/scripts/docs-parity-manifest.json")); for (const p of m.pages) { if (!("current_local_lines" in p)) throw new Error(p.slug); }'
+```
+
+Expected: exit 0.
+
 ### Step 4: Create port helper script
 
 Create `docs-site/scripts/port-upstream-doc.mjs`:
@@ -309,6 +361,8 @@ Minimum behavior:
 
 - Accept slug argument (`plugins/2fa.mdx`)
 - Read from `../../reference/upstream-src/1.6.9/repository/docs/content/docs/<slug>`
+- Abort if manifest marks slug `keep_local`, `skip_client`,
+  `skip_upstream_product`, `skip_unported`, or `remove_if_local`
 - Apply regex transforms from `docs-parity-rules.md` (inline the core regexes in script)
 - Strip lines matching client-plugin patterns (`createAuthClient`, `auth-client.ts`, `/client/plugins`)
 - Remove `[!code highlight]` markers
@@ -325,7 +379,9 @@ node docs-site/scripts/port-upstream-doc.mjs plugins/2fa.mdx --dry-run 2>/dev/nu
 wc -l docs-site/content/docs/plugins/2fa.mdx
 ```
 
-→ line count should jump from ~38 to ~500+ (before Ruby example pass).
+→ line count should be close to upstream (currently `plugins/2fa.mdx` is 94
+local lines vs 608 upstream, so expect several hundred lines before the Ruby
+example pass).
 
 Revert the test port after verify if executing on a clean branch for tooling-only PR:
 
@@ -347,6 +403,8 @@ Append to `docs-site/AGENTS.md`:
 - Workflow: `node docs-site/scripts/port-upstream-doc.mjs <slug>`, then replace
   code blocks using `docs-site/scripts/docs-parity-manifest.json` test paths.
 - Never port client-only sections (`createAuthClient`, framework JS integrations).
+- Never document unsupported plugins as supported: `mcp`, upstream
+  `oidc-provider`, `test-utils`, non-Stripe payment plugins.
 - Verify with `cd docs-site && pnpm lint && pnpm build`.
 ```
 
@@ -366,6 +424,9 @@ No Ruby tests. Validation is tooling + manifest completeness:
 - [ ] `docs-site/scripts/docs-parity-rules.md` exists with transform tables
 - [ ] `docs-site/scripts/port-upstream-doc.mjs` runs on a sample slug
 - [ ] `docs-site/AGENTS.md` documents the workflow
+- [ ] Manifest records current local line counts and `supported` flags
+- [ ] Manifest marks `plugins/mcp.mdx`, `plugins/oidc-provider.mdx`, and
+      `plugins/test-utils.mdx` unsupported / remove-if-local
 - [ ] `cd docs-site && pnpm lint` exits 0
 - [ ] `plans/README.md` status row for 020 updated
 
@@ -374,6 +435,9 @@ No Ruby tests. Validation is tooling + manifest completeness:
 - `reference/upstream-src/1.6.9/repository/docs/content/docs/` missing after fetch — report; do not guess content from memory
 - Upstream page count differs from ~178 by more than 10 — manifest may need advisor refresh
 - Port script would overwrite a `keep_local` page — abort that slug
+- Port script would create or retain `plugins/mcp.mdx`,
+  `plugins/oidc-provider.mdx`, or `plugins/test-utils.mdx` — abort and remove
+  from docs/navigation in plan 022
 - Mechanical transforms break MDX frontmatter — fix script, do not hand-edit 100 files
 
 ## Maintenance notes
@@ -381,4 +445,6 @@ No Ruby tests. Validation is tooling + manifest completeness:
 - When bumping upstream parity version in `VERSION.md`, regenerate manifest
   from new tag and re-run line-count diff
 - Plan 019 (`plugins/i18n.mdx`) should land before or alongside plan 022 i18n doc
-- Reviewers: ensure no `createAuthClient` or `npm install` strings remain in ported pages (plans 021–025 gate)
+- Reviewers: ensure no `createAuthClient`, `npm install better-auth`, `mcp`,
+  or upstream `oidc-provider` support claims remain in ported pages (plans
+  021–025 gate)

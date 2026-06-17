@@ -3,7 +3,7 @@
 > **Executor instructions**: Complete plan 020. Can run parallel to 021–023.
 >
 > **Drift check (run first)**:
-> `git diff --stat 0d19370..HEAD -- docs-site/content/docs/reference docs-site/content/docs/guides`
+> `git diff --stat 2ce7a4a..HEAD -- docs-site/content/docs/reference docs-site/content/docs/guides docs-site/components/sidebar-content.tsx`
 
 ## Status
 
@@ -12,14 +12,18 @@
 - **Risk**: LOW
 - **Depends on**: plans/020-docs-parity-foundation.md
 - **Category**: docs
-- **Planned at**: commit `0d19370`, 2026-06-15
+- **Planned at**: commit `2ce7a4a`, 2026-06-16
 
 ## Why this matters
 
 Reference pages (`options`, `security`, error catalog) and guides (migrations,
-SSO setup) are thin or missing. Error pages exist but lack upstream context.
-`reference/options.mdx` at 218 lines vs upstream 940 leaves configurators
-without complete Ruby option docs.
+SSO setup) are thin or missing. Error pages exist but several lack upstream
+context. `reference/options.mdx` at 218 lines vs upstream 940 leaves
+configurators without complete Ruby option docs.
+
+`reference/resources.mdx` is intentionally handled by plan 025 because it must
+become the generated endpoint index and link to generated database schemas.
+Do not expand `resources.mdx` here except for links required by plan 025.
 
 ## Current state
 
@@ -30,9 +34,9 @@ without complete Ruby option docs.
 | `reference/options.mdx` | 940 | 218 | THIN — major expand |
 | `reference/security.mdx` | 290 | 43 | STUB |
 | `reference/faq.mdx` | 256 | 66 | THIN |
-| `reference/instrumentation.mdx` | 88 | 24 | THIN |
+| `reference/instrumentation.mdx` | 88 | missing | create only if supported by telemetry/instrumentation code |
 | `reference/contributing.mdx` | 194 | 51 | adapt for Ruby repo |
-| `reference/resources.mdx` | 134 | 29 | STUB |
+| `reference/resources.mdx` | 134 | 29 | plan 025 — generated resources/endpoints |
 | `reference/telemetry.mdx` | — | exists | align with `better_auth-telemetry` gem |
 | `reference/errors/*.mdx` | ~15–40 each | similar | expand body text from upstream |
 
@@ -84,7 +88,8 @@ but replace all TS/Next.js code with Ruby/Rails equivalents.
 ## Scope
 
 **In scope**:
-- `docs-site/content/docs/reference/**` (except keep_local error)
+- `docs-site/content/docs/reference/**` except `reference/resources.mdx` and
+  the keep_local error page
 - `docs-site/content/docs/guides/**` (except browser-extension)
 - Create: `guides/your-first-plugin.mdx`, `guides/create-a-db-adapter.mdx`,
   `reference/errors/state_invalid.mdx`
@@ -94,6 +99,8 @@ but replace all TS/Next.js code with Ruby/Rails equivalents.
 **Out of scope**:
 - Plugin/concept pages
 - `docs-site/content/docs/comparison.mdx` (Ruby-specific, touch only if FAQ overlaps)
+- `docs-site/content/docs/reference/resources.mdx` endpoint/schema content
+  (plan 025 owns it)
 
 ## Git workflow
 
@@ -126,7 +133,7 @@ rg '```ts' docs-site/content/docs/reference/options.mdx
 cd docs-site && pnpm lint
 ```
 
-### Step 2: Port security, faq, instrumentation, resources, telemetry
+### Step 2: Port security, faq, instrumentation, telemetry, contributing
 
 - `security.mdx`: emphasize server-side secret handling, cookie flags, CSRF — no
   "store token in localStorage" client guidance
@@ -134,7 +141,8 @@ cd docs-site && pnpm lint
 - `instrumentation.mdx` + `telemetry.mdx`: document OpenTelemetry-style hooks if
   present; link to telemetry gem
 - `contributing.mdx`: point to repo root `AGENTS.md`, Minitest/RSpec, StandardRB
-- `resources.mdx`: Ruby community links, gem pages, GitHub repo
+- Do not expand `resources.mdx` here; plan 025 owns generated endpoint/schema
+  resources
 
 **Verify**: each file >= 60 lines; build passes.
 
@@ -232,6 +240,8 @@ cd docs-site && pnpm build
 - [ ] Ruby guides created: your-first-plugin, create-a-db-adapter
 - [ ] Migration guides ported (5) without TS client code
 - [ ] browser-extension guide not added
+- [ ] `reference/resources.mdx` endpoint/schema content is not duplicated here;
+      plan 025 remains the source of truth for generated resources
 - [ ] `pnpm lint && pnpm build` pass
 - [ ] `plans/README.md` row 024 DONE
 
@@ -240,6 +250,8 @@ cd docs-site && pnpm build
 - Option documented upstream but absent from `configuration.rb` — mark
   UnderDevelopment; do not document fake config keys
 - Migration guide requires client SDK steps — omit those sections, add note
+- Work requires changing generated schema/endpoint resources — stop and execute
+  or update plan 025 instead
 - Sidebar structure requires major refactor — stop and report
 
 ## Maintenance notes

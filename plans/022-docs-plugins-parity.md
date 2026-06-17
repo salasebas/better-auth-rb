@@ -1,10 +1,10 @@
-# Plan 022: Docs Parity — Plugins (All Server-Side)
+# Plan 022: Docs Parity — Supported Plugins Copy-First Parity
 
 > **Executor instructions**: Complete plan 020. Plan 021 recommended first.
 > Work in batches below; run `pnpm lint && pnpm build` after each batch.
 >
 > **Drift check (run first)**:
-> `git diff --stat 0d19370..HEAD -- docs-site/content/docs/plugins`
+> `git diff --stat 2ce7a4a..HEAD -- docs-site/content/docs/plugins docs-site/components/sidebar-content.tsx docs-site/lib/plugins.ts`
 
 ## Status
 
@@ -13,92 +13,82 @@
 - **Risk**: MED
 - **Depends on**: plans/020-docs-parity-foundation.md, plans/021-docs-concepts-and-getting-started.md (recommended)
 - **Category**: docs
-- **Planned at**: commit `0d19370`, 2026-06-15
+- **Planned at**: commit `2ce7a4a`, 2026-06-16
 
 ## Why this matters
 
-32 of 33 plugin pages are **STUBs** (~38 lines). Upstream plugin docs average
-400–2500 lines with endpoint reference, schema tables, and configuration.
-Users enabling 2FA, organization, SSO, API keys, etc. currently get no usable
-documentation.
+Plugin pages are no longer empty stubs, but most supported plugin docs are
+still far thinner than upstream. Upstream plugin docs include endpoint
+reference, schema tables, configuration, and edge cases that users need before
+enabling 2FA, organization, SSO, API keys, SCIM, OAuth provider, and similar
+plugins.
+
+This plan is deliberately copy-first: literally copy and paste upstream MDX for
+supported plugins, preserve the same prose/headings/tables/callouts/order, and
+only adapt examples, install commands, package names, and unsupported/client
+sections. Fix malformed code fences after the copy. Do not summarize upstream
+pages into short Ruby pages.
 
 ## Current state
 
-Stub template (38 lines) appears in all files matching:
+No plugin pages currently contain the old `See the plugin tests under` stub
+boilerplate, but line counts show most pages are still thin compared with
+upstream v1.6.9:
 
-```bash
-rg -l 'See the plugin tests under' docs-site/content/docs/plugins/
-# 30 files
-```
+| Slug | Upstream lines | Local lines | Status |
+|------|----------------|-------------|--------|
+| `plugins/organization.mdx` | 2516 | 68 | THIN |
+| `plugins/sso.mdx` | 1740 | 68 | THIN |
+| `plugins/oauth-provider.mdx` | 2146 | 193 | THIN |
+| `plugins/admin.mdx` | 839 | 66 | THIN |
+| `plugins/device-authorization.mdx` | 647 | 63 | THIN |
+| `plugins/2fa.mdx` | 608 | 94 | THIN |
+| `plugins/jwt.mdx` | 552 | 70 | THIN |
+| `plugins/generic-oauth.mdx` | 518 | 52 | THIN |
+| `plugins/passkey.mdx` | 486 | 153 | THIN |
+| `plugins/email-otp.mdx` | 467 | 62 | THIN |
+| `plugins/phone-number.mdx` | 412 | 63 | THIN |
+| `plugins/last-login-method.mdx` | 407 | 51 | THIN |
+| `plugins/scim.mdx` | 624 | 112 | THIN |
+| `plugins/magic-link.mdx` | 153 | 55 | THIN |
+| `plugins/one-tap.mdx` | 210 | 53 | THIN |
+| `plugins/siwe.mdx` | 295 | 64 | THIN |
+| `plugins/stripe.mdx` | 1095 | 860 | OK-ish, verify formatting only |
+| `plugins/username.mdx` | 361 | 369 | OK-ish, verify formatting only |
 
-**Port list** (`action: port` in manifest) — core gem plugins:
+**Supported plugin docs to port/finish**:
 
-| Slug | Upstream lines | Ruby test / source |
-|------|----------------|-------------------|
-| `plugins/2fa.mdx` | 608 | `packages/better_auth/test/better_auth/plugins/two_factor_test.rb` |
-| `plugins/admin.mdx` | 839 | `packages/better_auth/test/better_auth/plugins/admin_test.rb` |
-| `plugins/anonymous.mdx` | 204 | `anonymous_test.rb` |
-| `plugins/bearer.mdx` | 149 | `bearer_test.rb` |
-| `plugins/captcha.mdx` | (check upstream) | `captcha_test.rb` |
-| `plugins/device-authorization.mdx` | 647 | `device_authorization_test.rb` |
-| `plugins/dub.mdx` | 154 | `dub_test.rb` |
-| `plugins/email-otp.mdx` | 467 | `email_otp_test.rb` |
-| `plugins/generic-oauth.mdx` | 518 | `generic_oauth_test.rb` |
-| `plugins/have-i-been-pwned.mdx` | (check) | `have_i_been_pwned_test.rb` |
-| `plugins/jwt.mdx` | 552 | `jwt_test.rb` |
-| `plugins/last-login-method.mdx` | 407 | `last_login_method_test.rb` |
-| `plugins/magic-link.mdx` | 153 | `magic_link_test.rb` |
-| `plugins/multi-session.mdx` | 108 | `multi_session_test.rb` |
-| `plugins/oauth-proxy.mdx` | 102 | `oauth_proxy_test.rb` |
-| `plugins/oidc-provider.mdx` | 655 | `oidc_provider_test.rb` |
-| `plugins/one-tap.mdx` | 210 | `one_tap_test.rb` |
-| `plugins/one-time-token.mdx` | 127 | `one_time_token_test.rb` |
-| `plugins/open-api.mdx` | (check) | `open_api_test.rb` |
-| `plugins/organization.mdx` | 2516 | `organization_test.rb`, `organization_org_crud_test.rb`, `organization_members_test.rb` |
-| `plugins/phone-number.mdx` | 412 | `phone_number_test.rb` |
-| `plugins/siwe.mdx` | 295 | `siwe_test.rb` |
-| `plugins/username.mdx` | 361 | `username_test.rb` |
+- Core/plugin-shim docs: `2fa`, `admin`, `anonymous`, `bearer`, `captcha`,
+  `device-authorization`, `dub`, `email-otp`, `generic-oauth`,
+  `have-i-been-pwned`, `jwt`, `last-login-method`, `magic-link`,
+  `multi-session`, `oauth-proxy`, `one-tap`, `one-time-token`, `open-api`,
+  `organization`, `phone-number`, `siwe`, `username`
+- External gem docs: `api-key`, `passkey`, `sso`, `scim`, `stripe`,
+  `oauth-provider`
+- Local/support docs: `community-plugins`; `custom-session` only if present or
+  added by a separate supported-feature plan
 
-**External gem plugins** (add Gemfile section to each):
+**Explicitly unsupported / remove-if-local**:
 
-| Slug | Gem | Test path |
-|------|-----|-----------|
-| `plugins/api-key/index.mdx` | `better_auth-api-key` | `packages/better_auth-api-key/test/` |
-| `plugins/api-key/advanced.mdx` | same | same |
-| `plugins/api-key/reference.mdx` | same | same |
-| `plugins/passkey.mdx` | `better_auth-passkey` | `packages/better_auth-passkey/test/` |
-| `plugins/sso.mdx` | `better_auth-sso` | `packages/better_auth-sso/test/` |
-| `plugins/scim.mdx` | `better_auth-scim` | `packages/better_auth-scim/test/` |
-| `plugins/stripe.mdx` | `better_auth-stripe` | `packages/better_auth-stripe/test/` |
-| `plugins/oauth-provider.mdx` | `better_auth-oauth-provider` | `packages/better_auth-oauth-provider/test/` |
-| `plugins/mcp.mdx` | core | `packages/better_auth/test/better_auth/plugins/mcp/` |
+- `plugins/mcp.mdx` — delete/omit from docs and official plugin listing
+- upstream `plugins/oidc-provider.mdx` — do not create; remove stale
+  `oidc-provider` metadata from `docs-site/lib/plugins.ts`
+- `plugins/test-utils.mdx` — delete/omit; no public supported plugin
+- `plugins/agent-auth.mdx`
+- Non-Stripe payment plugins: `autumn`, `chargebee`, `creem`,
+  `dodopayments`, `polar`
 
-**Skip / stub-only** (`action: skip_unported`):
-
-- `plugins/agent-auth.mdx` — not in Ruby inventory
-- `plugins/autumn.mdx`, `chargebee.mdx`, `creem.mdx`, `dodopayments.mdx`, `polar.mdx` — billing plugins not ported
-- `plugins/test-utils.mdx` — test-only upstream plugin
-
-For skip_unported: either omit from `plugins/meta.json` and sidebar, OR add
-short MDX:
-
-```mdx
----
-title: Polar
-description: Not yet available in RubyAuth.
----
-<RubyAuthDisclaimer />
-<UnderDevelopment>This plugin is not ported to RubyAuth v1.6.9 parity.</UnderDevelopment>
-```
+Do not add stub pages for unsupported plugins. The user requirement is
+"only what we support"; unsupported docs should be absent from navigation and
+official plugin grids rather than shown as supported.
 
 **Special**:
 
-- `plugins/i18n.mdx` — **depends on plan 019** implementation; port upstream
-  doc only after `BetterAuth::Plugins.i18n` exists
-- `plugins/custom-session.mdx` — **keep_local**; expand using
-  `custom_session_test.rb` without overwriting Ruby-specific prose
+- `plugins/i18n.mdx` — depends on plan 019 implementation; port upstream doc
+  only after `BetterAuth::Plugins.i18n` exists
 - `plugins/community-plugins.mdx` — keep community table; align intro with upstream
-- `plugins/index.mdx` — update feature grid after batch ports
+- `plugins/index.mdx` — create only if navigation expects it; otherwise update
+  the existing plugin listing component/data after batch ports
 
 **Plugin factory naming** (use in Installation sections):
 
@@ -121,15 +111,21 @@ guess option keys; match `def self.admin(options = {})` signatures.
 | Port | `node docs-site/scripts/port-upstream-doc.mjs plugins/2fa.mdx` |
 | Find endpoints | `rg 'path:|def.*_endpoint' packages/better_auth/lib/better_auth/plugins/admin.rb` |
 | Lint/build | `cd docs-site && pnpm lint && pnpm build` |
-| Batch check | `rg -l 'See the plugin tests under' docs-site/content/docs/plugins/` → should trend to 0 |
+| Thin-page check | `ruby -e 'up="reference/upstream-src/1.6.9/repository/docs/content/docs"; Dir["docs-site/content/docs/plugins/*.mdx"].sort.each { |f| rel=f.delete_prefix("docs-site/content/docs/"); u=File.join(up, rel); next unless File.file?(u); puts "#{rel}: #{File.readlines(f).length}/#{File.readlines(u).length}" }'` |
+| Unsupported check | `rg 'mcp|oidc-provider|test-utils' docs-site/content/docs/plugins docs-site/lib/plugins.ts docs-site/components/sidebar-content.tsx` should show no supported docs/listing |
 
 ## Scope
 
-**In scope**: all `docs-site/content/docs/plugins/**/*.mdx` except skip_unported
-(slug list above)
+**In scope**:
+- Supported plugin MDX files listed above under `docs-site/content/docs/plugins/`
+- Delete/omit unsupported local pages: `docs-site/content/docs/plugins/mcp.mdx`
+  and `docs-site/content/docs/plugins/test-utils.mdx`
+- `docs-site/components/sidebar-content.tsx` if plugin navigation contains
+  unsupported links or needs supported plugin order updates
+- `docs-site/lib/plugins.ts` to remove stale `oidc-provider` metadata and ensure
+  official plugin grids only show supported pages
 
 **Out of scope**:
-- `plugins/meta.json` order changes unless adding mcp/i18n entries
 - Ruby plugin implementation
 - `docs-site/lib/community-plugins-data.ts`
 
@@ -150,7 +146,8 @@ For each:
 1. `node docs-site/scripts/port-upstream-doc.mjs plugins/<name>.mdx`
 2. Remove "Add the client plugin" steps entirely
 3. Replace `<APIMethod>` inner TS with Ruby `auth.api.*` from tests
-4. Add standard migration block (copy from current stub — it's correct):
+4. Add a standard Ruby migration block, preserving any existing local example
+   only if it is correctly formatted:
 
 ```ruby
 plugins: [BetterAuth::Plugins.two_factor(issuer: "My App")]
@@ -181,9 +178,9 @@ upstream explanation of behavior but show Ruby config-only examples.
 
 **Verify batch B**: same grep/lint pattern.
 
-### Batch C — Admin & organization (3 pages)
+### Batch C — Admin & organization
 
-Port: `admin`, `organization`, `oidc-provider`
+Port: `admin`, `organization`
 
 `organization.mdx` is largest (2516 upstream lines). Split work:
 
@@ -193,12 +190,17 @@ Port: `admin`, `organization`, `oidc-provider`
 4. Access control: document `BetterAuth::Plugins.create_access_control` from
    `access_test.rb`
 
-**Verify**: `organization.mdx` >= 800 lines after client removal; build passes.
+**Verify**: `organization.mdx` >= 1200 lines after client/unsupported removal
+or every omitted upstream section has a documented unsupported/client-only
+reason; build passes.
 
-### Batch D — External gems (9 pages)
+### Batch D — External gems
 
-Port: `api-key/index`, `api-key/advanced`, `api-key/reference`, `passkey`, `sso`,
-`scim`, `stripe`, `oauth-provider`, `mcp`
+Port/finish: `api-key`, `passkey`, `sso`, `scim`, `stripe`, `oauth-provider`.
+
+Note: local docs currently use `docs-site/content/docs/plugins/api-key.mdx`,
+not an `api-key/` folder. Keep the local route shape unless plan 020 manifest
+and sidebar changes intentionally move to nested pages.
 
 Each page must start Installation with:
 
@@ -215,16 +217,38 @@ Use external gem README + tests where upstream differs from core patterns.
 **Verify**:
 
 ```bash
-rg 'better_auth-api-key|better_auth/sso' docs-site/content/docs/plugins/{api-key,sso,scim,stripe,passkey,oauth-provider,mcp}.mdx
+rg 'better_auth-api-key|better_auth/sso' docs-site/content/docs/plugins/{api-key,sso,scim,stripe,passkey,oauth-provider}.mdx
 # multiple matches
 
 cd docs-site && pnpm build
 ```
 
-### Step 5: Update `plugins/index.mdx`
+### Step 5: Remove unsupported plugin docs/listings
+
+Delete or omit unsupported docs from the public docs surface:
+
+- Remove `docs-site/content/docs/plugins/mcp.mdx`
+- Remove `docs-site/content/docs/plugins/test-utils.mdx`
+- Ensure no `docs-site/content/docs/plugins/oidc-provider.mdx` exists
+- Remove stale `oidc-provider` metadata from `docs-site/lib/plugins.ts`
+- Remove any `mcp`, `oidc-provider`, or `test-utils` sidebar/plugin-grid entries
+
+**Verify**:
+
+```bash
+test ! -f docs-site/content/docs/plugins/mcp.mdx
+test ! -f docs-site/content/docs/plugins/test-utils.mdx
+test ! -f docs-site/content/docs/plugins/oidc-provider.mdx
+rg 'mcp|oidc-provider|test-utils' docs-site/content/docs/plugins docs-site/lib/plugins.ts docs-site/components/sidebar-content.tsx
+# expect no supported-doc/listing matches
+```
+
+### Step 6: Update `plugins/index.mdx` or plugin listing data
 
 Align plugin listing with ported pages; mark skip_unported plugins as
-"Not yet ported" in the index grid if they remain in sidebar.
+"Not yet ported" only if the maintainer explicitly wants visible unsupported
+pages. For this request, omit unsupported plugins from navigation and official
+plugin grids.
 
 **Verify**: no broken `/docs/plugins/...` links in index.
 
@@ -233,22 +257,33 @@ Align plugin listing with ported pages; mark skip_unported plugins as
 After all batches:
 
 ```bash
-# No stub boilerplate left on ported pages
-rg 'See the plugin tests under' docs-site/content/docs/plugins/ | wc -l
-# expect: 0 for ported pages (skip_unported may differ)
+# No old stub boilerplate left
+rg 'See the plugin tests under' docs-site/content/docs/plugins/
+# expect: no matches
 
 # No client leaks
-rg 'createAuthClient|authClient\.' docs-site/content/docs/plugins/
+rg 'createAuthClient|authClient\.|```ts|npm install better-auth' docs-site/content/docs/plugins/
 # expect: no matches
+
+# No unsupported public plugin docs/listings
+test ! -f docs-site/content/docs/plugins/mcp.mdx
+test ! -f docs-site/content/docs/plugins/test-utils.mdx
+test ! -f docs-site/content/docs/plugins/oidc-provider.mdx
 
 cd docs-site && pnpm lint && pnpm build
 ```
 
 ## Done criteria
 
-- [ ] All port-list plugin MDX files >= 100 lines (except hook-only plugins >= 80)
+- [ ] All supported plugin pages use literal upstream MDX as the base and only
+      adapt examples/unsupported sections
+- [ ] High-surface pages meet minimum sanity gates or document omissions:
+      `organization` >= 1200 lines, `sso` >= 800, `oauth-provider` >= 900,
+      `admin` >= 400, `2fa` >= 300
 - [ ] Zero `See the plugin tests under` on ported pages
-- [ ] Zero `createAuthClient` / `` ```ts `` in plugins/
+- [ ] Zero `createAuthClient` / `` ```ts `` / `npm install better-auth` in plugins/
+- [ ] `mcp`, upstream `oidc-provider`, and `test-utils` are absent from public
+      docs pages, sidebar entries, and official plugin-grid metadata
 - [ ] External gem pages document `gem` + `require`
 - [ ] `pnpm lint && pnpm build` pass
 - [ ] `plans/README.md` row 022 DONE
@@ -259,6 +294,8 @@ cd docs-site && pnpm lint && pnpm build
   `<UnderDevelopment>` for that section; do not document fantasy endpoints
 - External gem not in workspace — stop that page and report (do not document)
 - `plugins/i18n.mdx` requested but plan 019 not DONE — skip i18n page
+- A page or listing would present `mcp`, upstream `oidc-provider`, or
+  `test-utils` as supported — remove it instead of documenting it
 
 ## Maintenance notes
 

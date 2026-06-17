@@ -1,51 +1,51 @@
-# Plan 023: Docs Parity — Adapters, Database & Authentication Providers
+# Plan 023: Docs Parity — Adapters & Authentication Finish-Pass
 
-> **Executor instructions**: Complete plan 020. **Copy upstream verbatim first**
-> — do NOT rewrite adapter pages as short Ruby summaries (that is the current
-> broken state). Run verification after each section.
+> **Executor instructions**: Complete plan 020. For pages that still need work,
+> **copy upstream verbatim first** and adapt examples only. Do not replace
+> current long Ruby pages with shorter summaries. Run verification after each
+> section.
 >
 > **Drift check (run first)**:
-> `git diff --stat 0d19370..HEAD -- docs-site/content/docs/adapters docs-site/content/docs/authentication docs-site/content/docs/concepts/database.mdx`
+> `git diff --stat 2ce7a4a..HEAD -- docs-site/content/docs/adapters docs-site/content/docs/authentication docs-site/content/docs/concepts/database.mdx`
 
 ## Status
 
 - **Priority**: P1
 - **Effort**: M
-- **Risk**: MED
+- **Risk**: LOW
 - **Depends on**: plans/020-docs-parity-foundation.md
 - **Category**: docs
-- **Planned at**: commit `0d19370`, 2026-06-15 (revised 2026-06-15 — adapter copy-first)
+- **Planned at**: commit `2ce7a4a`, 2026-06-16
 
 ## Why this matters
 
-Local adapter pages were **hand-written summaries** (~51–72 lines) instead of
-upstream parity (~100–190 lines). They are missing entire upstream sections:
+Adapters and most authentication provider pages have already been expanded.
+This plan is now a finish-pass: verify that adapter/authentication pages follow
+the literal upstream-copy rule, fix malformed examples and any client-only leaks,
+and only copy upstream again where the page is still thin or missing a required
+server-side section.
 
-- Intro paragraphs and database product links
-- **Schema generation & migration** support tables
-- **Joins (Experimental)** with `experimental: { joins: true }` (Ruby supports this — see `configuration_test.rb`, `internal_adapter_test.rb`)
-- **Use a non-default schema** (PostgreSQL — full troubleshooting block)
-- SQLite multi-driver sections (Node/Bun — remove; keep Ruby `sqlite3` equivalent)
-- **Additional Information** / performance links
-
-The user requirement: **same content as upstream, replace examples only, remove
-client-only**. Unclear Ruby support (ActiveRecord outside Rails, Kysely community
-dialects, Drizzle/Prisma) goes in `other-relational-databases.mdx` with
-`<UnderDevelopment>` — not omitted silently.
+The user requirement remains strict: same upstream content, headings, tables,
+and order; replace examples only, remove unsupported/client-only sections, and
+fix bad formatting. Unclear Ruby support (ActiveRecord outside Rails, Kysely
+community dialects, Drizzle/Prisma) goes in
+`other-relational-databases.mdx` with `<UnderDevelopment>` — not omitted silently.
 
 ## Current state — upstream vs local (v1.6.9)
 
-| Slug | Upstream lines | Local lines | Problem |
-|------|----------------|-------------|---------|
-| `adapters/postgresql.mdx` | 189 | 72 | Missing joins, non-default schema, schema table |
-| `adapters/mysql.mdx` | 100 | 63 | Missing joins, intro, schema table |
-| `adapters/sqlite.mdx` | 134 | 51 | Missing joins, schema table; only Ruby config |
-| `adapters/mssql.mdx` | 131 | 62 | Missing joins, Kysely→Ruby note |
-| `adapters/mongo.mdx` | 61 | 58 | Close but missing joins section |
-| `adapters/other-relational-databases.mdx` | 46 | 56 | Local rewrite; missing upstream Kysely dialect list |
-| `adapters/drizzle.mdx` | 179 | **missing** | Merge into other-relational |
-| `adapters/prisma.mdx` | 96 | **missing** | Merge into other-relational |
-| `concepts/database.mdx` | 1024 | 112 | THIN — separate plan 021 but adapter cross-links must match |
+| Slug | Upstream lines | Local lines | Status |
+|------|----------------|-------------|--------|
+| `adapters/postgresql.mdx` | 189 | 197 | OK-ish — verify formatting/copy fidelity |
+| `adapters/mysql.mdx` | 100 | 202 | OK-ish — verify formatting/copy fidelity |
+| `adapters/sqlite.mdx` | 134 | 189 | OK-ish — verify Node/Bun driver sections removed |
+| `adapters/mssql.mdx` | 131 | 177 | OK-ish — verify formatting/copy fidelity |
+| `adapters/mongo.mdx` | 61 | 190 | OK-ish — verify current additions are Ruby-specific and accurate |
+| `adapters/other-relational-databases.mdx` | 46 | missing locally | Create/merge if absent; absorb Drizzle/Prisma |
+| `adapters/community-adapters.mdx` | upstream exists | missing locally | Create only if supported by navigation/manifest |
+| `adapters/drizzle.mdx` | 179 | missing | Do not create; merge into other-relational |
+| `adapters/prisma.mdx` | 96 | missing | Do not create; merge into other-relational |
+| `concepts/database.mdx` | 1024 | 400 | Plan 021; adapter links must match |
+| `authentication/email-password.mdx` | 533 | 166 | Plan 021 |
 
 **Ruby adapter implementations** (for example replacement only):
 
@@ -74,8 +74,8 @@ BetterAuth.auth(
 
 | Purpose | Command |
 |---------|---------|
-| Port (copy-first) | `node docs-site/scripts/port-upstream-doc.mjs adapters/postgresql.mdx` |
-| Line-count check | `wc -l docs-site/content/docs/adapters/postgresql.mdx` (expect ≥ 150) |
+| Port when needed | `node docs-site/scripts/port-upstream-doc.mjs adapters/postgresql.mdx` |
+| Line-count check | `wc -l docs-site/content/docs/adapters/*.mdx` |
 | Adapter tests | `rg 'Postgres|MySQL|SQLite|MSSQL' packages/better_auth/test/better_auth/adapters/` |
 | Verify | `cd docs-site && pnpm lint && pnpm build` |
 
@@ -103,19 +103,24 @@ BetterAuth.auth(
 
 ## Steps
 
-### Step 1: Port relational adapters (copy-first, section-by-section)
+### Step 1: Audit existing relational adapters before rewriting
 
-For **postgresql, mysql, sqlite, mssql** — same workflow each:
+For **postgresql, mysql, sqlite, mssql**:
 
-1. **Overwrite** local file with upstream v1.6.9 MDX (via port script or literal copy)
-2. Add `<RubyAuthDisclaimer />` after frontmatter
-3. Replace **only** `` ```ts `` blocks with Ruby (see table above)
-4. Replace `` ```package-install`` blocks with bash heredocs using `bundle exec better-auth`
-5. Replace Kysely doc links in `<Callout>` with Ruby adapter class names
-6. **Keep unchanged**: intro prose, HTML schema tables, joins explanation,
+1. Compare current local MDX against upstream v1.6.9 section-by-section.
+2. If the local page already preserves upstream prose, headings, tables, joins,
+   schema generation, and troubleshooting, keep it and only fix broken examples
+   or formatting.
+3. If a required server-side upstream section is missing, re-copy the upstream
+   file and then re-apply correct Ruby examples.
+4. Add `<RubyAuthDisclaimer />` after frontmatter if missing.
+5. Replace **only** `` ```ts `` blocks with Ruby (see table above).
+6. Replace `` ```package-install`` blocks with bash heredocs using `bundle exec better-auth`.
+7. Replace Kysely doc links in `<Callout>` with Ruby adapter class names.
+8. **Keep unchanged**: intro prose, HTML schema tables, joins explanation,
    non-default schema SQL, troubleshooting callouts, performance links
-7. **Delete subsections**: Node.js built-in SQLite, Bun SQLite (sqlite page only)
-8. **Add one Ruby subsection** under Example Usage where upstream had multiple drivers:
+9. **Delete subsections**: Node.js built-in SQLite, Bun SQLite (sqlite page only)
+10. **Add one Ruby subsection** under Example Usage where upstream had multiple drivers:
 
 ```ruby title="config/better_auth.rb"
 require "better_auth"
@@ -154,14 +159,19 @@ rg 'better-sqlite3|bun:sqlite|node:sqlite' docs-site/content/docs/adapters/sqlit
 cd docs-site && pnpm lint
 ```
 
-### Step 2: Port `adapters/mongo.mdx`
+### Step 2: Audit `adapters/mongo.mdx`
 
-Copy upstream, then:
+Current `mongo.mdx` is longer than upstream because it includes Ruby-specific
+installation/migration detail. Keep those additions if accurate, but compare
+against upstream and ensure upstream prose that still applies is present. If it
+is not, copy upstream first and then re-apply the Ruby-specific additions.
 
-1. Replace Installation `@better-auth/mongo-adapter` with `gem "better_auth-mongodb"`
-2. Replace TS example with existing Ruby config from current local file (it is correct — graft into upstream structure)
-3. **Keep** upstream joins section with Ruby `experimental: { joins: true }` example
-4. Keep "no schema migration for MongoDB" upstream statement
+Required checks:
+
+1. Installation uses `gem "better_auth-mongodb"`
+2. Ruby config uses `BetterAuth::Adapters::MongoDB`
+3. Upstream "no schema migration for MongoDB" statement is preserved or adapted
+4. Any generated-schema section clearly distinguishes SQL from Mongo behavior
 
 **Verify**: `wc -l` ≥ 55; joins section present.
 
@@ -213,26 +223,31 @@ test ! -f docs-site/content/docs/adapters/prisma.mdx
 
 ### Step 4: Port `adapters/community-adapters.mdx`
 
-Copy upstream, adapt links to Ruby community adapters gem/table in
-`docs-site/content/docs/adapters/community-adapters.mdx` — keep upstream structure.
+Create only if plan 020 manifest and sidebar include a supported community
+adapter page. If created, copy upstream, adapt links to Ruby community adapter
+gems/table, and keep upstream structure.
 
-### Step 5: Authentication providers (copy-first)
+### Step 5: Authentication providers finish-pass
 
-Same copy-first rules as adapters. Local pages like `github.mdx` (~56 lines) are
-acceptable **only if** upstream is similarly short. For THIN providers:
+Same copy-first rules as adapters. Current provider pages are mostly OK-ish by
+line count. Do not rewrite them unless section comparison shows missing
+server-side content or broken formatting.
 
 | Slug | Upstream lines | Action |
 |------|----------------|--------|
-| `google.mdx` | 212 | Full copy-first port |
-| `apple.mdx` | 184 | Full copy-first port |
-| `email-password.mdx` | 533 | Plan 021 — ensure cross-links match |
+| `google.mdx` | 212 upstream / 241 local | Review formatting/copy fidelity |
+| `apple.mdx` | 184 upstream / 194 local | Review formatting/copy fidelity |
+| `email-password.mdx` | 533 upstream / 166 local | Plan 021 — ensure cross-links match |
 
 For each provider:
 
-1. Copy upstream MDX
-2. Replace TS `socialProviders` config with `BetterAuth::SocialProviders.*`
-3. Remove client sign-in examples
-4. **Keep** upstream sections: scopes, advanced options, profile mapping, env tables
+1. Compare local MDX with upstream MDX.
+2. Replace any TS `socialProviders` config with
+   `BetterAuth::SocialProviders.*`.
+3. Remove client sign-in examples.
+4. **Keep** upstream sections: scopes, advanced options, profile mapping,
+   environment tables.
+5. Leave pages unchanged if they already satisfy those checks.
 
 **Verify**:
 
@@ -260,11 +275,15 @@ rg 'Kysely|better-sqlite3|createAuthClient' docs-site/content/docs/adapters/
 
 ## Done criteria
 
-- [ ] Each relational adapter page ≥ min line count; includes schema table + joins sections
+- [ ] Each existing relational adapter page preserves applicable upstream
+      headings/prose/tables and includes Ruby examples only
 - [ ] PostgreSQL retains full non-default schema section from upstream
-- [ ] `other-relational-databases.mdx` ≥ 120 lines with ORM integrations + UnderDevelopment dialects
+- [ ] `other-relational-databases.mdx` exists if sidebar/manifest expects it,
+      and includes ORM integrations + UnderDevelopment dialects
 - [ ] No standalone `drizzle.mdx` / `prisma.mdx`
-- [ ] THIN auth providers (google, apple) ≥ 150 lines
+- [ ] Authentication provider pages contain no `createAuthClient`, `` ```ts ``,
+      or `npm install better-auth`
+- [ ] `email-password.mdx` cross-links to plan 021 output and is not duplicated here
 - [ ] `pnpm lint && pnpm build` pass
 - [ ] `plans/README.md` row 023 DONE
 
@@ -273,6 +292,9 @@ rg 'Kysely|better-sqlite3|createAuthClient' docs-site/content/docs/adapters/
 - Local adapter page < 80% upstream lines after port — redo as copy-first, do not submit
 - Unsure if Ruby supports an upstream feature — use `<UnderDevelopment>`, keep upstream prose
 - Port script strips schema tables or callouts — fix script; do not accept thin output
+- Re-copying upstream would delete accurate Ruby-specific sections from the
+  current longer adapter pages — preserve those sections and report the merge
+  decision instead of overwriting blindly
 
 ## Maintenance notes
 
