@@ -1,0 +1,101 @@
+---
+title: i18n
+description: Translate server error messages by locale.
+---
+
+Translate server error messages by locale.
+
+<Callout type="info">
+This page documents the current Ruby port behavior. Ruby uses snake_case option names and `auth.api` method names; HTTP paths and JSON keys keep the upstream wire shape where implemented.
+</Callout>
+
+## Installation
+
+No extra gem is required. The i18n plugin ships with `better_auth`.
+
+## Configure
+
+```ruby title="config/auth.rb"
+require "better_auth"
+
+auth = BetterAuth.auth(
+  secret: ENV.fetch("BETTER_AUTH_SECRET"),
+  base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
+  plugins: [
+    BetterAuth::Plugins.i18n(
+      translations: {
+        "fr" => {
+          "INVALID_EMAIL_OR_PASSWORD" => "Identifiants invalides"
+        },
+        "de" => {
+          "INVALID_EMAIL_OR_PASSWORD" => "Ungueltige Anmeldedaten"
+        }
+      },
+      detection: ["cookie", "header"],
+      locale_cookie: "lang",
+      default_locale: "en"
+    )
+  ]
+)
+```
+
+## Error Response Format
+
+When a translation exists, error responses include:
+
+- `code`: the upstream error code
+- `message`: the translated message for the detected locale
+- `originalMessage`: the original English message
+
+```json
+{
+  "code": "INVALID_EMAIL_OR_PASSWORD",
+  "message": "Identifiants invalides",
+  "originalMessage": "Invalid email or password"
+}
+```
+
+If no translation exists for the detected locale and code, the original error response is returned unchanged.
+
+## Locale Detection
+
+Detection strategies run in the order configured by `detection`. The first strategy that yields an available locale wins.
+
+Supported strategies:
+
+- `header`: reads `Accept-Language` and picks the highest-quality available locale
+- `cookie`: reads the configured locale cookie
+- `session`: reads the current or new session user's locale field
+- `callback`: calls `get_locale` with the endpoint context
+
+If no strategy returns an available locale, the plugin falls back to `default_locale`.
+
+Fallback order for `default_locale`:
+
+1. explicit `default_locale` when it exists in `translations`
+2. `"en"` when translations include English
+3. the first locale key in `translations`
+
+## Options
+
+Current Ruby options accepted by `BetterAuth::Plugins.i18n`:
+
+- `translations` (required): hash keyed by locale, with nested error-code translations
+- `default_locale`
+- `detection`
+- `locale_cookie`
+- `user_locale_field`
+- `get_locale`
+
+CamelCase aliases such as `defaultLocale`, `localeCookie`, `userLocaleField`, and `getLocale` are also accepted.
+
+## Server-Only Note
+
+RubyAuth implements the server plugin only. There is no `i18nClient` equivalent in Ruby; frontends should continue calling the HTTP routes and read translated error JSON from responses.
+
+## Support Notes
+
+- The examples above are based on Ruby plugin source and tests in `packages/better_auth`.
+- If an upstream section is not represented here, treat it as not yet documented or not yet supported by the Ruby port until the matching Ruby implementation exists.
+
+{/* Upstream guide is preserved in reference/upstream-src/1.6.9/repository/docs/content/docs/plugins/i18n.mdx. */}

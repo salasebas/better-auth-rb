@@ -126,6 +126,11 @@ const pluginMeta: Record<
 		icon: "LogIn",
 		tagline: "Track and display the user's last login method",
 	},
+	i18n: {
+		category: "Utility",
+		icon: "Globe",
+		tagline: "Translate server error messages by locale",
+	},
 	"multi-session": {
 		category: "Utility",
 		icon: "Users",

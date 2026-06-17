@@ -39,6 +39,7 @@ class BetterAuthPluginsUpstreamInventoryTest < Minitest::Test
       BetterAuth::Plugins.bearer,
       BetterAuth::Plugins.captcha(provider: "cloudflare-turnstile", secret_key: "captcha-secret"),
       BetterAuth::Plugins.have_i_been_pwned,
+      BetterAuth::Plugins.i18n(translations: {"en" => {"INVALID_EMAIL_OR_PASSWORD" => "Invalid email or password"}}),
       BetterAuth::Plugins.last_login_method
     ]
 

@@ -19,7 +19,7 @@ Recommended order: **019 (done) → 025**.
 
 | Plan | Title | Depends on | Status |
 | --- | --- | --- | --- |
-| 019 | Core i18n plugin (`BetterAuth::Plugins.i18n`) | - | TODO |
+| 019 | Core i18n plugin (`BetterAuth::Plugins.i18n`) | - | DONE |
 
 ## Docs Parity Initiative (020–024)
 
