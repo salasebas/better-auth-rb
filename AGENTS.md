@@ -6,6 +6,9 @@ adaptation is documented.
 Read the package-level `AGENTS.md` when one exists for the package you are
 editing.
 
+When a referenced document is not given by path, look for it from the workspace
+root first, then the local package.
+
 ## Upstream
 
 Target: Better Auth `v1.6.9` at commit

@@ -1,0 +1,17 @@
+{
+  "lsp": {
+    "ruby-lsp": {
+      "initialization_options": {
+        "formatter": "standard",
+        "linters": ["standard"],
+        "indexing": {
+          "excludedPatterns": [
+            "docs-site/**/*.rb",
+            "reference/**/*.rb",
+            "tmp/**/*.rb",
+          ],
+        },
+      },
+    },
+  },
+}
