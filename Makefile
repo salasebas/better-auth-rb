@@ -12,16 +12,7 @@ NC := \033[0m
 
 .PHONY: install
 install:
-	@echo "$(BLUE)📦 Installing workspace dependencies...$(NC)"
-	bundle install
-	@echo "$(BLUE)📦 Installing better_auth...$(NC)"
-	cd packages/better_auth && bundle install
-	@echo "$(BLUE)📦 Installing better_auth-rails...$(NC)"
-	cd packages/better_auth-rails && bundle install
-	@echo "$(BLUE)📦 Installing better_auth-sinatra...$(NC)"
-	cd packages/better_auth-sinatra && bundle install
-	@echo "$(BLUE)📦 Installing better_auth-hanami...$(NC)"
-	cd packages/better_auth-hanami && bundle install
+	bundle exec rake install
 	@echo "$(GREEN)✓ All dependencies installed$(NC)"
 
 .PHONY: setup
@@ -43,26 +34,12 @@ console:
 
 .PHONY: lint
 lint:
-	@echo "$(BLUE)🔍 Checking workspace style...$(NC)"
-	bundle exec standardrb
-	@echo "$(BLUE)🔍 Checking better_auth...$(NC)"
-	cd packages/better_auth && bundle exec standardrb
-	@echo "$(BLUE)🔍 Checking better_auth-rails...$(NC)"
-	cd packages/better_auth-rails && bundle exec standardrb
-	@echo "$(BLUE)🔍 Checking better_auth-sinatra...$(NC)"
-	cd packages/better_auth-sinatra && bundle exec standardrb
-	@echo "$(BLUE)🔍 Checking better_auth-hanami...$(NC)"
-	cd packages/better_auth-hanami && bundle exec standardrb
+	bundle exec rake lint
 	@echo "$(GREEN)✓ Linting completed$(NC)"
 
 .PHONY: lint-fix
 lint-fix:
-	@echo "$(BLUE)🔧 Automatically fixing style issues...$(NC)"
-	bundle exec standardrb --fix
-	cd packages/better_auth && bundle exec standardrb --fix
-	cd packages/better_auth-rails && bundle exec standardrb --fix
-	cd packages/better_auth-sinatra && bundle exec standardrb --fix
-	cd packages/better_auth-hanami && bundle exec standardrb --fix
+	bundle exec rake lint:fix
 	@echo "$(GREEN)✓ Code fixed$(NC)"
 
 # =============================================
@@ -105,11 +82,7 @@ ci:
 
 .PHONY: release-check
 release-check:
-	@echo "$(BLUE)📦 Validating gem builds without publishing...$(NC)"
-	cd packages/better_auth && rm -f better_auth-*.gem && bundle install && gem build better_auth.gemspec
-	cd packages/better_auth-rails && rm -f better_auth-rails-*.gem better_auth_rails-*.gem && bundle install && gem build better_auth-rails.gemspec && gem build better_auth_rails.gemspec
-	cd packages/better_auth-sinatra && rm -f better_auth-sinatra-*.gem && bundle install && gem build better_auth-sinatra.gemspec
-	cd packages/better_auth-hanami && rm -f better_auth-hanami-*.gem && bundle install && gem build better_auth-hanami.gemspec
+	bundle exec rake release:check
 	@echo "$(GREEN)✓ Build OK for all gems (local dry run)$(NC)"
 
 # =============================================
@@ -134,12 +107,7 @@ db-down:
 
 .PHONY: clean
 clean:
-	@echo "$(BLUE)🧹 Cleaning workspace...$(NC)"
-	rm -rf Gemfile.lock
-	cd packages/better_auth && rm -rf Gemfile.lock *.gem coverage/
-	cd packages/better_auth-rails && rm -rf Gemfile.lock *.gem coverage/
-	cd packages/better_auth-sinatra && rm -rf Gemfile.lock *.gem coverage/
-	cd packages/better_auth-hanami && rm -rf Gemfile.lock *.gem coverage/
+	bundle exec rake clean
 	@echo "$(GREEN)✓ Cleanup completed$(NC)"
 
 # =============================================
