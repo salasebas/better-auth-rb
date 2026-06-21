@@ -414,6 +414,42 @@ jobs:
         working-directory: packages/better_auth-redis-storage
         run: bundle exec rake test
 
+  test-mongodb:
+    name: Test better_auth-mongodb (MongoDB Adapter)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: .ruby-version
+          bundler-cache: true
+          working-directory: packages/better_auth-mongodb
+
+
+      - name: Run tests
+        working-directory: packages/better_auth-mongodb
+        run: bundle exec rake test
+
+  test-mongo-adapter:
+    name: Test better_auth-mongo-adapter (MongoDB compatibility package)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: .ruby-version
+          bundler-cache: true
+          working-directory: packages/better_auth-mongo-adapter
+
+
+      - name: Run tests
+        working-directory: packages/better_auth-mongo-adapter
+        run: bundle exec rake test
+
   test-scim:
     name: Test better_auth-scim (SCIM Plugin)
     runs-on: ubuntu-latest
@@ -564,6 +600,8 @@ jobs:
       - test-roda
       - test-oauth-provider
       - test-redis-storage
+      - test-mongodb
+      - test-mongo-adapter
       - test-scim
       - test-oidc
       - test-saml
