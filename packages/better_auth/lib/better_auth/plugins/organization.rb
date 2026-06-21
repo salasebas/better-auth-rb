@@ -382,13 +382,16 @@ module BetterAuth
         if config[:require_email_verification_on_invitation] && !session[:user]["emailVerified"]
           raise APIError.new("FORBIDDEN", message: ORGANIZATION_ERROR_CODES.fetch("EMAIL_VERIFICATION_REQUIRED_BEFORE_ACCEPTING_OR_REJECTING_INVITATION"))
         end
+        organization = organization_by_id(ctx, invitation["organizationId"])
+        raise APIError.new("BAD_REQUEST", message: ORGANIZATION_ERROR_CODES.fetch("ORGANIZATION_NOT_FOUND")) unless organization
+
+        ensure_organization_member_capacity!(ctx, config, session[:user], organization)
         ensure_team_member_capacity!(ctx, config, organization_team_ids(invitation["teamId"]))
         member = ctx.context.adapter.create(model: "member", data: {organizationId: invitation["organizationId"], userId: session[:user]["id"], role: invitation["role"], createdAt: Time.now})
         organization_team_ids(invitation["teamId"]).each do |team_id|
           ctx.context.adapter.create(model: "teamMember", data: {teamId: team_id, userId: session[:user]["id"], createdAt: Time.now})
         end
         updated = ctx.context.adapter.update(model: "invitation", where: [{field: "id", value: invitation["id"]}], update: {status: "accepted"})
-        organization = organization_by_id(ctx, invitation["organizationId"])
         run_org_hook(config, :after_accept_invitation, {invitation: invitation_wire(ctx, updated), member: member_wire(ctx, member), user: session[:user], organization: organization_wire(ctx, organization)}, ctx)
         ctx.json({invitation: invitation_wire(ctx, updated), member: member_wire(ctx, member)})
       end
@@ -455,7 +458,10 @@ module BetterAuth
           raise APIError.new("CONFLICT", message: ORGANIZATION_ERROR_CODES.fetch("USER_IS_ALREADY_A_MEMBER_OF_THIS_ORGANIZATION"))
         end
         organization = organization_by_id(ctx, organization_id)
+        raise APIError.new("BAD_REQUEST", message: ORGANIZATION_ERROR_CODES.fetch("ORGANIZATION_NOT_FOUND")) unless organization
+
         user = ctx.context.internal_adapter.find_user_by_id(user_id)
+        ensure_organization_member_capacity!(ctx, config, user, organization)
         member_data = {organizationId: organization_id, userId: user_id, role: parse_roles(body[:role] || "member"), createdAt: Time.now}.merge(additional_input(body, :organization_id, :user_id, :role))
         merge_hook_data!(member_data, run_org_hook(config, :before_add_member, {member: member_data, user: user, organization: organization_wire(ctx, organization)}, ctx))
         member = ctx.context.adapter.create(model: "member", data: member_data)
@@ -1058,9 +1064,23 @@ module BetterAuth
       [requested, default].min
     end
 
+    def ensure_organization_member_capacity!(ctx, config, user, organization)
+      limit = organization_membership_capacity_limit(ctx, config, user, organization)
+      count = ctx.context.adapter.count(model: "member", where: [{field: "organizationId", value: organization["id"]}])
+      return if count < limit
+
+      raise APIError.new("FORBIDDEN", message: ORGANIZATION_ERROR_CODES.fetch("ORGANIZATION_MEMBERSHIP_LIMIT_REACHED"))
+    end
+
+    def organization_membership_capacity_limit(ctx, config, user, organization)
+      configured = config[:membership_limit] || 100
+      value = configured.respond_to?(:call) ? configured.call(user, organization_wire(ctx, organization)) : configured
+      numeric_member_limit(value)
+    end
+
     def numeric_member_limit(value)
       return value.to_i if value.is_a?(Numeric)
-      return value.to_i if value.to_s.match?(/\A\d+\z/)
+      return value.to_i if value.to_s.match?(/\A-?\d+\z/)
 
       100
     end
