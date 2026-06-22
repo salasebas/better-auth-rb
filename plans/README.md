@@ -17,7 +17,7 @@ Status values: TODO | IN PROGRESS | DONE | BLOCKED | REJECTED.
 | 005 | `005-endpoint-contract-cleanup.md` | Endpoint contract cleanup | 001 | DONE |
 | 006 | `006-upstream-auth-api-naming-parity.md` | Upstream `auth.api` naming parity (Ruby idiomatic) | 005 | DONE |
 | 007 | `007-stable-resource-oriented-http-api.md` | Stable resource-oriented HTTP API | 005; after 006 rec. | TODO |
-| 008 | `008-docs-parity-foundation.md` | Docs parity foundation (tooling + manifest) | 001 rec. | TODO |
+| 008 | `008-docs-parity-foundation.md` | Docs parity foundation (tooling + manifest) | 001 rec. | DONE |
 | 009 | `009-docs-concepts-and-getting-started.md` | Concepts & getting started finish-pass | 008 | TODO |
 | 010 | `010-docs-adapters-authentication.md` | Adapters & authentication finish-pass | 008 | TODO |
 | 011 | `011-docs-plugins-parity.md` | Supported plugins copy-first parity | 008, 009 rec. | TODO |
@@ -45,7 +45,7 @@ Status values: TODO | IN PROGRESS | DONE | BLOCKED | REJECTED.
 - **007** Stable resource-oriented HTTP API. This was missing as a file before
   renumbering; it now exists as a placeholder and still needs a full executable
   implementation plan before coding.
-- **008-013** Docs parity initiative.
+- **009-013** Docs parity initiative.
 - **014** Organization membership limit parity.
 - **015** Organization lifecycle and hooks parity.
 - **016** Include OIDC and SAML packages in workspace tasks.
