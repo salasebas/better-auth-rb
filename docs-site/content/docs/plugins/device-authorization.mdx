@@ -11,11 +11,14 @@ The Device Authorization plugin implements the OAuth 2.0 Device Authorization Gr
 
 ## Try It Out
 
-You can test the device authorization flow right now using the RubyAuth CLI:
+The upstream Better Auth docs include a CLI demo command for trying the device
+authorization flow end-to-end.
 
-```package-install
-npx auth login
-```
+<UnderDevelopment />
+
+RubyAuth does not currently ship an equivalent `better-auth login` device-flow
+demo command. Use the HTTP/Ruby examples below to exercise the flow against your
+own RubyAuth server.
 
 This will demonstrate the complete device authorization flow by:
 
@@ -25,7 +28,7 @@ This will demonstrate the complete device authorization flow by:
 4. Polling for authorization completion
 
 <Callout type="info">
-  The CLI login command is a demo feature that connects to the RubyAuth demo server to showcase the device authorization flow in action.
+  The upstream CLI login command is a demo feature that connects to the Better Auth demo server to showcase the device authorization flow in action. It is not a RubyAuth CLI command.
 </Callout>
 
 ## Installation
