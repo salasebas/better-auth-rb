@@ -1,0 +1,6 @@
+reference/upstream-src/1.6.9/repository/packages/better-auth/src/plugins/admin/types.ts:82:	 * @deprecated Use the `impersonate-admins` permission instead.
+reference/upstream-src/1.6.9/repository/packages/better-auth/src/plugins/oidc-provider/index.ts:278:const warnOidcDeprecation = deprecate(
+reference/upstream-src/1.6.9/repository/packages/better-auth/src/plugins/oidc-provider/index.ts:290: * @deprecated Use `@better-auth/oauth-provider` instead. This plugin will be removed in the next major version.
+reference/upstream-src/1.6.9/repository/packages/better-auth/src/plugins/email-otp/routes.ts:795: * @deprecated Use `/email-otp/request-password-reset` instead.
+reference/upstream-src/1.6.9/repository/packages/better-auth/src/plugins/email-otp/routes.ts:799:	const warnDeprecation = deprecate(
+reference/upstream-src/1.6.9/repository/packages/better-auth/src/plugins/oidc-provider/client.ts:6: * @deprecated Use `@better-auth/oauth-provider` instead. This plugin will be removed in the next major version.
