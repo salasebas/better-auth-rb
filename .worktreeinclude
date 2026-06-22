@@ -1,6 +1,3 @@
-**
-!reference/upstream-src/**
-!node_modules/**
-!vendor/bundle/**
-!target/**
-!.git/**
+plans/
+.agents/
+reference/upstream-src/
