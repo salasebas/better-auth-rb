@@ -39,29 +39,210 @@ The plugin has a secured configuration by default providing ease to users unfami
 
 ## Installation
 
-<UnderDevelopment />
+<Steps>
+  <Step>
+    ### Install the gem
 
-This upstream helper surface is not publicly supported by RubyAuth docs. Use the server plugin and documented HTTP/Rack endpoints instead.
+    ```ruby title="Gemfile"
+    gem "better_auth-oauth-provider"
+    ```
+  </Step>
+
+  <Step>
+    ### Mount the plugin
+
+    Add the OAuth provider plugin to your auth config. The JWT plugin is required by default and must be registered before the OAuth provider plugin unless you explicitly set `disable_jwt_plugin: true`.
+
+    ```ruby title="config/auth.rb"
+    require "better_auth"
+    require "better_auth/jwt"
+    require "better_auth/oauth_provider"
+
+    auth = BetterAuth.auth(
+      secret: ENV.fetch("BETTER_AUTH_SECRET"),
+      base_url: ENV.fetch("BETTER_AUTH_URL", "https://auth.example.com/api/auth"),
+      plugins: [
+        BetterAuth::Plugins.jwt,
+        BetterAuth::Plugins.oauth_provider(
+          scopes: ["openid", "profile", "email"],
+          login_page: "/login",
+          consent_page: "/oauth2/consent"
+        )
+      ]
+    )
+    ```
+  </Step>
+
+  <Step>
+    ### Migrate the database
+
+    Run the migration or generate the schema to add the OAuth provider tables.
+
+    <Tabs items={["migrate", "generate"]}>
+      <Tab value="migrate">
+        ```bash
+        bundle exec better-auth migrate --cwd . --config config/better_auth.rb --yes
+        ```
+      </Tab>
+
+      <Tab value="generate">
+        ```bash
+        bundle exec better-auth generate --cwd . --dialect postgres --output db/better_auth/schema.sql --config config/better_auth.rb
+        ```
+      </Tab>
+    </Tabs>
+
+    See the [Schema](#schema) section to add the fields manually.
+  </Step>
+
+  <Step>
+    ### Create your first OAuth client
+
+    Create a confidential OAuth client from an authenticated server context.
+
+    ```ruby title="server.rb"
+    client = auth.api.create_oauth_client(
+      headers: {"cookie" => request.env["HTTP_COOKIE"]},
+      body: {
+        name: "Example Client",
+        redirectURLs: ["https://client.example.com/callback"],
+        token_endpoint_auth_method: "client_secret_post",
+        grant_types: ["authorization_code", "refresh_token"],
+        response_types: ["code"],
+        scope: "openid profile email"
+      }
+    )
+    ```
+
+    <Callout type="info">
+      To create a public client without a client secret, set `token_endpoint_auth_method: "none"`.
+    </Callout>
+  </Step>
+</Steps>
+
 ## Client Plugins
 
-<UnderDevelopment />
+RubyAuth does not ship the upstream browser client helpers for this plugin. Ruby applications should call the JSON endpoints directly, use `auth.api.*` from trusted server code, or wrap those calls in app-specific Rack/Rails controllers.
 
-This upstream helper surface is not publicly supported by RubyAuth docs. Use the server plugin and documented HTTP/Rack endpoints instead.
 ## Usage
 
-<UnderDevelopment />
+The standard authorization-code flow uses the same public OAuth paths as upstream:
 
-This upstream helper surface is not publicly supported by RubyAuth docs. Use the server plugin and documented HTTP/Rack endpoints instead.
+1. The client redirects the user to `/oauth2/authorize` with `client_id`, `redirect_uri`, `response_type=code`, `scope`, `state`, `code_challenge`, and `code_challenge_method=S256`.
+2. RubyAuth validates the request. If the user is not signed in, it redirects to `login_page`. If consent is required, it redirects to `consent_page`.
+3. The app resumes the flow with `/oauth2/continue` and `/oauth2/consent`.
+4. The client exchanges the authorization code at `/oauth2/token`.
+
+```ruby title="token_exchange.rb"
+tokens = auth.api.oauth2_token(
+  body: {
+    grant_type: "authorization_code",
+    code: params.fetch("code"),
+    redirect_uri: "https://client.example.com/callback",
+    client_id: client.fetch(:client_id),
+    client_secret: client.fetch(:client_secret),
+    code_verifier: verifier
+  }
+)
+```
+
+Dynamic client registration is disabled by default. Enable it explicitly and keep registration authenticated unless your deployment has a clear reason to allow unauthenticated public registration.
+
+```ruby title="config/auth.rb"
+BetterAuth::Plugins.oauth_provider(
+  scopes: ["openid", "profile", "email", "offline_access"],
+  allow_dynamic_client_registration: true,
+  client_registration_default_scopes: ["openid", "profile"],
+  client_registration_allowed_scopes: ["openid", "profile", "email"]
+)
+```
+
+```ruby title="register_client.rb"
+client = auth.api.register_oauth_client(
+  headers: {"cookie" => request.env["HTTP_COOKIE"]},
+  body: {
+    client_name: "Example Client",
+    redirect_uris: ["https://client.example.com/callback"],
+    token_endpoint_auth_method: "client_secret_post",
+    grant_types: ["authorization_code", "refresh_token"],
+    response_types: ["code"],
+    scope: "openid profile offline_access"
+  }
+)
+```
+
 ## API Server
 
-<UnderDevelopment />
+The OAuth provider exposes authorization-server metadata, OIDC metadata, client registration/management, consent management, token, introspection, revocation, UserInfo, and end-session endpoints. The [Ruby API Endpoint Examples](#ruby-api-endpoint-examples) section below lists the generated `auth.api.*` methods and their HTTP paths.
 
-This upstream helper surface is not publicly supported by RubyAuth docs. Use the server plugin and documented HTTP/Rack endpoints instead.
+When your app uses Rack directly, route requests through the Better Auth handler so the following public paths are reachable under your configured auth base path:
+
+* `/.well-known/oauth-authorization-server`
+* `/.well-known/openid-configuration` when `openid` is in `scopes`
+* `/oauth2/authorize`
+* `/oauth2/token`
+* `/oauth2/introspect`
+* `/oauth2/revoke`
+* `/oauth2/userinfo`
+* `/oauth2/end-session`
+
+When `resource` is present and valid, access tokens are JWTs. Without `resource`, access tokens are opaque and introspectable. By default, valid JWT access-token audiences are the provider issuer URL and, when `openid` is granted, the UserInfo endpoint. Set `valid_audiences` to allow additional resource servers.
+
 ## Configuration
 
-<UnderDevelopment />
+Common options accepted by `BetterAuth::Plugins.oauth_provider`:
 
-This upstream helper surface is not publicly supported by RubyAuth docs. Use the server plugin and documented HTTP/Rack endpoints instead.
+* `login_page` and `consent_page`: application routes used to complete authorization prompts.
+* `scopes`: provider-supported scopes. Use `openid` to enable OIDC metadata, ID tokens, and UserInfo.
+* `claims`: claims advertised and resolved for OIDC responses.
+* `allow_dynamic_client_registration`: enables `/oauth2/register`.
+* `allow_unauthenticated_client_registration`: permits unauthenticated registration and coerces those clients to public-client behavior.
+* `client_registration_default_scopes` and `client_registration_allowed_scopes`: constrain registered client scopes. Values must be included in `scopes`.
+* `cached_trusted_clients`: client IDs that can be treated as trusted by the provider.
+* `valid_audiences`: additional accepted resource audiences for JWT access tokens.
+* `code_expires_in`, `id_token_expires_in`, `refresh_token_expires_in`, `access_token_expires_in`, and `m2m_access_token_expires_in`: token and code lifetimes in seconds.
+* `client_credential_grant_default_scopes`: default scopes for machine-to-machine tokens.
+* `scope_expirations`: per-scope expiration overrides.
+* `prefix`: token and client secret prefixes.
+* `disable_jwt_plugin`: skips the default JWT plugin requirement for legacy HS256 deployments.
+* `pairwise_secret`: enables pairwise subject identifiers and must be at least 32 characters.
+
+```ruby title="config/auth.rb"
+BetterAuth::Plugins.oauth_provider(
+  scopes: ["openid", "profile", "email", "offline_access"],
+  claims: {
+    email: ->(user, _scopes) { user[:email] },
+    name: ->(user, _scopes) { user[:name] }
+  },
+  login_page: "/login",
+  consent_page: "/oauth2/consent",
+  allow_dynamic_client_registration: true,
+  allow_unauthenticated_client_registration: false,
+  client_registration_default_scopes: ["openid", "profile"],
+  client_registration_allowed_scopes: ["openid", "profile", "email"],
+  cached_trusted_clients: ["first-party-dashboard"],
+  valid_audiences: ["https://api.example.com"],
+  code_expires_in: 600,
+  id_token_expires_in: 36_000,
+  refresh_token_expires_in: 2_592_000,
+  access_token_expires_in: 3600,
+  m2m_access_token_expires_in: 3600,
+  scope_expirations: {
+    "offline_access" => 2_592_000
+  },
+  prefix: {
+    opaqueAccessToken: "ba_at_",
+    refreshToken: "ba_rt_",
+    clientSecret: "ba_cs_"
+  },
+  pairwise_secret: ENV.fetch("OAUTH_PAIRWISE_SECRET")
+)
+```
+
+<Callout type="warn">
+  If `disable_jwt_plugin` is false, auth initialization fails with `jwt_config` unless `BetterAuth::Plugins.jwt` is registered before the OAuth provider plugin.
+</Callout>
+
 ## Ruby API Endpoint Examples
 
 The Ruby gem exposes the OAuth provider routes through `auth.api`. These examples mirror the public route table in the gem README and keep the same HTTP paths as the upstream OAuth provider plugin.
@@ -972,6 +1153,25 @@ To improve lookup performance, database adapters may map the field `client_id` o
 
 ## Migrations
 
-<UnderDevelopment />
+RubyAuth does not expose the removed core `oidc-provider` plugin as a supported API. New Ruby applications should add `gem "better_auth-oauth-provider"`, require `better_auth/oauth_provider`, and configure `BetterAuth::Plugins.oauth_provider(...)`.
 
-This upstream helper surface is not publicly supported by RubyAuth docs. Use the server plugin and documented HTTP/Rack endpoints instead.
+When migrating an older RubyAuth application:
+
+* Replace `BetterAuth::Plugins.oidc_provider(...)` with `BetterAuth::Plugins.oauth_provider(...)`.
+* Register `BetterAuth::Plugins.jwt` before the OAuth provider plugin unless you intentionally set `disable_jwt_plugin: true`.
+* Replace legacy `/mcp/*` routes with OAuth provider token, introspection, revocation, UserInfo, and resource-server bearer challenge handling.
+* Regenerate or run the OAuth provider schema migration after enabling the gem.
+
+`oauthAccessToken` uses the upstream canonical columns `token`, `expiresAt`, `scopes`, `clientId`, `sessionId`, `userId`, `referenceId`, and `refreshId`. Legacy `access_token`, `refresh_token`, `access_token_expires_at`, and `scope` columns should be copied forward before removal. `oauthConsent#consent_given` is also removed; a consent row means consent was granted.
+
+```sql
+UPDATE better_auth_oauth_access_tokens
+SET token = COALESCE(token, access_token),
+    expires_at = COALESCE(expires_at, access_token_expires_at),
+    scopes = COALESCE(scopes, scope)
+WHERE token IS NULL OR scopes IS NULL;
+
+DELETE FROM better_auth_oauth_consents WHERE consent_given = false;
+```
+
+After enabling the hashed defaults, newly created OAuth client secrets and opaque tokens are stored hashed. Existing plaintext rows continue to require either a migration that re-registers or rotates secrets and tokens, or a temporary explicit `store_client_secret: "plain"` setting for old clients during rollout.
