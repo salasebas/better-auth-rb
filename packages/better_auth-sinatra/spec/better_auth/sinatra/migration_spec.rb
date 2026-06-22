@@ -127,6 +127,7 @@ RSpec.describe BetterAuth::Sinatra::Migration do
     postgres = described_class.render(config, dialect: :postgres)
     mysql = described_class.render(config, dialect: :mysql)
     sqlite = described_class.render(config, dialect: :sqlite)
+    mssql = described_class.render(config, dialect: :mssql)
 
     expect(postgres).to include("-- Dialect: postgres")
     expect(postgres).to include('CREATE TABLE IF NOT EXISTS "users"')
@@ -134,6 +135,8 @@ RSpec.describe BetterAuth::Sinatra::Migration do
     expect(mysql).to include("CREATE TABLE IF NOT EXISTS `users`")
     expect(sqlite).to include("-- Dialect: sqlite")
     expect(sqlite).to include('CREATE TABLE IF NOT EXISTS "users"')
+    expect(mssql).to include("-- Dialect: mssql")
+    expect(mssql).to include("IF OBJECT_ID(N'[users]'")
   end
 
   it "rejects migration execution for adapters without SQL dialect support" do

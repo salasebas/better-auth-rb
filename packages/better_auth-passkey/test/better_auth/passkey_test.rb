@@ -590,6 +590,19 @@ class BetterAuthPluginsPasskeyTest < Minitest::Test
     refute_includes sql, "index_passkeys_on_credential_id"
   end
 
+  def test_passkey_fields_reach_migration_projection
+    config = BetterAuth::Configuration.new(
+      secret: SECRET,
+      database: :memory,
+      plugins: [BetterAuth::Plugins.passkey]
+    )
+    fields = BetterAuth::Schema.migration_tables(config).fetch("passkeys").fetch(:fields)
+
+    assert_includes fields, "credential_id"
+    assert_includes fields, "user_id"
+    assert_equal true, fields.fetch("credential_id").fetch(:unique)
+  end
+
   def test_rejects_expired_challenge_and_delete_not_found_message
     auth = build_auth
     cookie = sign_up_cookie(auth, email: "expired-challenge@example.com")

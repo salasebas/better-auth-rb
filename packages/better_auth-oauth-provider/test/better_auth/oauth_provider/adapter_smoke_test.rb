@@ -109,7 +109,7 @@ class OAuthProviderAdapterSmokeTest < Minitest::Test
     require_relative "../../../../better_auth-mongodb/lib/better_auth/mongodb"
     require_relative "../../../../better_auth-mongodb/test/support/fake_mongo"
 
-    database = FakeMongoDatabase.new
+    database = BetterAuthMongoAdapterTestSupport::FakeMongoDatabase.new
     run_oauth_provider_smoke(
       database: ->(options) { BetterAuth::Adapters::MongoDB.new(options, database: database) }
     )
@@ -130,6 +130,21 @@ class OAuthProviderAdapterSmokeTest < Minitest::Test
       assert_match(/FOREIGN KEY .*oauth_clients.*client_id/im, sql, "expected client foreign key for #{dialect}")
       assert_match(/FOREIGN KEY .*sessions.*id/im, sql, "expected session foreign key for #{dialect}")
     end
+  end
+
+  def test_oauth_provider_fields_reach_migration_projection
+    config = BetterAuth::Configuration.new(
+      secret: "oauth-provider-schema-secret-with-enough-entropy",
+      database: :memory,
+      plugins: [BetterAuth::Plugins.oauth_provider]
+    )
+    tables = BetterAuth::Schema.migration_tables(config)
+
+    assert_includes tables.fetch("oauth_clients").fetch(:fields), "client_id"
+    assert_includes tables.fetch("oauth_refresh_tokens").fetch(:fields), "client_id"
+    assert_includes tables.fetch("oauth_access_tokens").fetch(:fields), "refresh_id"
+    assert_equal "oauth_clients", tables.fetch("oauth_refresh_tokens").fetch(:fields).fetch("client_id").fetch(:references).fetch(:model)
+    assert_equal "client_id", tables.fetch("oauth_refresh_tokens").fetch(:fields).fetch("client_id").fetch(:references).fetch(:field)
   end
 
   private

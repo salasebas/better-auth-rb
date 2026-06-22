@@ -7,7 +7,7 @@ module BetterAuth
 
       def create_statements(options, dialect:)
         dialect = dialect.to_sym
-        tables = Schema.auth_tables(options)
+        tables = Schema.migration_tables(options)
         statements = tables.map { |logical_name, table| create_table_statement(logical_name, table, dialect, tables) }
         statements.concat(tables.flat_map { |_logical_name, table| index_statements(table, dialect) })
       end
@@ -18,7 +18,7 @@ module BetterAuth
         end
         statements.concat(plan.to_add.flat_map do |change|
           change.fields.map do |logical_field, attributes|
-            if logical_field.to_s == "id" && plan.dialect == :postgres
+            if logical_name(logical_field, attributes) == "id" && plan.dialect == :postgres
               add_postgres_id_column_statements(change.table_name)
             else
               add_column_statement(change.table_name, logical_field, attributes, plan.dialect)
@@ -61,8 +61,8 @@ module BetterAuth
 
       def column_definition(table_name, logical_field, attributes, dialect)
         column = quote(attributes[:field_name] || physical_name(logical_field), dialect)
-        parts = [column, sql_type(logical_field, attributes, dialect)]
-        parts << "PRIMARY KEY" if logical_field == "id"
+        parts = [column, sql_type(logical_name(logical_field, attributes), attributes, dialect)]
+        parts << "PRIMARY KEY" if logical_name(logical_field, attributes) == "id"
         if attributes[:required]
           parts << "NOT NULL"
         elsif dialect == :mssql
@@ -77,7 +77,7 @@ module BetterAuth
         constraints = []
         column = attributes[:field_name] || physical_name(logical_field)
 
-        if attributes[:unique] && logical_field != "id" && !(dialect == :mssql && !attributes[:required])
+        if attributes[:unique] && logical_name(logical_field, attributes) != "id" && !(dialect == :mssql && !attributes[:required])
           constraints << unique_constraint(table_name, column, dialect)
         end
 
@@ -92,7 +92,7 @@ module BetterAuth
       def index_statements(table, dialect)
         table_name = table.fetch(:model_name)
         table.fetch(:fields).filter_map do |logical_field, attributes|
-          nullable_unique_mssql = dialect == :mssql && attributes[:unique] && logical_field != "id" && !attributes[:required]
+          nullable_unique_mssql = dialect == :mssql && attributes[:unique] && logical_name(logical_field, attributes) != "id" && !attributes[:required]
           next if attributes[:unique] && !nullable_unique_mssql
           next unless attributes[:index] || nullable_unique_mssql
 
@@ -292,6 +292,10 @@ module BetterAuth
           .gsub(/([a-z\d])([A-Z])/, "\\1_\\2")
           .tr("-", "_")
           .downcase
+      end
+
+      def logical_name(logical_field, attributes)
+        (attributes[:logical_name] || logical_field).to_s
       end
     end
   end

@@ -196,6 +196,52 @@ class BetterAuthSchemaSQLTest < Minitest::Test
     assert_includes sql, 'FOREIGN KEY ("client_id") REFERENCES "oauth_clients" ("client_id") ON DELETE CASCADE'
   end
 
+  def test_migration_sql_merges_logical_tables_by_physical_table_name
+    plugin = BetterAuth::Plugin.new(
+      id: "profile-collision",
+      schema: {
+        auditProfile: {
+          model_name: "users",
+          fields: {
+            auditFlag: {type: "boolean", required: false, index: true},
+            sharedFlag: {type: "string", required: false, field_name: "profile_flag", index: true}
+          }
+        },
+        billingProfile: {
+          model_name: "users",
+          fields: {
+            billingRef: {type: "string", required: false},
+            sharedFlag: {type: "string", required: false, field_name: "profile_flag", index: true}
+          }
+        },
+        profileLink: {
+          model_name: "profile_links",
+          fields: {
+            auditFlag: {type: "boolean", required: false, references: {model: "auditProfile", field: "auditFlag"}}
+          }
+        }
+      }
+    )
+    config = BetterAuth::Configuration.new(secret: SECRET, database: :memory, plugins: [plugin])
+
+    {
+      sqlite: ['CREATE TABLE IF NOT EXISTS "users"', '"audit_flag"', '"billing_ref"', 'FOREIGN KEY ("audit_flag") REFERENCES "users" ("audit_flag")'],
+      postgres: ['CREATE TABLE IF NOT EXISTS "users"', '"audit_flag"', '"billing_ref"', 'FOREIGN KEY ("audit_flag") REFERENCES "users" ("audit_flag")'],
+      mysql: ["CREATE TABLE IF NOT EXISTS `users`", "`audit_flag`", "`billing_ref`", "FOREIGN KEY (`audit_flag`) REFERENCES `users` (`audit_flag`)"],
+      mssql: ["IF OBJECT_ID(N'[users]', N'U') IS NULL", "[audit_flag]", "[billing_ref]", "FOREIGN KEY ([audit_flag]) REFERENCES [users] ([audit_flag])"]
+    }.each do |dialect, expectations|
+      sql = BetterAuth::Schema::SQL.create_statements(config, dialect: dialect).join("\n")
+      create_table, audit_column, billing_column, foreign_key = expectations
+
+      assert_equal 1, sql.scan(create_table).length, "expected one physical users table for #{dialect}"
+      assert_includes sql, audit_column
+      assert_includes sql, billing_column
+      index_pattern = (dialect == :mssql) ? "CREATE INDEX [index_users_on_profile_flag]" : "index_users_on_profile_flag"
+      assert_equal 1, sql.scan(index_pattern).length, "expected one profile_flag index for #{dialect}"
+      assert_includes sql, foreign_key
+    end
+  end
+
   def test_recommended_lookup_fields_are_indexed_when_tables_are_created
     config = BetterAuth::Configuration.new(
       secret: SECRET,

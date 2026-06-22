@@ -24,6 +24,19 @@ class BetterAuthStripeSchemaTest < Minitest::Test
     assert_equal({type: "string", required: false}, schema.fetch(:organization).fetch(:fields).fetch(:stripeCustomerId))
   end
 
+  def test_conditional_fields_reach_migration_projection
+    config = BetterAuth::Configuration.new(
+      secret: "stripe-schema-secret-with-enough-entropy",
+      database: :memory,
+      plugins: [BetterAuth::Plugins.stripe(subscription: {enabled: true, plans: []}, organization: {enabled: true})]
+    )
+    tables = BetterAuth::Schema.migration_tables(config)
+
+    assert_includes tables.fetch("subscriptions").fetch(:fields), "stripe_subscription_id"
+    assert_includes tables.fetch("organizations").fetch(:fields), "stripe_customer_id"
+    assert_includes tables.fetch("users").fetch(:fields), "stripe_customer_id"
+  end
+
   def test_custom_subscription_schema_is_ignored_when_subscriptions_are_disabled
     schema = BetterAuth::Stripe::Schema.schema(
       schema: {
