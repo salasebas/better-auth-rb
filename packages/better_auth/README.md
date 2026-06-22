@@ -185,6 +185,33 @@ auth = BetterAuth.auth(
 )
 ```
 
+### Organizations
+
+The organization plugin supports upstream-style organizations, members,
+invitations, teams, roles, membership limits, and organization lifecycle hooks.
+Ruby option and hook names use snake_case.
+
+```ruby
+auth = BetterAuth.auth(
+  secret: ENV.fetch("BETTER_AUTH_SECRET"),
+  database: :memory,
+  plugins: [
+    BetterAuth::Plugins.organization(
+      membership_limit: 25,
+      disable_organization_deletion: true,
+      organization_hooks: {
+        before_update_organization: ->(data, _ctx) { { data: { name: data[:organization][:name].strip } } },
+        after_add_member: ->(data, _ctx) { Audit.log("member added", data[:member]) }
+      }
+    )
+  ]
+)
+```
+
+Direct member adds and invitation acceptance enforce `membership_limit`.
+Deleting or leaving the active organization clears the active organization and
+team session fields.
+
 ### JavaScript Client
 
 Ruby Better Auth exposes the same HTTP route surface. Frontend apps should use the upstream Better Auth JavaScript client and point it at the Ruby server:

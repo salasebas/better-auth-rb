@@ -452,6 +452,61 @@ class BetterAuthPluginsOrganizationTest < Minitest::Test
     assert_nil auth.api.get_session(headers: {"cookie" => cleared_cookie}).fetch(:session)["activeTeamId"]
   end
 
+  def test_team_update_delete_and_membership_hooks_fire
+    calls = []
+    auth = build_auth(
+      plugins: [
+        BetterAuth::Plugins.organization(
+          teams: {enabled: true, default_team: {enabled: false}, allow_removing_all_teams: true},
+          organization_hooks: {
+            before_update_team: lambda { |data, _ctx|
+              calls << [:before_update_team, data[:team].fetch("name"), data[:updates][:name]]
+              {data: {name: "Hooked Team"}}
+            },
+            after_update_team: ->(data, _ctx) { calls << [:after_update_team, data[:team].fetch("name"), data[:organization].fetch("slug")] },
+            before_add_team_member: lambda { |data, _ctx|
+              calls << [:before_add_team_member, data[:team].fetch("name"), data[:user].fetch("email")]
+              {data: {teamId: "ignored-team", userId: "ignored-user", createdAt: Time.now}}
+            },
+            after_add_team_member: ->(data, _ctx) { calls << [:after_add_team_member, data[:team_member].fetch("userId"), data[:team].fetch("name")] },
+            before_remove_team_member: ->(data, _ctx) { calls << [:before_remove_team_member, data[:team_member].fetch("userId"), data[:team].fetch("name")] },
+            after_remove_team_member: ->(data, _ctx) { calls << [:after_remove_team_member, data[:team_member].fetch("userId"), data[:team].fetch("name")] },
+            before_delete_team: ->(data, _ctx) { calls << [:before_delete_team, data[:team].fetch("name"), data[:user].fetch("email")] },
+            after_delete_team: ->(data, _ctx) { calls << [:after_delete_team, data[:team].fetch("name"), data[:organization].fetch("slug")] }
+          }
+        )
+      ]
+    )
+    owner_cookie = sign_up_cookie(auth, email: "team-hooks-owner@example.com")
+    member_cookie = sign_up_cookie(auth, email: "team-hooks-member@example.com")
+    member_user = auth.api.get_session(headers: {"cookie" => member_cookie}).fetch(:user)
+    organization = auth.api.create_organization(headers: {"cookie" => owner_cookie}, body: {name: "Team Hooks", slug: "team-hooks"})
+    team = auth.api.create_team(headers: {"cookie" => owner_cookie}, body: {organizationId: organization.fetch("id"), name: "Original Team"})
+    auth.api.add_member(headers: {"cookie" => owner_cookie}, body: {organizationId: organization.fetch("id"), userId: member_user.fetch("id"), role: "member"})
+
+    updated = auth.api.update_team(headers: {"cookie" => owner_cookie}, body: {teamId: team.fetch("id"), name: "Requested Team"})
+    added = auth.api.add_team_member(headers: {"cookie" => owner_cookie}, body: {teamId: team.fetch("id"), userId: member_user.fetch("id")})
+    existing = auth.api.add_team_member(headers: {"cookie" => owner_cookie}, body: {teamId: team.fetch("id"), userId: member_user.fetch("id")})
+    auth.api.remove_team_member(headers: {"cookie" => owner_cookie}, body: {teamId: team.fetch("id"), userId: member_user.fetch("id")})
+    auth.api.remove_team(headers: {"cookie" => owner_cookie}, body: {teamId: team.fetch("id")})
+
+    assert_equal "Hooked Team", updated.fetch("name")
+    assert_equal member_user.fetch("id"), added.fetch("userId")
+    assert_equal added.fetch("id"), existing.fetch("id")
+    assert_equal [
+      [:before_update_team, "Original Team", "Requested Team"],
+      [:after_update_team, "Hooked Team", "team-hooks"],
+      [:before_add_team_member, "Hooked Team", "team-hooks-member@example.com"],
+      [:after_add_team_member, member_user.fetch("id"), "Hooked Team"],
+      [:before_add_team_member, "Hooked Team", "team-hooks-member@example.com"],
+      [:after_add_team_member, member_user.fetch("id"), "Hooked Team"],
+      [:before_remove_team_member, member_user.fetch("id"), "Hooked Team"],
+      [:after_remove_team_member, member_user.fetch("id"), "Hooked Team"],
+      [:before_delete_team, "Hooked Team", "team-hooks-owner@example.com"],
+      [:after_delete_team, "Hooked Team", "team-hooks"]
+    ], calls
+  end
+
   def test_dynamic_access_control_rejects_invalid_and_assigned_roles
     ac = BetterAuth::Plugins.create_access_control(
       organization: ["update", "delete"],

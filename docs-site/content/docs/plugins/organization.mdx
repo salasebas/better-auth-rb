@@ -39,9 +39,16 @@ auth.api.create_invitation(headers: { "cookie" => owner_cookie }, body: { organi
 | `POST` | `/organization/set-active` | `auth.api.set_active_organization` |
 | `POST` | `/organization/invite-member` | `auth.api.create_invitation` |
 | `POST` | `/organization/accept-invitation` | `auth.api.accept_invitation` |
+| `POST` | `/organization/reject-invitation` | `auth.api.reject_invitation` |
+| `POST` | `/organization/cancel-invitation` | `auth.api.cancel_invitation` |
 | `POST` | `/organization/add-member` | `auth.api.add_member` |
+| `POST` | `/organization/remove-member` | `auth.api.remove_member` |
 | `POST` | `/organization/update-member-role` | `auth.api.update_member_role` |
 | `POST` | `/organization/create-team` | `auth.api.create_team` |
+| `POST` | `/organization/update-team` | `auth.api.update_team` |
+| `POST` | `/organization/remove-team` | `auth.api.remove_team` |
+| `POST` | `/organization/add-team-member` | `auth.api.add_team_member` |
+| `POST` | `/organization/remove-team-member` | `auth.api.remove_team_member` |
 | `POST` | `/organization/create-role` | `auth.api.create_org_role` |
 
 ## Options
@@ -51,14 +58,64 @@ Current Ruby options accepted by `BetterAuth::Plugins.organization`:
 - `allow_user_to_create_organization`
 - `creator_role`
 - `membership_limit`
+- `disable_organization_deletion`
 - `invitation_expires_in`
 - `invitation_limit`
 - `ac`
 - `roles`
+- `organization_hooks`
 - `organization_limit`
 - `cancel_pending_invitations_on_re_invite`
 - `send_invitation_email`
 - `require_email_verification_on_invitation`
+
+`membership_limit` accepts a number or callable. Ruby enforces it when members
+are added directly and when invitations are accepted. Direct member adds also
+support the active organization fallback and optional `teamId` assignment when
+teams are enabled.
+
+Set `disable_organization_deletion: true` to reject organization deletion with
+`ORGANIZATION_DELETION_DISABLED`. When the active organization is deleted or a
+member leaves their active organization, Ruby clears both `activeOrganizationId`
+and `activeTeamId` on the session.
+
+## Organization Hooks
+
+Use `organization_hooks` to customize organization write flows. Hook names are
+snake_case in Ruby and receive the route payload plus the request context:
+
+```ruby
+BetterAuth::Plugins.organization(
+  organization_hooks: {
+    before_update_organization: ->(data, ctx) { { data: { name: "New name" } } },
+    after_delete_organization: ->(data, ctx) { Audit.log(data[:organization]) }
+  }
+)
+```
+
+Before-hooks that support data mutation return `{ data: { ... } }`. Ruby
+currently supports data mutation for create/update organization data, member
+creation, member role updates, invitation creation, and team create/update
+data. Other before-hooks are veto hooks: raise `BetterAuth::APIError` to stop
+the operation.
+
+Supported organization hook names:
+
+- `before_create_organization`, `after_create_organization`
+- `before_update_organization`, `after_update_organization`
+- `before_delete_organization`, `after_delete_organization`
+- `before_add_member`, `after_add_member`
+- `before_remove_member`, `after_remove_member`
+- `before_update_member_role`, `after_update_member_role`
+- `before_create_invitation`, `after_create_invitation`
+- `before_accept_invitation`, `after_accept_invitation`
+- `before_reject_invitation`, `after_reject_invitation`
+- `before_cancel_invitation`, `after_cancel_invitation`
+- `before_create_team`, `after_create_team`
+- `before_update_team`, `after_update_team`
+- `before_delete_team`, `after_delete_team`
+- `before_add_team_member`, `after_add_team_member`
+- `before_remove_team_member`, `after_remove_team_member`
 
 ## Support Notes
 
