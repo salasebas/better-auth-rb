@@ -1,0 +1,36 @@
+---
+title: INVALID_EMAIL
+description: An email address supplied to RubyAuth failed validation.
+---
+
+RubyAuth validates email addresses before sign-up, sign-in, password reset, and
+email-change flows. `INVALID_EMAIL` means the request body included an email
+value but it did not match RubyAuth's accepted email shape.
+
+## When it occurs
+
+This usually happens when a form submits an empty value, a value with leading or
+trailing whitespace that was not normalized, or a non-email identifier to an
+endpoint that expects email authentication.
+
+It can also appear in migration scripts if exported user data contains blank or
+malformed email rows.
+
+## HTTP status
+
+RubyAuth returns `400 Bad Request` for invalid email input.
+
+## Example response
+
+```json
+{
+  "code": "INVALID_EMAIL",
+  "message": "Invalid email"
+}
+```
+
+## How to fix
+
+Normalize and validate email input before submitting it to RubyAuth. During
+migrations, reject or repair malformed rows before importing them, and preserve
+the original source-system ID in your audit log for follow-up.

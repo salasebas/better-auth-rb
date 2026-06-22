@@ -1,38 +1,59 @@
 ---
-title: Email Not Found
-description: OAuth error `email_not_found` in RubyAuth.
+title: email_not_found
+description: The provider did not return an email address.
 ---
 
-## When this appears
+## What is it?
 
-Provider user profile did not include an email address.
+This error occurs during the OAuth flow when the provider does not return an email address for the user.
+RubyAuth uses the email from the provider to identify or create a user account. If the provider omits
+the email (or returns it as empty/undefined), we cannot proceed and the request is rejected.
 
-Redirect URL shape:
+This error is only possible through OAuth providers. It will not occur in non-OAuth flows.
 
+## Common Causes
+
+* Missing or insufficient scopes in the provider configuration (e.g., not requesting `email`).
+* The user's email is private or not exposed by default (e.g., GitHub private email).
+* The provider returns email only via a separate endpoint and the scope/API call to fetch it was not enabled
+  (e.g., GitHub `user:email`).
+* Provider project or tenant misconfiguration (consent screen, admin consent, restricted claims/attributes).
+* Using different credentials between environments (preview/staging/prod) that do not request the same scopes.
+
+## How to resolve
+
+### Request the correct scopes
+
+* Ensure your provider configuration requests the email-related scopes.
+
+### Verify provider app/dashboard settings
+
+* In the provider's dashboard, confirm the app has permission to request email and the consent screen allows it.
+
+### Debug locally
+
+* Inspect the outgoing authorize request to confirm the scopes include `email` where required.
+* Inspect the callback payload (query, `id_token` claims, userinfo response) to see if an email claim exists.
+* Log the provider profile object received by your callback handler to verify whether `email` is present.
+* Check which environment's provider credentials are in use and whether scopes differ across environments.
+
+## When it occurs
+
+The request reached RubyAuth but failed validation for this specific callback or auth flow.
+
+## HTTP status
+
+RubyAuth normally returns `400 Bad Request` for this error, unless the route redirects to a configured error callback URL.
+
+## Example response
+
+```json
+{
+  "code": "EMAIL_NOT_FOUND",
+  "message": "The request reached RubyAuth but failed validation for this specific callback or auth flow."
+}
 ```
-/api/auth/error?error=email_not_found
-```
-
-Or your configured `errorCallbackURL` with the same query parameters.
-
-## Common causes
-
-- Provider scope missing email
-- Account privacy settings
-- Enterprise IdP omitting email claim
 
 ## How to fix
 
-- Request `email` scope from provider
-- Use a provider that returns email for your tenant
-
-## Diagnostics
-
-```bash
-bundle exec better-auth doctor --cwd . --config config/better_auth.rb
-```
-
-## Related
-
-- [OAuth errors index](/docs/reference/errors)
-- [OAuth concepts](/docs/concepts/oauth)
+Verify the RubyAuth route, provider settings, callback URL, cookies, and `BETTER_AUTH_SECRET` used by every running instance. In Rails, also confirm the mounted auth path matches `config.base_path`; in Rack, confirm requests reach the same `auth` instance that initiated the flow.

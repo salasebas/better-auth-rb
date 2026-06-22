@@ -1,15 +1,34 @@
 ---
-title: Internal Server Error
-description: Upstream OAuth error slug — not emitted by RubyAuth redirects.
+title: internal_server_error
+description: An unexpected error occurred during authentication.
 ---
 
-<Callout type="info" title="RubyAuth note">
-  RubyAuth does not emit this OAuth redirect slug. Similar failures may appear as JSON API errors from `BetterAuth::APIError` instead. See [options](/docs/reference/options#on-api-error) for `on_api_error` configuration.
-</Callout>
+This error occurs when an unexpected failure happens inside the authentication process.
 
-This page documents an upstream Better Auth error slug kept for bookmark compatibility. If you see auth failures with related symptoms, check server logs and API error codes rather than this redirect query parameter.
+## How to fix
 
-## Related
+* Check server logs for detailed error information
+* Verify database connectivity and configuration
+* Ensure all required environment variables are set correctly
+* Review any custom hooks or adapters for runtime errors
 
-- [OAuth errors index](/docs/reference/errors)
-- [FAQ](/docs/reference/faq)
+## When it occurs
+
+RubyAuth raised an unexpected exception while handling the request. Check application logs for the original exception and request path.
+
+## HTTP status
+
+RubyAuth normally returns `500 Internal Server Error` for this error, unless the route redirects to a configured error callback URL.
+
+## Example response
+
+```json
+{
+  "code": "INTERNAL_SERVER_ERROR",
+  "message": "RubyAuth raised an unexpected exception while handling the request. Check application logs for the original exception and request path."
+}
+```
+
+## How to fix
+
+Verify the RubyAuth route, provider settings, callback URL, cookies, and `BETTER_AUTH_SECRET` used by every running instance. In Rails, also confirm the mounted auth path matches `config.base_path`; in Rack, confirm requests reach the same `auth` instance that initiated the flow.

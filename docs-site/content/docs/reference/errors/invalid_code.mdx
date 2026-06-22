@@ -1,39 +1,33 @@
 ---
-title: Invalid Code
-description: OAuth error `invalid_code` in RubyAuth.
+title: invalid_code
+description: The provided authentication code is invalid or expired.
 ---
 
-## When this appears
-
-Authorization code exchange with the provider failed.
-
-Redirect URL shape:
-
-```
-/api/auth/error?error=invalid_code
-```
-
-Or your configured `errorCallbackURL` with the same query parameters.
-
-## Common causes
-
-- Code already used
-- Clock skew
-- Wrong client secret
-- PKCE verifier mismatch
+This error occurs when the authentication code is invalid, expired, or cannot be verified.
 
 ## How to fix
 
-- Verify `client_id` and `client_secret`
-- For Google/Vercel, ensure PKCE flow completes in one browser session
+* Restart the authentication flow to generate a new code
+* Ensure the code is used only once and within its valid time window
+* Verify that the correct code is being sent to the callback endpoint
 
-## Diagnostics
+## When it occurs
 
-```bash
-bundle exec better-auth doctor --cwd . --config config/better_auth.rb
+The callback or verification route expected a one-time code, but the supplied code was missing, expired, already consumed, or did not match stored verification state.
+
+## HTTP status
+
+RubyAuth normally returns `400 Bad Request` for this error, unless the route redirects to a configured error callback URL.
+
+## Example response
+
+```json
+{
+  "code": "INVALID_CODE",
+  "message": "The callback or verification route expected a one-time code, but the supplied code was missing, expired, already consumed, or did not match stored verification state."
+}
 ```
 
-## Related
+## How to fix
 
-- [OAuth errors index](/docs/reference/errors)
-- [OAuth concepts](/docs/concepts/oauth)
+Verify the RubyAuth route, provider settings, callback URL, cookies, and `BETTER_AUTH_SECRET` used by every running instance. In Rails, also confirm the mounted auth path matches `config.base_path`; in Rack, confirm requests reach the same `auth` instance that initiated the flow.

@@ -1,39 +1,82 @@
 ---
-title: State Not Found
-description: OAuth error `state_not_found` in RubyAuth.
+title: state_not_found
+description: The state parameter was not found in the request.
 ---
 
-## When this appears
+## What is it?
 
-OAuth callback arrived without valid stored OAuth state.
+During the OAuth callback, RubyAuth expects a `state` value to be present on the incoming request.
+This `state` is originally generated when the OAuth flow starts and is sent to the provider. When the
+provider redirects back to your app, it should include the same `state` value in the callback request.
+If the `state` is missing entirely in the callback request (query or body),
+we cannot validate the flow and the request is rejected.
 
-Redirect URL shape:
+This check prevents CSRF and replay attacks by ensuring the callback belongs to the same browser session
+that initiated the flow.
 
+## Common Causes
+
+* You navigated directly to `/api/auth/callback` without starting an OAuth flow first.
+* A reverse proxy, CDN, or rewrite stripped query or body parameters from the callback request.
+* The OAuth provider was not given a `state` on the authorize request (custom/manual flow overriding parameters).
+* The callback URL registered at the provider does not match your actual callback route, causing an intermediate
+  redirect that drops query or body parameters.
+* The callback reached a different route/handler than expected due to framework routing or middleware, and the
+  handler is not reading the query or body you think it is.
+* Mobile/WebView or deep-link handoff opened a new context that lost the original query string.
+
+## How to resolve
+
+### Start the flow via RubyAuth APIs
+
+Always initiate OAuth through RubyAuth so we can generate and send `state` correctly. Avoid manually hitting
+callback endpoints or constructing authorize URLs unless you fully mirror RubyAuth's parameters.
+
+### Verify the callback URL and method
+
+* Ensure the provider's configured callback URL exactly matches your app's `/api/auth/callback` route (including
+  protocol and domain).
+* Most providers redirect via GET with query parameters. If you have custom handlers or methods, confirm the
+  handler reads the query/body consistent with your provider's redirect.
+
+### Check proxies, rewrites, and middleware
+
+* Confirm that any reverse proxies (Vercel, Cloudflare, Nginx) and app-level rewrites preserve the full query
+  string (including `state`).
+* If you have middleware that redirects or rewrites the callback path, ensure it forwards query & body parameters intact.
+
+### Debug locally
+
+Use your browser DevTools → Network to inspect the callback request:
+
+* Confirm the callback URL includes `?state=...` (or that the request body contains `state` if you expect one).
+* Verify the authorize request was sent earlier from the same session and that a `state` cookie exists prior to
+  the redirect back.
+* Log request query/body fields in your callback handler during local debugging to confirm what is actually
+  received by the server.
+
+### Edge cases to consider
+
+* Preview vs production domains can behave differently if extra redirects or rewrites occur.
+* Mobile/WebView environments and deep links can drop or alter query parameters during handoff.
+
+## When it occurs
+
+The request reached RubyAuth but failed validation for this specific callback or auth flow.
+
+## HTTP status
+
+RubyAuth normally returns `400 Bad Request` for this error, unless the route redirects to a configured error callback URL.
+
+## Example response
+
+```json
+{
+  "code": "STATE_NOT_FOUND",
+  "message": "The request reached RubyAuth but failed validation for this specific callback or auth flow."
+}
 ```
-/api/auth/error?error=state_not_found
-```
-
-Or your configured `errorCallbackURL` with the same query parameters.
-
-## Common causes
-
-- State cookie expired (10 minute default)
-- Session cleared mid-flow
-- Multiple auth mounts with mismatched cookie paths
 
 ## How to fix
 
-- Retry sign-in from the beginning
-- Verify single `better_auth` mount per app
-- Check cookie `SameSite` and domain settings
-
-## Diagnostics
-
-```bash
-bundle exec better-auth doctor --cwd . --config config/better_auth.rb
-```
-
-## Related
-
-- [OAuth errors index](/docs/reference/errors)
-- [OAuth concepts](/docs/concepts/oauth)
+Verify the RubyAuth route, provider settings, callback URL, cookies, and `BETTER_AUTH_SECRET` used by every running instance. In Rails, also confirm the mounted auth path matches `config.base_path`; in Rack, confirm requests reach the same `auth` instance that initiated the flow.

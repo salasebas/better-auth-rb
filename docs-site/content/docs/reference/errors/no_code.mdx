@@ -1,38 +1,59 @@
 ---
-title: No Code
-description: OAuth error `no_code` in RubyAuth.
+title: no_code
+description: The code was not found in the request.
 ---
 
-## When this appears
+## What is it?
 
-Provider redirected back without an authorization `code`.
+This error occurs during the OAuth callback when the authorization code is missing from the request.
+In the Authorization Code flow, the provider redirects back to your `/api/auth/callback` route with a
+`code` parameter (and typically `state`). Without the `code`, RubyAuth cannot exchange it for tokens,
+so the request is rejected.
 
-Redirect URL shape:
+## Common Causes
 
+* The OAuth flow was not started correctly (wrong response type or custom URL missing required params).
+* The provider returned an error instead of a code (e.g., user canceled consent), so only `error`/`error_description` are present.
+* Query parameters were stripped by a reverse proxy, CDN, or framework rewrite.
+* Callback URL mismatch at the provider caused an intermediate redirect that dropped query parameters.
+* Mobile/WebView or deep-link handoff opened a new context that lost the query string.
+* Using a response mode your handler does not read (e.g., form\_post body vs query parameters).
+
+## How to resolve
+
+### Use the standard Authorization Code flow
+
+* Start the flow through RubyAuth so the provider receives the correct parameters and the app expects a `code`.
+* In the provider settings, ensure your app is configured for Authorization Code (with PKCE where applicable).
+
+### Verify callback URL and parameter delivery
+
+* Confirm the provider's configured redirect URI exactly matches your `/api/auth/callback` route (protocol, host, path).
+* Ensure infrastructure (proxies, rewrites, middleware) preserves the full query string and does not redirect in ways that drop parameters.
+
+## Debug locally
+
+* In DevTools → Network, inspect the callback request and verify whether `code` or `error` parameters are present.
+* Log the raw query/body received by the callback handler during development to see exactly what arrived.
+* Compare dev/staging/prod credentials and redirect URIs to ensure they are consistent across environments.
+
+## When it occurs
+
+The request reached RubyAuth but failed validation for this specific callback or auth flow.
+
+## HTTP status
+
+RubyAuth normally returns `400 Bad Request` for this error, unless the route redirects to a configured error callback URL.
+
+## Example response
+
+```json
+{
+  "code": "NO_CODE",
+  "message": "The request reached RubyAuth but failed validation for this specific callback or auth flow."
+}
 ```
-/api/auth/error?error=no_code
-```
-
-Or your configured `errorCallbackURL` with the same query parameters.
-
-## Common causes
-
-- User denied consent
-- Provider misconfiguration
-- Wrong redirect URI registered
 
 ## How to fix
 
-- Confirm redirect URI matches `{BETTER_AUTH_URL}/api/auth/callback/{provider}`
-- Check provider console for errors
-
-## Diagnostics
-
-```bash
-bundle exec better-auth doctor --cwd . --config config/better_auth.rb
-```
-
-## Related
-
-- [OAuth errors index](/docs/reference/errors)
-- [OAuth concepts](/docs/concepts/oauth)
+Verify the RubyAuth route, provider settings, callback URL, cookies, and `BETTER_AUTH_SECRET` used by every running instance. In Rails, also confirm the mounted auth path matches `config.base_path`; in Rack, confirm requests reach the same `auth` instance that initiated the flow.
