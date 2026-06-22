@@ -1,133 +1,247 @@
 ---
 title: Session Management
-description: Learn how Better Auth Ruby handles session expiration, freshness, revocation, cookie cache, secondary storage, stateless sessions, and custom session responses.
+description: Learn about session management in RubyAuth, including session expiration, freshness, cookie caching strategies, secondary storage, stateless sessions, and customizing session responses.
 ---
 
-## Session Table
+<RubyAuthDisclaimer />
 
-Sessions contain `id`, `token`, `userId`, `expiresAt`, `ipAddress`, `userAgent`, `createdAt`, and `updatedAt`.
+RubyAuth manages session using a traditional cookie-based session management. The session is stored in a cookie and is sent to the server on every request. The server then verifies the session and returns the user data if the session is valid.
 
-When `secondary_storage` is configured, Better Auth can store sessions outside the database. Use `session.store_session_in_database` when you also want a database copy.
+## Session table
+
+The session table stores the session data. The session table has the following fields:
+
+* `id`: Unique identifier for the session.
+* `token`: The session token. Which is also used as the session cookie.
+* `userId`: The user ID of the user.
+* `expiresAt`: The expiration date of the session.
+* `ipAddress`: The IP address of the user.
+* `userAgent`: The user agent of the user. It stores the user agent header from the request.
 
 ## Session Expiration
 
-Configure session lifetime with `session.expires_in`.
+The session expires after 7 days by default. But whenever the session is used and the `update_age` is reached, the session expiration is updated to the current time plus the `expires_in` value.
 
-```ruby
+You can change both the `expires_in` and `update_age` values by passing the `session` object to the `auth` configuration.
+
+```ruby title="config/better_auth.rb"
+require "better_auth"
+
 auth = BetterAuth.auth(
-  secret: ENV.fetch("BETTER_AUTH_SECRET"),
+  # ... other config options
   session: {
-    expires_in: 60 * 60 * 24 * 7,
-    update_age: 60 * 60 * 24,
-    fresh_age: 60 * 5
+    expires_in: 60 * 60 * 24 * 7, # 7 days
+    update_age: 60 * 60 * 24 # 1 day (every 1 day the session expiration is updated)
   }
 )
 ```
 
 ### Disable Session Refresh
 
-Pass `disableRefresh` or `disable_refresh` to `get_session` when you do not want the session `updatedAt` refreshed.
+You can disable session refresh so that the session is not updated regardless of the `update_age` option.
 
-```ruby
-auth.api.get_session(
-  headers: {"cookie" => cookie},
-  query: {disableRefresh: true}
+```ruby title="config/better_auth.rb"
+require "better_auth"
+
+auth = BetterAuth.auth(
+  # ... other config options
+  session: {
+    disable_session_refresh: true
+  }
 )
 ```
 
 ### Defer Session Refresh
 
-Ruby refreshes according to `update_age`. Use `disableRefresh` for requests that should only read session state.
+By default, `GET /get-session` performs database writes to refresh the session. This can cause issues with read-replica database setups where GET requests are routed to read-only replicas.
+
+When enabled, GET becomes read-only and returns `needsRefresh: true` when refresh is needed. The client can call POST to perform the refresh.
+
+```ruby title="config/better_auth.rb"
+require "better_auth"
+
+auth = BetterAuth.auth(
+  session: {
+    defer_session_refresh: true
+  }
+)
+```
 
 ## Session Freshness
 
-Sensitive endpoints require a fresh session. Configure the age window with `fresh_age`.
+Some endpoints in RubyAuth require the session to be **fresh**. A session is considered fresh if its `createdAt` is within the `fresh_age` limit. By default, the `fresh_age` is set to **1 day** (60 \* 60 \* 24).
 
-```ruby
-session: {
-  fresh_age: 60 * 10
-}
+You can customize the `fresh_age` value by passing a `session` object in the `auth` configuration:
+
+```ruby title="config/better_auth.rb"
+require "better_auth"
+
+auth = BetterAuth.auth(
+  # ... other config options
+  session: {
+    fresh_age: 60 * 5 # 5 minutes (the session is fresh if created within the last 5 minutes)
+  }
+)
 ```
 
-Endpoints such as password changes, password setting, account unlinking, and user deletion use freshness checks where required.
+To **disable the freshness check**, set `fresh_age` to `0`:
+
+```ruby title="config/better_auth.rb"
+require "better_auth"
+
+auth = BetterAuth.auth(
+  # ... other config options
+  session: {
+    fresh_age: 0 # Disable freshness check
+  }
+)
+```
 
 ## Session Management
 
+RubyAuth provides a set of functions to manage sessions.
+
 ### Get Session
 
-```ruby
-auth.api.get_session(headers: {"cookie" => cookie})
+The `getSession` function retrieves the current active session.
+
+```http
+GET /api/auth/get-session
+Cookie: better-auth.session_token=...
 ```
+
+```ruby
+session = auth.api.get_session(
+  headers: {"cookie" => cookie_header}
+)
+```
+
+To learn how to customize the session response check the [Customizing Session Response](#customizing-session-response) section.
 
 ### Use Session
 
-Rails controllers can use helpers:
+The `useSession` action provides a reactive way to access the current session.
 
-```ruby
-class ApplicationController < ActionController::Base
-  include BetterAuth::Rails::ControllerHelpers
-end
+RubyAuth does not ship an official browser client gem. In browser code, call the session endpoint with your preferred HTTP layer and update your frontend state from the response.
 
-class DashboardController < ApplicationController
-  before_action :require_better_auth_session!
-
-  def show
-    @session = better_auth_session
-    @user = better_auth_user
-  end
-end
+```http
+GET /api/auth/get-session
+Cookie: better-auth.session_token=...
 ```
 
 ### List Sessions
 
+The `listSessions` function returns a list of sessions that are active for the user.
+
+```http
+GET /api/auth/list-sessions
+Cookie: better-auth.session_token=...
+```
+
 ```ruby
-auth.api.list_sessions(headers: {"cookie" => cookie})
+sessions = auth.api.list_sessions(
+  headers: {"cookie" => cookie_header}
+)
 ```
 
 ### Revoke Session
 
+When a user signs out of a device, the session is automatically ended. However, you can also end a session manually from any device the user is signed into.
+
+To end a session, use the `revokeSession` function. Just pass the session token as a parameter.
+
+```http
+POST /api/auth/revoke-session
+Content-Type: application/json
+Cookie: better-auth.session_token=...
+
+{"token":"session-token"}
+```
+
 ```ruby
 auth.api.revoke_session(
-  headers: {"cookie" => cookie},
-  body: {token: session_token}
+  body: {token: "session-token"},
+  headers: {"cookie" => cookie_header}
 )
 ```
 
 ### Revoke Other Sessions
 
+To revoke all other sessions except the current session, you can use the `revokeOtherSessions` function.
+
+```http
+POST /api/auth/revoke-other-sessions
+Cookie: better-auth.session_token=...
+```
+
 ```ruby
-auth.api.revoke_other_sessions(headers: {"cookie" => cookie})
+auth.api.revoke_other_sessions(
+  headers: {"cookie" => cookie_header}
+)
 ```
 
 ### Revoke All Sessions
 
+To revoke all sessions, you can use the `revokeSessions` function.
+
+```http
+POST /api/auth/revoke-sessions
+Cookie: better-auth.session_token=...
+```
+
 ```ruby
-auth.api.revoke_sessions(headers: {"cookie" => cookie})
+auth.api.revoke_sessions(
+  headers: {"cookie" => cookie_header}
+)
 ```
 
 ### Update Session
 
-Update declared session fields:
+If you have [additional fields](/docs/concepts/database#extending-core-schema) configured on the session, you can update them using the `updateSession` function.
+
+```http
+POST /api/auth/update-session
+Content-Type: application/json
+Cookie: better-auth.session_token=...
+
+{"theme":"dark","language":"en"}
+```
 
 ```ruby
 auth.api.update_session(
-  headers: {"cookie" => cookie},
-  body: {activeOrganizationId: "org_123"}
+  body: {
+    theme: "dark",
+    language: "en"
+  },
+  headers: {"cookie" => cookie_header}
 )
 ```
 
-The field must exist in session schema or additional fields.
+Core session fields (`token`, `userId`, `expiresAt`, `createdAt`, `updatedAt`, `ipAddress`, `userAgent`) cannot be updated through this endpoint. Only custom additional fields are allowed.
 
-### Revoking Sessions On Password Change
+On the server:
+
+```ruby title="app/services/update_session.rb"
+auth.api.update_session(
+  body: {
+    theme: "dark"
+  },
+  headers: {"cookie" => request.get_header("HTTP_COOKIE").to_s}
+)
+```
+
+### Revoking Sessions on Password Change
+
+You can revoke all sessions when the user changes their password by passing `revokeOtherSessions` as true on `changePassword` function.
 
 ```ruby
 auth.api.change_password(
-  headers: {"cookie" => cookie},
   body: {
-    currentPassword: "old-password",
-    newPassword: "new-password",
+    newPassword: new_password,
+    currentPassword: current_password,
     revokeOtherSessions: true
-  }
+  },
+  headers: {"cookie" => cookie_header}
 )
 ```
 
@@ -135,98 +249,341 @@ auth.api.change_password(
 
 ### Cookie Cache
 
-Enable cookie cache to avoid a database or secondary-storage read on every session lookup.
+Calling your database every time `useSession` or `getSession` is invoked isn't ideal, especially if sessions don't change frequently. Cookie caching handles this by storing session data in a short-lived, signed cookie-similar to how JWT access tokens are used with refresh tokens.
 
-```ruby
-session: {
-  cookie_cache: {
-    enabled: true,
-    max_age: 60 * 5
-  }
-}
-```
+When cookie caching is enabled, the server can check session validity from the cookie itself instead of hitting the database each time. The cookie is signed to prevent tampering, and a short `max_age` ensures that the session data gets refreshed regularly. If a session is revoked or expires, the cookie will be invalidated automatically.
 
-#### Cookie Cache Strategies
+To turn on cookie caching, just set `session.cookie_cache` in your auth config:
 
-Use the configured cookie cache strategy for your deployment. The cache stores session/user data in Better Auth cookies and is refreshed as sessions refresh.
+```ruby title="config/better_auth.rb"
+require "better_auth"
 
-## Sessions In Secondary Storage
-
-Configure secondary storage to store sessions outside the database.
-
-```ruby
 auth = BetterAuth.auth(
-  secret: ENV.fetch("BETTER_AUTH_SECRET"),
-  secondary_storage: redis_storage
-)
-```
-
-### Storing Sessions In The Database
-
-```ruby
-session: {
-  store_session_in_database: true
-}
-```
-
-### Preserving Sessions
-
-```ruby
-session: {
-  preserve_session_in_database: true
-}
-```
-
-This keeps database session rows after the secondary-storage record is deleted.
-
-## Stateless Session Management
-
-### Basic Stateless Setup
-
-Use `database: nil` when your app relies on cookie-backed session state and plugin behavior that does not require persistent adapter writes.
-
-```ruby
-auth = BetterAuth.auth(
-  secret: ENV.fetch("BETTER_AUTH_SECRET"),
-  database: nil,
   session: {
     cookie_cache: {
-      enabled: true
+      enabled: true,
+      max_age: 5 * 60 # Cache duration in seconds (5 minutes)
     }
   }
 )
 ```
 
-### Understanding `refreshCache`
+<Callout type="info">
+  **Notes**
 
-Refresh behavior is controlled by session expiration, update age, and cookie cache settings.
+  When `cookie_cache` is enabled, revoked sessions may remain active on other devices until the cookie cache expires (`max_age`). This is because:
 
-### Versioning Stateless Sessions
+  * Cookie cache stores session data in the client's browser
+  * The server cannot directly delete cookies from other devices
+  * Sessions are only revalidated when the cache expires or `disableCookieCache: true` is used
 
-When rolling out stateless sessions, rotate secrets carefully and keep old secrets configured long enough for existing cookies to expire.
+  **If immediate session revocation is critical:**
 
-### Stateless With Secondary Storage
+  * Disable `cookie_cache` entirely, or
+  * Set a shorter `max_age` (e.g. 60 seconds), or
+  * Use `disableCookieCache: true` for sensitive operations
+</Callout>
 
-Secondary storage can be combined with cookie cache to share sessions between processes while reducing database reads.
+#### Cookie Cache Strategies
 
-## Customizing Session Response
+RubyAuth supports three different encoding strategies for cookie cache:
 
-Use session additional fields or the custom session plugin to shape session data.
+* **`compact`** (default): Uses base64url encoding with HMAC-SHA256 signature. Most compact format with no JWT spec overhead. Best for performance and size.
+* **`jwt`**: Standard JWT with HMAC-SHA256 signature (HS256). Signed but not encrypted - readable by anyone but tamper-proof. Follows JWT spec for interoperability.
+* **`jwe`**: Uses JWE (JSON Web Encryption) with A256CBC-HS512 and HKDF key derivation. Fully encrypted tokens - neither readable nor tamperable. Most secure but largest size.
+
+**Comparison:**
+
+| Strategy  | Size     | Security         | Readable | Interoperable | Use Case                                      |
+| --------- | -------- | ---------------- | -------- | ------------- | --------------------------------------------- |
+| `compact` | Smallest | Good (signed)    | Yes      | No            | Performance-critical, internal use            |
+| `jwt`     | Medium   | Good (signed)    | Yes      | Yes           | Need JWT compatibility, external integrations |
+| `jwe`     | Largest  | Best (encrypted) | No       | Yes           | Sensitive data, maximum security              |
+
+```ruby title="config/better_auth.rb"
+auth = BetterAuth.auth(
+  session: {
+    cookie_cache: {
+      enabled: true,
+      max_age: 5 * 60,
+      strategy: "compact" # or "jwt" or "jwe"
+    }
+  }
+)
+```
+
+**Note:** All strategies are cryptographically secure and prevent tampering. The main differences are size, readability, and JWT spec compliance.
+
+**When to use each:**
+
+* **Use `compact`** when you need maximum performance and smallest cookie size. Best for most applications where cookies are only used internally by RubyAuth.
+* **Use `jwt`** when you need JWT compatibility for external systems, or when you want standard JWT tokens that can be verified by third-party tools. The tokens are readable (base64-encoded JSON) but tamper-proof.
+* **Use `jwe`** when you need maximum security and want to hide session data from the client. The tokens are fully encrypted and cannot be read without the secret key. Use this for sensitive data or compliance requirements.
+
+If you want to disable returning from the cookie cache when fetching the session, you can pass `disableCookieCache:true` this will force the server to fetch the session from the database and also refresh the cookie cache.
+
+```http
+GET /api/auth/get-session?disableCookieCache=true
+Cookie: better-auth.session_token=...
+```
+
+or on the server
 
 ```ruby
+auth.api.get_session(
+  query: {
+    disableCookieCache: true
+  },
+  headers: {"cookie" => cookie_header}
+)
+```
+
+## Sessions in Secondary Storage
+
+By default, if you provide a [secondary storage](/docs/concepts/database#secondary-storage) in your auth configuration, the session will be stored in the secondary storage.
+
+```ruby title="config/better_auth.rb"
+require "better_auth"
+
 auth = BetterAuth.auth(
-  secret: ENV.fetch("BETTER_AUTH_SECRET"),
+  # ... other options
+  secondary_storage: storage
+)
+```
+
+### Storing Sessions in the Database
+
+By default, RubyAuth already stores sessions in the database, however if you provide a secondary storage,
+RubyAuth will store sessions in the secondary storage instead of the database.
+
+You can choose to store sessions in the database instead of secondary storage by passing
+`store_session_in_database: true` in the session configuration.
+
+```ruby title="config/better_auth.rb"
+require "better_auth"
+
+auth = BetterAuth.auth(
+  secondary_storage: storage,
   session: {
-    additional_fields: {
-      activeOrganizationId: {
-        type: "string",
-        required: false
+    store_session_in_database: true
+  }
+)
+```
+
+### Preserving Sessions
+
+When a session is revoked, it will be removed from the secondary storage, however if you enable `preserve_session_in_database`,
+the session will be preserved in the database and not be deleted.
+
+This is useful if you want to keep track of the sessions that have been revoked.
+
+```ruby title="config/better_auth.rb"
+require "better_auth"
+
+auth = BetterAuth.auth(
+  secondary_storage: storage,
+  session: {
+    preserve_session_in_database: true
+  }
+)
+```
+
+## Stateless Session Management
+
+RubyAuth supports stateless session management without any database. This means that the session data is stored in a signed/encrypted cookie and the server never queries a database to validate sessions - it simply verifies the cookie signature and checks expiration.
+
+### Basic Stateless Setup
+
+If you don't pass a database configuration, RubyAuth will automatically enable stateless mode.
+
+```ruby title="config/better_auth.rb"
+require "better_auth"
+
+auth = BetterAuth.auth(
+  # No database configuration
+  social_providers: {
+    google: {
+      client_id: ENV.fetch("GOOGLE_CLIENT_ID"),
+      client_secret: ENV.fetch("GOOGLE_CLIENT_SECRET")
+    }
+  }
+)
+```
+
+To manually enable stateless mode, you need to configure `cookie_cache` and `account` with the following options:
+
+```ruby title="config/better_auth.rb"
+require "better_auth"
+
+auth = BetterAuth.auth(
+  session: {
+    cookie_cache: {
+      enabled: true,
+      max_age: 7 * 24 * 60 * 60, # 7 days cache duration
+      strategy: "jwe", # can be "jwt" or "compact"
+      refresh_cache: true # Enable stateless refresh
+    }
+  },
+  account: {
+    store_state_strategy: "cookie",
+    store_account_cookie: true # Store account data after OAuth flow in a cookie (useful for database-less flows)
+  }
+)
+```
+
+<Callout type="info">
+  If you don't provide a database, by default we provide the above configuration for you.
+</Callout>
+
+### Understanding `refreshCache`
+
+The Ruby `refresh_cache` option maps to upstream `refreshCache` and controls automatic cookie refresh **before expiry** without querying any database:
+
+* **`false`** (default): No automatic refresh. When the cookie cache expires (reaches `max_age`), it will attempt to fetch from the database if available.
+* **`true`**: Enable automatic refresh with default settings. Refreshes when 80% of `max_age` is reached (20% time remaining).
+* **`object`**: Custom refresh configuration with `update_age` property.
+
+```ruby title="config/better_auth.rb"
+require "better_auth"
+
+auth = BetterAuth.auth(
+  session: {
+    cookie_cache: {
+      enabled: true,
+      max_age: 300, # 5 minutes
+      refresh_cache: {
+        update_age: 60 # Refresh when 60 seconds remain before expiry
       }
     }
   }
 )
 ```
 
-### Caveats On Customizing Session Response
+### Versioning Stateless Sessions
 
-Only expose fields that are safe for clients. Avoid adding secrets, raw provider tokens, password hashes, or internal authorization state to session responses.
+One of the biggest drawbacks of stateless sessions is that you can't invalidate session easily. To solve this with better auth, if you would like to invalidate all sessions, you can change the version of the cookie cache and re-deploy your application.
+
+```ruby title="config/better_auth.rb"
+require "better_auth"
+
+auth = BetterAuth.auth(
+  session: {
+    cookie_cache: {
+      version: "2" # Change the version to invalidate all sessions
+    }
+  }
+)
+```
+
+<Callout type="warning">
+  This will invalidate all sessions that don't match the new version.
+</Callout>
+
+### Stateless with Secondary Storage
+
+You can combine stateless sessions with secondary storage (Redis, etc.) for the best of both worlds:
+
+```ruby title="config/better_auth.rb"
+require "better_auth"
+
+auth = BetterAuth.auth(
+  # No primary database needed
+  secondary_storage: storage,
+  session: {
+    cookie_cache: {
+      max_age: 5 * 60, # 5 minutes (short-lived cookie)
+      refresh_cache: false # Disable stateless refresh
+    }
+  }
+)
+```
+
+This setup:
+
+* Uses cookies for session validation (no DB queries)
+* Uses Redis for storing session data and refreshing the cookie cache before expiry
+* You can revoke sessions from the secondary storage and the cookie cache will be invalidated on refresh
+
+## Customizing Session Response
+
+When you call `getSession` or `useSession`, the session data is returned as a `user` and `session` object. You can customize this response using the `customSession` plugin (`BetterAuth::Plugins.custom_session` in Ruby).
+
+```ruby title="config/better_auth.rb"
+require "better_auth"
+
+auth = BetterAuth.auth(
+  plugins: [
+    BetterAuth::Plugins.custom_session(
+      lambda do |payload, _ctx|
+        roles = find_user_roles(payload[:session]["userId"])
+        payload.merge(
+          roles: roles,
+          user: payload[:user].merge("newField" => "newField")
+        )
+      end
+    )
+  ]
+)
+```
+
+This will add `roles` and `user.newField` to the session response.
+
+### Caveats on Customizing Session Response
+
+1. The passed `session` object to the callback does not infer fields added by plugins.
+
+However, as a workaround, you can pull up your auth options and pass it to the plugin to infer the fields.
+
+```ruby
+options = {
+  # ... config options
+  plugins: [
+    # ... plugins
+  ]
+}
+
+auth = BetterAuth.auth(
+  **options,
+  plugins: [
+    *(options[:plugins] || []),
+    BetterAuth::Plugins.custom_session(
+      lambda do |payload, _ctx|
+        {
+          user: payload[:user],
+          session: payload[:session]
+        }
+      end,
+      options
+    )
+  ]
+)
+```
+
+2. When your server and client code are in separate projects or repositories, and you cannot share the exact response shape, document the custom session payload contract for the client consuming it.
+3. Session caching, including secondary storage or cookie cache, does not include custom fields. Each time the session is fetched, your custom session function will be called.
+
+**Mutating the list-device-sessions endpoint**
+The `/multi-session/list-device-sessions` endpoint from the [multi-session](/docs/plugins/multi-session) plugin is used to list the devices that the user is signed into.
+
+You can mutate the response of this endpoint by passing the `should_mutate_list_device_sessions_endpoint` option to the `custom_session` plugin.
+
+By default, we do not mutate the response of this endpoint.
+
+```ruby title="config/better_auth.rb"
+require "better_auth"
+
+auth = BetterAuth.auth(
+  plugins: [
+    BetterAuth::Plugins.custom_session(
+      lambda do |payload, _ctx|
+        {
+          user: payload[:user],
+          session: payload[:session]
+        }
+      end,
+      {},
+      should_mutate_list_device_sessions_endpoint: true
+    )
+  ]
+)
+```
