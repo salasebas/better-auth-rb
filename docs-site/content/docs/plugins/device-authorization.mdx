@@ -1,17 +1,42 @@
 ---
 title: Device Authorization
-description: OAuth device authorization flow for CLI and TV clients.
+description: OAuth 2.0 Device Authorization Grant for limited-input devices
 ---
 
-OAuth device authorization flow for CLI and TV clients.
+<RubyAuthDisclaimer />
+
+`RFC 8628` `CLI` `Smart TV` `IoT`
+
+The Device Authorization plugin implements the OAuth 2.0 Device Authorization Grant ([RFC 8628](https://datatracker.ietf.org/doc/html/rfc8628)), enabling authentication for devices with limited input capabilities such as smart TVs, CLI applications, IoT devices, and gaming consoles.
+
+## Try It Out
+
+You can test the device authorization flow right now using the RubyAuth CLI:
+
+```package-install
+npx auth login
+```
+
+This will demonstrate the complete device authorization flow by:
+
+1. Requesting a device code from the RubyAuth demo server
+2. Displaying a user code for you to enter
+3. Opening your browser to the verification page
+4. Polling for authorization completion
 
 <Callout type="info">
-This page documents the current Ruby port behavior. Ruby uses snake_case option names and `auth.api` method names; HTTP paths and JSON keys keep the upstream wire shape where implemented.
+  The CLI login command is a demo feature that connects to the RubyAuth demo server to showcase the device authorization flow in action.
 </Callout>
 
-## Configure
+## Installation
 
-```ruby title="config/auth.rb"
+<Steps>
+  <Step>
+    ### Add the plugin to your auth config
+
+    Add the device authorization plugin to your server configuration.
+
+    ```ruby title="config/auth.rb"
 require "better_auth"
 
 auth = BetterAuth.auth(
@@ -22,42 +47,347 @@ auth = BetterAuth.auth(
   ]
 )
 ```
+  </Step>
 
-## Usage
+  <Step>
+    ### Migrate the database
+
+    Run the migration or generate the schema to add the necessary tables to the database.
+
+    <Tabs items={["migrate", "generate"]}>
+  <Tab value="migrate">
+    ```bash
+    bundle exec better-auth migrate --cwd . --config config/better_auth.rb --yes
+    ```
+  </Tab>
+
+  <Tab value="generate">
+    ```bash
+    bundle exec better-auth generate --cwd . --dialect postgres --output db/better_auth/schema.sql --config config/better_auth.rb
+    ```
+  </Tab>
+</Tabs>
+
+    See the [Schema](#schema) section to add the fields manually.
+  </Step>
+
+</Steps>
+
+## How It Works
+
+The device flow follows these steps:
+
+1. **Device requests codes**: The device requests a device code and user code from the authorization server
+2. **User authorizes**: The user visits a verification URL and enters the user code
+3. **Device polls for token**: The device polls the server until the user completes authorization
+4. **Access granted**: Once authorized, the device receives an access token
+
+## Basic Usage
+
+### Requesting Device Authorization
+
+To initiate device authorization, call `device.code` with the client ID:
+
+<APIMethod path="/device/code" method="POST">
+  ```
+  type deviceCode = {
+      /**
+       * OAuth client ID.
+       */
+      client_id: string = "cli"
+      /**
+       * Requested scope.
+       */
+      scope?: string = "openid profile"
+  }
+  ```
+</APIMethod>
+
+Example usage:
 
 ```ruby title="server.rb"
-issued = auth.api.device_code(body: { client_id: "cli", scope: "openid profile" })
-auth.api.device_approve(headers: { "cookie" => request.env["HTTP_COOKIE"] }, body: { user_code: issued[:user_code] })
-token = auth.api.device_token(body: { grant_type: "urn:ietf:params:oauth:grant-type:device_code", device_code: issued[:device_code], client_id: "cli" })
+# Use the Ruby auth.api method or HTTP endpoint documented in this section.
+# HTTP paths and JSON keys keep the upstream wire shape.
 ```
 
-## Routes
+### Polling for Token
 
-| Method | Path | Ruby API method |
-| --- | --- | --- |
-| `POST` | `/device/code` | `auth.api.device_code` |
-| `POST` | `/device/token` | `auth.api.device_token` |
-| `GET` | `/device` | `auth.api.device_verify` |
-| `POST` | `/device/approve` | `auth.api.device_approve` |
-| `POST` | `/device/deny` | `auth.api.device_deny` |
+After displaying the user code, poll for the access token:
+
+<APIMethod path="/device/token" method="POST">
+  ```
+  type deviceToken = {
+      /**
+       * Device-code grant type.
+       */
+      grant_type: string = "urn:ietf:params:oauth:grant-type:device_code"
+      /**
+       * The device code.
+       */
+      device_code: string = "device-code"
+      /**
+       * OAuth client ID.
+       */
+      client_id: string = "cli"
+  }
+  ```
+</APIMethod>
+
+Example polling implementation:
+
+```ruby title="server.rb"
+# Use the Ruby auth.api method or HTTP endpoint documented in this section.
+# HTTP paths and JSON keys keep the upstream wire shape.
+```
+
+### User Authorization Flow
+
+The user authorization flow requires two steps:
+
+1. **Code Verification**: Check if the entered user code is valid
+2. **Authorization**: User must be authenticated to approve/deny the device
+
+<Callout type="warn">
+  Users must be authenticated before they can approve or deny device authorization requests. If not authenticated, redirect them to the login page with a return URL.
+</Callout>
+
+Create a page where users can enter their code:
+
+```ruby title="server.rb"
+# Use the Ruby auth.api method or HTTP endpoint documented in this section.
+# HTTP paths and JSON keys keep the upstream wire shape.
+```
+
+### Approving or Denying Device
+
+Users must be authenticated to approve or deny device authorization requests:
+
+#### Approve Device
+
+<APIMethod path="/device/approve" method="POST" requireSession>
+  ```
+  type deviceApprove = {
+      /**
+       * The user code shown by the device.
+       */
+      userCode: string = "ABCD-EFGH"
+  }
+  ```
+</APIMethod>
+
+#### Deny Device
+
+<APIMethod path="/device/deny" method="POST" requireSession>
+  ```
+  type deviceDeny = {
+      /**
+       * The user code shown by the device.
+       */
+      userCode: string = "ABCD-EFGH"
+  }
+  ```
+</APIMethod>
+
+#### Example Approval Page
+
+```ruby title="server.rb"
+# Use the Ruby auth.api method or HTTP endpoint documented in this section.
+# HTTP paths and JSON keys keep the upstream wire shape.
+```
+
+## Advanced Configuration
+
+### Client Validation
+
+You can validate client IDs to ensure only authorized applications can use the device flow:
+
+```ruby title="server.rb"
+# Use the Ruby auth.api method or HTTP endpoint documented in this section.
+# HTTP paths and JSON keys keep the upstream wire shape.
+```
+
+### Custom Code Generation
+
+Customize how device and user codes are generated:
+
+```ruby title="server.rb"
+# Use the Ruby auth.api method or HTTP endpoint documented in this section.
+# HTTP paths and JSON keys keep the upstream wire shape.
+```
+
+## Error Handling
+
+The device flow defines specific error codes:
+
+| Error Code              | Description                                 |
+| ----------------------- | ------------------------------------------- |
+| `authorization_pending` | User hasn't approved yet (continue polling) |
+| `slow_down`             | Polling too frequently (increase interval)  |
+| `expired_token`         | Device code has expired                     |
+| `access_denied`         | User denied the authorization               |
+| `invalid_grant`         | Invalid device code or client ID            |
+
+## Example: CLI Application
+
+Here's a complete example for a CLI application based on the actual demo:
+
+<Callout type="info">
+  To use the access token for API requests, ensure you have added the [Bearer plugin](/docs/plugins/bearer) to your auth instance.
+</Callout>
+
+```ruby title="device_cli.rb"
+require "json"
+require "net/http"
+require "uri"
+
+base_url = ENV.fetch("AUTH_BASE_URL", "http://localhost:3000")
+
+def post_json(url, payload)
+  request = Net::HTTP::Post.new(URI(url))
+  request["content-type"] = "application/json"
+  request.body = JSON.generate(payload)
+  response = Net::HTTP.start(request.uri.hostname, request.uri.port, use_ssl: request.uri.scheme == "https") do |http|
+    http.request(request)
+  end
+  JSON.parse(response.body)
+end
+
+issued = post_json("#{base_url}/api/auth/device/code", {
+  client_id: "demo-cli",
+  scope: "openid profile email"
+})
+
+puts "Visit #{issued.fetch("verification_uri")}"
+puts "Enter code: #{issued.fetch("user_code")}"
+
+loop do
+  sleep issued.fetch("interval", 5).to_i
+  token = post_json("#{base_url}/api/auth/device/token", {
+    grant_type: "urn:ietf:params:oauth:grant-type:device_code",
+    device_code: issued.fetch("device_code"),
+    client_id: "demo-cli"
+  })
+
+  if token["access_token"]
+    puts "Authorization successful"
+    break
+  end
+
+  case token["error"]
+  when "authorization_pending"
+    next
+  when "slow_down"
+    issued["interval"] = issued.fetch("interval", 5).to_i + 5
+  else
+    abort(token["error_description"] || token["error"] || "Device authorization failed")
+  end
+end
+```
+
+## Security Considerations
+
+1. **Rate Limiting**: The plugin enforces polling intervals to prevent abuse
+2. **Code Expiration**: Device and user codes expire after the configured time (default: 30 minutes)
+3. **Client Validation**: Always validate client IDs in production to prevent unauthorized access
+4. **HTTPS Only**: Always use HTTPS in production for device authorization
+5. **User Code Format**: User codes use a limited character set (excluding similar-looking characters like 0/O, 1/I) to reduce typing errors
+6. **Authentication Required**: Users must be authenticated before they can approve or deny device requests
 
 ## Options
 
-Current Ruby options accepted by `BetterAuth::Plugins.device_authorization`:
+### Server
 
-- `validate_client`
-- `generate_device_code`
-- `device_code_length`
-- `generate_user_code`
-- `user_code_length`
-- `expires_in`
-- `interval`
-- `on_device_auth_request`
-- `verification_uri`
+**verificationUri**: The URL of the verification page where users can enter their device code. Match this to the route of your verification page. Returned as `verification_uri` in the response. Can be an absolute URL (e.g., `https://example.com/device`) or relative path (e.g., `/device`). Default: `/device`.
 
-## Support Notes
+**expiresIn**: The expiration time for device codes. Default: `"30m"` (30 minutes).
 
-- The examples above are based on Ruby plugin source and tests in `packages/better_auth`.
-- If an upstream section is not represented here, treat it as not yet documented or not yet supported by the Ruby port until the matching Ruby implementation exists.
+**interval**: The minimum polling interval. Default: `"5s"` (5 seconds).
 
-{/* Upstream guide is preserved in reference/upstream-src/1.6.9/repository/docs/content/docs/plugins/device-authorization.mdx. */}
+**userCodeLength**: The length of the user code. Default: `8`.
+
+**deviceCodeLength**: The length of the device code. Default: `40`.
+
+**generateDeviceCode**: Custom function to generate device codes. Returns a string or `Promise<string>`.
+
+**generateUserCode**: Custom function to generate user codes. Returns a string or `Promise<string>`.
+
+**validateClient**: Function to validate client IDs. Takes a clientId and returns boolean or `Promise<boolean>`.
+
+**onDeviceAuthRequest**: Hook called when device authorization is requested. Takes clientId and optional scope.
+
+### Client
+
+No client-specific configuration options. The plugin adds the following methods:
+
+* **device()**: Verify user code validity
+* **device.code()**: Request device and user codes
+* **device.token()**: Poll for access token
+* **device.approve()**: Approve device (requires authentication)
+* **device.deny()**: Deny device (requires authentication)
+
+## Schema
+
+The plugin requires a new table to store device authorization data.
+
+Table Name: `deviceCode`
+
+export const deviceCodeTableFields = [
+	{
+		name: "id",
+		type: "string",
+		description: "Unique identifier for the device authorization request",
+		isPrimaryKey: true,
+	},
+	{
+		name: "deviceCode",
+		type: "string",
+		description: "The device verification code",
+	},
+	{
+		name: "userCode",
+		type: "string",
+		description: "The user-friendly code for verification",
+	},
+	{
+		name: "userId",
+		type: "string",
+		description: "The ID of the user who approved/denied",
+		isOptional: true,
+	},
+	{
+		name: "clientId",
+		type: "string",
+		description: "The OAuth client identifier",
+		isOptional: true,
+	},
+	{
+		name: "scope",
+		type: "string",
+		description: "Requested OAuth scopes",
+		isOptional: true,
+	},
+	{
+		name: "status",
+		type: "string",
+		description: "Current status: pending, approved, or denied",
+	},
+	{
+		name: "expiresAt",
+		type: "Date",
+		description: "When the device code expires",
+	},
+	{
+		name: "lastPolledAt",
+		type: "Date",
+		description: "Last time the device polled for status",
+		isOptional: true,
+	},
+	{
+		name: "pollingInterval",
+		type: "number",
+		description: "Minimum seconds between polls",
+		isOptional: true,
+	},
+];
+
+<DatabaseTable name="deviceCode" fields={deviceCodeTableFields} />

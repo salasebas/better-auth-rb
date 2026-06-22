@@ -169,8 +169,6 @@ const pluginMeta: Record<
 	},
 };
 
-const unsupportedPluginSlugs = new Set(["mcp", "oidc-provider", "test-utils"]);
-
 export const categories = [
 	"Authentication",
 	"Authorization",
@@ -187,8 +185,7 @@ export function getOfficialPlugins(): Plugin[] {
 			(page) =>
 				page.slugs[0] === "plugins" &&
 				page.slugs.length === 2 &&
-				page.slugs[1] !== "community-plugins" &&
-				!unsupportedPluginSlugs.has(page.slugs[1]),
+				page.slugs[1] !== "community-plugins",
 		)
 		.map((page) => {
 			const slug = page.slugs[1];
