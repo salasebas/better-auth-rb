@@ -21,7 +21,7 @@ Status values: TODO | IN PROGRESS | DONE | BLOCKED | REJECTED.
 | 009 | `009-docs-concepts-and-getting-started.md` | Concepts & getting started finish-pass | 008 | DONE |
 | 010 | `010-docs-adapters-authentication.md` | Adapters & authentication finish-pass | 008 | DONE |
 | 011 | `011-docs-plugins-parity.md` | Supported plugins copy-first parity | 008, 009 rec. | DONE |
-| 012 | `012-docs-schema-endpoint-resources.md` | Generated database schemas and endpoint resources | 008, 011 | TODO |
+| 012 | `012-docs-schema-endpoint-resources.md` | Generated database schemas and endpoint resources | 008, 011 | DONE |
 | 013 | `013-docs-reference-guides.md` | Reference, guides & errors | 008 | DONE |
 | 014 | `014-organization-membership-limit-parity.md` | Organization membership limit parity | - | TODO |
 | 015 | `015-organization-lifecycle-hooks-parity.md` | Organization lifecycle and hooks parity | 014 rec. | TODO |
