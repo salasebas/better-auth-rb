@@ -5,7 +5,8 @@ module BetterAuth
     module_function
 
     def twitch(client_id:, client_secret:, scopes: ["user:read:email", "openid"], **options)
-      Base.oauth_provider(
+      normalized = Base.normalize_options(options)
+      provider = Base.oauth_provider(
         id: "twitch",
         name: "Twitch",
         client_id: client_id,
@@ -34,6 +35,28 @@ module BetterAuth
         },
         **options
       )
+      provider[:get_user_info] = lambda do |tokens|
+        custom = normalized[:get_user_info]
+        next custom.call(tokens) if custom
+        next nil unless Base.id_token(tokens)
+
+        profile = Base.decode_jwt_payload(Base.id_token(tokens))
+        next nil if profile.empty?
+
+        user = Base.apply_profile_mapping(
+          {
+            id: profile["sub"],
+            name: profile["preferred_username"],
+            email: profile["email"],
+            image: profile["picture"],
+            emailVerified: !!profile["email_verified"]
+          },
+          profile,
+          normalized
+        )
+        {user: user, data: profile}
+      end
+      provider
     end
   end
 end

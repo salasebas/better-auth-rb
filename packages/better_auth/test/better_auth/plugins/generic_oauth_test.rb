@@ -7,6 +7,7 @@ require_relative "../../test_helper"
 
 class BetterAuthPluginsGenericOAuthTest < Minitest::Test
   SECRET = "phase-eight-secret-with-enough-entropy-123"
+  BetterAuth::Plugins.generic_oauth(config: [])
 
   def test_oauth2_callback_endpoint_is_get_only_like_upstream
     auth = build_auth
@@ -54,6 +55,37 @@ class BetterAuthPluginsGenericOAuthTest < Minitest::Test
     assert_equal "api", params.fetch("audience")
     assert_equal "http://localhost:3000/api/auth", params.fetch("origin")
     assert_equal "query", params.fetch("response_mode")
+  end
+
+  def test_sign_in_oauth2_authorization_params_replace_defaults_and_existing_query_params
+    auth = build_auth(
+      provider_overrides: {
+        authorization_url: "https://provider.example.com/authorize?resource=a&resource=b&scope=old-scope&prompt=login&response_type=old",
+        authorizationUrlParams: ->(_ctx) {
+          {
+            scope: "custom-scope",
+            prompt: "consent",
+            response_type: "token",
+            audience: "api"
+          }
+        },
+        prompt: "select_account"
+      }
+    )
+
+    result = auth.api.sign_in_with_oauth2(body: {providerId: "custom", disableRedirect: true})
+    pairs = URI.decode_www_form(URI.parse(result[:url]).query)
+    params = pairs.to_h
+
+    assert_equal "custom-scope", params.fetch("scope")
+    assert_equal "consent", params.fetch("prompt")
+    assert_equal "token", params.fetch("response_type")
+    assert_equal "api", params.fetch("audience")
+    resource_values = pairs.each_with_object([]) do |(name, value), values|
+      values << value if name == "resource"
+    end
+    assert_equal ["a", "b"], resource_values
+    assert_equal ["scope", "prompt", "response_type", "audience"], %w[scope prompt response_type audience].select { |key| pairs.count { |name, _value| name == key } == 1 }
   end
 
   def test_pkce_uses_s256_challenge_and_token_exchange_only_sends_verifier_when_enabled
@@ -138,7 +170,7 @@ class BetterAuthPluginsGenericOAuthTest < Minitest::Test
       user_info: {id: "missing-email-sub", name: "Missing Email User", emailVerified: true},
       on_api_error: {error_url: "/error"}
     )
-    sign_in = auth.api.sign_in_with_oauth2(body: {providerId: "custom", callbackURL: "/dashboard"})
+    sign_in = auth.api.sign_in_with_oauth2(body: {providerId: "custom", callbackURL: "/dashboard", errorCallbackURL: "/error"})
     state = Rack::Utils.parse_query(URI.parse(sign_in[:url]).query).fetch("state")
 
     status, headers, _body = auth.api.oauth2_callback(
@@ -149,6 +181,26 @@ class BetterAuthPluginsGenericOAuthTest < Minitest::Test
 
     assert_equal 302, status
     assert_includes headers.fetch("location"), "error=email_is_missing"
+  end
+
+  def test_callback_redirects_with_missing_user_info_when_custom_get_user_info_returns_nil
+    auth = build_auth(
+      provider_overrides: {
+        get_user_info: ->(_tokens) {}
+      },
+      on_api_error: {error_url: "/error"}
+    )
+    sign_in = auth.api.sign_in_with_oauth2(body: {providerId: "custom", callbackURL: "/dashboard", errorCallbackURL: "/error"})
+    state = Rack::Utils.parse_query(URI.parse(sign_in[:url]).query).fetch("state")
+
+    status, headers, = auth.api.oauth2_callback(
+      params: {providerId: "custom"},
+      query: {code: "oauth-code", state: state},
+      as_response: true
+    )
+
+    assert_equal 302, status
+    assert_equal "/error?error=user_info_is_missing", headers.fetch("location")
   end
 
   def test_additional_data_cannot_override_internal_state_fields
@@ -599,23 +651,159 @@ class BetterAuthPluginsGenericOAuthTest < Minitest::Test
     end
   end
 
-  def test_provider_helper_factories_match_upstream_defaults
-    assert_equal(
-      {
-        provider_id: "auth0",
-        discovery_url: "https://tenant.auth0.com/.well-known/openid-configuration",
-        scopes: ["openid", "profile", "email"]
+  def test_generic_oauth_id_token_user_info_requires_sub_and_email_before_skipping_userinfo
+    requests = []
+    with_oauth_server(requests) do |base_url|
+      [
+        {"sub" => "token-sub", "name" => "Token Only"},
+        {"sub" => "token-sub", "email" => "", "name" => "Blank Email"},
+        {"sub" => "", "email" => "token@example.com", "name" => "Blank Subject"}
+      ].each do |payload|
+        requests.clear
+        auth = build_auth(
+          provider_overrides: {
+            get_token: ->(**_data) {
+              {
+                accessToken: "http-access-token",
+                refreshToken: "http-refresh-token",
+                idToken: unsigned_jwt(payload),
+                scopes: ["openid", "email"]
+              }
+            },
+            get_user_info: nil,
+            authorization_url: "#{base_url}/authorize",
+            token_url: "#{base_url}/token",
+            user_info_url: "#{base_url}/userinfo"
+          }
+        )
+        sign_in = auth.api.sign_in_with_oauth2(body: {providerId: "custom", callbackURL: "/dashboard"})
+        state = Rack::Utils.parse_query(URI.parse(sign_in[:url]).query).fetch("state")
+
+        status, headers, = auth.api.oauth2_callback(
+          params: {providerId: "custom"},
+          query: {code: "oauth-code", state: state},
+          as_response: true
+        )
+
+        assert_equal 302, status
+        assert_equal "/dashboard", headers.fetch("location")
+        assert requests.find { |request| request[:path] == "/userinfo" }, "expected userinfo fallback for #{payload.inspect}"
+        assert auth.context.internal_adapter.find_account_by_provider_id("http-sub", "custom")
+      end
+    end
+
+    auth = build_auth(
+      provider_overrides: {
+        get_token: ->(**_data) {
+          {
+            accessToken: "access-token",
+            idToken: unsigned_jwt("sub" => "token-sub", "name" => "Token Only")
+          }
+        },
+        get_user_info: nil,
+        user_info_url: nil
       },
-      BetterAuth::Plugins.auth0(client_id: "id", client_secret: "secret", domain: "https://tenant.auth0.com").slice(:provider_id, :discovery_url, :scopes)
+      on_api_error: {error_url: "/error"}
     )
-    assert_equal "https://okta.example.com/oauth2/default/.well-known/openid-configuration", BetterAuth::Plugins.okta(client_id: "id", client_secret: "secret", issuer: "https://okta.example.com/oauth2/default/")[:discovery_url]
-    assert_equal "https://realm.example.com/realms/main/.well-known/openid-configuration", BetterAuth::Plugins.keycloak(client_id: "id", client_secret: "secret", issuer: "https://realm.example.com/realms/main/")[:discovery_url]
-    assert_equal "https://login.microsoftonline.com/common/oauth2/v2.0/authorize", BetterAuth::Plugins.microsoft_entra_id(client_id: "id", client_secret: "secret", tenant_id: "common")[:authorization_url]
-    assert_equal "https://slack.com/openid/connect/authorize", BetterAuth::Plugins.slack(client_id: "id", client_secret: "secret")[:authorization_url]
-    assert_equal "line-jp", BetterAuth::Plugins.line(provider_id: "line-jp", client_id: "id", client_secret: "secret")[:provider_id]
-    assert_equal "https://gumroad.com/oauth/authorize", BetterAuth::Plugins.gumroad(client_id: "id", client_secret: "secret")[:authorization_url]
-    assert_equal "post", BetterAuth::Plugins.hubspot(client_id: "id", client_secret: "secret")[:authentication]
-    assert_equal "https://www.patreon.com/oauth2/authorize", BetterAuth::Plugins.patreon(client_id: "id", client_secret: "secret")[:authorization_url]
+    sign_in = auth.api.sign_in_with_oauth2(body: {providerId: "custom", callbackURL: "/dashboard"})
+    state = Rack::Utils.parse_query(URI.parse(sign_in[:url]).query).fetch("state")
+
+    status, headers, = auth.api.oauth2_callback(
+      params: {providerId: "custom"},
+      query: {code: "oauth-code", state: state},
+      as_response: true
+    )
+
+    assert_equal 302, status
+    assert_equal "http://localhost:3000/api/auth/error?error=user_info_is_missing", headers.fetch("location")
+  end
+
+  def test_provider_helper_factories_match_upstream_defaults
+    helper_expectations.each do |entry|
+      config = BetterAuth::Plugins.public_send(entry.fetch(:helper), **entry.fetch(:options))
+
+      entry.fetch(:defaults).each do |key, value|
+        assert_equal value, config[key], "#{entry.fetch(:helper)} #{key}"
+      end
+      assert_equal "id", config.fetch(:client_id), "#{entry.fetch(:helper)} client_id"
+      assert_equal "secret", config.fetch(:client_secret), "#{entry.fetch(:helper)} client_secret"
+      assert_equal entry.fetch(:has_get_user_info), config.key?(:get_user_info), "#{entry.fetch(:helper)} get_user_info presence"
+    end
+  end
+
+  def test_provider_helper_factories_preserve_overrides_and_camel_case_inputs
+    helper_override_expectations.each do |entry|
+      config = BetterAuth::Plugins.public_send(entry.fetch(:helper), **entry.fetch(:options))
+
+      assert_equal ["custom.scope"], config.fetch(:scopes), "#{entry.fetch(:helper)} scopes"
+      assert_equal "https://app.example.com/callback", config.fetch(:redirect_uri), "#{entry.fetch(:helper)} redirect_uri"
+      assert_equal true, config.fetch(:pkce), "#{entry.fetch(:helper)} pkce"
+      assert_equal true, config.fetch(:disable_implicit_sign_up), "#{entry.fetch(:helper)} disable_implicit_sign_up"
+      assert_equal true, config.fetch(:disable_sign_up), "#{entry.fetch(:helper)} disable_sign_up"
+      assert_equal true, config.fetch(:override_user_info), "#{entry.fetch(:helper)} override_user_info"
+      entry.fetch(:expected).each do |key, value|
+        assert_equal value, config[key], "#{entry.fetch(:helper)} #{key}"
+      end
+    end
+  end
+
+  def test_custom_provider_helpers_map_user_info_like_upstream
+    gumroad = BetterAuth::Plugins.gumroad(client_id: "id", client_secret: "secret")
+    with_stubbed_http_json("https://api.gumroad.com/v2/user" => {"success" => false}) do
+      assert_nil gumroad.fetch(:get_user_info).call(accessToken: "token")
+    end
+    with_stubbed_http_json("https://api.gumroad.com/v2/user" => {"success" => true}) do
+      assert_nil gumroad.fetch(:get_user_info).call(accessToken: "token")
+    end
+    with_stubbed_http_json("https://api.gumroad.com/v2/user" => {"success" => true, "user" => {"user_id" => "gumroad-id", "name" => "Gumroad User", "email" => "gumroad@example.com", "profile_url" => "https://img.example.com/gumroad.png"}}) do
+      assert_equal(
+        {id: "gumroad-id", name: "Gumroad User", email: "gumroad@example.com", image: "https://img.example.com/gumroad.png", emailVerified: false},
+        gumroad.fetch(:get_user_info).call(accessToken: "token")
+      )
+    end
+
+    hubspot = BetterAuth::Plugins.hubspot(client_id: "id", client_secret: "secret")
+    with_stubbed_http_json("https://api.hubapi.com/oauth/v1/access-tokens/token" => {"user" => "hubspot@example.com"}) do
+      assert_nil hubspot.fetch(:get_user_info).call(accessToken: "token")
+    end
+    with_stubbed_http_json("https://api.hubapi.com/oauth/v1/access-tokens/token" => {"user" => "hubspot@example.com", "signed_access_token" => {"userId" => "hubspot-signed-id"}}) do
+      assert_equal(
+        {id: "hubspot-signed-id", name: "hubspot@example.com", email: "hubspot@example.com", emailVerified: false},
+        hubspot.fetch(:get_user_info).call(accessToken: "token")
+      )
+    end
+    with_stubbed_http_json("https://api.hubapi.com/oauth/v1/access-tokens/token" => {"user_id" => "hubspot-id", "user" => "hubspot@example.com"}) do
+      result = hubspot.fetch(:get_user_info).call(accessToken: "token")
+      assert_equal "hubspot-id", result.fetch(:id)
+      refute_includes result, :image
+    end
+
+    line = BetterAuth::Plugins.line(provider_id: "line-th", client_id: "id", client_secret: "secret")
+    assert_equal "line-th", line.fetch(:provider_id)
+    require "better_auth/plugins/jwt"
+    id_token_profile = line.fetch(:get_user_info).call(idToken: unsigned_jwt("sub" => "line-token-id", "name" => "Line Token", "email" => "line-token@example.com", "picture" => "https://img.example.com/line-token.png"), accessToken: "token")
+    assert_equal({id: "line-token-id", name: "Line Token", email: "line-token@example.com", image: "https://img.example.com/line-token.png", emailVerified: false}, id_token_profile)
+    with_stubbed_http_json("https://api.line.me/oauth2/v2.1/userinfo" => {"sub" => "line-http-id", "name" => "Line HTTP", "email" => "line-http@example.com", "picture" => "https://img.example.com/line-http.png"}) do
+      assert_equal({id: "line-http-id", name: "Line HTTP", email: "line-http@example.com", image: "https://img.example.com/line-http.png", emailVerified: false}, line.fetch(:get_user_info).call(idToken: "bad-token", accessToken: "token"))
+    end
+
+    microsoft = BetterAuth::Plugins.microsoft_entra_id(client_id: "id", client_secret: "secret", tenant_id: "common")
+    with_stubbed_http_json("https://graph.microsoft.com/oidc/userinfo" => {"sub" => "ms-id", "given_name" => "Microsoft", "family_name" => "User", "preferred_username" => "microsoft@example.com", "picture" => "https://img.example.com/ms.png"}) do
+      assert_equal({id: "ms-id", name: "Microsoft User", email: "microsoft@example.com", image: "https://img.example.com/ms.png", emailVerified: false}, microsoft.fetch(:get_user_info).call(accessToken: "token"))
+    end
+
+    patreon = BetterAuth::Plugins.patreon(client_id: "id", client_secret: "secret")
+    with_stubbed_http_json("https://www.patreon.com/api/oauth2/v2/identity?fields[user]=email,full_name,image_url,is_email_verified" => {"data" => {"id" => "patreon-id"}}) do
+      assert_nil patreon.fetch(:get_user_info).call(accessToken: "token")
+    end
+    with_stubbed_http_json("https://www.patreon.com/api/oauth2/v2/identity?fields[user]=email,full_name,image_url,is_email_verified" => {"data" => {"id" => "patreon-id", "attributes" => {"full_name" => "Patreon User", "email" => "patreon@example.com", "image_url" => "https://img.example.com/patreon.png", "is_email_verified" => true}}}) do
+      assert_equal({id: "patreon-id", name: "Patreon User", email: "patreon@example.com", image: "https://img.example.com/patreon.png", emailVerified: true}, patreon.fetch(:get_user_info).call(accessToken: "token"))
+    end
+
+    slack = BetterAuth::Plugins.slack(client_id: "id", client_secret: "secret")
+    with_stubbed_http_json("https://slack.com/api/openid.connect.userInfo" => {"sub" => "slack-sub", "https://slack.com/user_id" => "slack-id", "name" => "Slack User", "email" => "slack@example.com", "https://slack.com/user_image_512" => "https://img.example.com/slack.png"}) do
+      assert_equal({id: "slack-id", name: "Slack User", email: "slack@example.com", image: "https://img.example.com/slack.png", emailVerified: false}, slack.fetch(:get_user_info).call(accessToken: "token"))
+    end
   end
 
   def test_duplicate_provider_ids_emit_warning
@@ -662,7 +850,8 @@ class BetterAuthPluginsGenericOAuthTest < Minitest::Test
           authorization_url: "#{base_url}/authorize",
           token_url: "#{base_url}/token",
           user_info_url: "#{base_url}/userinfo",
-          authentication: "basic"
+          authentication: "basic",
+          token_url_params: ->(_ctx) { {resource: "calendar"} }
         }
       )
       _status, sign_in_headers, sign_in_body = auth.api.sign_in_with_oauth2(
@@ -688,6 +877,7 @@ class BetterAuthPluginsGenericOAuthTest < Minitest::Test
       refresh_request = requests.reverse.find { |request| request[:path] == "/token" }
       assert_equal "refresh_token", refresh_request.fetch(:params).fetch("grant_type")
       assert_equal "http-refresh-token", refresh_request.fetch(:params).fetch("refresh_token")
+      assert_equal "calendar", refresh_request.fetch(:params).fetch("resource")
       assert_match(/\ABasic /, refresh_request.fetch(:headers).fetch("authorization"))
     end
   end
@@ -820,6 +1010,124 @@ class BetterAuthPluginsGenericOAuthTest < Minitest::Test
   end
 
   private
+
+  def helper_expectations
+    [
+      {
+        helper: :auth0,
+        options: {clientId: "id", clientSecret: "secret", domain: "https://tenant.auth0.com"},
+        defaults: {provider_id: "auth0", discovery_url: "https://tenant.auth0.com/.well-known/openid-configuration", scopes: ["openid", "profile", "email"]},
+        has_get_user_info: false
+      },
+      {
+        helper: :gumroad,
+        options: {client_id: "id", client_secret: "secret"},
+        defaults: {provider_id: "gumroad", authorization_url: "https://gumroad.com/oauth/authorize", token_url: "https://api.gumroad.com/oauth/token", scopes: ["view_profile"]},
+        has_get_user_info: true
+      },
+      {
+        helper: :hubspot,
+        options: {client_id: "id", client_secret: "secret"},
+        defaults: {provider_id: "hubspot", authorization_url: "https://app.hubspot.com/oauth/authorize", token_url: "https://api.hubapi.com/oauth/v1/token", scopes: ["oauth"], authentication: "post"},
+        has_get_user_info: true
+      },
+      {
+        helper: :keycloak,
+        options: {client_id: "id", client_secret: "secret", issuer: "https://realm.example.com/realms/main/"},
+        defaults: {provider_id: "keycloak", discovery_url: "https://realm.example.com/realms/main/.well-known/openid-configuration", scopes: ["openid", "profile", "email"]},
+        has_get_user_info: false
+      },
+      {
+        helper: :line,
+        options: {providerId: "line-jp", client_id: "id", client_secret: "secret"},
+        defaults: {provider_id: "line-jp", authorization_url: "https://access.line.me/oauth2/v2.1/authorize", token_url: "https://api.line.me/oauth2/v2.1/token", user_info_url: "https://api.line.me/oauth2/v2.1/userinfo", scopes: ["openid", "profile", "email"]},
+        has_get_user_info: true
+      },
+      {
+        helper: :microsoft_entra_id,
+        options: {client_id: "id", client_secret: "secret", tenantId: "common"},
+        defaults: {provider_id: "microsoft-entra-id", authorization_url: "https://login.microsoftonline.com/common/oauth2/v2.0/authorize", token_url: "https://login.microsoftonline.com/common/oauth2/v2.0/token", user_info_url: "https://graph.microsoft.com/oidc/userinfo", scopes: ["openid", "profile", "email"]},
+        has_get_user_info: true
+      },
+      {
+        helper: :okta,
+        options: {client_id: "id", client_secret: "secret", issuer: "https://okta.example.com/oauth2/default/"},
+        defaults: {provider_id: "okta", discovery_url: "https://okta.example.com/oauth2/default/.well-known/openid-configuration", scopes: ["openid", "profile", "email"]},
+        has_get_user_info: false
+      },
+      {
+        helper: :patreon,
+        options: {client_id: "id", client_secret: "secret"},
+        defaults: {provider_id: "patreon", authorization_url: "https://www.patreon.com/oauth2/authorize", token_url: "https://www.patreon.com/api/oauth2/token", scopes: ["identity[email]"]},
+        has_get_user_info: true
+      },
+      {
+        helper: :slack,
+        options: {client_id: "id", client_secret: "secret"},
+        defaults: {provider_id: "slack", authorization_url: "https://slack.com/openid/connect/authorize", token_url: "https://slack.com/api/openid.connect.token", user_info_url: "https://slack.com/api/openid.connect.userInfo", scopes: ["openid", "profile", "email"]},
+        has_get_user_info: true
+      }
+    ]
+  end
+
+  def helper_override_expectations
+    base = {
+      client_id: "id",
+      client_secret: "secret",
+      scopes: ["custom.scope"],
+      redirect_uri: "https://app.example.com/callback",
+      pkce: true,
+      disable_implicit_sign_up: true,
+      disable_sign_up: true,
+      override_user_info: true
+    }
+    camel_base = {
+      clientId: "id",
+      clientSecret: "secret",
+      scopes: ["custom.scope"],
+      redirectURI: "https://app.example.com/callback",
+      pkce: true,
+      disableImplicitSignUp: true,
+      disableSignUp: true,
+      overrideUserInfo: true
+    }
+
+    [
+      {helper: :auth0, options: camel_base.merge(domain: "https://tenant.auth0.com"), expected: {discovery_url: "https://tenant.auth0.com/.well-known/openid-configuration"}},
+      {helper: :gumroad, options: base, expected: {}},
+      {helper: :hubspot, options: base, expected: {authentication: "post"}},
+      {helper: :keycloak, options: base.merge(issuer: "https://realm.example.com/realms/main/"), expected: {discovery_url: "https://realm.example.com/realms/main/.well-known/openid-configuration"}},
+      {helper: :line, options: camel_base.merge(providerId: "line-th"), expected: {provider_id: "line-th"}},
+      {helper: :microsoft_entra_id, options: camel_base.merge(tenantId: "organizations"), expected: {authorization_url: "https://login.microsoftonline.com/organizations/oauth2/v2.0/authorize", token_url: "https://login.microsoftonline.com/organizations/oauth2/v2.0/token"}},
+      {helper: :okta, options: base.merge(issuer: "https://okta.example.com/oauth2/default/"), expected: {discovery_url: "https://okta.example.com/oauth2/default/.well-known/openid-configuration"}},
+      {helper: :patreon, options: base, expected: {}},
+      {helper: :slack, options: base, expected: {}}
+    ]
+  end
+
+  def with_stubbed_http_json(responses)
+    requests = []
+    stub = lambda do |uri, request|
+      url = uri.to_s
+      requests << {url: url, headers: request.to_hash}
+      body = responses.fetch(url)
+      StubHTTPResponse.new(JSON.generate(body))
+    end
+
+    BetterAuth::HTTPClient.stub(:request, stub) do
+      yield requests
+    end
+  end
+
+  StubHTTPResponse = Struct.new(:body) do
+    def is_a?(klass)
+      klass == Net::HTTPSuccess || super
+    end
+  end
+
+  def unsigned_jwt(payload)
+    JWT.encode(payload, nil, "none")
+  end
 
   def build_auth(options = {})
     user_info = options.delete(:user_info) || {id: "oauth-sub", email: "oauth@example.com", name: "OAuth User", emailVerified: true, image: "https://example.com/avatar.png"}

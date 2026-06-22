@@ -26,8 +26,9 @@ module BetterAuth
         uri.to_s
       end
 
-      def oauth_provider(id:, name:, client_id:, authorization_endpoint:, token_endpoint:, profile_map:, client_secret: nil, user_info_endpoint: nil, scopes: [], scope_separator: " ", pkce: false, auth_params: {}, token_params: {}, user_info_method: :get, user_info_headers: {}, user_info_body: nil, **options)
+      def oauth_provider(id:, name:, client_id:, authorization_endpoint:, token_endpoint:, profile_map:, client_secret: nil, user_info_endpoint: nil, scopes: [], scope_separator: " ", pkce: false, require_code_verifier: false, auth_params: {}, token_params: {}, token_authentication: :post, user_info_method: :get, user_info_headers: {}, user_info_body: nil, **options)
         opts = normalize_options(options.merge(client_id: client_id, client_secret: client_secret))
+        primary_id = primary_client_id(client_id)
         {
           id: id,
           name: name,
@@ -36,9 +37,11 @@ module BetterAuth
           options: opts,
           create_authorization_url: lambda do |data|
             verifier = value(data, :code_verifier, :codeVerifier)
+            raise Error, "codeVerifier is required for #{name}" if require_code_verifier && verifier.to_s.empty?
+
             selected_scopes = selected_scopes(scopes, opts, data)
             params = {
-              client_id: primary_client_id(client_id),
+              client_id: primary_id,
               redirect_uri: opts[:redirect_uri] || value(data, :redirect_uri, :redirectURI),
               response_type: "code",
               scope: selected_scopes.empty? ? nil : selected_scopes.join(scope_separator),
@@ -51,21 +54,27 @@ module BetterAuth
             authorization_url(option(opts, :authorization_endpoint, :authorizationEndpoint) || authorization_endpoint, params)
           end,
           validate_authorization_code: lambda do |data|
-            post_form_json(option(opts, :token_endpoint, :tokenEndpoint) || token_endpoint, {
-              client_id: primary_client_id(client_id),
-              client_secret: client_secret,
+            token_form = {
               code: value(data, :code),
               code_verifier: value(data, :code_verifier, :codeVerifier),
               grant_type: "authorization_code",
               redirect_uri: opts[:redirect_uri] || value(data, :redirect_uri, :redirectURI)
-            }.merge(resolve_hash(token_params, data, opts)))
+            }.merge(resolve_hash(token_params, data, opts))
+            post_token_form(
+              option(opts, :token_endpoint, :tokenEndpoint) || token_endpoint,
+              token_form,
+              client_id: primary_id,
+              client_secret: client_secret,
+              authentication: token_authentication
+            )
           end,
           refresh_access_token: opts[:refresh_access_token] || lambda do |refresh_token|
             refresh_access_token(
               option(opts, :token_endpoint, :tokenEndpoint) || token_endpoint,
               refresh_token,
-              client_id: primary_client_id(client_id),
-              client_secret: client_secret
+              client_id: primary_id,
+              client_secret: client_secret,
+              authentication: token_authentication
             )
           end,
           verify_id_token: opts[:verify_id_token],
@@ -138,13 +147,27 @@ module BetterAuth
         (method == :post) ? post_json(endpoint, resolved_body, resolved_headers) : get_json(endpoint, resolved_headers)
       end
 
-      def refresh_access_token(token_endpoint, refresh_token, client_id:, client_secret: nil, extra_params: {})
-        normalize_tokens(post_form_json(token_endpoint, {
-          client_id: client_id,
-          client_secret: client_secret,
+      def refresh_access_token(token_endpoint, refresh_token, client_id:, client_secret: nil, extra_params: {}, authentication: :post)
+        normalize_tokens(post_token_form(token_endpoint, {
           grant_type: "refresh_token",
           refresh_token: refresh_token
-        }.merge(extra_params || {})))
+        }.merge(extra_params || {}), client_id: client_id, client_secret: client_secret, authentication: authentication))
+      end
+
+      def post_token_form(token_endpoint, form, client_id:, client_secret: nil, authentication: :post, headers: {})
+        case authentication&.to_sym
+        when :basic
+          post_form_json(token_endpoint, form.compact, basic_auth_headers(client_id, client_secret).merge(headers))
+        else
+          post_form_json(token_endpoint, {
+            client_id: client_id,
+            client_secret: client_secret
+          }.merge(form), headers)
+        end
+      end
+
+      def basic_auth_headers(client_id, client_secret)
+        {"Authorization" => "Basic #{Base64.strict_encode64("#{client_id}:#{client_secret}")}"}
       end
 
       def normalize_tokens(tokens, now: Time.now)
@@ -211,7 +234,11 @@ module BetterAuth
           appBundleIdentifier: :app_bundle_identifier,
           profilePhotoSize: :profile_photo_size,
           disableProfilePhoto: :disable_profile_photo,
-          tenantId: :tenant_id
+          tenantId: :tenant_id,
+          userPoolId: :user_pool_id,
+          requireClientSecret: :require_client_secret,
+          configId: :config_id,
+          loginUrl: :login_url
         }.each do |camel, snake|
           normalized[snake] = normalized[camel] if normalized.key?(camel) && !normalized.key?(snake)
         end

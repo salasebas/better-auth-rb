@@ -15,6 +15,7 @@ module BetterAuth
         user_info_endpoint: "https://api.notion.com/v1/users/me",
         scopes: scopes,
         auth_params: {owner: "user"},
+        token_authentication: :basic,
         user_info_headers: {"Notion-Version" => "2022-06-28"},
         profile_map: ->(profile) {
           user = profile.dig("bot", "owner", "user") || profile

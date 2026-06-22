@@ -5,7 +5,8 @@ module BetterAuth
     module_function
 
     def naver(client_id:, client_secret:, scopes: ["profile", "email"], **options)
-      Base.oauth_provider(
+      normalized = Base.normalize_options(options)
+      provider = Base.oauth_provider(
         id: "naver",
         name: "Naver",
         client_id: client_id,
@@ -26,6 +27,28 @@ module BetterAuth
         },
         **options
       )
+      provider[:get_user_info] = lambda do |tokens|
+        custom = normalized[:get_user_info]
+        next custom.call(tokens) if custom
+
+        profile = Base.fetch_user_info("https://openapi.naver.com/v1/nid/me", tokens)
+        next nil unless profile && profile["resultcode"] == "00"
+
+        data = profile["response"] || {}
+        user = Base.apply_profile_mapping(
+          {
+            id: data["id"],
+            name: data["name"] || data["nickname"] || "",
+            email: data["email"],
+            image: data["profile_image"],
+            emailVerified: false
+          },
+          profile,
+          normalized
+        )
+        {user: user, data: profile}
+      end
+      provider
     end
   end
 end
