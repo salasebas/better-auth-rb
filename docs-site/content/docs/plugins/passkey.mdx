@@ -27,7 +27,25 @@ auth = BetterAuth.auth(
   secret: ENV.fetch("BETTER_AUTH_SECRET"),
   base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
   plugins: [
-    BetterAuth::Plugins.passkey
+    BetterAuth::Plugins.passkey(
+      registration: {
+        require_session: false,
+        resolve_user: ->(data) {
+          context = data.fetch(:context)
+          user = User.find_by!(email: context)
+          BetterAuth::Plugins.passkey_registration_user_data(
+            id: user.id,
+            name: user.email,
+            display_name: user.name,
+            email: user.email
+          )
+        },
+        extensions: {credProps: true}
+      },
+      authentication: {
+        extensions: {credProps: true}
+      }
+    )
   ]
 )
 ```
@@ -98,22 +116,169 @@ auth = BetterAuth.auth(
 When `registration.requireSession` is `false`, passkey registration can be initiated without a session. You can pass an opaque `context` to the registration options endpoint; it will be forwarded to `resolveUser`.
 
 ```ruby title="server.rb"
-# Use the generated Ruby tab in the API block above, or call the same route over HTTP.
-# HTTP paths and JSON keys keep the upstream wire shape.
+options = auth.api.generate_passkey_registration_options(
+  query: {context: "user@example.com"}
+)
 ```
 
 When using passkey-first flows (`registration.requireSession: false`), pass the same `context` from the client when registering the passkey so the server can resolve the user during verification:
 
 ```ruby title="server.rb"
-# Use the generated Ruby tab in the API block above, or call the same route over HTTP.
-# HTTP paths and JSON keys keep the upstream wire shape.
+registration = auth.api.generate_passkey_registration_options(
+  query: {context: "user@example.com"},
+  return_headers: true
+)
+
+passkey = auth.api.verify_passkey_registration(
+  headers: {
+    "origin" => "http://localhost:3000",
+    "cookie" => registration.fetch(:headers).fetch("set-cookie")
+  },
+  body: {
+    response: webauthn_response,
+    name: "Primary passkey"
+  }
+)
 ```
 
 ## Usage
 
-<UnderDevelopment />
+### Add/Register a passkey
 
-This upstream section depends on Better Auth client helpers. RubyAuth documents the server plugin and HTTP/Rack integration for this feature.
+To add or register a passkey, first generate WebAuthn registration options. By default the user must have a fresh session.
+
+`POST /passkey/generate-register-options`
+
+```ruby title="server.rb"
+registration = auth.api.generate_passkey_registration_options(
+  headers: {"cookie" => request.env["HTTP_COOKIE"]},
+  query: {
+    name: "Work laptop",
+    authenticatorAttachment: "platform"
+  },
+  return_headers: true
+)
+```
+
+Send the returned options to the browser's WebAuthn API, then verify the browser response with the challenge cookie returned by the options call.
+
+`POST /passkey/verify-registration`
+
+```ruby title="server.rb"
+passkey = auth.api.verify_passkey_registration(
+  headers: {
+    "cookie" => [
+      request.env["HTTP_COOKIE"],
+      registration.fetch(:headers).fetch("set-cookie")
+    ].compact.join("; "),
+    "origin" => request.base_url
+  },
+  body: {
+    response: webauthn_response,
+    name: "Work laptop"
+  }
+)
+```
+
+### Sign in with a passkey
+
+To sign in with a passkey, generate authentication options, send them to the browser's WebAuthn API, then verify the assertion.
+
+`POST /passkey/generate-authenticate-options`
+
+```ruby title="server.rb"
+authentication = auth.api.generate_passkey_authentication_options(
+  return_headers: true
+)
+```
+
+`POST /passkey/verify-authentication`
+
+```ruby title="server.rb"
+status, headers, body = auth.api.verify_passkey_authentication(
+  headers: {
+    "cookie" => authentication.fetch(:headers).fetch("set-cookie"),
+    "origin" => request.base_url
+  },
+  body: {
+    response: webauthn_assertion
+  }
+)
+```
+
+The verification response is the normal Better Auth session response. If you call through Rack, forward the returned `set-cookie` header to the browser.
+
+### Extensions
+
+You can configure server-defined WebAuthn extensions for registration and authentication.
+
+```ruby title="config/auth.rb"
+BetterAuth::Plugins.passkey(
+  registration: {
+    extensions: {credProps: true}
+  },
+  authentication: {
+    extensions: {credProps: true}
+  }
+)
+```
+
+Registration options also accept an optional `context` for passkey-first registration flows and an optional `authenticatorAttachment` value of `"platform"` or `"cross-platform"`.
+
+### List passkeys
+
+`GET /passkey/list-user-passkeys`
+
+```ruby title="server.rb"
+passkeys = auth.api.list_passkeys(
+  headers: {"cookie" => request.env["HTTP_COOKIE"]}
+)
+```
+
+### Deleting passkeys
+
+`POST /passkey/delete-passkey`
+
+```ruby title="server.rb"
+result = auth.api.delete_passkey(
+  headers: {"cookie" => request.env["HTTP_COOKIE"]},
+  body: {
+    id: params.fetch("id")
+  }
+)
+```
+
+### Updating passkey names
+
+`POST /passkey/update-passkey`
+
+```ruby title="server.rb"
+result = auth.api.update_passkey(
+  headers: {"cookie" => request.env["HTTP_COOKIE"]},
+  body: {
+    id: params.fetch("id"),
+    name: "Renamed passkey"
+  }
+)
+```
+
+### Conditional UI
+
+Conditional UI is browser behavior around discoverable credentials and autofill. RubyAuth exposes the server-side pieces through `generate_passkey_authentication_options` and `verify_passkey_authentication`; the browser integration remains application code that calls the WebAuthn API with the returned options.
+
+```ruby title="server.rb"
+options = auth.api.generate_passkey_authentication_options
+```
+
+### Debugging
+
+Passkey registration and authentication depend on the request origin, relying party ID, challenge cookie, and WebAuthn response. When debugging, check these first:
+
+* `origin` must match the browser origin that created the WebAuthn response.
+* The challenge cookie from the generate-options call must be sent to the verify call.
+* Registration requires a fresh session unless `registration.require_session` is `false` and `registration.resolve_user` returns a user.
+* Management endpoints only operate on passkeys owned by the authenticated user.
+
 ## Schema
 
 The plugin require a new table in the database to store passkey data.
@@ -223,4 +388,4 @@ until it hits an effective TLD. So `www.example.com` can use the RP IDs `www.exa
 
 <UnderDevelopment />
 
-This upstream section depends on Better Auth client helpers. RubyAuth documents the server plugin and HTTP/Rack integration for this feature.
+RubyAuth does not ship Expo client integration. Use the server endpoints documented above from your app-specific client integration.
