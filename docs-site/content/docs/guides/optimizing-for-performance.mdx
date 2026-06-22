@@ -1,60 +1,203 @@
 ---
-title: Optimizing For Performance
-description: Performance tips for RubyAuth server deployments.
+title: Optimizing for Performance
+description: A guide to optimizing your RubyAuth application for performance.
 ---
 
-RubyAuth runs as a Rack app — optimize the Ruby process, database, and cookie/session strategy.
+<RubyAuthDisclaimer />
 
-## Database
+In this guide, we’ll go over some of the ways you can optimize your application for a more performant RubyAuth app.
 
-- Use PostgreSQL or MySQL in production; avoid `:memory`
-- Index auth tables from generated migrations
-- Place auth DB close to app servers (low latency)
+## Caching
 
-## Session cookie cache
+Caching is a powerful technique that can significantly improve the performance of your RubyAuth application by reducing the number of database queries and speeding up response times.
 
-Reduce database reads with encrypted session data cookies:
+### Cookie Cache
 
-```ruby
-session: {
-  cookie_cache: {
-    enabled: true,
-    max_age: 300,
-    strategy: "jwe"
-  }
-}
+Calling your database every time `useSession` or `get_session` is invoked isn’t ideal, especially if sessions don’t change frequently. Cookie caching handles this by storing session data in a short-lived, signed cookie similar to how JWT access tokens are used with refresh tokens.
+
+To turn on cookie caching, just set `session.cookie_cache` in your auth config:
+
+```ruby title="config/initializers/better_auth.rb"
+require "better_auth"
+
+auth = BetterAuth.auth(
+  secret: ENV.fetch("BETTER_AUTH_SECRET"),
+  base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
+  database: :postgres
+)
 ```
 
-See [Session management](/docs/concepts/session-management).
+Read more about [cookie caching](/docs/concepts/session-management#cookie-cache).
 
-## Rate limiting storage
+### Framework Caching
 
-Use shared storage for rate limits when running multiple Puma/Unicorn workers:
+Here are examples of how you can do caching in different frameworks and environments:
 
-```ruby
-rate_limit: {
-  enabled: true,
-  storage: :memory  # single process only
-}
+<Tabs items={["Next", "react-router", "SolidStart", "TanStack Query"]}>
+  <Tab value="Next">
+    Since Next v15, we can use the `"use cache"` directive to cache the response of a server function.
+
+    ```ruby
+require "better_auth"
+
+auth = BetterAuth.auth(
+  secret: ENV.fetch("BETTER_AUTH_SECRET"),
+  base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
+  database: :postgres
+)
 ```
 
-<UnderDevelopment>
-  Redis-backed rate limit storage requires explicit adapter wiring — verify with `bundle exec better-auth doctor`.
-</UnderDevelopment>
+    Learn more about NextJS use cache directive <Link href="https://nextjs.org/docs/app/api-reference/directives/use-cache">here</Link>.
+  </Tab>
 
-## Secondary storage
+  <Tab value="react-router">
+    In React Router v7, you use HTTP `Cache-Control` headers in the loader function to cache responses. You must also export a headers function to send these headers. Here's an example:
 
-Optional Redis secondary storage can offload hot session data. Configure only when needed and benchmark first.
+    ```ruby
+require "better_auth"
 
-## Keep plugins minimal
+auth = BetterAuth.auth(
+  secret: ENV.fetch("BETTER_AUTH_SECRET"),
+  base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
+  database: :postgres
+)
+```
+  </Tab>
 
-Each plugin adds routes and schema. Enable only plugins you use.
+  <Tab value="SolidStart">
+    In SolidStart, you can use the `query` function to cache data. Here’s an example:
 
-## Reverse proxies
+    ```ruby
+require "better_auth"
 
-Set `trusted_origins`, forward `X-Forwarded-*` headers correctly, and use HTTPS termination at the load balancer.
+auth = BetterAuth.auth(
+  secret: ENV.fetch("BETTER_AUTH_SECRET"),
+  base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
+  database: :postgres
+)
+```
 
-## Related
+    Learn more about SolidStart `query` function <Link href="https://docs.solidjs.com/solid-router/reference/data-apis/query">here</Link>.
+  </Tab>
 
-- [Options](/docs/reference/options)
-- [PostgreSQL adapter](/docs/adapters/postgresql)
+  <Tab value="TanStack Query">
+    With TanStack Query you can use the `useQuery` hook to cache data. Here’s an example:
+
+    ```ruby
+require "better_auth"
+
+auth = BetterAuth.auth(
+  secret: ENV.fetch("BETTER_AUTH_SECRET"),
+  base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
+  database: :postgres
+)
+```
+
+    Learn more about TanStack Query <Link href="https://tanstack.com/query">here</Link>.
+  </Tab>
+</Tabs>
+
+## Background Tasks
+
+On serverless platforms (Vercel, Cloudflare Workers), you can improve response times by deferring non-critical work—cleanup, analytics, rate limit updates, email sending—to run after the response is sent. Configure [`advanced.backgroundTasks`](/docs/reference/options#backgroundtasks) and use `ctx.context.runInBackground` or `ctx.context.runInBackgroundOrAwait` in hooks.
+
+```ruby title="config/initializers/better_auth.rb"
+require "better_auth"
+
+auth = BetterAuth.auth(
+  secret: ENV.fetch("BETTER_AUTH_SECRET"),
+  base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
+  database: :postgres
+)
+```
+
+See the [Context documentation](/docs/concepts/hooks#runinbackground) for more examples.
+
+## SSR Optimizations
+
+If you're using a framework that supports server-side rendering, it's usually best to pre-fetch the user session on the server and use it as a fallback on the client.
+
+```ruby
+require "better_auth"
+
+auth = BetterAuth.auth(
+  secret: ENV.fetch("BETTER_AUTH_SECRET"),
+  base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
+  database: :postgres
+)
+```
+
+## Database optimizations
+
+Optimizing database performance is essential to get the best out of RubyAuth.
+
+#### Recommended fields to index
+
+| Table         | Fields                     | Plugin       |
+| ------------- | -------------------------- | ------------ |
+| users         | `email`                    |              |
+| accounts      | `user_id`                   |              |
+| sessions      | `user_id`, `token`          |              |
+| verifications | `identifier`               |              |
+| invitations   | `email`, `organization_id`  | organization |
+| members       | `user_id`, `organization_id` | organization |
+| organizations | `slug`                     | organization |
+| passkey       | `user_id`                   | passkey      |
+| twoFactor     | `secret`                   | twoFactor    |
+
+<Callout>
+  We intend to add indexing support in our schema generation tool in the future.
+</Callout>
+
+## Bundle Size Optimization
+
+If you're using custom adapters (like Prisma, Drizzle, or MongoDB), you can reduce your bundle size by using `better-auth/minimal` instead of `better-auth`. This version excludes Kysely, which is only needed when using direct database connections.
+
+### Usage
+
+Simply import from `better-auth/minimal` instead of `better-auth`:
+
+<Tabs items={["Prisma", "Drizzle", "MongoDB"]}>
+  <Tab value="Prisma">
+    ```ruby title="config/initializers/better_auth.rb"
+require "better_auth"
+
+auth = BetterAuth.auth(
+  secret: ENV.fetch("BETTER_AUTH_SECRET"),
+  base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
+  database: :postgres
+)
+```
+  </Tab>
+
+  <Tab value="Drizzle">
+    ```ruby title="config/initializers/better_auth.rb"
+require "better_auth"
+
+auth = BetterAuth.auth(
+  secret: ENV.fetch("BETTER_AUTH_SECRET"),
+  base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
+  database: :postgres
+)
+```
+  </Tab>
+
+  <Tab value="MongoDB">
+    ```ruby title="config/initializers/better_auth.rb"
+require "better_auth"
+
+auth = BetterAuth.auth(
+  secret: ENV.fetch("BETTER_AUTH_SECRET"),
+  base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
+  database: :postgres
+)
+```
+  </Tab>
+</Tabs>
+
+<Callout type="warning">
+  **Limitations:**
+
+  * Direct database connections are not supported (you must use an adapter)
+  * Built-in migrations are not supported. Use external migration tools (or use `better-auth` if you need built-in migration support)
+</Callout>

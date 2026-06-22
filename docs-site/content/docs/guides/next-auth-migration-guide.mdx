@@ -1,0 +1,731 @@
+---
+title: Migrating from Auth.js to RubyAuth
+description: A step-by-step guide to transitioning from Auth.js to RubyAuth.
+---
+
+<RubyAuthDisclaimer />
+
+## Introduction
+
+In this guide, we'll walk through the steps to migrate a project from [Auth.js](https://authjs.dev/) (formerly [NextAuth.js](https://next-auth.js.org/)) to RubyAuth. Since these projects have different design philosophies, the migration requires careful planning and work. If your current setup is working well, there's no urgent need to migrate. We continue to handle security patches and critical issues for Auth.js.
+
+However, if you're starting a new project or facing challenges with your current setup, we strongly recommend using RubyAuth. Our roadmap includes features previously exclusive to Auth.js, and we hope this will unite the ecosystem more strongly without causing fragmentation.
+
+<Steps>
+  <Step>
+    ## Create RubyAuth Instance
+
+    Before starting the migration process, set up RubyAuth in your project. Follow the [installation guide](/docs/installation) to get started.
+
+    For example, if you use the GitHub OAuth provider, here is a comparison of the `config/initializers/better_auth.rb` file.
+
+    <Tabs items={["Auth.js", "RubyAuth"]}>
+      <Tab value="Auth.js">
+        ```ruby
+# RubyAuth migration step
+# Export users from next-auth, import them through your app service,
+# then invalidate existing next-auth sessions and redirect users through RubyAuth.
+```
+      </Tab>
+
+      <Tab value="RubyAuth">
+        ```ruby
+require "better_auth"
+
+auth = BetterAuth.auth(
+  secret: ENV.fetch("BETTER_AUTH_SECRET"),
+  base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
+  database: :postgres,
+  email_and_password: { enabled: true },
+  social_providers: {
+    google: {
+      client_id: ENV.fetch("GOOGLE_CLIENT_ID"),
+      client_secret: ENV.fetch("GOOGLE_CLIENT_SECRET")
+    }
+  }
+)
+```
+      </Tab>
+    </Tabs>
+
+    <Callout type="info">
+      Now RubyAuth supports stateless session management without any database. If you were using a Database adapter in Auth.js, you can refer to the [Database models](#database-models) below to check the differences with RubyAuth's core schema.
+    </Callout>
+  </Step>
+
+  <Step>
+    ## Replace client SDK calls
+
+    Auth.js client helpers cannot be reused directly from RubyAuth. Replace them with Rails/Rack helpers for server-rendered pages or HTTP calls to the mounted RubyAuth endpoints from browser code.
+
+    <UnderDevelopment>
+      RubyAuth does not ship a JavaScript client SDK. Keep this step as an integration boundary and avoid copying Auth.js client code into the Ruby app.
+    </UnderDevelopment>
+  </Step>
+
+  <Step>
+    ## Update the Route Handler
+
+    Rename the `/app/api/auth/[...nextauth]` folder to `/app/api/auth/[...all]` to avoid confusion. Then, update the `config/routes.rb` or `config.ru` file as follows:
+
+    <Tabs items={["Auth.js", "RubyAuth"]}>
+      <Tab value="Auth.js">
+        ```ruby
+# RubyAuth migration step
+# Export users from next-auth, import them through your app service,
+# then invalidate existing next-auth sessions and redirect users through RubyAuth.
+```
+      </Tab>
+
+      <Tab value="RubyAuth">
+        ```ruby
+# RubyAuth migration step
+# Export users from next-auth, import them through your app service,
+# then invalidate existing next-auth sessions and redirect users through RubyAuth.
+```
+      </Tab>
+    </Tabs>
+  </Step>
+
+  <Step>
+    ## Session Management
+
+    In this section, we'll look at how to manage sessions in RubyAuth compared to Auth.js. For more information, see [here](/docs/concepts/session-management).
+
+    ### Client-side
+
+    #### Sign In
+
+    Here are the differences between Auth.js and RubyAuth for signing in users. For example, with the GitHub OAuth provider:
+
+    <Tabs items={["Auth.js", "RubyAuth"]}>
+      <Tab value="Auth.js">
+        ```ruby
+# RubyAuth migration step
+# Export users from next-auth, import them through your app service,
+# then invalidate existing next-auth sessions and redirect users through RubyAuth.
+```
+      </Tab>
+
+      <Tab value="RubyAuth">
+        ```ruby
+# RubyAuth migration step
+# Export users from next-auth, import them through your app service,
+# then invalidate existing next-auth sessions and redirect users through RubyAuth.
+```
+      </Tab>
+    </Tabs>
+
+    #### Sign Out
+
+    Here are the differences between Auth.js and RubyAuth when signing out users.
+
+    <Tabs items={["Auth.js", "RubyAuth"]}>
+      <Tab value="Auth.js">
+        ```ruby
+# RubyAuth migration step
+# Export users from next-auth, import them through your app service,
+# then invalidate existing next-auth sessions and redirect users through RubyAuth.
+```
+      </Tab>
+
+      <Tab value="RubyAuth">
+        ```ruby
+# RubyAuth migration step
+# Export users from next-auth, import them through your app service,
+# then invalidate existing next-auth sessions and redirect users through RubyAuth.
+```
+      </Tab>
+    </Tabs>
+
+    #### Get Session
+
+    Here are the differences between Auth.js and RubyAuth for getting the current active session.
+
+    <Tabs items={["Auth.js", "RubyAuth"]}>
+      <Tab value="Auth.js">
+        ```ruby
+# RubyAuth migration step
+# Export users from next-auth, import them through your app service,
+# then invalidate existing next-auth sessions and redirect users through RubyAuth.
+```
+      </Tab>
+
+      <Tab value="RubyAuth">
+        ```ruby
+# RubyAuth migration step
+# Export users from next-auth, import them through your app service,
+# then invalidate existing next-auth sessions and redirect users through RubyAuth.
+```
+      </Tab>
+    </Tabs>
+
+    ### Server-side
+
+    #### Sign In
+
+    Here are the differences between Auth.js and RubyAuth for signing in users. For example, with the GitHub OAuth provider:
+
+    <Tabs items={["Auth.js", "RubyAuth"]}>
+      <Tab value="Auth.js">
+        ```ruby
+# RubyAuth migration step
+# Export users from next-auth, import them through your app service,
+# then invalidate existing next-auth sessions and redirect users through RubyAuth.
+```
+      </Tab>
+
+      <Tab value="RubyAuth">
+        ```ruby
+# RubyAuth migration step
+# Export users from next-auth, import them through your app service,
+# then invalidate existing next-auth sessions and redirect users through RubyAuth.
+```
+      </Tab>
+    </Tabs>
+
+    #### Sign Out
+
+    Here are the differences between Auth.js and RubyAuth when signing out users.
+
+    <Tabs items={["Auth.js", "RubyAuth"]}>
+      <Tab value="Auth.js">
+        ```ruby
+# RubyAuth migration step
+# Export users from next-auth, import them through your app service,
+# then invalidate existing next-auth sessions and redirect users through RubyAuth.
+```
+      </Tab>
+
+      <Tab value="RubyAuth">
+        ```ruby
+# RubyAuth migration step
+# Export users from next-auth, import them through your app service,
+# then invalidate existing next-auth sessions and redirect users through RubyAuth.
+```
+      </Tab>
+    </Tabs>
+
+    #### Get Session
+
+    Here are the differences between Auth.js and RubyAuth for getting the current active session.
+
+    <Tabs items={["Auth.js", "RubyAuth"]}>
+      <Tab value="Auth.js">
+        ```ruby
+# RubyAuth migration step
+# Export users from next-auth, import them through your app service,
+# then invalidate existing next-auth sessions and redirect users through RubyAuth.
+```
+      </Tab>
+
+      <Tab value="RubyAuth">
+        ```ruby
+# RubyAuth migration step
+# Export users from next-auth, import them through your app service,
+# then invalidate existing next-auth sessions and redirect users through RubyAuth.
+```
+      </Tab>
+    </Tabs>
+  </Step>
+
+  <Step>
+    ## Protecting Resources
+
+    > Proxy(Middleware) is not intended for slow data fetching. While Proxy can be helpful for optimistic checks such as permission-based redirects, it should not be used as a full session management or authorization solution. - [Next.js docs](https://nextjs.org/docs/app/getting-started/proxy#use-cases)
+
+    Auth.js offers approaches using Proxy (Middleware), but we recommend handling auth checks on each page or route rather than in a Proxy or Layout. Here is a basic example of protecting resources with RubyAuth.
+
+    <Tabs items={["Client-side", "Server-side"]}>
+      <Tab value="Client-side">
+        ```ruby title="app/dashboard/page.rb"
+# Rails controller/helper example
+before_action :require_current_user
+
+def require_current_user
+  @session = BetterAuth::Rails.current_session(request)
+  redirect_to "/sign-in" unless @session
+end
+```
+      </Tab>
+
+      <Tab value="Server-side">
+        ```ruby title="app/dashboard/page.rb"
+# Rails controller/helper example
+before_action :require_current_user
+
+def require_current_user
+  @session = BetterAuth::Rails.current_session(request)
+  redirect_to "/sign-in" unless @session
+end
+```
+      </Tab>
+    </Tabs>
+  </Step>
+
+  <Step>
+    ## Database models
+
+    Both Auth.js and RubyAuth provide stateless (JWT) and database session strategies. If you were using the database session strategy in Auth.js and plan to continue using it in RubyAuth, you will also need to migrate your database.
+
+    Just like Auth.js has database models, RubyAuth also has a core schema. In this section, we'll compare the two and explore the differences between them.
+
+    ### User -> User
+
+    <Tabs items={["Auth.js", "RubyAuth"]}>
+      <Tab value="Auth.js">
+        <DatabaseTable
+          fields={[
+{
+name: "id",
+type: "string",
+description: "Unique identifier for each user",
+isPrimaryKey: true,
+},
+{
+name: "name",
+type: "string",
+description: "User's chosen display name",
+isOptional: true,
+},
+{
+name: "email",
+type: "string",
+description: "User's email address for communication and login",
+isOptional: true,
+},
+{
+name: "email_verified",
+type: "Date",
+description: "When the user's email was verified",
+isOptional: true,
+},
+{
+name: "image",
+type: "string",
+description: "User's image url",
+isOptional: true,
+},
+]}
+        />
+      </Tab>
+
+      <Tab value="RubyAuth">
+        <DatabaseTable
+          fields={[
+{
+name: "id",
+type: "string",
+description: "Unique identifier for each user",
+isPrimaryKey: true,
+},
+{
+name: "name",
+type: "string",
+description: "User's chosen display name",
+},
+{
+name: "email",
+type: "string",
+description: "User's email address for communication and login",
+isUnique: true,
+},
+{
+name: "email_verified",
+type: "boolean",
+description: "Whether the user's email is verified",
+},
+{
+name: "image",
+type: "string",
+description: "User's image url",
+isOptional: true,
+},
+{
+name: "created_at",
+type: "Date",
+description: "Timestamp of when the user account was created",
+},
+{
+name: "updated_at",
+type: "Date",
+description: "Timestamp of the last update to the user's information",
+},
+]}
+        />
+      </Tab>
+    </Tabs>
+
+    ### Session -> Session
+
+    <Tabs items={["Auth.js", "RubyAuth"]}>
+      <Tab value="Auth.js">
+        <DatabaseTable
+          fields={[
+{
+name: "id",
+type: "string",
+description: "Unique identifier for each session",
+isPrimaryKey: true,
+},
+{
+name: "user_id",
+type: "string",
+description: "The ID of the user",
+isForeignKey: true,
+references: { model: "user", field: "id", onDelete: "cascade" },
+},
+{
+name: "session_token",
+type: "string",
+description: "The unique session token",
+},
+{
+name: "expires",
+type: "Date",
+description: "The time when the session expires",
+},
+]}
+        />
+      </Tab>
+
+      <Tab value="RubyAuth">
+        <DatabaseTable
+          fields={[
+{
+name: "id",
+type: "string",
+description: "Unique identifier for each session",
+isPrimaryKey: true,
+},
+{
+name: "user_id",
+type: "string",
+description: "The ID of the user",
+isForeignKey: true,
+references: { model: "user", field: "id", onDelete: "cascade" },
+},
+{
+name: "token",
+type: "string",
+description: "The unique session token",
+isUnique: true,
+},
+{
+name: "expires_at",
+type: "Date",
+description: "The time when the session expires",
+},
+{
+name: "ip_address",
+type: "string",
+description: "The IP address of the device",
+isOptional: true,
+},
+{
+name: "userAgent",
+type: "string",
+description: "The user agent information of the device",
+isOptional: true,
+},
+{
+name: "created_at",
+type: "Date",
+description: "Timestamp of when the session was created",
+},
+{
+name: "updated_at",
+type: "Date",
+description: "Timestamp of when the session was updated",
+},
+]}
+        />
+      </Tab>
+    </Tabs>
+
+    ### Account -> Account
+
+    <Tabs items={["Auth.js", "RubyAuth"]}>
+      <Tab value="Auth.js">
+        <DatabaseTable
+          fields={[
+{
+name: "id",
+type: "string",
+description: "Unique identifier for each account",
+isPrimaryKey: true,
+},
+{
+name: "user_id",
+type: "string",
+description: "The ID of the user",
+isForeignKey: true,
+references: { model: "user", field: "id", onDelete: "cascade" },
+},
+{
+name: "type",
+type: "string",
+description: "Type of the account (e.g. 'oauth', 'email', 'credentials')",
+},
+{
+name: "provider",
+type: "string",
+description: "Provider identifier",
+},
+{
+name: "providerAccountId",
+type: "string",
+description: "Account ID from the provider",
+},
+{
+name: "refresh_token",
+type: "string",
+description: "The refresh token of the account. Returned by the provider",
+isOptional: true,
+},
+{
+name: "access_token",
+type: "string",
+description: "The access token of the account. Returned by the provider",
+isOptional: true,
+},
+{
+name: "expires_at",
+type: "number",
+description: "The time when the access token expires",
+isOptional: true,
+},
+{
+name: "token_type",
+type: "string",
+description: "Type of the token",
+isOptional: true,
+},
+{
+name: "scope",
+type: "string",
+description: "The scope of the account. Returned by the provider",
+isOptional: true,
+},
+{
+name: "id_token",
+type: "string",
+description: "The ID token returned from the provider",
+isOptional: true,
+},
+{
+name: "session_state",
+type: "string",
+description: "OAuth session state",
+isOptional: true,
+},
+]}
+        />
+      </Tab>
+
+      <Tab value="RubyAuth">
+        <DatabaseTable
+          fields={[
+{
+name: "id",
+type: "string",
+description: "Unique identifier for each account",
+isPrimaryKey: true,
+},
+{
+name: "user_id",
+type: "string",
+description: "The ID of the user",
+isForeignKey: true,
+references: { model: "user", field: "id", onDelete: "cascade" },
+},
+{
+name: "accountId",
+type: "string",
+description:
+"The ID of the account as provided by the SSO or equal to user_id for credential accounts",
+},
+{
+name: "provider_id",
+type: "string",
+description: "The ID of the provider",
+},
+{
+name: "access_token",
+type: "string",
+description: "The access token of the account. Returned by the provider",
+isOptional: true,
+},
+{
+name: "refresh_token",
+type: "string",
+description: "The refresh token of the account. Returned by the provider",
+isOptional: true,
+},
+{
+name: "access_tokenExpiresAt",
+type: "Date",
+description: "The time when the access token expires",
+isOptional: true,
+},
+{
+name: "refresh_tokenExpiresAt",
+type: "Date",
+description: "The time when the refresh token expires",
+isOptional: true,
+},
+{
+name: "scope",
+type: "string",
+description: "The scope of the account. Returned by the provider",
+isOptional: true,
+},
+{
+name: "id_token",
+type: "string",
+description: "The ID token returned from the provider",
+isOptional: true,
+},
+{
+name: "password",
+type: "string",
+description:
+"The password of the account. Mainly used for email and password authentication",
+isOptional: true,
+},
+{
+name: "created_at",
+type: "Date",
+description: "Timestamp of when the account was created",
+},
+{
+name: "updated_at",
+type: "Date",
+description: "Timestamp of when the account was updated",
+},
+]}
+        />
+      </Tab>
+    </Tabs>
+
+    ### VerificationToken -> Verification
+
+    <Tabs items={["Auth.js", "RubyAuth"]}>
+      <Tab value="Auth.js">
+        <DatabaseTable
+          fields={[
+{
+name: "identifier",
+type: "string",
+description: "Identifier for the verification request",
+isPrimaryKey: true,
+},
+{
+name: "token",
+type: "string",
+description: "The verification token",
+isPrimaryKey: true,
+},
+{
+name: "expires",
+type: "Date",
+description: "The time when the verification token expires",
+},
+]}
+        />
+      </Tab>
+
+      <Tab value="RubyAuth">
+        <DatabaseTable
+          fields={[
+{
+name: "id",
+type: "string",
+description: "Unique identifier for each verification",
+isPrimaryKey: true,
+},
+{
+name: "identifier",
+type: "string",
+description: "The identifier for the verification request",
+},
+{
+name: "value",
+type: "string",
+description: "The value to be verified",
+},
+{
+name: "expires_at",
+type: "Date",
+description: "The time when the verification request expires",
+},
+{
+name: "created_at",
+type: "Date",
+description: "Timestamp of when the verification request was created",
+},
+{
+name: "updated_at",
+type: "Date",
+description: "Timestamp of when the verification request was updated",
+},
+]}
+        />
+      </Tab>
+    </Tabs>
+
+    ### Comparison
+
+    Table: <strong className="underline italic">User</strong>
+
+    * `name`, `email`, and `email_verified` are required in RubyAuth, while optional in Auth.js
+    * `email_verified` uses a boolean in RubyAuth, while Auth.js uses a timestamp
+    * RubyAuth includes `created_at` and `updated_at` timestamps
+
+    Table: <strong className="underline italic">Session</strong>
+
+    * RubyAuth uses `token` instead of `session_token`
+    * RubyAuth uses `expires_at` instead of `expires`
+    * RubyAuth includes `ip_address` and `userAgent` fields
+    * RubyAuth includes `created_at` and `updated_at` timestamps
+
+    Table: <strong className="underline italic">Account</strong>
+
+    * RubyAuth uses camelCase naming (e.g. `refresh_token` vs `refresh_token`)
+    * RubyAuth includes `accountId` to distinguish between the account ID and internal ID
+    * RubyAuth uses `provider_id` instead of `provider`
+    * RubyAuth includes `access_tokenExpiresAt` and `refresh_tokenExpiresAt` for token management
+    * RubyAuth includes `password` field to support built-in credential authentication
+    * RubyAuth does not have a `type` field as it's determined by the `provider_id`
+    * RubyAuth removes `token_type` and `session_state` fields
+    * RubyAuth includes `created_at` and `updated_at` timestamps
+
+    <Callout type="warn">
+      **Critical for Credentials Migration:**
+      In Auth.js, passwords are often stored directly on the `User` model. In RubyAuth, passwords must be stored in the `Account` table.
+      If you are migrating users with passwords (including for the Phone Number plugin), you **must** create a record in the `account` table for each user with the `provider_id` set specifically to `"credential"`. Without this record, password-based sign-ins will fail.
+    </Callout>
+
+    Table: <strong className="underline italic">VerificationToken -> Verification</strong>
+
+    * RubyAuth uses `Verification` table instead of `VerificationToken`
+    * RubyAuth uses a single `id` primary key instead of composite primary key
+    * RubyAuth uses `value` instead of `token` to support various verification types
+    * RubyAuth uses `expires_at` instead of `expires`
+    * RubyAuth includes `created_at` and `updated_at` timestamps
+
+    <Callout type="info">
+      If you were using Auth.js v4, note that v5 does not introduce any breaking changes to the database schema. Optional fields like `oauth_token_secret` and `oauth_token` can be removed if you are not using them. Rarely used fields like `refresh_token_expires_in` can also be removed.
+    </Callout>
+
+    ### Customization
+
+    You may have extended the database models or implemented additional logic in Auth.js. RubyAuth allows you to customize the core schema in a type-safe way. You can also define custom logic during the lifecycle of database operations. For more details, see [Concepts - Database](/docs/concepts/database).
+  </Step>
+</Steps>
+
+## Wrapping Up
+
+Now you're ready to migrate from Auth.js to RubyAuth. For a complete implementation with multiple authentication methods, check out the [Next.js Demo App](https://github.com/better-auth/better-auth/tree/main/demo/nextjs). RubyAuth offers greater flexibility and more features, so be sure to explore the [documentation](/docs) to unlock its full potential.
+
+If you need help with migration, join our [community](/community) or reach out to [contact@better-auth.com](mailto:contact@better-auth.com).
