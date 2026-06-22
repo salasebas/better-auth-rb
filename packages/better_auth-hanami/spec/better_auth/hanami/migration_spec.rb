@@ -67,6 +67,41 @@ RSpec.describe BetterAuth::Hanami::Migration do
     expect(migration).to include("foreign_key :owner_email, :users, type: String, null: false, key: :email, on_delete: :cascade")
   end
 
+  it "merges logical plugin models that share one physical table" do
+    plugin = BetterAuth::Plugin.new(
+      id: "profile-collision",
+      schema: {
+        auditProfile: {
+          model_name: "users",
+          fields: {
+            auditFlag: {type: "boolean", required: false, index: true}
+          }
+        },
+        billingProfile: {
+          model_name: "users",
+          fields: {
+            billingRef: {type: "string", required: false}
+          }
+        },
+        profileLink: {
+          model_name: "profile_links",
+          fields: {
+            auditFlag: {type: "boolean", required: false, references: {model: "auditProfile", field: "auditFlag"}}
+          }
+        }
+      }
+    )
+    plugin_config = BetterAuth::Configuration.new(secret: secret, database: :memory, plugins: [plugin])
+
+    migration = described_class.render(plugin_config)
+
+    expect(migration.scan("create_table :users")).to eq(["create_table :users"])
+    expect(migration).to include("column :audit_flag, TrueClass")
+    expect(migration).to include("column :billing_ref, String")
+    expect(migration).to include("index :audit_flag")
+    expect(migration).to include("foreign_key :audit_flag, :users, type: TrueClass, key: :audit_flag, on_delete: :cascade")
+  end
+
   it "renders bigint number fields for database rate limit millisecond timestamps" do
     rate_limit_config = BetterAuth::Configuration.new(secret: secret, database: :memory, rate_limit: {storage: "database"})
 
@@ -98,6 +133,24 @@ RSpec.describe BetterAuth::Hanami::Migration do
     expect(migration).to include("column :metadata, JSON")
     expect(migration).to include("column :tags, JSON")
     expect(migration).to include("column :scores, JSON")
+  end
+
+  it "renders official external plugin tables with core-table field plugins" do
+    plugin_config = BetterAuth::Configuration.new(
+      secret: secret,
+      database: :memory,
+      plugins: [
+        external_schema_plugin,
+        BetterAuth::Plugins.username
+      ]
+    )
+
+    migration = described_class.render(plugin_config)
+
+    expect(migration).to include("create_table :external_credentials do")
+    expect(migration).to include("column :credential_id, String, null: false")
+    expect(migration).to include("index :user_id")
+    expect(migration).to include("column :username, String")
   end
 
   it "renders pending ROM migrations from the shared migration plan" do
@@ -177,5 +230,20 @@ RSpec.describe BetterAuth::Hanami::Migration do
 
   def secret
     "test-secret-that-is-long-enough-for-validation"
+  end
+
+  def external_schema_plugin
+    BetterAuth::Plugin.new(
+      id: "external-schema",
+      schema: {
+        externalCredential: {
+          model_name: "external_credentials",
+          fields: {
+            credentialId: {type: "string", required: true, unique: true},
+            userId: {type: "string", required: true, references: {model: "user", field: "id"}, index: true}
+          }
+        }
+      }
+    )
   end
 end

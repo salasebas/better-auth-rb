@@ -12,7 +12,7 @@ module BetterAuth
       def render(options, migration_version: nil, dialect: nil)
         migration_version ||= self.migration_version
         dialect ||= active_record_connection ? active_record_dialect(active_record_connection) : :rails
-        tables = BetterAuth::Schema.auth_tables(options)
+        tables = BetterAuth::Schema.migration_tables(options)
         lines = [
           "# frozen_string_literal: true",
           "",
@@ -20,7 +20,7 @@ module BetterAuth
           "  def change"
         ]
         tables.each_value { |table| lines.concat(create_table_lines(table, dialect: dialect)) }
-        tables.each_value { |table| lines.concat(index_lines(table)) }
+        tables.each_value { |table| lines.concat(index_lines(table, dialect: dialect)) }
         tables.each_value { |table| lines.concat(foreign_key_lines(table, options)) }
         lines.concat(["  end", "end", ""])
         lines.join("\n")
@@ -36,11 +36,11 @@ module BetterAuth
           "  def change"
         ]
         plan.to_create.each { |change| lines.concat(create_table_lines(change.table, dialect: plan.dialect)) }
-        plan.to_create.each { |change| lines.concat(index_lines(change.table)) }
+        plan.to_create.each { |change| lines.concat(index_lines(change.table, dialect: plan.dialect)) }
         plan.to_create.each { |change| lines.concat(foreign_key_lines(change.table, plan.tables)) }
         plan.to_add.each { |change| lines.concat(add_column_lines(change, dialect: plan.dialect)) }
         plan.to_index.reject { |change| created_tables.include?(change.table_name) }.each do |change|
-          lines << index_line(change.table_name, change.field_name, unique: change.unique)
+          lines << index_line(change.table_name, change.field_name, unique: change.unique, field: change.field, dialect: plan.dialect)
         end
         plan.to_add.each do |change|
           lines.concat(foreign_key_lines({model_name: change.table_name, fields: change.fields}, plan.tables))
@@ -108,7 +108,7 @@ module BetterAuth
         table_name = table.fetch(:model_name)
         lines = ["", "    create_table :#{table_name}, #{primary_key_options(table, dialect: dialect)} do |t|"]
         table.fetch(:fields).each do |logical_field, attributes|
-          next if logical_field == "id"
+          next if logical_name(logical_field, attributes) == "id"
 
           lines << column_line(logical_field, attributes, dialect: dialect)
         end
@@ -116,25 +116,25 @@ module BetterAuth
       end
 
       def primary_key_options(table, dialect: :rails)
-        attributes = table.fetch(:fields)["id"]
+        attributes = id_field(table)
         return "id: false" unless attributes
 
         column = attributes[:field_name] || physical_name("id")
-        parts = ["id: :#{rails_type("id", attributes, dialect)}"]
-        parts << "limit: #{BOUNDED_STRING_LIMIT}" if limited_string?("id", attributes)
+        parts = ["id: :#{rails_type(logical_name("id", attributes), attributes, dialect)}"]
+        parts << "limit: #{BOUNDED_STRING_LIMIT}" if limited_string?(logical_name("id", attributes), attributes)
         parts << "primary_key: :#{column}" unless column == "id"
         parts.join(", ")
       end
 
       def column_line(logical_field, attributes, dialect: :rails)
         column = attributes[:field_name] || physical_name(logical_field)
-        type = rails_type(logical_field, attributes, dialect)
+        type = rails_type(logical_name(logical_field, attributes), attributes, dialect)
         parts = if type == "timestamptz"
           ["t.column :#{column}, :timestamptz"]
         else
           ["t.#{type} :#{column}"]
         end
-        parts.concat(column_options(logical_field, attributes))
+        parts.concat(column_options(logical_name(logical_field, attributes), attributes))
         "      #{parts.join(", ")}"
       end
 
@@ -147,28 +147,29 @@ module BetterAuth
         parts
       end
 
-      def index_lines(table)
+      def index_lines(table, dialect: :rails)
         table_name = table.fetch(:model_name)
         table.fetch(:fields).filter_map do |logical_field, attributes|
           next unless attributes[:unique] || attributes[:index]
 
           column = attributes[:field_name] || physical_name(logical_field)
-          index_line(table_name, column, unique: attributes[:unique])
+          index_line(table_name, column, unique: attributes[:unique], field: attributes, dialect: dialect)
         end
       end
 
       def add_column_lines(change, dialect: :rails)
         change.fields.map do |logical_field, attributes|
           column = attributes[:field_name] || physical_name(logical_field)
-          parts = ["    add_column :#{change.table_name}, :#{column}, :#{rails_type(logical_field, attributes, dialect)}"]
-          parts.concat(column_options(logical_field, attributes))
+          parts = ["    add_column :#{change.table_name}, :#{column}, :#{rails_type(logical_name(logical_field, attributes), attributes, dialect)}"]
+          parts.concat(column_options(logical_name(logical_field, attributes), attributes))
           parts.join(", ")
         end
       end
 
-      def index_line(table_name, column, unique: false)
+      def index_line(table_name, column, unique: false, field: nil, dialect: :rails)
         unique_option = unique ? ", unique: true" : ""
-        "    add_index :#{table_name}, :#{column}#{unique_option}"
+        where = filtered_unique_index?(field, dialect) ? ", where: \"#{column} IS NOT NULL\"" : ""
+        "    add_index :#{table_name}, :#{column}#{unique_option}#{where}"
       end
 
       def foreign_key_lines(table, options)
@@ -233,7 +234,7 @@ module BetterAuth
         if options.respond_to?(:values) && options.values.all? { |value| value.respond_to?(:fetch) && value.key?(:fields) }
           options
         else
-          BetterAuth::Schema.auth_tables(options)
+          BetterAuth::Schema.migration_tables(options)
         end
       end
 
@@ -255,6 +256,20 @@ module BetterAuth
         else
           physical_name(field)
         end
+      end
+
+      def id_field(table)
+        table.fetch(:fields)["id"] || table.fetch(:fields).values.find { |attributes| logical_name("id", attributes) == "id" }
+      end
+
+      def logical_name(logical_field, attributes)
+        (attributes[:logical_name] || logical_field).to_s
+      end
+
+      def filtered_unique_index?(field, dialect)
+        return false unless field
+
+        dialect == :mssql && field[:unique] && !field[:required] && logical_name(field[:field_name], field) != "id"
       end
     end
   end

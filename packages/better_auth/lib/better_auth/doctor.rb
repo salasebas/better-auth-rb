@@ -80,7 +80,9 @@ module BetterAuth
       auth = BetterAuth.auth(config.to_h)
       adapter = auth.context.adapter
       unless adapter.respond_to?(:dialect) && adapter.respond_to?(:connection)
-        result.warnings << "database adapter does not expose SQL migration introspection; schema drift check skipped"
+        warning = "database adapter does not expose SQL migration introspection; schema drift check skipped"
+        warning += "; run `better-auth mongo indexes` to ensure MongoDB indexes" if adapter.respond_to?(:ensure_indexes!)
+        result.warnings << warning
         return
       end
 

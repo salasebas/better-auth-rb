@@ -171,6 +171,44 @@ class BetterAuthMigrationSQLTest < Minitest::Test
     assert_equal ["index_api_keys_on_user_id"], plan.to_index.map(&:name)
   end
 
+  def test_plans_plugin_fields_on_existing_physical_table_as_one_addition
+    connection = SQLite3::Database.new(":memory:")
+    connection.results_as_hash = true
+    base_config = BetterAuth::Configuration.new(secret: SECRET, database: :memory)
+    BetterAuth::SQLMigration.execute_sql(
+      connection,
+      BetterAuth::Schema::SQL.create_statements(base_config, dialect: :sqlite).join("\n")
+    )
+    plugin = BetterAuth::Plugin.new(
+      id: "profile-collision",
+      schema: {
+        auditProfile: {
+          model_name: "users",
+          fields: {
+            auditFlag: {type: "boolean", required: false, index: true}
+          }
+        },
+        billingProfile: {
+          model_name: "users",
+          fields: {
+            billingRef: {type: "string", required: false}
+          }
+        }
+      }
+    )
+    config = BetterAuth::Configuration.new(secret: SECRET, database: :memory, plugins: [plugin])
+
+    plan = BetterAuth::SQLMigration.plan(config, connection: connection, dialect: :sqlite)
+    sql = BetterAuth::SQLMigration.render_pending(config, connection: connection, dialect: :sqlite, generator: "better_auth-test")
+
+    assert_empty plan.to_create
+    assert_equal ["users"], plan.to_add.map(&:table_name)
+    assert_equal %w[audit_flag billing_ref], plan.to_add.first.fields.values.map { |attributes| attributes.fetch(:field_name) }
+    assert_includes sql, 'ALTER TABLE "users" ADD COLUMN "audit_flag" integer;'
+    assert_includes sql, 'ALTER TABLE "users" ADD COLUMN "billing_ref" text;'
+    refute_includes sql, 'CREATE TABLE IF NOT EXISTS "users"'
+  end
+
   def test_postgres_pending_migration_backfills_missing_plugin_id_columns
     plugin = BetterAuth::Plugin.new(
       id: "idless-plugin",

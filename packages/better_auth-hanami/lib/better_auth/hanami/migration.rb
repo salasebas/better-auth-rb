@@ -8,7 +8,7 @@ module BetterAuth
       module_function
 
       def render(options)
-        tables = BetterAuth::Schema.auth_tables(options)
+        tables = BetterAuth::Schema.migration_tables(options)
         lines = [
           "# frozen_string_literal: true",
           "",
@@ -225,7 +225,7 @@ module BetterAuth
         if options_or_tables.is_a?(Hash) && options_or_tables.values.all? { |value| value.is_a?(Hash) && value.key?(:fields) && value.key?(:model_name) }
           options_or_tables
         else
-          BetterAuth::Schema.auth_tables(options_or_tables)
+          BetterAuth::Schema.migration_tables(options_or_tables)
         end
       end
 

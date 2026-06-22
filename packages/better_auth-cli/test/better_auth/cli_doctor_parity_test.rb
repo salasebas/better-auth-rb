@@ -39,6 +39,18 @@ class CliDoctorParityTest < BetterAuthCLITestCase
     end
   end
 
+  def test_doctor_points_mongodb_adapters_to_mongo_indexes
+    Dir.mktmpdir("better-auth-cli-doctor-mongo") do |dir|
+      config_path = write_mongo_config(dir, indexes: [])
+
+      status, stdout, stderr = run_cli("doctor", "--cwd", dir, "--config", config_path)
+
+      assert_equal 0, status, stderr
+      assert_includes stdout, "better-auth mongo indexes"
+      assert_includes stdout, "schema drift check skipped"
+    end
+  end
+
   %w[sqlite postgres mysql mssql].each do |dialect|
     define_method("test_generate_memory_config_succeeds_for_#{dialect}") do
       Dir.mktmpdir("better-auth-cli-doctor-#{dialect}") do |dir|

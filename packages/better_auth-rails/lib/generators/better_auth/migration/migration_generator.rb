@@ -29,8 +29,17 @@ module BetterAuth
         end
 
         create_file incremental_migration_path, BetterAuth::Rails::Migration.render_pending(plan, class_name: incremental_class_name)
-      rescue => _error
-        say_status :skip, "db/migrate/*_create_better_auth_tables.rb already exists"
+      rescue => error
+        raise unless incremental_planning_unavailable?(error)
+
+        say_status :skip, "Better Auth incremental migration skipped: #{error.message}"
+      end
+
+      def incremental_planning_unavailable?(error)
+        return true if error.is_a?(BetterAuth::SQLMigration::UnsupportedAdapterError)
+        return true if defined?(::ActiveRecord::ConnectionNotEstablished) && error.is_a?(::ActiveRecord::ConnectionNotEstablished)
+
+        error.is_a?(NoMethodError) && error.message.match?(/tables|columns|indexes|connection/)
       end
 
       def migration_path

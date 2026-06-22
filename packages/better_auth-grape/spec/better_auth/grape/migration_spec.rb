@@ -119,12 +119,17 @@ RSpec.describe BetterAuth::Grape::Migration do
     {
       postgres: '"users"',
       mysql: "`users`",
-      sqlite: '"users"'
+      sqlite: '"users"',
+      mssql: "[users]"
     }.each do |dialect, quoted_users|
       sql = described_class.render(config, dialect: dialect)
 
       expect(sql).to include("-- Dialect: #{dialect}")
-      expect(sql).to include("CREATE TABLE IF NOT EXISTS #{quoted_users}")
+      if dialect == :mssql
+        expect(sql).to include("IF OBJECT_ID(N'#{quoted_users}'")
+      else
+        expect(sql).to include("CREATE TABLE IF NOT EXISTS #{quoted_users}")
+      end
     end
   end
 

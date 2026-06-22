@@ -22,6 +22,37 @@ module BetterAuth
       tables.sort_by { |_name, table| table[:order] || Float::INFINITY }.to_h
     end
 
+    def migration_tables(options)
+      tables = auth_tables(options)
+      grouped = {}
+
+      tables.each_with_index do |(logical_name, table), index|
+        table_name = table.fetch(:model_name)
+        target = grouped[table_name] ||= {
+          model_name: table_name,
+          fields: {},
+          order: table[:order] || Float::INFINITY,
+          source_order: index,
+          logical_names: []
+        }
+        target[:order] = [target[:order], table[:order] || Float::INFINITY].min
+        target[:source_order] = [target[:source_order], index].min
+        target[:logical_names] << logical_name
+
+        table.fetch(:fields).each do |logical_field, attributes|
+          column = attributes[:field_name] || physical_name(logical_field)
+          physical_attributes = physical_field_attributes(logical_field, attributes, tables)
+          merge_physical_field!(target, column, physical_attributes)
+        end
+      end
+
+      grouped
+        .sort_by { |_name, table| [table[:order], table[:source_order]] }
+        .to_h do |name, table|
+          [name, table.except(:source_order)]
+        end
+    end
+
     def storage_model_name(options, model)
       table = auth_tables(options).fetch(model.to_s)
       table[:model_name]
@@ -129,6 +160,49 @@ module BetterAuth
 
         table[:fields] = id_field.merge(fields)
       end
+    end
+
+    private_class_method def self.physical_field_attributes(logical_field, attributes, tables)
+      column = attributes[:field_name] || physical_name(logical_field)
+      physical_attributes = attributes.merge(field_name: column, logical_name: logical_field.to_s)
+      reference = attributes[:references]
+      return physical_attributes unless reference
+
+      physical_attributes.merge(references: physical_reference(reference, tables))
+    end
+
+    private_class_method def self.physical_reference(reference, tables)
+      model = reference.fetch(:model).to_s
+      target_table = tables.fetch(model, nil) || tables.each_value.find { |table| table.fetch(:model_name).to_s == model }
+      return reference unless target_table
+
+      field = reference.fetch(:field).to_s
+      target_field = target_table.fetch(:fields).fetch(field, nil)
+      physical_field = if target_field
+        target_field[:field_name] || physical_name(field)
+      elsif target_table.fetch(:fields).each_value.any? { |attributes| attributes[:field_name].to_s == field }
+        field
+      else
+        physical_name(field)
+      end
+      reference.merge(model: target_table.fetch(:model_name), field: physical_field)
+    end
+
+    private_class_method def self.merge_physical_field!(table, column, attributes)
+      existing = table.fetch(:fields)[column]
+      unless existing
+        table.fetch(:fields)[column] = attributes
+        return
+      end
+
+      return if compatible_physical_field?(existing, attributes)
+
+      raise BetterAuth::Error, "Conflicting schema metadata for #{table.fetch(:model_name)}.#{column}"
+    end
+
+    private_class_method def self.compatible_physical_field?(left, right)
+      keys = [:type, :required, :references, :index, :unique, :sortable, :bigint]
+      keys.all? { |key| left[key] == right[key] }
     end
 
     private_class_method def self.base_fields
@@ -319,6 +393,6 @@ module BetterAuth
       (Time.now.to_f * 1000).to_i
     end
 
-    public_class_method :storage_key
+    public_class_method :physical_name, :storage_key
   end
 end

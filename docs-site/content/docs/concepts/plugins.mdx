@@ -102,7 +102,10 @@ audit_plugin = BetterAuth::Plugin.new(
 )
 ```
 
-The migration generator and SQL helpers include plugin schema.
+The migration generator, Rails and Hanami renderers, and MongoDB index setup
+derive database additions from `Plugin#schema`. Use schema for plugin tables,
+columns, and indexed fields; `Plugin#migrations` is not an upstream-backed
+migration source in this Ruby port.
 
 ### Hooks
 
