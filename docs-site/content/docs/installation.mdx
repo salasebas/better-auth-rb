@@ -26,6 +26,18 @@ Then install:
 bundle install
 ```
 
+For a new app you can also add the core gem with Bundler:
+
+```bash
+bundle add better_auth
+```
+
+Then add the integration gem that matches your framework, for example:
+
+```bash
+bundle add better_auth-rails
+```
+
 | Framework | Gem | Notes |
 |-----------|-----|-------|
 | Rails | `better_auth-rails` | Generators, controller helpers, route helper |
@@ -42,6 +54,8 @@ bin/rails generate better_auth:install
 # or
 bundle exec better-auth init --cwd . --framework rails
 ```
+
+For a non-Rails app, create a config file yourself and point CLI commands at it with `--config`.
 
 ### Environment variables
 
@@ -113,6 +127,8 @@ For Sinatra, Roda, or Hanami, use the matching integration gem — each provides
 
 </Tabs>
 
+RubyAuth configuration is just Ruby. Keep shared auth behavior in the core config and add plugin gems only for features your app uses.
+
 ### Mount routes
 
 <Tabs items={["Rails", "Plain Rack"]}>
@@ -148,6 +164,8 @@ end
 </Tab>
 
 </Tabs>
+
+All examples in these docs assume the default auth base path `/api/auth`. If you mount somewhere else, keep the same route suffixes under your chosen base path.
 
 ### Database
 
@@ -244,6 +262,8 @@ Check migration status or diagnose setup issues:
 bundle exec better-auth migrate status --cwd . --config config/better_auth.rb
 bundle exec better-auth doctor --cwd . --config config/better_auth.rb
 ```
+
+Run the generate or migrate command again after adding plugins, changing plugin schema, or adding core additional fields.
 
 </Steps>
 
