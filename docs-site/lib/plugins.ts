@@ -88,7 +88,7 @@ const pluginMeta: Record<
 	"oauth-provider": {
 		category: "Enterprise",
 		icon: "Server",
-		tagline: "OAuth 2.1 provider with OIDC compatibility and MCP/resource-server helpers",
+		tagline: "OAuth 2.1 authorization server for RubyAuth integrations",
 	},
 	sso: {
 		category: "Enterprise",
@@ -169,6 +169,8 @@ const pluginMeta: Record<
 	},
 };
 
+const unsupportedPluginSlugs = new Set(["mcp", "oidc-provider", "test-utils"]);
+
 export const categories = [
 	"Authentication",
 	"Authorization",
@@ -185,7 +187,8 @@ export function getOfficialPlugins(): Plugin[] {
 			(page) =>
 				page.slugs[0] === "plugins" &&
 				page.slugs.length === 2 &&
-				page.slugs[1] !== "community-plugins",
+				page.slugs[1] !== "community-plugins" &&
+				!unsupportedPluginSlugs.has(page.slugs[1]),
 		)
 		.map((page) => {
 			const slug = page.slugs[1];
