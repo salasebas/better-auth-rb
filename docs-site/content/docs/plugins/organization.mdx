@@ -1228,12 +1228,34 @@ auth = BetterAuth.auth(
   secret: ENV.fetch("BETTER_AUTH_SECRET"),
   base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
   plugins: [
-    BetterAuth::Plugins.organization
+    BetterAuth::Plugins.organization(
+      schema: {
+        organization_role: {
+          additionalFields: {
+            color: {type: "string", required: false}
+          }
+        }
+      }
+    )
   ]
 )
 ```
 
-<UnderDevelopment />
+When creating or updating roles, keep the upstream public request shape and pass custom values under `additionalFields`.
+
+```ruby title="server.rb"
+role = auth.api.create_organization_role(
+  headers: {"cookie" => request.env["HTTP_COOKIE"]},
+  body: {
+    organizationId: organization.fetch("id"),
+    role: "project-reader",
+    permission: {project: ["read"]},
+    additionalFields: {
+      color: "#000000"
+    }
+  }
+)
+```
 
 RubyAuth does not provide the upstream client-side `inferOrgAdditionalFields` helper. Configure additional fields on the server plugin schema and use the generated Ruby/HTTP API examples for organization-role routes.
 
@@ -1874,20 +1896,58 @@ auth = BetterAuth.auth(
   secret: ENV.fetch("BETTER_AUTH_SECRET"),
   base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
   plugins: [
-    BetterAuth::Plugins.organization
+    BetterAuth::Plugins.organization(
+      teams: {enabled: true},
+      schema: {
+        organization: {
+          additionalFields: {
+            publicCode: {type: "string", required: false},
+            secretCode: {type: "string", required: false, returned: false}
+          }
+        },
+        member: {
+          additionalFields: {
+            title: {type: "string", required: false}
+          }
+        },
+        team: {
+          additionalFields: {
+            code: {type: "string", required: false}
+          }
+        }
+      }
+    )
   ]
 )
 ```
-
-<UnderDevelopment />
 
 RubyAuth does not provide the upstream client-side `inferOrgAdditionalFields` helper. Define additional fields directly in the server plugin schema.
 
 #### Example usage
 
 ```ruby title="server.rb"
-# Use the generated Ruby tab in the API block above, or call the same route over HTTP.
-# HTTP paths and JSON keys keep the upstream wire shape.
+organization = auth.api.create_organization(
+  headers: {"cookie" => request.env["HTTP_COOKIE"]},
+  body: {
+    name: "Additional",
+    slug: "additional",
+    additionalFields: {
+      publicCode: "public",
+      secretCode: "secret"
+    }
+  }
+)
+
+team = auth.api.create_team(
+  headers: {"cookie" => request.env["HTTP_COOKIE"]},
+  body: {
+    organizationId: organization.fetch("id"),
+    name: "Founding Team",
+    additionalFields: {
+      code: "founders"
+    }
+  }
+)
 ```
 
 ## Options

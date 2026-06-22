@@ -1008,9 +1008,90 @@ The provider ID is stored in the OAuth state so the callback can identify which 
 
 ## Domain verification
 
-<UnderDevelopment />
+Domain verification is optional and is only registered when `domain_verification.enabled` is true. When enabled, registering an SSO provider creates a `domainVerificationToken`, and the owner or organization admin can request the active token again or verify the domain after publishing the DNS TXT record.
 
-This upstream section depends on Better Auth client helpers. RubyAuth documents the server plugin and HTTP/Rack integration for this feature.
+```ruby title="config/auth.rb"
+require "better_auth"
+require "better_auth/sso"
+
+auth = BetterAuth.auth(
+  secret: ENV.fetch("BETTER_AUTH_SECRET"),
+  base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
+  plugins: [
+    BetterAuth::Plugins.sso(
+      domain_verification: {
+        enabled: true,
+        request: ->(provider:, token:, **_data) {
+          Rails.logger.info("Publish #{token} for #{provider.fetch("domain")}")
+        },
+        dns_txt_resolver: ->(hostname) {
+          Resolv::DNS.open do |dns|
+            dns.getresources(hostname, Resolv::DNS::Resource::IN::TXT).map(&:strings)
+          end
+        }
+      }
+    )
+  ]
+)
+```
+
+### Register a provider
+
+```ruby title="server.rb"
+provider = auth.api.register_sso_provider(
+  headers: {"cookie" => request.env["HTTP_COOKIE"]},
+  body: {
+    providerId: "acme",
+    issuer: "https://idp.acme.test",
+    domain: "acme.test",
+    oidcConfig: {
+      clientId: "client-id",
+      clientSecret: "client-secret",
+      authorizationEndpoint: "https://idp.acme.test/authorize",
+      tokenEndpoint: "https://idp.acme.test/token",
+      jwksEndpoint: "https://idp.acme.test/jwks"
+    }
+  }
+)
+
+provider.fetch(:domainVerificationToken)
+```
+
+### Request the active token
+
+`POST /sso/request-domain-verification`
+
+```ruby title="server.rb"
+response = auth.api.request_domain_verification(
+  headers: {"cookie" => request.env["HTTP_COOKIE"]},
+  body: {providerId: "acme"}
+)
+```
+
+Create this TXT record:
+
+```txt
+_better-auth-token-acme.acme.test TXT "_better-auth-token-acme=<domainVerificationToken>"
+```
+
+The DNS label uses the configured token prefix, which defaults to `better-auth-token`, plus the provider ID.
+
+### Verify the domain
+
+`POST /sso/verify-domain`
+
+```ruby title="server.rb"
+result = auth.api.verify_domain(
+  headers: {"cookie" => request.env["HTTP_COOKIE"]},
+  body: {providerId: "acme"},
+  return_status: true
+)
+
+result.fetch(:status) # 204
+```
+
+After verification, the provider record has `domainVerified: true`.
+
 ## Schema
 
 The plugin requires additional fields in the `ssoProvider` table to store the provider's configuration.
