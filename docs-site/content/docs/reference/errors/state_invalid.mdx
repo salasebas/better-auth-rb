@@ -1,0 +1,33 @@
+---
+title: STATE_INVALID
+description: The OAuth or SSO state value was present but failed validation.
+---
+
+OAuth, OIDC, and SSO flows use a short-lived state value to bind the callback to the request that initiated it. RubyAuth returns this error when the callback includes a state value that cannot be verified against the stored state.
+
+## When it occurs
+
+This usually means the callback was replayed, the browser dropped the state cookie, the provider redirected to a different host than the one that initiated sign-in, or the server secret changed between the authorization request and callback.
+
+It can also happen during local development when `base_url`, `trusted_origins`, or proxy headers do not match the URL registered with the OAuth or SSO provider.
+
+## HTTP status
+
+RubyAuth treats invalid state as a bad callback request. The response is normally `400 Bad Request` or a redirect to the configured error callback URL with `error=STATE_INVALID`.
+
+## Example response
+
+```json
+{
+  "code": "STATE_INVALID",
+  "message": "State is invalid"
+}
+```
+
+## How to fix
+
+Keep `BETTER_AUTH_SECRET` stable across all app instances, configure `base_url` to the public origin that providers call back to, and include every frontend origin in `trusted_origins`.
+
+For multi-host preview deployments, use the [dynamic base URL guide](/docs/guides/dynamic-base-url) and make sure the provider callback URL matches the resolved RubyAuth URL.
+
+If this appears after a deploy, check whether old pods and new pods used different secrets or whether the callback landed on a different environment than the one that initiated the sign-in.

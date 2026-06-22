@@ -1981,6 +1981,11 @@ C0.7,239.6,62.1,0.5,62.2,0.4c0,0,54,13.8,119.9,30.8S302.1,62,302.2,62c0.2,0,0.2,
 				href: "/docs/reference/resources",
 				icon: () => <Book className="w-4 h-4 text-current" />,
 			},
+			{
+				title: "Database Schemas",
+				href: "/docs/reference/database-schemas",
+				icon: () => <Database className="w-4 h-4 text-current" />,
+			},
 
 			{
 				title: "Security",
@@ -2038,6 +2043,16 @@ C0.7,239.6,62.1,0.5,62.2,0.4c0,0,54,13.8,119.9,30.8S302.1,62,302.2,62c0.2,0,0.2,
 						/>
 					</svg>
 				),
+			},
+			{
+				title: "Your First Plugin",
+				href: "/docs/guides/your-first-plugin",
+				icon: () => <Zap className="w-4 h-4" />,
+			},
+			{
+				title: "Create a DB Adapter",
+				href: "/docs/guides/create-a-db-adapter",
+				icon: () => <Database className="w-4 h-4" />,
 			},
 			{
 				title: "SAML SSO with Okta",

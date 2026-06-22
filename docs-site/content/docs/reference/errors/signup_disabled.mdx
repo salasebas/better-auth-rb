@@ -1,37 +1,38 @@
 ---
-title: Signup Disabled
-description: OAuth error `signup_disabled` in RubyAuth.
+title: signup_disabled
+description: Signup disabled error
 ---
 
-## When this appears
-
-OAuth attempted to create a new user but sign-up is disabled.
-
-Redirect URL shape:
-
-```
-/api/auth/error?error=signup_disabled
-```
-
-Or your configured `errorCallbackURL` with the same query parameters.
-
-## Common causes
-
-- `disableSignUp` on provider or global policy
-- Invite-only app
+This error occurs when you disable sign up in your oauth provider config and a user tries to sign up with that provider.
 
 ## How to fix
 
-- Create user through admin flow first
-- Adjust provider `disable_sign_up` options
+If you're using the `disableSignUp` option with stateless mode, you will see this error. Please consider using database hooks instead to handle this case.
 
-## Diagnostics
+```ruby title="config/initializers/better_auth.rb"
+curl -i http://localhost:3000/api/auth/example
 
-```bash
-bundle exec better-auth doctor --cwd . --config config/better_auth.rb
+# JSON response
+# { "code": "ERROR_CODE", "message": "Human readable message" }
 ```
 
-## Related
+## When it occurs
 
-- [OAuth errors index](/docs/reference/errors)
-- [OAuth concepts](/docs/concepts/oauth)
+The sign-up endpoint was called while email/password sign-up is disabled for this server configuration.
+
+## HTTP status
+
+RubyAuth normally returns `400 Bad Request` for this error, unless the route redirects to a configured error callback URL.
+
+## Example response
+
+```json
+{
+  "code": "SIGNUP_DISABLED",
+  "message": "The sign-up endpoint was called while email/password sign-up is disabled for this server configuration."
+}
+```
+
+## How to fix
+
+Verify the RubyAuth route, provider settings, callback URL, cookies, and `BETTER_AUTH_SECRET` used by every running instance. In Rails, also confirm the mounted auth path matches `config.base_path`; in Rack, confirm requests reach the same `auth` instance that initiated the flow.

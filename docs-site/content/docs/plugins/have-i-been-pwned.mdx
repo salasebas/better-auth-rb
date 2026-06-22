@@ -1,15 +1,15 @@
 ---
 title: Have I Been Pwned
-description: Reject compromised passwords.
+description: A plugin to check if a password has been compromised
 ---
 
-Reject compromised passwords.
+<RubyAuthDisclaimer />
 
-<Callout type="info">
-This page documents the current Ruby port behavior. Ruby uses snake_case option names and `auth.api` method names; HTTP paths and JSON keys keep the upstream wire shape where implemented.
-</Callout>
+The Have I Been Pwned plugin helps protect user accounts by preventing the use of passwords that have been exposed in known data breaches. It uses the [Have I Been Pwned](https://haveibeenpwned.com/) API to check if a password has been compromised.
 
-## Configure
+## Installation
+
+### Add the plugin to your **auth** config
 
 ```ruby title="config/auth.rb"
 require "better_auth"
@@ -25,26 +25,49 @@ auth = BetterAuth.auth(
 
 ## Usage
 
+When a user attempts to create an account or update their password with a compromised password, they'll receive the following default error:
+
 ```ruby title="server.rb"
-# This plugin hooks into existing auth flows and does not add public endpoints.
-# Use the normal sign-up, sign-in, or password routes after configuring it.
+# Use the Ruby auth.api method or HTTP endpoint documented in this section.
+# HTTP paths and JSON keys keep the upstream wire shape.
 ```
-
-## Routes
-
-This plugin does not add public routes.
 
 ## Options
 
-Current Ruby options accepted by `BetterAuth::Plugins.have_i_been_pwned`:
+### `enabled`
 
-- `paths`
-- `range_lookup`
-- `custom_password_compromised_message`
+Enable or disable password checks against the HIBP database. Useful for skipping checks in development or testing without removing the plugin. Defaults to `true`.
 
-## Support Notes
+```ruby title="config/auth.rb"
+require "better_auth"
 
-- The examples above are based on Ruby plugin source and tests in `packages/better_auth`.
-- If an upstream section is not represented here, treat it as not yet documented or not yet supported by the Ruby port until the matching Ruby implementation exists.
+auth = BetterAuth.auth(
+  secret: ENV.fetch("BETTER_AUTH_SECRET"),
+  base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
+  plugins: [
+    BetterAuth::Plugins.have_i_been_pwned
+  ]
+)
+```
 
-{/* Upstream guide is preserved in reference/upstream-src/1.6.9/repository/docs/content/docs/plugins/have-i-been-pwned.mdx. */}
+### `customPasswordCompromisedMessage`
+
+Customize the error message shown when a compromised password is detected.
+
+```ruby title="config/auth.rb"
+require "better_auth"
+
+auth = BetterAuth.auth(
+  secret: ENV.fetch("BETTER_AUTH_SECRET"),
+  base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
+  plugins: [
+    BetterAuth::Plugins.have_i_been_pwned
+  ]
+)
+```
+
+## Security Notes
+
+* Only the first 5 characters of the password hash are sent to the API
+* The full password is never transmitted
+* Provides an additional layer of account security

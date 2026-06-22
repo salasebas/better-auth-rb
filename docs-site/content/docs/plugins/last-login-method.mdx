@@ -1,15 +1,130 @@
 ---
 title: Last Login Method
-description: Remember the last sign-in provider.
+description: Track and display the last authentication method used by users
 ---
 
-Remember the last sign-in provider.
+<RubyAuthDisclaimer />
 
-<Callout type="info">
-This page documents the current Ruby port behavior. Ruby uses snake_case option names and `auth.api` method names; HTTP paths and JSON keys keep the upstream wire shape where implemented.
-</Callout>
+The last login method plugin tracks the most recent authentication method used by users (email, OAuth providers, etc.). This enables you to display helpful indicators on login pages, such as "Last signed in with Google" or prioritize certain login methods based on user preferences.
 
-## Configure
+## Installation
+
+<Steps>
+  <Step>
+    ### Add the plugin to your auth config
+
+    ```ruby title="config/auth.rb"
+require "better_auth"
+
+auth = BetterAuth.auth(
+  secret: ENV.fetch("BETTER_AUTH_SECRET"),
+  base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
+  plugins: [
+    BetterAuth::Plugins.last_login_method
+  ]
+)
+```
+  </Step>
+
+</Steps>
+
+## Usage
+
+Once installed, the plugin automatically tracks the last authentication method used by users. You can then retrieve and display this information in your application.
+
+### Getting the Last Used Method
+
+The server plugin provides several methods to work with the last login method:
+
+```ruby title="server.rb"
+# Use the Ruby auth.api method or HTTP endpoint documented in this section.
+# HTTP paths and JSON keys keep the upstream wire shape.
+```
+
+### UI Integration Example
+
+Here's how to use the plugin to enhance your login page:
+
+```ruby title="server.rb"
+# Use the Ruby auth.api method or HTTP endpoint documented in this section.
+# HTTP paths and JSON keys keep the upstream wire shape.
+```
+
+## Database Persistence
+
+By default, the last login method is stored only in cookies. For more persistent tracking and analytics, you can enable database storage.
+
+<Steps>
+  <Step>
+    ### Enable database storage
+
+    Set `storeInDatabase` to `true` in your plugin configuration:
+
+    ```ruby title="config/auth.rb"
+require "better_auth"
+
+auth = BetterAuth.auth(
+  secret: ENV.fetch("BETTER_AUTH_SECRET"),
+  base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
+  plugins: [
+    BetterAuth::Plugins.last_login_method
+  ]
+)
+```
+  </Step>
+
+  <Step>
+    ### Run database migration
+
+    The plugin will automatically add a `lastLoginMethod` field to your user table. Run the migration to apply the changes:
+
+    <Tabs items={["migrate", "generate"]}>
+  <Tab value="migrate">
+    ```bash
+    bundle exec better-auth migrate --cwd . --config config/better_auth.rb --yes
+    ```
+  </Tab>
+
+  <Tab value="generate">
+    ```bash
+    bundle exec better-auth generate --cwd . --dialect postgres --output db/better_auth/schema.sql --config config/better_auth.rb
+    ```
+  </Tab>
+</Tabs>
+  </Step>
+
+  <Step>
+    ### Access database field
+
+    When database storage is enabled, the `lastLoginMethod` field becomes available in user objects:
+
+    ```ruby title="server.rb"
+# Use the Ruby auth.api method or HTTP endpoint documented in this section.
+# HTTP paths and JSON keys keep the upstream wire shape.
+```
+  </Step>
+</Steps>
+
+### Database Schema
+
+When `storeInDatabase` is enabled, the plugin adds the following field to the `user` table:
+
+Table: `user`
+
+export const lastLoginMethodUserTableFields = [
+	{
+		name: "lastLoginMethod",
+		type: "string",
+		description: "The last authentication method used by the user",
+		isOptional: true,
+	},
+];
+
+<DatabaseTable name="user" fields={lastLoginMethodUserTableFields} />
+
+### Custom Schema Configuration
+
+You can customize the database field name:
 
 ```ruby title="config/auth.rb"
 require "better_auth"
@@ -18,34 +133,101 @@ auth = BetterAuth.auth(
   secret: ENV.fetch("BETTER_AUTH_SECRET"),
   base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
   plugins: [
-    BetterAuth::Plugins.last_login_method(store_in_database: true)
+    BetterAuth::Plugins.last_login_method
   ]
 )
 ```
 
-## Usage
+## Configuration Options
 
-```ruby title="server.rb"
-# This plugin hooks into existing auth flows and does not add public endpoints.
-# Use the normal sign-up, sign-in, or password routes after configuring it.
+The last login method plugin accepts the following options:
+
+### Server Options
+
+```ruby title="config/auth.rb"
+require "better_auth"
+
+auth = BetterAuth.auth(
+  secret: ENV.fetch("BETTER_AUTH_SECRET"),
+  base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
+  plugins: [
+    BetterAuth::Plugins.last_login_method
+  ]
+)
 ```
 
-## Routes
+**cookieName**: `string`
 
-This plugin does not add public routes.
+* The name of the cookie used to store the last login method
+* Default: `"better-auth.last_used_login_method"`
+* **Note**: This cookie is `httpOnly: false` to allow client-side JavaScript access for UI features
 
-## Options
+**maxAge**: `number`
 
-Current Ruby options accepted by `BetterAuth::Plugins.last_login_method`:
+* Cookie expiration time in seconds
+* Default: `2592000` (30 days)
 
-- `store_in_database`
-- `max_age`
-- `cookie_name`
-- `custom_resolve_method`
+**storeInDatabase**: `boolean`
 
-## Support Notes
+* Whether to store the last login method in the database
+* Default: `false`
+* When enabled, adds a `lastLoginMethod` field to the user table
 
-- The examples above are based on Ruby plugin source and tests in `packages/better_auth`.
-- If an upstream section is not represented here, treat it as not yet documented or not yet supported by the Ruby port until the matching Ruby implementation exists.
+**customResolveMethod**: `(ctx: GenericEndpointContext) => string | null`
 
-{/* Upstream guide is preserved in reference/upstream-src/1.6.9/repository/docs/content/docs/plugins/last-login-method.mdx. */}
+* Custom function to determine the login method from the request context
+* Return `null` to use the default resolution logic
+* Useful for custom OAuth providers or authentication flows
+
+**schema**: `object`
+
+* Customize database field names when `storeInDatabase` is enabled
+* Allows mapping the `lastLoginMethod` field to a custom column name
+
+### Default Method Resolution
+
+By default, the plugin tracks these authentication methods:
+
+* **Email authentication**: `"email"`
+* **OAuth providers**: Provider ID (e.g., `"google"`, `"github"`, `"discord"`)
+* **OAuth2 callbacks**: Provider ID from URL path
+* **Sign up methods**: Tracked the same as sign in methods
+
+The plugin automatically detects the method from these endpoints:
+
+* `/callback/:id` - OAuth callback with provider ID
+* `/oauth2/callback/:id` - OAuth2 callback with provider ID
+* `/sign-in/email` - Email sign in
+* `/sign-up/email` - Email sign up
+
+## Cross-Domain Support
+
+The plugin automatically inherits cookie settings from RubyAuth's centralized cookie system. This solves the problem where the last login method wouldn't persist across:
+
+* **Cross-subdomain setups**: `auth.example.com` → `app.example.com`
+* **Cross-origin setups**: `api.company.com` → `app.different.com`
+
+When you enable `crossSubDomainCookies` or `crossOriginCookies` in your RubyAuth config, the plugin will automatically use the same domain, secure, and sameSite settings as your session cookies, ensuring consistent behavior across your application.
+
+## Advanced Examples
+
+### Custom Provider Tracking
+
+If you have custom OAuth providers or authentication methods, you can use the `customResolveMethod` option:
+
+```ruby title="config/auth.rb"
+require "better_auth"
+
+auth = BetterAuth.auth(
+  secret: ENV.fetch("BETTER_AUTH_SECRET"),
+  base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
+  plugins: [
+    BetterAuth::Plugins.last_login_method
+  ]
+)
+```
+
+<UnderDevelopment />
+
+Expo-specific client helpers are not part of the RubyAuth server plugin.
+

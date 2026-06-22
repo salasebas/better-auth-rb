@@ -1,11 +1,12 @@
 ---
 title: SQLite
-description: Use Better Auth Ruby with SQLite.
+description: Integrate Better Auth with SQLite.
 ---
 
-SQLite is supported by the core `better_auth` gem through the `sqlite3` gem. It
-is useful for local development, single-node Rack apps, tests, and small
-deployments.
+<RubyAuthDisclaimer />
+
+SQLite is a lightweight, serverless, self-contained SQL database engine that is widely used for local data storage in applications.
+Read more [here.](https://www.sqlite.org/)
 
 <Callout type="info">
 Use the lambda form when configuring the direct adapter. Better Auth passes the
@@ -26,6 +27,8 @@ bundle install
 
 ## Example Usage
 
+Better Auth Ruby supports SQLite through the `sqlite3` gem.
+
 ```ruby title="config/auth.rb"
 require "better_auth"
 
@@ -40,6 +43,11 @@ auth = BetterAuth.auth(
   }
 )
 ```
+
+<Callout>
+  For more information, read the Ruby
+  `BetterAuth::Adapters::SQLite` implementation and adapter tests in this repository.
+</Callout>
 
 You may also pass an existing `SQLite3::Database` object when your application
 owns connection lifecycle.
@@ -77,72 +85,52 @@ bin/rails db:migrate
 
 ## Schema generation & migration
 
-The Ruby schema helpers generate SQLite DDL from the same Better Auth
-configuration used at runtime, including plugins, custom model names, custom
-field names, and `additional_fields`.
+The [Better Auth CLI](/docs/concepts/cli) allows you to generate or migrate
+your database schema based on your Better Auth configuration and plugins.
 
 <table>
   <thead>
-    <tr>
+    <tr className="border-b">
       <th>
         <p className="font-bold text-[16px] mb-1">SQLite Schema Generation</p>
       </th>
+
       <th>
         <p className="font-bold text-[16px] mb-1">SQLite Schema Migration</p>
       </th>
     </tr>
   </thead>
+
   <tbody>
-    <tr>
+    <tr className="h-10">
       <td>✅ Supported</td>
       <td>✅ Supported</td>
     </tr>
   </tbody>
 </table>
 
-<Tabs items={["generate", "migrate"]}>
-  <Tab value="generate">
-  ```ruby title="db/better_auth_schema.rb"
-  config = BetterAuth::Configuration.new(
-    secret: ENV.fetch("BETTER_AUTH_SECRET"),
-    database: :memory,
-    plugins: []
-  )
-
-  statements = BetterAuth::Schema::SQL.create_statements(
-    config,
-    dialect: :sqlite
-  )
-
-  puts statements.join("\n\n")
-  ```
-  </Tab>
+<Tabs items={["migrate", "generate"]}>
   <Tab value="migrate">
-  ```ruby title="db/migrate_better_auth.rb"
-  require "better_auth"
-  require "sqlite3"
+    ```bash title="Terminal"
+    bundle exec better-auth migrate --cwd . --config config/better_auth.rb --yes
+    ```
+  </Tab>
 
-  config = BetterAuth::Configuration.new(
-    secret: ENV.fetch("BETTER_AUTH_SECRET"),
-    database: :memory,
-    plugins: []
-  )
-
-  statements = BetterAuth::Schema::SQL.create_statements(
-    config,
-    dialect: :sqlite
-  )
-
-  database = SQLite3::Database.new("storage/better_auth.sqlite3")
-  statements.each { |sql| database.execute(sql) }
-  ```
+  <Tab value="generate">
+    ```bash title="Terminal"
+    bundle exec better-auth generate --cwd . --dialect sqlite --output db/better_auth/schema.sql --config config/better_auth.rb
+    ```
   </Tab>
 </Tabs>
 
 ## Joins (Experimental)
 
-Enable experimental joins when you want Better Auth to ask the database adapter
-to fetch related records in one adapter call.
+Database joins is useful when Better-Auth needs to fetch related data from multiple tables in a single query.
+Endpoints like `/get-session`, `/get-full-organization` and many others benefit greatly from this feature,
+seeing upwards of 2x to 3x performance improvements depending on database latency.
+
+The Ruby SQLite adapter supports joins.
+To enable this feature, you need to set the `experimental.joins` option to `true` in your auth configuration.
 
 ```ruby title="config/auth.rb"
 auth = BetterAuth.auth(
@@ -157,9 +145,9 @@ auth = BetterAuth.auth(
 )
 ```
 
-The SQLite adapter supports native joins for core relationships and for plugin
-schema relationships declared with `references`. Rails uses generated
-ActiveRecord associations for the same schema-driven relationships.
+<Callout type="warn">
+  It's possible that you may need to run migrations after enabling this feature.
+</Callout>
 
 ## Schema
 
@@ -179,8 +167,12 @@ instead.
 
 ## Additional Information
 
+SQLite is supported under the hood via `BetterAuth::Adapters::SQLite`. Other relational database options are documented in <Link href="/docs/adapters/other-relational-databases">Other Relational Databases</Link>.
+
+If you're looking for performance improvements or tips, take a look at our guide to <Link href="/docs/guides/optimizing-for-performance">performance optimizations</Link>.
+
 - The direct adapter enables foreign keys with `PRAGMA foreign_keys = ON`.
-- The direct adapter supports the shared Better Auth CRUD contract, where
+- The direct adapter supports the shared Better Auth CRUD contract, including
   operators, sorting, pagination, counts, transactions, and native joins.
 - Rails apps should prefer Rails migrations generated by `better_auth-rails`;
   direct SQL generation is intended for non-Rails apps or custom migration

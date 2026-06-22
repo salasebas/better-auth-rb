@@ -1,37 +1,55 @@
 ---
-title: Account Not Linked
-description: OAuth error `account_not_linked` in RubyAuth.
+title: account_not_linked
+description: The provider account is not linked to the current user and cannot be linked automatically.
 ---
 
-## When this appears
+## What is it?
 
-Existing user tried OAuth sign-in but account is not linked to that provider.
+This error occurs during an OAuth flow when a provider account is not linked to the current or matched user and, under the current configuration, cannot be linked automatically (for example, because the provider is untrusted, account linking is disabled, or implicit linking is turned off), even if a matching user exists.
 
-Redirect URL shape:
+## Common Causes
 
+* The user previously signed up using a different provider or method.
+* Account linking is not enabled or configured.
+* The provider email does not match any existing user.
+* Linking rules (e.g., trusted providers) prevent automatic linking.
+
+## How to resolve
+
+### Enable or configure account linking
+
+* Ensure account linking is enabled in your auth configuration.
+* Add providers to `account.account_linking.trustedProviders` if required.
+
+### Verify user identity matching
+
+* Ensure the provider returns a verified email that matches an existing user.
+
+### Prompt user action
+
+* Ask users to sign in using the originally linked provider or method.
+
+### Review configuration consistency
+
+* Ensure environment configs are consistent across deployments.
+
+## When it occurs
+
+The request reached RubyAuth but failed validation for this specific callback or auth flow.
+
+## HTTP status
+
+RubyAuth normally returns `400 Bad Request` for this error, unless the route redirects to a configured error callback URL.
+
+## Example response
+
+```json
+{
+  "code": "ACCOUNT_NOT_LINKED",
+  "message": "The request reached RubyAuth but failed validation for this specific callback or auth flow."
+}
 ```
-/api/auth/error?error=account_not_linked
-```
-
-Or your configured `errorCallbackURL` with the same query parameters.
-
-## Common causes
-
-- User previously signed up with email/password only
-- Linking required before OAuth sign-in
 
 ## How to fix
 
-- Sign in with email/password then link provider
-- Enable implicit linking if appropriate for your app
-
-## Diagnostics
-
-```bash
-bundle exec better-auth doctor --cwd . --config config/better_auth.rb
-```
-
-## Related
-
-- [OAuth errors index](/docs/reference/errors)
-- [OAuth concepts](/docs/concepts/oauth)
+Verify the RubyAuth route, provider settings, callback URL, cookies, and `BETTER_AUTH_SECRET` used by every running instance. In Rails, also confirm the mounted auth path matches `config.base_path`; in Rack, confirm requests reach the same `auth` instance that initiated the flow.

@@ -1,57 +1,95 @@
 ---
 title: OAuth Proxy
-description: Proxy OAuth callbacks through a stable URL.
+description: OAuth Proxy plugin for RubyAuth
 ---
 
-Proxy OAuth callbacks through a stable URL.
+<RubyAuthDisclaimer />
 
-<Callout type="info">
-This page documents the current Ruby port behavior. Ruby uses snake_case option names and `auth.api` method names; HTTP paths and JSON keys keep the upstream wire shape where implemented.
-</Callout>
+A proxy plugin that allows you to proxy OAuth requests. Useful for development and preview deployments where the redirect URL can't be known in advance to add to the OAuth provider.
 
-## Configure
+## Installation
 
-```ruby title="config/auth.rb"
+<Steps>
+  <Step>
+    ### Add the plugin to your auth config
+
+    ```ruby title="config/auth.rb"
 require "better_auth"
 
 auth = BetterAuth.auth(
   secret: ENV.fetch("BETTER_AUTH_SECRET"),
   base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
   plugins: [
-    BetterAuth::Plugins.oauth_proxy(current_url: ENV.fetch("BETTER_AUTH_URL"), production_url: ENV.fetch("BETTER_AUTH_PRODUCTION_URL"))
+    BetterAuth::Plugins.oauth_proxy
   ]
 )
 ```
 
-## Usage
+    The plugin will automatically route OAuth requests through your production server.
+  </Step>
 
-```ruby title="server.rb"
-status, headers, body = auth.api.o_auth_proxy(
-  query: {
-    callbackURL: "/dashboard",
-    cookies: params[:cookies]
-  },
-  as_response: true
+  <Step>
+    ### Register the callback URL with your OAuth provider
+
+    In your OAuth provider's developer console (e.g. GitHub, Google), register the callback URL using your **production** domain. For example:
+
+    ```
+    https://my-production-app.com/api/auth/callback/github
+    ```
+
+    Only the production callback URL needs to be registered. The plugin handles routing OAuth requests from preview and development environments through production automatically.
+  </Step>
+
+  <Step>
+    ### Add trusted origins
+
+    Since preview and development servers redirect through production, you need to add them as `trustedOrigins` in your auth config:
+
+    ```ruby title="config/auth.rb"
+require "better_auth"
+
+auth = BetterAuth.auth(
+  secret: ENV.fetch("BETTER_AUTH_SECRET"),
+  base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
+  plugins: [
+    BetterAuth::Plugins.oauth_proxy
+  ]
 )
 ```
+  </Step>
+</Steps>
 
-## Routes
+<Callout type="info">
+  All environments participating in the OAuth proxy flow must share the same encryption key. By default, the plugin uses `BETTER_AUTH_SECRET`. To avoid sharing your main secret across environments, you can provide a dedicated `secret` option (see [Options](#options)).
+</Callout>
 
-| Method | Path | Ruby API method |
-| --- | --- | --- |
-| `GET` | `/oauth-proxy-callback` | `auth.api.o_auth_proxy` |
+## How it works
+
+The plugin allows you to use a single OAuth client (registered with your production URL) across multiple environments like preview deployments or local development.
+
+1. Preview server initiates OAuth, redirecting to the OAuth provider with production's redirect URI
+2. OAuth provider callbacks to production server
+3. Production server exchanges the code for tokens and fetches user info
+4. Production server encrypts the profile data and redirects to preview server (**no database write on production**)
+5. Preview server decrypts the profile, creates user/session in its own database, and sets the session cookie
+
+```ruby title="server.rb"
+# Use the Ruby auth.api method or HTTP endpoint documented in this section.
+# HTTP paths and JSON keys keep the upstream wire shape.
+```
+
+The encrypted profile data is passed via URL query parameters and can only be decrypted by servers sharing the same secret. This also allows preview deployments to use separate databases from production if needed.
+
+<Callout type="info">
+  This plugin is intended for development and preview environments. If `baseURL` and `productionURL` are the same, the plugin will not proxy the request.
+</Callout>
 
 ## Options
 
-Current Ruby options accepted by `BetterAuth::Plugins.oauth_proxy`:
+**productionURL**: The URL of your production server. If this value matches the `baseURL` in your auth config, requests will not be proxied. Defaults to the `BETTER_AUTH_URL` environment variable.
 
-- `max_age`
-- `current_url`
-- `production_url`
+**currentURL**: The application's current URL is automatically determined by the plugin. It first checks the request URL, then vendor-specific environment variables from popular hosting providers, and finally falls back to the `baseURL` in your auth config. You only need to set this if the URL isn't being inferred correctly in your environment.
 
-## Support Notes
+**maxAge**: Maximum age in seconds for encrypted profile payloads. Payloads older than this will be rejected to prevent replay attacks. Keep this value short (e.g., 30-60 seconds) to minimize the window for potential replay attacks while still allowing normal OAuth flows. Defaults to `60` seconds.
 
-- The examples above are based on Ruby plugin source and tests in `packages/better_auth`.
-- If an upstream section is not represented here, treat it as not yet documented or not yet supported by the Ruby port until the matching Ruby implementation exists.
-
-{/* Upstream guide is preserved in reference/upstream-src/1.6.9/repository/docs/content/docs/plugins/oauth-proxy.mdx. */}
+**secret**: A dedicated secret used for encrypting and decrypting data during the OAuth proxy flow. When set, this is used **instead of** the global `BETTER_AUTH_SECRET`, limiting the blast radius if the key is shared across environments — a leaked proxy secret cannot forge sessions or decrypt other data protected by the main secret. All environments participating in the proxy flow must share the same `secret` value.

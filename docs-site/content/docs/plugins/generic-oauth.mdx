@@ -1,15 +1,107 @@
 ---
 title: Generic OAuth
-description: Configure custom OAuth 2.0 providers.
+description: Authenticate users with any OAuth provider
 ---
 
-Configure custom OAuth 2.0 providers.
+<RubyAuthDisclaimer />
 
-<Callout type="info">
-This page documents the current Ruby port behavior. Ruby uses snake_case option names and `auth.api` method names; HTTP paths and JSON keys keep the upstream wire shape where implemented.
-</Callout>
+The Generic OAuth plugin provides a flexible way to integrate authentication with any OAuth provider. It supports both OAuth 2.0 and OpenID Connect (OIDC) flows, allowing you to easily add social login or custom OAuth authentication to your application.
 
-## Configure
+## Installation
+
+<Steps>
+  <Step>
+    ### Add the plugin to your auth config
+
+    To use the Generic OAuth plugin, add it to your auth config.
+
+    ```ruby title="config/auth.rb"
+require "better_auth"
+
+auth = BetterAuth.auth(
+  secret: ENV.fetch("BETTER_AUTH_SECRET"),
+  base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
+  plugins: [
+    BetterAuth::Plugins.generic_oauth(providers: [{ provider_id: "custom", client_id: ENV.fetch("OAUTH_CLIENT_ID"), client_secret: ENV.fetch("OAUTH_CLIENT_SECRET"), discovery_url: "https://provider.example/.well-known/openid-configuration" }])
+  ]
+)
+```
+  </Step>
+
+</Steps>
+
+## Usage
+
+The Generic OAuth plugin provides endpoints for initiating the OAuth flow and handling the callback. Here's how to use them:
+
+### Initiate OAuth Sign-In
+
+To start the OAuth sign-in process:
+
+<APIMethod path="/sign-in/oauth2" method="POST">
+  ```
+  type signInWithOAuth2 = {
+      /**
+       * The configured provider ID.
+       */
+      providerId: string = "custom"
+      /**
+       * Where to redirect after sign-in.
+       */
+      callbackURL?: string = "/dashboard"
+      /**
+       * Where to redirect on error.
+       */
+      errorCallbackURL?: string = "/error"
+      /**
+       * Return the redirect URL instead of redirecting.
+       */
+      disableRedirect?: boolean = true
+  }
+  ```
+</APIMethod>
+
+### Linking OAuth Accounts
+
+To link an OAuth account to an existing user:
+
+<APIMethod path="/oauth2/link" method="POST" requireSession>
+  ```
+  type oauth2LinkAccount = {
+      /**
+       * The configured provider ID.
+       */
+      providerId: string = "custom"
+      /**
+       * Where to redirect after linking.
+       */
+      callbackURL?: string = "/settings"
+  }
+  ```
+</APIMethod>
+
+### Handle OAuth Callback
+
+The plugin mounts a route to handle the OAuth callback `/oauth2/callback/:providerId`. This means by default `${baseURL}/api/auth/oauth2/callback/:providerId` will be used as the callback URL. Make sure your OAuth provider is configured to use this URL.
+
+Unlike built-in providers, the `:providerId` parameter is required and must match your configured provider ID.
+
+## Pre-configured Provider Helpers
+
+RubyAuth provides pre-configured helper functions for popular OAuth providers. These helpers handle the provider-specific configuration, including discovery URLs and user info endpoints.
+
+### Supported Providers
+
+* **Auth0** - `auth0(options)`
+* **HubSpot** - `hubspot(options)`
+* **Keycloak** - `keycloak(options)`
+* **LINE** - `line(options)`
+* **Microsoft Entra ID (Azure AD)** - `microsoftEntraId(options)`
+* **Okta** - `okta(options)`
+* **Slack** - `slack(options)`
+* **Patreon** - `patreon(options)`
+
+### Example: Using Pre-configured Providers
 
 ```ruby title="config/auth.rb"
 require "better_auth"
@@ -18,35 +110,182 @@ auth = BetterAuth.auth(
   secret: ENV.fetch("BETTER_AUTH_SECRET"),
   base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
   plugins: [
-    BetterAuth::Plugins.generic_oauth(config: [{ provider_id: "example", client_id: ENV.fetch("OAUTH_CLIENT_ID"), client_secret: ENV.fetch("OAUTH_CLIENT_SECRET") }])
+    BetterAuth::Plugins.generic_oauth(providers: [{ provider_id: "custom", client_id: ENV.fetch("OAUTH_CLIENT_ID"), client_secret: ENV.fetch("OAUTH_CLIENT_SECRET"), discovery_url: "https://provider.example/.well-known/openid-configuration" }])
   ]
 )
 ```
 
-## Usage
+Each provider helper accepts common OAuth options (extending `BaseOAuthProviderOptions`) plus provider-specific fields:
+
+* **Auth0**: Requires `domain` (e.g., `dev-xxx.eu.auth0.com`)
+* **HubSpot**: No additional required fields. Optional `scopes` (defaults to `["oauth"]`)
+* **Keycloak**: Requires `issuer` (e.g., `https://my-domain/realms/MyRealm`)
+* **LINE**: Optional `providerId` (defaults to `"line"`). LINE requires separate channels for different countries (Japan, Thailand, Taiwan, etc.), so you can call `line()` multiple times with different `providerId`s and credentials to support multiple countries
+* **Microsoft Entra ID**: Requires `tenantId` (can be a GUID, `"common"`, `"organizations"`, or `"consumers"`)
+* **Okta**: Requires `issuer` (e.g., `https://dev-xxxxx.okta.com/oauth2/default`)
+* **Slack**: No additional required fields
+* **Patreon**: No additional required fields
+
+All providers support the same optional fields:
+
+* `scopes?: string[]` - Array of OAuth scopes to request
+* `redirectURI?: string` - Custom redirect URI
+* `pkce?: boolean` - Enable PKCE (defaults to `false`)
+* `disableImplicitSignUp?: boolean` - Disable automatic sign-up for new users
+* `disableSignUp?: boolean` - Disable sign-up entirely
+* `overrideUserInfo?: boolean` - Override user info on sign in
+
+## Configuration
+
+When adding the plugin to your auth config, you can configure multiple OAuth providers. You can either use the pre-configured provider helpers (shown above) or create custom configurations manually.
+
+### Manual Configuration
+
+Each provider configuration object supports the following options:
 
 ```ruby title="server.rb"
-response = auth.api.sign_in_with_oauth2(body: { providerId: "example", callbackURL: "/dashboard" })
-link = auth.api.o_auth2_link_account(headers: { "cookie" => request.env["HTTP_COOKIE"] }, body: { providerId: "example" })
+# Use the Ruby auth.api method or HTTP endpoint documented in this section.
+# HTTP paths and JSON keys keep the upstream wire shape.
 ```
 
-## Routes
+### Other Provider Configurations
 
-| Method | Path | Ruby API method |
-| --- | --- | --- |
-| `POST` | `/sign-in/oauth2` | `auth.api.sign_in_with_oauth2` |
-| `GET` | `/callback/oauth2/:providerId` | `auth.api.o_auth2_callback` |
-| `POST` | `/oauth2/link` | `auth.api.o_auth2_link_account` |
+**providerId**: A unique string to identify the OAuth provider configuration.
 
-## Options
+**discoveryUrl**: (Optional) URL to fetch the provider's OAuth 2.0/OIDC configuration. If provided, endpoints like `authorizationUrl`, `tokenUrl`, and `userInfoUrl` can be auto-discovered.
 
-Current Ruby options accepted by `BetterAuth::Plugins.generic_oauth`:
+**issuer**: (Optional) The expected issuer identifier for validation. If not provided but `discoveryUrl` is set, it will be fetched from the discovery document. When set, the callback validates that the `iss` parameter matches this value.
 
-- `config`
+**requireIssuerValidation**: (Optional) When `true`, requires the `iss` parameter in callbacks if an issuer is configured. This provides stricter security but may break with older OAuth servers. Defaults to `false`.
 
-## Support Notes
+**authorizationUrl**: (Optional) The OAuth provider's authorization endpoint. Not required if using `discoveryUrl`.
 
-- The examples above are based on Ruby plugin source and tests in `packages/better_auth`.
-- If an upstream section is not represented here, treat it as not yet documented or not yet supported by the Ruby port until the matching Ruby implementation exists.
+**tokenUrl**: (Optional) The OAuth provider's token endpoint. Not required if using `discoveryUrl`.
 
-{/* Upstream guide is preserved in reference/upstream-src/1.6.9/repository/docs/content/docs/plugins/generic-oauth.mdx. */}
+**userInfoUrl**: (Optional) The endpoint to fetch user profile information. Not required if using `discoveryUrl`.
+
+**clientId**: The OAuth client ID issued by your provider.
+
+**clientSecret**: The OAuth client secret issued by your provider.
+
+**scopes**: (Optional) An array of scopes to request from the provider (e.g., `["openid", "email", "profile"]`).
+
+**redirectURI**: (Optional) The redirect URI to use for the OAuth flow. If not set, a default is constructed based on your app's base URL. Must include `:providerId` placeholder (e.g., `https://example.com/api/auth/oauth2/callback/my-provider`).
+
+**responseType**: (Optional) The OAuth response type. Defaults to `"code"` for authorization code flow.
+
+**responseMode**: (Optional) The response mode for the authorization code request, such as `"query"` or `"form_post"`.
+
+**prompt**: (Optional) Controls the authentication experience (e.g., force login, consent, etc.).
+
+**pkce**: (Optional) If true, enables PKCE (Proof Key for Code Exchange) for enhanced security. Defaults to `false`.
+
+**accessType**: (Optional) The access type for the authorization request. Use `"offline"` to request a refresh token.
+
+**getToken**: (Optional) A custom function to exchange authorization code for tokens. If provided, this function will be used instead of the default token exchange logic. This is useful for providers with non-standard token endpoints that use GET requests or custom parameters.
+
+**getUserInfo**: (Optional) A custom function to fetch user info from the provider, given the OAuth tokens. If not provided, a default fetch is used.
+
+**mapProfileToUser**: (Optional) A function to map the provider's user profile to your app's user object. Useful for custom field mapping or transformations.
+
+**authorizationUrlParams**: (Optional) Additional query parameters to add to the authorization URL. These can override default parameters. You can also provide a function that returns the parameters.
+
+**tokenUrlParams**: (Optional) Additional query parameters to add to the token URL. These can override default parameters. You can also provide a function that returns the parameters.
+
+**disableImplicitSignUp**: (Optional) If true, disables automatic sign-up for new users. Sign-in must be explicitly requested with sign-up intent.
+
+**disableSignUp**: (Optional) If true, disables sign-up for new users entirely. Only existing users can sign in.
+
+**authentication**: (Optional) The authentication method for token requests. Can be `'basic'` or `'post'`. Defaults to `'post'`.
+
+**discoveryHeaders**: (Optional) Custom headers to include in the discovery request. Useful for providers that require special headers.
+
+**authorizationHeaders**: (Optional) Custom headers to include in the authorization request. Useful for providers that require special headers.
+
+**overrideUserInfo**: (Optional) If true, the user's info in your database will be updated with the provider's info every time they sign in. Defaults to `false`.
+
+## Security: Issuer Validation
+
+RubyAuth validates the OAuth provider's issuer to protect against mix-up attacks ([RFC 9207](https://datatracker.ietf.org/doc/html/rfc9207)). A mix-up attack occurs when a malicious authorization server tricks your application into sending an authorization code to the wrong token endpoint.
+
+### How It Works
+
+When an OAuth provider supports RFC 9207, it includes an `iss` (issuer) parameter in the authorization response. RubyAuth validates this parameter against the expected issuer to ensure the response came from the intended provider.
+
+### Configuration Examples
+
+**Auto-discovery (recommended for OIDC providers):**
+
+```ruby title="server.rb"
+# Use the Ruby auth.api method or HTTP endpoint documented in this section.
+# HTTP paths and JSON keys keep the upstream wire shape.
+```
+
+**Manual issuer configuration:**
+
+```ruby title="server.rb"
+# Use the Ruby auth.api method or HTTP endpoint documented in this section.
+# HTTP paths and JSON keys keep the upstream wire shape.
+```
+
+**Strict mode (recommended for modern providers):**
+
+```ruby title="server.rb"
+# Use the Ruby auth.api method or HTTP endpoint documented in this section.
+# HTTP paths and JSON keys keep the upstream wire shape.
+```
+
+### Validation Behavior
+
+| Scenario               | `requireIssuerValidation` | Result                        |
+| ---------------------- | ------------------------- | ----------------------------- |
+| `iss` matches expected | -                         | Success                       |
+| `iss` doesn't match    | -                         | `issuer_mismatch` error       |
+| `iss` missing          | `false` (default)         | Success (backward compatible) |
+| `iss` missing          | `true`                    | `issuer_missing` error        |
+
+<Callout>
+  For maximum security with modern OAuth/OIDC providers (Google, Auth0, Okta, etc.), we recommend enabling `requireIssuerValidation: true`.
+</Callout>
+
+## Advanced Usage
+
+### Custom Token Exchange
+
+For providers with non-standard token endpoints that use GET requests or custom parameters, you can provide a custom `getToken` function:
+
+```ruby title="server.rb"
+# Use the Ruby auth.api method or HTTP endpoint documented in this section.
+# HTTP paths and JSON keys keep the upstream wire shape.
+```
+
+### Custom User Info Fetching
+
+You can provide a custom `getUserInfo` function to handle specific provider requirements:
+
+```ruby title="server.rb"
+# Use the Ruby auth.api method or HTTP endpoint documented in this section.
+# HTTP paths and JSON keys keep the upstream wire shape.
+```
+
+### Map User Info Fields
+
+If the user info returned by the provider does not match the expected format, or you need to map additional fields, you can use the `mapProfileToUser`:
+
+```ruby title="server.rb"
+# Use the Ruby auth.api method or HTTP endpoint documented in this section.
+# HTTP paths and JSON keys keep the upstream wire shape.
+```
+
+### Accessing Raw Token Data
+
+The `tokens` parameter includes a `raw` field that preserves the original token response from the provider. This is useful for accessing provider-specific fields:
+
+```ruby title="server.rb"
+# Use the Ruby auth.api method or HTTP endpoint documented in this section.
+# HTTP paths and JSON keys keep the upstream wire shape.
+```
+
+### Error Handling
+
+The plugin includes built-in error handling for common OAuth issues. Errors are typically redirected to your application's error page with an appropriate error message in the URL parameters. If the callback URL is not provided, the user will be redirected to RubyAuth's default error page.

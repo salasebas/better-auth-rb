@@ -1,7 +1,13 @@
 ---
-title: MongoDB
-description: Use Better Auth Ruby with MongoDB.
+title: MongoDB Adapter
+description: Integrate Better Auth with MongoDB.
 ---
+
+<RubyAuthDisclaimer />
+
+MongoDB is a popular NoSQL database that is widely used for building scalable and flexible applications. It provides a flexible schema that allows for easy data modeling and querying.
+
+Before getting started, make sure you have MongoDB installed and configured. For more information, see [MongoDB Documentation](https://www.mongodb.com/docs/)
 
 MongoDB support ships in the external `better_auth-mongodb` gem, so
 SQL-only applications do not install the MongoDB driver.
@@ -12,7 +18,9 @@ collections use upstream-compatible singular names by default: `user`,
 `session`, `account`, and `verification`.
 </Callout>
 
-## Install Dependencies
+## Installation
+
+To use the MongoDB adapter, you need to install the `better_auth-mongodb` gem:
 
 ```ruby title="Gemfile"
 gem "better_auth"
@@ -24,6 +32,8 @@ bundle install
 ```
 
 ## Example Usage
+
+You can use the MongoDB adapter to connect to your database as follows.
 
 ```ruby title="config/auth.rb"
 require "better_auth"
@@ -57,7 +67,9 @@ capable.
 
 ## Schema generation & migration
 
-MongoDB does not require SQL schema generation or migration. The adapter writes
+For MongoDB, we don't need to generate or migrate the schema.
+
+The Ruby adapter writes
 documents using Better Auth storage field names, including custom model names,
 custom field names, plugin schemas, and `additional_fields`.
 
@@ -101,8 +113,12 @@ index automatically.
 
 ## Joins (Experimental)
 
-Enable experimental joins when you want Better Auth to ask the MongoDB adapter
-to fetch related records in one adapter call.
+Database joins is useful when Better-Auth needs to fetch related data from multiple tables in a single query.
+Endpoints like `/get-session`, `/get-full-organization` and many others benefit greatly from this feature,
+seeing upwards of 2x to 3x performance improvements depending on database latency.
+
+The Ruby MongoDB adapter supports joins.
+To enable this feature, you need to set the `experimental.joins` option to `true` in your auth configuration.
 
 ```ruby title="config/auth.rb"
 auth = BetterAuth.auth(
@@ -152,6 +168,8 @@ coerces them to a one-element list as a Ruby adapter-family compatibility
 adaptation.
 
 ## Additional Information
+
+* If you're looking for performance improvements or tips, take a look at our guide to <Link href="/docs/guides/optimizing-for-performance">performance optimizations</Link>.
 
 - Transactions are enabled when a client is provided unless
   `transaction: false` is passed. If your MongoDB deployment does not support

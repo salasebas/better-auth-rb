@@ -1,0 +1,7 @@
+packages/better_auth/lib/better_auth/plugins/admin.rb:415:        can_impersonate_admins = config[:allow_impersonating_admins] ||
+packages/better_auth/test/better_auth/endpoint_registry_parity_test.rb:22:  SKIP_PATHS = %w[/forget-password/email-otp].freeze
+packages/better_auth/test/support/upstream_server_parity.rb:19:        "plugins/mcp/client/mcp-client.test.ts" => "MCP browser/client plugin; server MCP tests live elsewhere",
+packages/better_auth/test/support/upstream_server_parity.rb:331:        "plugins/mcp/mcp.test.ts" => {
+packages/better_auth/test/better_auth/plugins/email_otp_test.rb:368:    assert_equal 404, auth.call(rack_json_env("/api/auth/forget-password/email-otp", {email: "reset-otp@example.com"})).first
+packages/better_auth/test/better_auth/plugins/open_api_test.rb:594:    refute paths.any? { |path| path.start_with?("/mcp/") }
+packages/better_auth-oauth-provider/README.md:198:- Legacy `/mcp/*` routes are not supported. Use OAuth Provider token and introspection endpoints instead of `/mcp/get-session`.

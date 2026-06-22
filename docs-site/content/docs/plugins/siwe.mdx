@@ -1,15 +1,80 @@
 ---
-title: Sign In With Ethereum
-description: Sign in with an Ethereum wallet message.
+title: Sign In With Ethereum (SIWE)
+description: Sign in with Ethereum plugin for RubyAuth
 ---
 
-Sign in with an Ethereum wallet message.
+<RubyAuthDisclaimer />
 
-<Callout type="info">
-This page documents the current Ruby port behavior. Ruby uses snake_case option names and `auth.api` method names; HTTP paths and JSON keys keep the upstream wire shape where implemented.
-</Callout>
+The Sign in with Ethereum (SIWE) plugin allows users to authenticate using their Ethereum wallets following the [ERC-4361 standard](https://eips.ethereum.org/EIPS/eip-4361). This plugin provides flexibility by allowing you to implement your own message verification and nonce generation logic.
 
-## Configure
+## Installation
+
+<Steps>
+  <Step>
+    ### Add the Server Plugin
+
+    Add the SIWE plugin to your auth configuration:
+
+    ```ruby title="config/auth.rb"
+require "better_auth"
+
+auth = BetterAuth.auth(
+  secret: ENV.fetch("BETTER_AUTH_SECRET"),
+  base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
+  plugins: [
+    BetterAuth::Plugins.siwe(get_nonce: -> { SecureRandom.hex(16) })
+  ]
+)
+```
+  </Step>
+
+  <Step>
+    ### Migrate the database
+
+    Run the migration or generate the schema to add the necessary fields and tables to the database.
+
+    <Tabs items={["migrate", "generate"]}>
+  <Tab value="migrate">
+    ```bash
+    bundle exec better-auth migrate --cwd . --config config/better_auth.rb --yes
+    ```
+  </Tab>
+
+  <Tab value="generate">
+    ```bash
+    bundle exec better-auth generate --cwd . --dialect postgres --output db/better_auth/schema.sql --config config/better_auth.rb
+    ```
+  </Tab>
+</Tabs>
+
+    See the [Schema](#schema) section to add the fields manually.
+  </Step>
+
+</Steps>
+
+## Usage
+
+### Generate a Nonce
+
+Before signing a SIWE message, you need to generate a nonce for the wallet address:
+
+```ruby title="server.rb"
+# Use the matching Ruby auth.api method for this flow.
+# HTTP paths and JSON keys keep the upstream wire shape.
+```
+
+### Sign In with Ethereum
+
+After generating a nonce and creating a SIWE message, verify the signature to authenticate:
+
+```ruby title="server.rb"
+# Use the matching Ruby auth.api method for this flow.
+# HTTP paths and JSON keys keep the upstream wire shape.
+```
+
+### Chain-Specific Examples
+
+Here are examples for different blockchain networks:
 
 ```ruby title="config/auth.rb"
 require "better_auth"
@@ -18,47 +83,89 @@ auth = BetterAuth.auth(
   secret: ENV.fetch("BETTER_AUTH_SECRET"),
   base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
   plugins: [
-    BetterAuth::Plugins.siwe(domain: "localhost")
+    BetterAuth::Plugins.siwe(get_nonce: -> { SecureRandom.hex(16) })
   ]
 )
 ```
 
-## Usage
+```ruby title="config/auth.rb"
+require "better_auth"
 
-```ruby title="server.rb"
-nonce = auth.api.get_siwe_nonce(
-  body: { address: "0xabc123..." }
-)
-
-result = auth.api.verify_siwe_message(
-  body: {
-    message: signed_message,
-    signature: signature
-  }
+auth = BetterAuth.auth(
+  secret: ENV.fetch("BETTER_AUTH_SECRET"),
+  base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
+  plugins: [
+    BetterAuth::Plugins.siwe(get_nonce: -> { SecureRandom.hex(16) })
+  ]
 )
 ```
 
-## Routes
+```ruby title="config/auth.rb"
+require "better_auth"
 
-| Method | Path | Ruby API method |
-| --- | --- | --- |
-| `POST` | `/siwe/nonce` | `auth.api.get_siwe_nonce` |
-| `POST` | `/siwe/verify` | `auth.api.verify_siwe_message` |
+auth = BetterAuth.auth(
+  secret: ENV.fetch("BETTER_AUTH_SECRET"),
+  base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
+  plugins: [
+    BetterAuth::Plugins.siwe(get_nonce: -> { SecureRandom.hex(16) })
+  ]
+)
+```
 
-## Options
+```ruby title="config/auth.rb"
+require "better_auth"
 
-Current Ruby options accepted by `BetterAuth::Plugins.siwe`:
+auth = BetterAuth.auth(
+  secret: ENV.fetch("BETTER_AUTH_SECRET"),
+  base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
+  plugins: [
+    BetterAuth::Plugins.siwe(get_nonce: -> { SecureRandom.hex(16) })
+  ]
+)
+```
 
-- `get_nonce`
-- `anonymous`
-- `verify_message`
-- `domain`
-- `email_domain_name`
-- `ens_lookup`
+<Callout type="warning">
+  The `chainId` must match the Chain ID specified in your SIWE message. Verification will fail with a 401 error if there's a mismatch between the message's Chain ID and the `chainId` parameter.
+</Callout>
 
-## Support Notes
+## Configuration Options
 
-- The examples above are based on Ruby plugin source and tests in `packages/better_auth`.
-- If an upstream section is not represented here, treat it as not yet documented or not yet supported by the Ruby port until the matching Ruby implementation exists.
+### Server Options
 
-{/* Upstream guide is preserved in reference/upstream-src/1.6.9/repository/docs/content/docs/plugins/siwe.mdx. */}
+The SIWE plugin accepts the following configuration options:
+
+* **domain**: The domain name of your application (required for SIWE message generation)
+* **emailDomainName**: The email domain name for creating user accounts when not using anonymous mode. Defaults to the domain from your base URL
+* **anonymous**: Whether to allow anonymous sign-ins without requiring an email. Default is `true`
+* **getNonce**: Function to generate a unique nonce for each sign-in attempt. You must implement this function to return a cryptographically secure random string. Must return a `Promise<string>`
+* **verifyMessage**: Function to verify the signed SIWE message. Receives message details and should return `Promise<boolean>`
+* **ensLookup**: Optional function to lookup ENS names and avatars for Ethereum addresses
+
+## Schema
+
+The SIWE plugin adds a `walletAddress` table to store user wallet associations:
+
+| Field     | Type    | Description                               |
+| --------- | ------- | ----------------------------------------- |
+| id        | string  | Primary key                               |
+| userId    | string  | Reference to user.id                      |
+| address   | string  | Ethereum wallet address                   |
+| chainId   | number  | Chain ID (e.g., 1 for Ethereum mainnet)   |
+| isPrimary | boolean | Whether this is the user's primary wallet |
+| createdAt | date    | Creation timestamp                        |
+
+## Example Implementation
+
+Here's a complete example showing how to implement SIWE authentication:
+
+```ruby title="config/auth.rb"
+require "better_auth"
+
+auth = BetterAuth.auth(
+  secret: ENV.fetch("BETTER_AUTH_SECRET"),
+  base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
+  plugins: [
+    BetterAuth::Plugins.siwe(get_nonce: -> { SecureRandom.hex(16) })
+  ]
+)
+```

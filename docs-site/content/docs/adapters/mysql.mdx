@@ -1,11 +1,12 @@
 ---
 title: MySQL
-description: Use Better Auth Ruby with MySQL.
+description: Integrate Better Auth with MySQL.
 ---
 
-MySQL is supported by the core `better_auth` gem through the direct MySQL
-adapter. Rails applications can use `better_auth-rails` with ActiveRecord on top
-of MySQL.
+<RubyAuthDisclaimer />
+
+MySQL is a popular open-source relational database management system (RDBMS) that is widely used for building web applications and other types of software. It provides a flexible and scalable database solution that allows for efficient storage and retrieval of data.
+Read more here: [MySQL](https://www.mysql.com/).
 
 <Callout type="info">
 Use the lambda form when configuring the direct adapter. Better Auth passes the
@@ -26,6 +27,9 @@ bundle install
 
 ## Example Usage
 
+Make sure you have MySQL installed and configured.
+Then, you can connect it straight into Better Auth.
+
 ```ruby title="config/auth.rb"
 require "better_auth"
 
@@ -40,6 +44,11 @@ auth = BetterAuth.auth(
   }
 )
 ```
+
+<Callout>
+  For more information, read the Ruby
+  `BetterAuth::Adapters::MySQL` implementation and adapter tests in this repository.
+</Callout>
 
 You may also pass an existing `Mysql2::Client` when your app owns connection
 management.
@@ -82,78 +91,53 @@ bin/rails db:migrate
 
 ## Schema generation & migration
 
-The Ruby schema helpers generate MySQL DDL from the same Better Auth
-configuration used at runtime, including plugins, custom model names, custom
-field names, and `additional_fields`.
+The [Better Auth CLI](/docs/concepts/cli) allows you to generate or migrate
+your database schema based on your Better Auth configuration and plugins.
 
 <table>
   <thead>
-    <tr>
+    <tr className="border-b">
       <th>
         <p className="font-bold text-[16px] mb-1">MySQL Schema Generation</p>
       </th>
+
       <th>
         <p className="font-bold text-[16px] mb-1">MySQL Schema Migration</p>
       </th>
     </tr>
   </thead>
+
   <tbody>
-    <tr>
+    <tr className="h-10">
       <td>✅ Supported</td>
       <td>✅ Supported</td>
     </tr>
   </tbody>
 </table>
 
-<Tabs items={["generate", "migrate"]}>
-  <Tab value="generate">
-  ```ruby title="db/better_auth_schema.rb"
-  config = BetterAuth::Configuration.new(
-    secret: ENV.fetch("BETTER_AUTH_SECRET"),
-    database: :memory,
-    plugins: []
-  )
-
-  statements = BetterAuth::Schema::SQL.create_statements(
-    config,
-    dialect: :mysql
-  )
-
-  puts statements.join("\n\n")
-  ```
-  </Tab>
+<Tabs items={["migrate", "generate"]}>
   <Tab value="migrate">
-  ```ruby title="db/migrate_better_auth.rb"
-  require "better_auth"
-  require "mysql2"
+    ```bash title="Terminal"
+    bundle exec better-auth migrate --cwd . --config config/better_auth.rb --yes
+    ```
+  </Tab>
 
-  config = BetterAuth::Configuration.new(
-    secret: ENV.fetch("BETTER_AUTH_SECRET"),
-    database: :memory,
-    plugins: []
-  )
-
-  statements = BetterAuth::Schema::SQL.create_statements(
-    config,
-    dialect: :mysql
-  )
-
-  client = Mysql2::Client.new(
-    host: "localhost",
-    username: "root",
-    password: ENV.fetch("MYSQL_PASSWORD"),
-    database: "app_development",
-    symbolize_keys: false
-  )
-  statements.each { |sql| client.query(sql) }
-  ```
+  <Tab value="generate">
+    ```bash title="Terminal"
+    bundle exec better-auth generate --cwd . --dialect mysql --output db/better_auth/schema.sql --config config/better_auth.rb
+    ```
   </Tab>
 </Tabs>
 
 ## Joins (Experimental)
 
-Enable experimental joins when you want Better Auth to ask the database adapter
-to fetch related records in one adapter call.
+Database joins is useful when Better-Auth needs to fetch related data from multiple tables in a single query.
+Endpoints like `/get-session`, `/get-full-organization` and many others benefit greatly from this feature,
+seeing upwards of 2x to 3x performance improvements depending on database latency.
+
+The Ruby MySQL adapter supports joins.
+
+To enable this feature, you need to set the `experimental.joins` option to `true` in your auth configuration.
 
 ```ruby title="config/auth.rb"
 auth = BetterAuth.auth(
@@ -168,9 +152,9 @@ auth = BetterAuth.auth(
 )
 ```
 
-The MySQL adapter supports native joins for core relationships and for plugin
-schema relationships declared with `references`. Rails uses generated
-ActiveRecord associations for the same schema-driven relationships.
+<Callout type="warn">
+  It's possible that you may need to run migrations after enabling this feature.
+</Callout>
 
 ## Schema
 
@@ -191,7 +175,11 @@ instead.
 
 ## Additional Information
 
-- The direct adapter supports the shared Better Auth CRUD contract, where
+MySQL is supported under the hood via `BetterAuth::Adapters::MySQL`. Other relational database options are documented in <Link href="/docs/adapters/other-relational-databases">Other Relational Databases</Link>.
+
+If you're looking for performance improvements or tips, take a look at our guide to <Link href="/docs/guides/optimizing-for-performance">performance optimizations</Link>.
+
+- The direct adapter supports the shared Better Auth CRUD contract, including
   operators, sorting, pagination, counts, transactions, and native joins.
 - If you pass your own `Mysql2::Client`, configure connection settings such as
   timezone/session behavior in that client before handing it to Better Auth.

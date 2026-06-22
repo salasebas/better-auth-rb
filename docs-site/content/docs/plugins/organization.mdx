@@ -1,34 +1,58 @@
 ---
 title: Organization
-description: Organizations, members, invitations, teams, and roles.
+description: The organization plugin allows you to manage your organization's members and teams.
 ---
 
-Organizations, members, invitations, teams, and roles.
+<RubyAuthDisclaimer />
 
-<Callout type="info">
-This page documents the current Ruby port behavior. Ruby uses snake_case option names and `auth.api` method names; HTTP paths and JSON keys keep the upstream wire shape where implemented.
-</Callout>
+Organizations simplifies user access and permissions management. Assign roles and permissions to streamline project management, team coordination, and partnerships.
 
-## Configure
+## Installation
 
-```ruby title="config/auth.rb"
+<Steps>
+  <Step>
+    ### Add the plugin to your **auth** config
+
+    ```ruby title="config/auth.rb"
 require "better_auth"
 
 auth = BetterAuth.auth(
   secret: ENV.fetch("BETTER_AUTH_SECRET"),
   base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
   plugins: [
-    BetterAuth::Plugins.organization(allow_user_to_create_organization: true, creator_role: "owner")
+    BetterAuth::Plugins.organization
   ]
 )
 ```
+  </Step>
+
+  <Step>
+    ### Migrate the database
+
+    Run the migration or generate the schema to add the necessary fields and tables to the database.
+
+    <Tabs items={["migrate", "generate"]}>
+  <Tab value="migrate">
+    ```bash
+    bundle exec better-auth migrate --cwd . --config config/better_auth.rb --yes
+    ```
+  </Tab>
+
+  <Tab value="generate">
+    ```bash
+    bundle exec better-auth generate --cwd . --dialect postgres --output db/better_auth/schema.sql --config config/better_auth.rb
+    ```
+  </Tab>
+</Tabs>
+
+    See the [Schema](#schema) section to add the fields manually.
+  </Step>
+
+</Steps>
 
 ## Usage
 
-```ruby title="server.rb"
-organization = auth.api.create_organization(headers: { "cookie" => owner_cookie }, body: { name: "Example Inc", slug: "example" })
-auth.api.create_invitation(headers: { "cookie" => owner_cookie }, body: { organizationId: organization[:id], email: "member@example.com", role: "member" })
-```
+Once you've installed the plugin, you can start using the organization plugin to manage your organization's members and teams. Ruby exposes the implemented operations through `auth.api` and matching HTTP endpoints.
 
 ## Routes
 
@@ -51,75 +75,1837 @@ auth.api.create_invitation(headers: { "cookie" => owner_cookie }, body: { organi
 | `POST` | `/organization/remove-team-member` | `auth.api.remove_team_member` |
 | `POST` | `/organization/create-role` | `auth.api.create_org_role` |
 
-## Options
+## Organization
 
-Current Ruby options accepted by `BetterAuth::Plugins.organization`:
+### Create an organization
 
-- `allow_user_to_create_organization`
-- `creator_role`
-- `membership_limit`
-- `disable_organization_deletion`
-- `invitation_expires_in`
-- `invitation_limit`
-- `ac`
-- `roles`
-- `organization_hooks`
-- `organization_limit`
-- `cancel_pending_invitations_on_re_invite`
-- `send_invitation_email`
-- `require_email_verification_on_invitation`
+<APIMethod path="/organization/create" method="POST" requireSession>
+  ```
+  const metadata = { someKey: "someValue" };
 
-`membership_limit` accepts a number or callable. Ruby enforces it when members
-are added directly and when invitations are accepted. Direct member adds also
-support the active organization fallback and optional `teamId` assignment when
-teams are enabled.
+  type createOrganization = {
+    /**
+    * The organization name.
+    */
+    name: string = "My Organization"
+    /**
+    * The organization slug.
+    */
+    slug: string = "my-org"
+    /**
+    * The organization logo.
+    */
+    logo?: string = "https://example.com/logo.png"
+    /**
+    * The metadata of the organization.
+    */
+    metadata?: Record<string, any>
+    /**
+    * The user ID of the organization creator.
+    * @serverOnly - This is ignored if session headers are provided.
+    */
+    userId?: string = "some_user_id"
+    /**
+    * Whether to keep the current active organization active after creating a new one.
+    */
+    keepCurrentActiveOrganization?: boolean = false
+  }
+  ```
+</APIMethod>
 
-Set `disable_organization_deletion: true` to reject organization deletion with
-`ORGANIZATION_DELETION_DISABLED`. When the active organization is deleted or a
-member leaves their active organization, Ruby clears both `activeOrganizationId`
-and `activeTeamId` on the session.
+<Callout type="warn">
+  **Mutually Exclusive Parameters**
 
-## Organization Hooks
+  The `userId` and session headers cannot be used together:
 
-Use `organization_hooks` to customize organization write flows. Hook names are
-snake_case in Ruby and receive the route payload plus the request context:
+  * **With session headers:** The organization is created for the authenticated session user. The `userId` field is **silently ignored**.
+  * **Without session headers (Server-side only):** The organization is created for the user specified by `userId`.
 
-```ruby
+  **For Admins:** To create an organization on behalf of another user, you must make the API call server-side **without** passing session headers.
+</Callout>
+
+#### Restrict who can create an organization
+
+By default, any user can create an organization. To restrict this, set the `allow_user_to_create_organization` option to a function that returns a boolean, or directly to `true` or `false`.
+
+```ruby title="config/auth.rb"
+require "better_auth"
+
+auth = BetterAuth.auth(
+  secret: ENV.fetch("BETTER_AUTH_SECRET"),
+  base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
+  plugins: [
+    BetterAuth::Plugins.organization
+  ]
+)
+```
+
+#### Check if organization slug is taken
+
+To check if an organization slug is taken or not you can use `auth.api.check_organization_slug` or the HTTP endpoint. The function takes an object with the following properties:
+
+<APIMethod path="/organization/check-slug" method="POST">
+  ```
+  type checkOrganizationSlug = {
+      /**
+       * The organization slug to check.
+       */
+      slug: string = "my-org"
+  }
+  ```
+</APIMethod>
+
+### Organization Hooks
+
+You can customize organization operations using hooks that run before and after various organization-related activities. Ruby uses the `organization_hooks` option with snake_case hook names.
+
+#### Organization Creation and Management Hooks
+
+Control organization lifecycle operations:
+
+```ruby title="config/auth.rb"
+require "better_auth"
+
+auth = BetterAuth.auth(
+  secret: ENV.fetch("BETTER_AUTH_SECRET"),
+  base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
+  plugins: [
+    BetterAuth::Plugins.organization
+  ]
+)
+```
+
+```ruby title="config/auth.rb"
 BetterAuth::Plugins.organization(
   organization_hooks: {
-    before_update_organization: ->(data, ctx) { { data: { name: "New name" } } },
+    before_update_organization: ->(data, ctx) { {data: {name: "New name"}} },
     after_delete_organization: ->(data, ctx) { Audit.log(data[:organization]) }
   }
 )
 ```
 
-Before-hooks that support data mutation return `{ data: { ... } }`. Ruby
-currently supports data mutation for create/update organization data, member
-creation, member role updates, invitation creation, and team create/update
-data. Other before-hooks are veto hooks: raise `BetterAuth::APIError` to stop
-the operation.
+Before-hooks that support data mutation return `{data: {...}}`. Ruby currently supports data mutation for create/update organization data, member creation, member role updates, invitation creation, and team create/update data. Other before-hooks are veto hooks: raise `BetterAuth::APIError` to stop the operation.
 
-Supported organization hook names:
+Supported hook names:
 
-- `before_create_organization`, `after_create_organization`
-- `before_update_organization`, `after_update_organization`
-- `before_delete_organization`, `after_delete_organization`
-- `before_add_member`, `after_add_member`
-- `before_remove_member`, `after_remove_member`
-- `before_update_member_role`, `after_update_member_role`
-- `before_create_invitation`, `after_create_invitation`
-- `before_accept_invitation`, `after_accept_invitation`
-- `before_reject_invitation`, `after_reject_invitation`
-- `before_cancel_invitation`, `after_cancel_invitation`
-- `before_create_team`, `after_create_team`
-- `before_update_team`, `after_update_team`
-- `before_delete_team`, `after_delete_team`
-- `before_add_team_member`, `after_add_team_member`
-- `before_remove_team_member`, `after_remove_team_member`
+* `before_create_organization`, `after_create_organization`
+* `before_update_organization`, `after_update_organization`
+* `before_delete_organization`, `after_delete_organization`
+* `before_add_member`, `after_add_member`
+* `before_remove_member`, `after_remove_member`
+* `before_update_member_role`, `after_update_member_role`
+* `before_create_invitation`, `after_create_invitation`
+* `before_accept_invitation`, `after_accept_invitation`
+* `before_reject_invitation`, `after_reject_invitation`
+* `before_cancel_invitation`, `after_cancel_invitation`
+* `before_create_team`, `after_create_team`
+* `before_update_team`, `after_update_team`
+* `before_delete_team`, `after_delete_team`
+* `before_add_team_member`, `after_add_team_member`
+* `before_remove_team_member`, `after_remove_team_member`
 
-## Support Notes
+#### Member Hooks
 
-- The examples above are based on Ruby plugin source and tests in `packages/better_auth`.
-- If an upstream section is not represented here, treat it as not yet documented or not yet supported by the Ruby port until the matching Ruby implementation exists.
+Control member operations within organizations:
 
-{/* Upstream guide is preserved in reference/upstream-src/1.6.9/repository/docs/content/docs/plugins/organization.mdx. */}
+```ruby title="permissions.rb"
+statement = {
+  organization: ["update", "delete"],
+  member: ["create", "update", "delete"],
+  invitation: ["create", "cancel"]
+}
+
+access_control = BetterAuth::Plugins.create_access_control(statement)
+owner = access_control.new_role(organization: ["update", "delete"], member: ["create", "update", "delete"], invitation: ["create", "cancel"])
+member = access_control.new_role(organization: [], member: [], invitation: [])
+```
+
+#### Invitation Hooks
+
+Control invitation lifecycle:
+
+```ruby title="permissions.rb"
+statement = {
+  organization: ["update", "delete"],
+  member: ["create", "update", "delete"],
+  invitation: ["create", "cancel"]
+}
+
+access_control = BetterAuth::Plugins.create_access_control(statement)
+owner = access_control.new_role(organization: ["update", "delete"], member: ["create", "update", "delete"], invitation: ["create", "cancel"])
+member = access_control.new_role(organization: [], member: [], invitation: [])
+```
+
+#### Team Hooks
+
+Control team operations (when teams are enabled):
+
+```ruby title="permissions.rb"
+statement = {
+  organization: ["update", "delete"],
+  member: ["create", "update", "delete"],
+  invitation: ["create", "cancel"]
+}
+
+access_control = BetterAuth::Plugins.create_access_control(statement)
+owner = access_control.new_role(organization: ["update", "delete"], member: ["create", "update", "delete"], invitation: ["create", "cancel"])
+member = access_control.new_role(organization: [], member: [], invitation: [])
+```
+
+#### Hook Error Handling
+
+All hooks support error handling. Throwing an error in a `before` hook will prevent the operation from proceeding:
+
+```ruby title="config/auth.rb"
+require "better_auth"
+
+auth = BetterAuth.auth(
+  secret: ENV.fetch("BETTER_AUTH_SECRET"),
+  base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
+  plugins: [
+    BetterAuth::Plugins.organization
+  ]
+)
+```
+
+### List User's Organizations
+
+To list the organizations that a user is a member of, you can use `useListOrganizations` hook. It implements a reactive way to get the organizations that the user is a member of.
+
+<Tabs items={["React", "Vue", "Svelte"]} default="React">
+  <Tab value="React">
+    ```ruby title="server.rb"
+# Use the generated Ruby tab in the API block above, or call the same route over HTTP.
+# HTTP paths and JSON keys keep the upstream wire shape.
+```
+  </Tab>
+
+  <Tab value="Svelte">
+    ```svelte title="page.svelte"
+    <script lang="ts">
+    </script>
+
+    <h1>Organizations</h1>
+
+    {#if $organizations.isPending}
+
+      <p>Loading...</p>
+    {:else if !$organizations.data?.length}
+      <p>No organizations found.</p>
+    {:else}
+      <ul>
+        {#each $organizations.data as organization}
+          <li>{organization.name}</li>
+        {/each}
+      </ul>
+    {/if}
+    ```
+  </Tab>
+
+  <Tab value="Vue">
+    ```vue title="organization.vue"
+    <script lang="ts">;
+    export default {
+        setup() {
+            return { organizations };
+        }
+    };
+    </script>
+
+    <template>
+        <div>
+            <h1>Organizations</h1>
+            <div v-if="organizations.isPending">Loading...</div>
+            <div v-else-if="organizations.data === null">No organizations found.</div>
+            <ul v-else>
+                <li v-for="organization in organizations.data" :key="organization.id">
+                    {{ organization.name }}
+                </li>
+            </ul>
+        </div>
+    </template>
+    ```
+  </Tab>
+</Tabs>
+
+Or alternatively, you can call `organization.list` if you don't want to use a hook.
+
+<APIMethod path="/organization/list" method="GET" requireSession>
+  ```
+  type listOrganizations = {
+  }
+  ```
+</APIMethod>
+
+### Active Organization
+
+Active organization is the workspace the user is currently working on. By default when the user is signed in the active organization is set to `null`. You can set the active organization to the user session.
+
+<Callout type="info">
+  It's not always you want to persist the active organization in the session.
+  You can manage the active organization in the client side only. For example,
+  multiple tabs can have different active organizations.
+</Callout>
+
+#### Set Active Organization
+
+You can set the active organization by calling the `organization.setActive` function. It'll set the active organization for the user session.
+
+<Callout>
+  In some applications, you may want the ability to unset an active
+  organization. In this case, you can call this endpoint with `organizationId`
+  set to `null`.
+</Callout>
+
+<APIMethod path="/organization/set-active" method="POST" requireSession>
+  ```
+  type setActiveOrganization = {
+      /**
+       * The organization ID to set as active. It can be null to unset the active organization.
+       */
+      organizationId?: string | null = "org-id"
+      /**
+       * The organization slug to set as active. It can be null to unset the active organization if organizationId is not provided.
+       */
+      organizationSlug?: string = "org-slug"
+  }
+  ```
+</APIMethod>
+
+To automatically set an active organization when a session is created, you can use [database hooks](/docs/concepts/database#database-hooks). You'll need to implement logic to determine which organization to set as the initial active organization.
+
+```ruby title="config/auth.rb"
+require "better_auth"
+
+auth = BetterAuth.auth(
+  secret: ENV.fetch("BETTER_AUTH_SECRET"),
+  base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
+  plugins: [
+    BetterAuth::Plugins.organization
+  ]
+)
+```
+
+#### Use Active Organization
+
+To retrieve the active organization for the user, you can call the `useActiveOrganization` hook. It returns the active organization for the user. Whenever the active organization changes, the hook will re-evaluate and return the new active organization.
+
+<Tabs items={['React', 'Vue', 'Svelte']}>
+  <Tab value="React">
+    ```ruby title="server.rb"
+# Use the generated Ruby tab in the API block above, or call the same route over HTTP.
+# HTTP paths and JSON keys keep the upstream wire shape.
+```
+  </Tab>
+
+  <Tab value="Svelte">
+    ```ruby title="server.rb"
+# Use the generated Ruby tab in the API block above, or call the same route over HTTP.
+# HTTP paths and JSON keys keep the upstream wire shape.
+```
+  </Tab>
+
+  <Tab value="Vue">
+    ```vue title="organization.vue"
+    <script lang="ts">;
+    export default {
+        setup() {
+            return { activeOrganization };
+        }
+    };
+    </script>
+
+    <template>
+        <div>
+            <h2>Active organization</h2>
+            <div v-if="activeOrganization.isPending">Loading...</div>
+            <div v-else-if="activeOrganization.data === null">No active organization.</div>
+            <div v-else>
+                {{ activeOrganization.data.name }}
+            </div>
+        </div>
+    </template>
+    ```
+  </Tab>
+</Tabs>
+
+### Get Full Organization
+
+To get the full details of an organization, you can use `auth.api.get_full_organization`.
+By default, if you don't pass any properties, it will use the active organization.
+
+<APIMethod path="/organization/get-full-organization" method="GET" requireSession>
+  ```
+  type getFullOrganization = {
+      /**
+       * The organization ID to get. By default, it will use the active organization.
+       */
+      organizationId?: string = "org-id"
+      /**
+       * The organization slug to get.
+       */
+      organizationSlug?: string = "org-slug"
+      /**
+       * The limit of members to get. By default, it uses the membership_limit option which defaults to 100.
+       */
+      membersLimit?: number = 100
+  }
+  ```
+</APIMethod>
+
+### Update Organization
+
+To update organization info, you can use `auth.api.update_organization`.
+
+<APIMethod path="/organization/update" method="POST" requireSession>
+  ```
+  type updateOrganization = {
+      /**
+       * A partial list of data to update the organization.
+       */
+      data: {
+          /**
+           * The name of the organization.
+           */
+          name?: string = "updated-name"
+          /**
+           * The slug of the organization.
+           */
+          slug?: string = "updated-slug"
+          /**
+           * The logo of the organization.
+           */
+          logo?: string = "new-logo.url"
+          /**
+           * The metadata of the organization.
+           */
+          metadata?: Record<string, any> | null = { customerId: "test" }
+      }
+      /**
+       * The organization ID. to update.
+       */
+      organizationId?: string = "org-id"
+  }
+  ```
+</APIMethod>
+
+### Delete Organization
+
+To remove user owned organization, you can use `auth.api.delete_organization`.
+
+<APIMethod path="/organization/delete" method="POST" requireSession>
+  ```
+  type deleteOrganization = {
+      /*
+      * The organization ID to delete.
+      */
+      organizationId: string = "org-id"
+  }
+  ```
+</APIMethod>
+
+If the user has the necessary permissions (by default: role is owner) in the specified organization, all members, invitations and organization information will be removed.
+
+You can configure how organization deletion is handled through the `disable_organization_deletion` option:
+
+```ruby title="config/auth.rb"
+require "better_auth"
+
+auth = BetterAuth.auth(
+  secret: ENV.fetch("BETTER_AUTH_SECRET"),
+  base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
+  plugins: [
+    BetterAuth::Plugins.organization
+  ]
+)
+```
+
+## Invitations
+
+To add a member to an organization, we first need to send an invitation to the user. The user will receive an email/sms with the invitation link. Once the user accepts the invitation, they will be added to the organization.
+
+### Setup Invitation Email
+
+For member invitation to work we first need to provide `send_invitation_email` to the `better-auth` instance. This callable is responsible for sending the invitation email to the user.
+
+You'll need to construct and send the invitation link to the user. The link should include the invitation ID, which will be used with `auth.api.accept_invitation` when the user clicks on it.
+
+```ruby title="config/auth.rb"
+require "better_auth"
+
+auth = BetterAuth.auth(
+  secret: ENV.fetch("BETTER_AUTH_SECRET"),
+  base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
+  plugins: [
+    BetterAuth::Plugins.organization
+  ]
+)
+```
+
+### Send Invitation
+
+To invite users to an organization, you can use `auth.api.create_invitation` or the HTTP endpoint. The function takes an object with the following properties:
+
+<APIMethod path="/organization/invite-member" method="POST" requireSession>
+  ```
+  type createInvitation = {
+      /**
+       * The email address of the user to invite.
+       */
+      email: string = "example@gmail.com"
+      /**
+       * The role(s) to assign to the user. It can be `admin`, `member`, `owner`
+       */
+      role: string | string[] = "member"
+      /**
+       * The organization ID to invite the user to. Defaults to the active organization.
+       */
+      organizationId?: string = "org-id"
+      /**
+       * Resend the invitation email, if the user is already invited.
+       */
+      resend?: boolean = true
+      /**
+       * The team ID to invite the user to.
+       */
+      teamId?: string = "team-id"
+  }
+  ```
+</APIMethod>
+
+<Callout>
+  * If the user is already a member of the organization, the invitation will be
+    canceled. - If the user is already invited to the organization, unless
+    `resend` is set to `true`, the invitation will not be sent again. - If
+    `cancel_pending_invitations_on_re_invite` is set to `true`, the invitation will be
+    canceled if the user is already invited to the organization and a new
+    invitation is sent.
+</Callout>
+
+### Accept Invitation
+
+When a user receives an invitation email, they can click on the invitation link to accept the invitation. The invitation link should include the invitation ID, which will be used to accept the invitation.
+
+Make sure to call `auth.api.accept_invitation` after the user is logged in.
+
+<APIMethod path="/organization/accept-invitation" method="POST" requireSession>
+  ```
+  type acceptInvitation = {
+      /**
+       * The ID of the invitation to accept.
+       */
+      invitationId: string = "invitation-id"
+  }
+  ```
+</APIMethod>
+
+#### Email Verification Requirement
+
+If the `require_email_verification_on_invitation` option is enabled in your organization configuration, users must verify their email address before they can accept invitations. This adds an extra security layer to ensure that only verified users can join your organization.
+
+```ruby title="config/auth.rb"
+require "better_auth"
+
+auth = BetterAuth.auth(
+  secret: ENV.fetch("BETTER_AUTH_SECRET"),
+  base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
+  plugins: [
+    BetterAuth::Plugins.organization
+  ]
+)
+```
+
+### Cancel Invitation
+
+If a user has sent out an invitation, you can use this method to cancel it.
+
+If you're looking for how a user can reject an invitation, you can find that [here](#reject-invitation).
+
+<APIMethod path="/organization/cancel-invitation" method="POST" noResult requireSession>
+  ```
+  type cancelInvitation = {
+      /**
+       * The ID of the invitation to cancel.
+       */
+      invitationId: string = "invitation-id"
+  }
+  ```
+</APIMethod>
+
+### Reject Invitation
+
+If this user has received an invitation, but wants to decline it, this method will allow you to do so by rejecting it.
+
+<APIMethod path="/organization/reject-invitation" method="POST" noResult requireSession>
+  ```
+  type rejectInvitation = {
+      /**
+       * The ID of the invitation to reject.
+       */
+      invitationId: string = "invitation-id"
+  }
+  ```
+</APIMethod>
+
+<Callout type="info">
+  Like accepting invitations, rejecting invitations also requires email
+  verification when the `require_email_verification_on_invitation` option is
+  enabled. Users with unverified emails will receive an error when attempting to
+  reject invitations.
+</Callout>
+
+### Get Invitation
+
+To get an invitation you can use `auth.api.get_invitation` or the HTTP endpoint. You need to provide the invitation id as a query parameter.
+
+<APIMethod path="/organization/get-invitation" method="GET" requireSession>
+  ```
+  type getInvitation = {
+      /**
+       * The ID of the invitation to get.
+       */
+      id: string = "invitation-id"
+  }
+  ```
+</APIMethod>
+
+### List Invitations
+
+To list all invitations for a given organization you can use the `listInvitations` function available through the Ruby API or HTTP endpoint.
+
+<APIMethod path="/organization/list-invitations" method="GET" requireSession>
+  ```
+  type listInvitations = {
+      /**
+       * An optional ID of the organization to list invitations for. If not provided, will default to the user's active organization.
+       */
+      organizationId?: string = "organization-id"
+  }
+  ```
+</APIMethod>
+
+### List user invitations
+
+To list all invitations for a given user you can use the `listUserInvitations` function available through the Ruby API or HTTP endpoint.
+
+```ruby title="server.rb"
+# Use the generated Ruby tab in the API block above, or call the same route over HTTP.
+# HTTP paths and JSON keys keep the upstream wire shape.
+```
+
+On the server, you can pass the user ID as a query parameter.
+
+```ruby title="server.rb"
+# Use the generated Ruby tab in the API block above, or call the same route over HTTP.
+# HTTP paths and JSON keys keep the upstream wire shape.
+```
+
+<Callout type="warn">
+  The `email` query parameter is only available on the server to query for
+  invitations for a specific user.
+</Callout>
+
+## Members
+
+### List Members
+
+To list all members of an organization you can use the `listMembers` function.
+
+<APIMethod path="/organization/list-members" method="GET" requireSession>
+  ```
+  type listMembers = {
+      /**
+       * An optional organization ID to list members for. If not provided, will default to the user's active organization.
+       */
+      organizationId?: string = "organization-id"
+      /**
+       * The limit of members to return.
+       */
+      limit?: number = 100
+      /**
+       * The offset to start from.
+       */
+      offset?: number = 0
+      /**
+       * The field to sort by.
+       */
+      sortBy?: string = "createdAt"
+      /**
+       * The direction to sort by.
+       */
+      sortDirection?: "asc" | "desc" = "desc"
+      /**
+       * The field to filter by.
+       */
+      filterField?: string = "createdAt"
+      /**
+       * The operator to filter by.
+       */
+      filterOperator?: "eq" | "ne" | "lt" | "lte" | "gt" | "gte" | "in" | "not_in" | "contains" | "starts_with" | "ends_with" = "eq"
+      /**
+       * The value to filter by.
+       */
+      filterValue?: string | number | boolean | string[] | number[] = "value"
+  }
+  ```
+</APIMethod>
+
+### Remove Member
+
+To remove you can use `organization.removeMember`
+
+<APIMethod path="/organization/remove-member" method="POST" requireSession>
+  ```
+  type removeMember = {
+      /**
+       * The ID or email of the member to remove.
+       */
+      memberIdOrEmail: string = "user@example.com"
+      /**
+       * The ID of the organization to remove the member from. If not provided, the active organization will be used.
+       */
+      organizationId?: string = "org-id"
+  }
+  ```
+</APIMethod>
+
+### Update Member Role
+
+To update the role of a member in an organization, you can use `auth.api.update_member_role`. If the user has the permission to update the role of the member, the role will be updated.
+
+<APIMethod path="/organization/update-member-role" method="POST" noResult requireSession>
+  ```
+  type updateMemberRole = {
+      /**
+       * The new role to be applied. This can be a string or array of strings representing the roles.
+       */
+      role: string | string[] = ["admin", "sale"]
+      /**
+       * The member id to apply the role update to.
+       */
+      memberId: string = "member-id"
+      /**
+       * An optional organization ID which the member is a part of to apply the role update. If not provided, you must provide session headers to get the active organization.
+       */
+      organizationId?: string = "organization-id"
+  }
+  ```
+</APIMethod>
+
+### Get Active Member
+
+To get the current member of the active organization you can use the `organization.getActiveMember` function. This function will return the user's member details in their active organization.
+
+<APIMethod path="/organization/get-active-member" method="GET" requireSession resultVariable="member">
+  ```
+  type getActiveMember = {
+  }
+  ```
+</APIMethod>
+
+### Get Active Member Role
+
+To get the current role member of the active organization you can use the `organization.getActiveMemberRole` function. This function will return the user's member role in their active organization.
+
+<APIMethod path="/organization/get-active-member-role" method="GET" requireSession resultVariable="{ role }">
+  ```
+  type getActiveMemberRole = {
+  }
+  ```
+</APIMethod>
+
+### Add Member
+
+If you want to add a member directly to an organization without sending an invitation, you can use the `addMember` function which can only be invoked on the server.
+
+<APIMethod path="/organization/add-member" method="POST" isServerOnly>
+  ```
+  type addMember = {
+      /**
+       * The user ID which represents the user to be added as a member. If `null` is provided, then it's expected to provide session headers.
+       */
+      userId?: string | null = "user-id"
+      /**
+       * The role(s) to assign to the new member.
+       */
+      role: string | string[] = ["admin", "sale"]
+      /**
+       * An optional organization ID to pass. If not provided, will default to the user's active organization.
+       */
+      organizationId?: string = "org-id"
+      /**
+       * An optional team ID to add the member to.
+       */
+      teamId?: string = "team-id"
+  }
+  ```
+</APIMethod>
+
+### Leave Organization
+
+To leave organization you can use `organization.leave` function. This function will remove the current user from the organization.
+
+<APIMethod path="/organization/leave" method="POST" requireSession noResult>
+  ```
+  type leaveOrganization = {
+      /**
+       * The organization ID for the member to leave.
+       */
+      organizationId: string = "organization-id"
+  }
+  ```
+</APIMethod>
+
+## Access Control
+
+The organization plugin provides a very flexible access control system. You can control the access of the user based on the role they have in the organization. You can define your own set of permissions based on the role of the user.
+
+### Roles
+
+By default, there are three roles in the organization:
+
+`owner`: The user who created the organization by default. The owner has full control over the organization and can perform any action.
+
+`admin`: Users with the admin role have full control over the organization except for deleting the organization or changing the owner.
+
+`member`: Users with the member role have limited control over the organization. They can only read organization data and have no permissions to create, update, or delete resources.
+
+<Callout>
+  A user can have multiple roles. Multiple roles are stored as string separated
+  by comma (",").
+</Callout>
+
+### Permissions
+
+By default, there are three resources, and these have two to three actions.
+
+**organization**:
+
+`update` `delete`
+
+**member**:
+
+`create` `update` `delete`
+
+**invitation**:
+
+`create` `cancel`
+
+The owner has full control over all the resources and actions. The admin has full control over all the resources except for deleting the organization or changing the owner. The member has no control over any of those actions other than reading the data.
+
+### Custom Permissions
+
+The plugin provides an easy way to define your own set of permissions for each role.
+
+<Steps>
+  <Step>
+    #### Create Access Control
+
+    You first need to create access controller by calling `createAccessControl` function and passing the statement object. The statement object should have the resource name as the key and the array of actions as the value.
+
+    ```ruby title="permissions.rb"
+statement = {
+  organization: ["update", "delete"],
+  member: ["create", "update", "delete"],
+  invitation: ["create", "cancel"]
+}
+
+access_control = BetterAuth::Plugins.create_access_control(statement)
+owner = access_control.new_role(organization: ["update", "delete"], member: ["create", "update", "delete"], invitation: ["create", "cancel"])
+member = access_control.new_role(organization: [], member: [], invitation: [])
+```
+
+    <Callout type="warning">
+      To keep bundle sizes small, make sure to import from `better-auth/plugins/access` instead of `better-auth/plugins`.
+    </Callout>
+  </Step>
+
+  <Step>
+    #### Create Roles
+
+    Once you have created the access controller you can create roles with the permissions you have defined.
+
+    ```ruby title="permissions.rb"
+statement = {
+  organization: ["update", "delete"],
+  member: ["create", "update", "delete"],
+  invitation: ["create", "cancel"]
+}
+
+access_control = BetterAuth::Plugins.create_access_control(statement)
+owner = access_control.new_role(organization: ["update", "delete"], member: ["create", "update", "delete"], invitation: ["create", "cancel"])
+member = access_control.new_role(organization: [], member: [], invitation: [])
+```
+
+    When you create custom roles for existing roles, the predefined permissions for those roles will be overridden. To add the existing permissions to the custom role, you need to import `defaultStatements` and merge it with your new statement, plus merge the roles' permissions set with the default roles.
+
+    ```ruby title="permissions.rb"
+statement = {
+  organization: ["update", "delete"],
+  member: ["create", "update", "delete"],
+  invitation: ["create", "cancel"]
+}
+
+access_control = BetterAuth::Plugins.create_access_control(statement)
+owner = access_control.new_role(organization: ["update", "delete"], member: ["create", "update", "delete"], invitation: ["create", "cancel"])
+member = access_control.new_role(organization: [], member: [], invitation: [])
+```
+  </Step>
+
+</Steps>
+
+### Access Control Usage
+
+**Has Permission**:
+
+You can use the `hasPermission` action provided by the `api` to check the permission of the user.
+
+```ruby title="permissions.rb"
+statement = {
+  organization: ["update", "delete"],
+  member: ["create", "update", "delete"],
+  invitation: ["create", "cancel"]
+}
+
+access_control = BetterAuth::Plugins.create_access_control(statement)
+owner = access_control.new_role(organization: ["update", "delete"], member: ["create", "update", "delete"], invitation: ["create", "cancel"])
+member = access_control.new_role(organization: [], member: [], invitation: [])
+```
+
+If you want to check the permission of the user from the server, use the Ruby API or HTTP endpoint.
+
+```ruby title="server.rb"
+allowed = auth.api.has_permission(
+  headers: {"cookie" => request.env["HTTP_COOKIE"]},
+  body: {permissions: {project: ["create"], sale: ["create"]}}
+)
+```
+
+**Check Role Permission**:
+
+Once you have defined roles and permissions, check static role permissions with the Ruby access-control object:
+
+```ruby title="permissions.rb"
+admin = access_control.new_role(organization: ["delete"], member: ["delete"])
+can_delete_org = access_control.check_role_permission(admin, organization: ["delete"])
+```
+
+<Callout type="warn">
+  Static role checks do not include dynamic roles.
+  Please use `auth.api.has_permission` or the matching HTTP endpoint to include checks for any dynamic roles and permissions.
+</Callout>
+
+***
+
+## Dynamic Access Control
+
+Dynamic access control allows you to create roles at runtime for organizations. This is achieved by storing the
+created roles and permissions associated with an organization in a database table.
+
+### Enabling Dynamic Access Control
+
+To enable dynamic access control, pass the `dynamic_access_control` configuration option with `enabled` set to `true` to the server plugin.
+
+Ensure you have pre-defined an `ac` instance on the server auth plugin.
+This is important as this is how we can infer the permissions that are available for use.
+
+```ruby title="permissions.rb"
+statement = {
+  organization: ["update", "delete"],
+  member: ["create", "update", "delete"],
+  invitation: ["create", "cancel"]
+}
+
+access_control = BetterAuth::Plugins.create_access_control(statement)
+owner = access_control.new_role(organization: ["update", "delete"], member: ["create", "update", "delete"], invitation: ["create", "cancel"])
+member = access_control.new_role(organization: [], member: [], invitation: [])
+```
+
+
+<Callout>
+  This will require you to run migrations to add the new `organizationRole` table to the database.
+</Callout>
+
+<Callout type="warn">
+  Please use `auth.api.has_permission` or the matching HTTP endpoint to include checks for any dynamic roles.
+</Callout>
+
+### Creating a role
+
+To create a new role for an organization at runtime, you can use `auth.api.create_org_role`.
+
+Only users with roles which contain the `ac` resource with the `create` permission can create a new role.
+By default, only the `admin` and `owner` roles have this permission. You also cannot add permissions that your
+current role in that organization can't already access.
+
+<APIMethod path="/organization/create-role" method="POST" requireSession noResult>
+  ```
+  // To use custom resources or permissions,
+  // make sure they are defined in the `ac` instance of your organization config.
+  const permission = {
+    project: ["create", "update", "delete"]
+  }
+
+  type createOrgRole = {
+      /**
+       * A unique name of the role to create.
+       */
+      role: string = "my-unique-role"
+      /**
+       * The permissions to assign to the role.
+       */
+      permission?: Record<string, string[]> = permission,
+      /**
+       * The organization ID which the role will be created in. Defaults to the active organization.
+       */
+      organizationId?: string = "organization-id"
+  }
+  ```
+</APIMethod>
+
+Now you can call [`auth.api.update_member_role`](#update-member-role) to update the role of a member with your newly created role.
+
+### Deleting a role
+
+To delete a role, you can use `auth.api.delete_org_role`, then provide either a `roleName` or `roleId` parameter along
+with the `organizationId` parameter.
+
+<APIMethod path="/organization/delete-role" method="POST" requireSession noResult>
+  ```
+  type deleteOrgRole = {
+      /**
+       * The name of the role to delete. Alternatively, you can pass a `roleId` parameter instead.
+       */
+      roleName?: string = "my-role"
+      /**
+       * The id of the role to delete. Alternatively, you can pass a `roleName` parameter instead.
+       */
+      roleId?: string = "role-id"
+      /**
+       * The organization ID which the role will be deleted in. Defaults to the active organization.
+       */
+      organizationId?: string = "organization-id"
+  }
+  ```
+</APIMethod>
+
+### Listing roles
+
+To list roles, you can use the `listOrgRoles` function.
+This requires the `ac` resource with the `read` permission for the member to be able to list roles.
+
+<APIMethod path="/organization/list-roles" method="GET" requireSession resultVariable="roles">
+  ```
+  type listOrgRoles = {
+      /**
+       * The organization ID which the roles are under to list. Defaults to the user's active organization.
+       */
+      organizationId?: string = "organization-id"
+  }
+  ```
+</APIMethod>
+
+### Getting a specific role
+
+To get a specific role, you can use the `getOrgRole` function and pass either a `roleName` or `roleId` parameter.
+This requires the `ac` resource with the `read` permission for the member to be able to get a role.
+
+<APIMethod path="/organization/get-role" method="GET" requireSession resultVariable="role">
+  ```
+  type getOrgRole = {
+      /**
+       * The name of the role to get. Alternatively, you can pass a `roleId` parameter instead.
+       */
+      roleName?: string = "my-role"
+      /**
+       * The id of the role to get. Alternatively, you can pass a `roleName` parameter instead.
+       */
+      roleId?: string = "role-id"
+      /**
+       * The organization ID from which the role will be retrieved. Defaults to the active organization.
+       */
+      organizationId?: string = "organization-id"
+  }
+  ```
+</APIMethod>
+
+### Updating a role
+
+To update a role, you can use the `updateOrgRole` function and pass either a `roleName` or `roleId` parameter.
+
+<APIMethod path="/organization/update-role" method="POST" requireSession resultVariable="updatedRole">
+  ```
+  type updateOrgRole = {
+      /**
+       * The name of the role to update. Alternatively, you can pass a `roleId` parameter instead.
+       */
+      roleName?: string = "my-role"
+      /**
+       * The id of the role to update. Alternatively, you can pass a `roleName` parameter instead.
+       */
+      roleId?: string = "role-id"
+      /**
+       * The organization ID which the role will be updated in. Defaults to the active organization.
+       */
+      organizationId?: string = "organization-id"
+      /**
+       * The data which will be updated
+      */
+      data: {
+        /**
+         * Optionally update the permissions of the role.
+         */
+        permission?: Record<string, string[]> = { project: ["create", "update", "delete"] }
+        /**
+         * Optionally update the name of the role.
+         */
+        roleName?: string = "my-new-role"
+      }
+  }
+  ```
+</APIMethod>
+
+### Configuration Options
+
+Below is a list of options that can be passed to the `dynamic_access_control` object.
+
+#### `enabled`
+
+This option is used to enable or disable dynamic access control. By default, it is disabled.
+
+```ruby title="config/auth.rb"
+require "better_auth"
+
+auth = BetterAuth.auth(
+  secret: ENV.fetch("BETTER_AUTH_SECRET"),
+  base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
+  plugins: [
+    BetterAuth::Plugins.organization
+  ]
+)
+```
+
+#### `maximum_roles_per_organization`
+
+This option is used to limit the number of roles that can be created for an organization.
+
+By default, the maximum number of roles that can be created for an organization is infinite.
+
+```ruby title="config/auth.rb"
+require "better_auth"
+
+auth = BetterAuth.auth(
+  secret: ENV.fetch("BETTER_AUTH_SECRET"),
+  base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
+  plugins: [
+    BetterAuth::Plugins.organization
+  ]
+)
+```
+
+You can also pass a function that returns a number.
+
+```ruby title="config/auth.rb"
+require "better_auth"
+
+auth = BetterAuth.auth(
+  secret: ENV.fetch("BETTER_AUTH_SECRET"),
+  base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
+  plugins: [
+    BetterAuth::Plugins.organization
+  ]
+)
+```
+
+### Additional Fields
+
+To add additional fields to the `organizationRole` table, you can pass the `additionalFields` configuration option to the `organization` plugin.
+
+```ruby title="config/auth.rb"
+require "better_auth"
+
+auth = BetterAuth.auth(
+  secret: ENV.fetch("BETTER_AUTH_SECRET"),
+  base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
+  plugins: [
+    BetterAuth::Plugins.organization
+  ]
+)
+```
+
+<UnderDevelopment />
+
+RubyAuth does not provide the upstream client-side `inferOrgAdditionalFields` helper. Configure additional fields on the server plugin schema and use the generated Ruby/HTTP API examples for organization-role routes.
+
+***
+
+## Teams
+
+Teams allow you to group members within an organization. The teams feature provides additional organization structure and can be used to manage permissions at a more granular level.
+
+### Enabling Teams
+
+To enable teams, pass the `teams` configuration option to the server plugin:
+
+```ruby title="config/auth.rb"
+require "better_auth"
+
+auth = BetterAuth.auth(
+  secret: ENV.fetch("BETTER_AUTH_SECRET"),
+  base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
+  plugins: [
+    BetterAuth::Plugins.organization
+  ]
+)
+```
+### Managing Teams
+
+#### Create Team
+
+Create a new team within an organization:
+
+<APIMethod path="/organization/create-team" method="POST">
+  ```
+  type createTeam = {
+      /**
+       * The name of the team.
+       */
+      name: string = "my-team"
+      /**
+       * The organization ID which the team will be created in. Defaults to the active organization.
+       */
+      organizationId?: string = "organization-id"
+  }
+  ```
+</APIMethod>
+
+#### List Teams
+
+Get all teams in an organization:
+
+<APIMethod path="/organization/list-teams" method="GET" requireSession>
+  ```
+  type listOrganizationTeams = {
+      /**
+      * The organization ID which the teams are under to list. Defaults to the user's active organization.
+      */
+      organizationId?: string = "organization-id"
+  }
+  ```
+</APIMethod>
+
+#### Update Team
+
+Update a team's details:
+
+<APIMethod path="/organization/update-team" method="POST" requireSession>
+  ```
+  type updateTeam = {
+      /**
+       * The ID of the team to be updated.
+       */
+      teamId: string = "team-id"
+      /**
+       * A partial object containing options for you to update.
+       */
+      data: {
+          /**
+           * The name of the team to be updated.
+           */
+          name?: string = "My new team name"
+          /**
+           * The organization ID which the team falls under.
+           */
+          organizationId?: string = "My new organization ID for this team"
+          /**
+           * The timestamp of when the team was created.
+           */
+          createdAt?: Date = new Date()
+          /**
+           * The timestamp of when the team was last updated.
+           */
+          updatedAt?: Date = new Date()
+      }
+  }
+  ```
+</APIMethod>
+
+#### Remove Team
+
+Delete a team from an organization:
+
+<APIMethod path="/organization/remove-team" method="POST">
+  ```
+  type removeTeam = {
+      /**
+       * The team ID of the team to remove.
+       */
+      teamId: string = "team-id"
+      /**
+       * The organization ID which the team falls under. If not provided, it will default to the user's active organization.
+       */
+      organizationId?: string = "organization-id"
+  }
+  ```
+</APIMethod>
+
+#### Set Active Team
+
+Sets the given team as the current active team. If `teamId` is `null` the current active team is unset.
+
+<APIMethod path="/organization/set-active-team" method="POST" requireSession>
+  ```
+  type setActiveTeam = {
+      /**
+       * The team ID of the team to set as the current active team.
+       */
+      teamId?: string = "team-id"
+  }
+  ```
+</APIMethod>
+
+#### List User Teams
+
+List all teams that the current user is a part of.
+
+<APIMethod path="/organization/list-user-teams" method="GET" requireSession>
+  ```
+  type listUserTeams = {
+  }
+  ```
+</APIMethod>
+
+#### List Team Members
+
+List the members of the given team.
+
+<APIMethod path="/organization/list-team-members" method="POST" forceAsQuery requireSession>
+  ```
+  type listTeamMembers = {
+      /**
+       * The team whose members we should return. If this is not provided the members of the current active team get returned.
+       */
+      teamId?: string = "team-id"
+  }
+  ```
+</APIMethod>
+
+#### Add Team Member
+
+Add a member to a team.
+
+<APIMethod path="/organization/add-team-member" method="POST" requireSession>
+  ```
+  type addTeamMember = {
+      /**
+       * The team the user should be a member of.
+       */
+      teamId: string = "team-id"
+      /**
+       * The user ID which represents the user to be added as a member.
+       */
+      userId: string = "user-id"
+  }
+  ```
+</APIMethod>
+
+#### Remove Team Member
+
+Remove a member from a team.
+
+<APIMethod path="/organization/remove-team-member" method="POST" requireSession>
+  ```
+  type removeTeamMember = {
+      /**
+       * The team the user should be removed from.
+       */
+      teamId: string = "team-id"
+      /**
+       * The user which should be removed from the team.
+       */
+      userId: string = "user-id"
+  }
+  ```
+</APIMethod>
+
+### Team Permissions
+
+Teams follow the organization's permission system. To manage teams, users need the following permissions:
+
+* `team:create` - Create new teams
+* `team:update` - Update team details
+* `team:delete` - Remove teams
+
+By default:
+
+* Organization owners and admins can manage teams
+* Regular members cannot create, update, or delete teams
+
+### Team Configuration Options
+
+The teams feature supports several configuration options:
+
+* `maximumTeams`: Limit the number of teams per organization
+
+  ```ruby title="server.rb"
+# Use the generated Ruby tab in the API block above, or call the same route over HTTP.
+# HTTP paths and JSON keys keep the upstream wire shape.
+```
+
+* `allowRemovingAllTeams`: Control whether the last team can be removed
+  ```ruby title="server.rb"
+# Use the generated Ruby tab in the API block above, or call the same route over HTTP.
+# HTTP paths and JSON keys keep the upstream wire shape.
+```
+
+### Team Members
+
+When inviting members to an organization, you can specify a team:
+
+```ruby title="server.rb"
+# Use the generated Ruby tab in the API block above, or call the same route over HTTP.
+# HTTP paths and JSON keys keep the upstream wire shape.
+```
+
+The invited member will be added to the specified team upon accepting the invitation.
+
+### Database Schema
+
+When teams are enabled, new `team` and `teamMember` tables are added to the database.
+
+Table Name: `team`
+
+export const teamsFeatureTeamTableFields = [
+	{
+		name: "id",
+		type: "string",
+		description: "Unique identifier for each team",
+		isPrimaryKey: true,
+	},
+	{
+		name: "name",
+		type: "string",
+		description: "The name of the team",
+	},
+	{
+		name: "organizationId",
+		type: "string",
+		description: "The ID of the organization",
+		isForeignKey: true,
+		references: { model: "organization", field: "id" },
+	},
+	{
+		name: "createdAt",
+		type: "Date",
+		description: "Timestamp of when the team was created",
+	},
+	{
+		name: "updatedAt",
+		type: "Date",
+		isOptional: true,
+		description: "Timestamp of when the team was created",
+	},
+];
+
+<DatabaseTable name="team" fields={teamsFeatureTeamTableFields} />
+
+Table Name: `teamMember`
+
+export const teamsFeatureTeamMemberTableFields = [
+	{
+		name: "id",
+		type: "string",
+		description: "Unique identifier for each team member",
+		isPrimaryKey: true,
+	},
+	{
+		name: "teamId",
+		type: "string",
+		description: "Unique identifier for each team",
+		isForeignKey: true,
+		references: { model: "team", field: "id" },
+	},
+	{
+		name: "userId",
+		type: "string",
+		description: "The ID of the user",
+		isForeignKey: true,
+		references: { model: "user", field: "id" },
+	},
+	{
+		name: "createdAt",
+		type: "Date",
+		description: "Timestamp of when the team member was created",
+		isOptional: true,
+	},
+];
+
+<DatabaseTable name="teamMember" fields={teamsFeatureTeamMemberTableFields} />
+
+## Schema
+
+The organization plugin adds the following tables to the database:
+
+### Organization
+
+Table Name: `organization`
+
+export const organizationTableFields = [
+	{
+		name: "id",
+		type: "string",
+		description: "Unique identifier for each organization",
+		isPrimaryKey: true,
+	},
+	{
+		name: "name",
+		type: "string",
+		description: "The name of the organization",
+	},
+	{
+		name: "slug",
+		type: "string",
+		description: "The slug of the organization",
+		isUnique: true,
+	},
+	{
+		name: "logo",
+		type: "string",
+		description: "The logo of the organization",
+		isOptional: true,
+	},
+	{
+		name: "metadata",
+		type: "string",
+		description: "Additional metadata for the organization",
+		isOptional: true,
+	},
+	{
+		name: "createdAt",
+		type: "Date",
+		description: "Timestamp of when the organization was created",
+	},
+];
+
+<DatabaseTable name="organization" fields={organizationTableFields} />
+
+### Member
+
+Table Name: `member`
+
+export const memberTableFields = [
+	{
+		name: "id",
+		type: "string",
+		description: "Unique identifier for each member",
+		isPrimaryKey: true,
+	},
+	{
+		name: "userId",
+		type: "string",
+		description: "The ID of the user",
+		isForeignKey: true,
+		references: { model: "user", field: "id" },
+	},
+	{
+		name: "organizationId",
+		type: "string",
+		description: "The ID of the organization",
+		isForeignKey: true,
+		references: { model: "organization", field: "id" },
+	},
+	{
+		name: "role",
+		type: "string",
+		description: "The role of the user in the organization",
+	},
+	{
+		name: "createdAt",
+		type: "Date",
+		description: "Timestamp of when the member was added to the organization",
+	},
+];
+
+<DatabaseTable name="member" fields={memberTableFields} />
+
+### Invitation
+
+Table Name: `invitation`
+
+export const invitationTableFields = [
+	{
+		name: "id",
+		type: "string",
+		description: "Unique identifier for each invitation",
+		isPrimaryKey: true,
+	},
+	{
+		name: "email",
+		type: "string",
+		description: "The email address of the user",
+	},
+	{
+		name: "inviterId",
+		type: "string",
+		description: "The ID of the inviter",
+		isForeignKey: true,
+		references: { model: "user", field: "id" },
+	},
+	{
+		name: "organizationId",
+		type: "string",
+		description: "The ID of the organization",
+		isForeignKey: true,
+		references: { model: "organization", field: "id" },
+	},
+	{
+		name: "role",
+		type: "string",
+		description: "The role of the user in the organization",
+		isOptional: true,
+	},
+	{
+		name: "status",
+		type: "string",
+		description: "The status of the invitation",
+	},
+	{
+		name: "createdAt",
+		type: "Date",
+		description: "Timestamp of when the invitation was created",
+	},
+	{
+		name: "expiresAt",
+		type: "Date",
+		description: "Timestamp of when the invitation expires",
+	},
+];
+
+<DatabaseTable name="invitation" fields={invitationTableFields} />
+
+If teams are enabled, you need to add the following fields to the invitation table:
+
+export const invitationTeamIdFields = [
+	{
+		name: "teamId",
+		type: "string",
+		description: "The ID of the team",
+		isOptional: true,
+	},
+];
+
+<DatabaseTable name="invitation" fields={invitationTeamIdFields} />
+
+### Session
+
+Table Name: `session`
+
+You need to add two more fields to the session table to store the active organization ID and the active team ID.
+
+export const sessionActiveOrganizationFields = [
+	{
+		name: "activeOrganizationId",
+		type: "string",
+		description: "The ID of the active organization",
+		isOptional: true,
+	},
+	{
+		name: "activeTeamId",
+		type: "string",
+		description: "The ID of the active team",
+		isOptional: true,
+	},
+];
+
+<DatabaseTable name="session" fields={sessionActiveOrganizationFields} />
+
+### Organization Role (optional)
+
+Table Name: `organizationRole`
+
+export const organizationRoleTableFields = [
+	{
+		name: "id",
+		type: "string",
+		description: "Unique identifier for each organization role",
+	},
+	{
+		name: "organizationId",
+		type: "string",
+		description: "The ID of the organization",
+		isForeignKey: true,
+		references: { model: "organization", field: "id" },
+	},
+	{
+		name: "role",
+		type: "string",
+		description: "The name of the role",
+	},
+	{
+		name: "permission",
+		type: "string",
+		description: "The permission of the role",
+	},
+	{
+		name: "createdAt",
+		type: "Date",
+		description: "Timestamp of when the organization role was created",
+	},
+	{
+		name: "updatedAt",
+		type: "Date",
+		description: "Timestamp of when the organization role was updated",
+		isOptional: true,
+	},
+];
+
+<DatabaseTable name="organizationRole" fields={organizationRoleTableFields} />
+
+### Teams (optional)
+
+Table Name: `team`
+
+export const optionalTeamTableFields = [
+	{
+		name: "id",
+		type: "string",
+		description: "Unique identifier for each team",
+		isPrimaryKey: true,
+	},
+	{
+		name: "name",
+		type: "string",
+		description: "The name of the team",
+	},
+	{
+		name: "organizationId",
+		type: "string",
+		description: "The ID of the organization",
+		isForeignKey: true,
+		references: { model: "organization", field: "id" },
+	},
+	{
+		name: "createdAt",
+		type: "Date",
+		description: "Timestamp of when the team was created",
+	},
+	{
+		name: "updatedAt",
+		type: "Date",
+		isOptional: true,
+		description: "Timestamp of when the team was created",
+	},
+];
+
+<DatabaseTable name="team" fields={optionalTeamTableFields} />
+
+Table Name: `teamMember`
+
+export const teamsFeatureTeamTableFields0 = [
+	{
+		name: "id",
+		type: "string",
+		description: "Unique identifier for each team member",
+		isPrimaryKey: true,
+	},
+	{
+		name: "teamId",
+		type: "string",
+		description: "Unique identifier for each team",
+		isForeignKey: true,
+		references: { model: "team", field: "id" },
+	},
+	{
+		name: "userId",
+		type: "string",
+		description: "The ID of the user",
+		isForeignKey: true,
+		references: { model: "user", field: "id" },
+	},
+	{
+		name: "createdAt",
+		type: "Date",
+		description: "Timestamp of when the team member was created",
+		isOptional: true,
+	},
+];
+
+<DatabaseTable name="teamMember" fields={teamsFeatureTeamTableFields0} />
+
+Table Name: `invitation`
+
+export const teamsFeatureTeamTableFields1 = [
+	{
+		name: "teamId",
+		type: "string",
+		description: "The ID of the team",
+		isOptional: true,
+	},
+];
+
+<DatabaseTable name="invitation" fields={teamsFeatureTeamTableFields1} />
+
+### Customizing the Schema
+
+To change the schema table name or fields, you can pass `schema` option to the organization plugin.
+
+```ruby title="config/auth.rb"
+require "better_auth"
+
+auth = BetterAuth.auth(
+  secret: ENV.fetch("BETTER_AUTH_SECRET"),
+  base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
+  plugins: [
+    BetterAuth::Plugins.organization
+  ]
+)
+```
+
+#### Additional Fields
+
+Starting with [RubyAuth v1.3](https://github.com/better-auth/better-auth/releases/tag/v1.3.0), you can easily add custom fields to the `organization`, `invitation`, `member`, and `team` tables.
+
+When you add extra fields to a model, the relevant API endpoints will automatically accept and return these new properties. For instance, if you add a custom field to the `organization` table, the `createOrganization` endpoint will include this field in its request and response payloads as needed.
+
+```ruby title="config/auth.rb"
+require "better_auth"
+
+auth = BetterAuth.auth(
+  secret: ENV.fetch("BETTER_AUTH_SECRET"),
+  base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
+  plugins: [
+    BetterAuth::Plugins.organization
+  ]
+)
+```
+
+<UnderDevelopment />
+
+RubyAuth does not provide the upstream client-side `inferOrgAdditionalFields` helper. Define additional fields directly in the server plugin schema.
+
+#### Example usage
+
+```ruby title="server.rb"
+# Use the generated Ruby tab in the API block above, or call the same route over HTTP.
+# HTTP paths and JSON keys keep the upstream wire shape.
+```
+
+## Options
+
+Current Ruby options accepted by `BetterAuth::Plugins.organization`:
+
+* `allow_user_to_create_organization`: boolean or callable that determines whether a user can create organizations. Defaults to `true`.
+* `organization_limit`: maximum number of organizations allowed for a user. Accepts a number or callable.
+* `creator_role`: role assigned to the user who creates the organization. Defaults to `"owner"` and can be set to `"admin"`.
+* `membership_limit`: maximum number of members allowed in an organization. Accepts a number or callable. Ruby enforces it when members are added directly and when invitations are accepted.
+* `send_invitation_email`: callable used to send invitation email.
+* `invitation_expires_in`: invitation lifetime in seconds. Defaults to 48 hours.
+* `cancel_pending_invitations_on_re_invite`: whether to cancel pending invitations when the user is invited again.
+* `invitation_limit`: maximum number of pending invitations allowed.
+* `require_email_verification_on_invitation`: requires verified email before accepting or rejecting invitations.
+* `disable_organization_deletion`: rejects organization deletion with `ORGANIZATION_DELETION_DISABLED` when set to `true`.
+* `ac`: access control instance.
+* `roles`: organization roles.
+* `organization_hooks`: lifecycle hooks for organization, member, invitation, and team writes.
+
+Direct member adds also support the active organization fallback and optional `teamId` assignment when teams are enabled. When the active organization is deleted or a member leaves their active organization, Ruby clears both `activeOrganizationId` and `activeTeamId` on the session.

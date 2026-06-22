@@ -1,38 +1,68 @@
 ---
-title: OAuth Provider Not Found
-description: OAuth error `oauth_provider_not_found` in RubyAuth.
+title: oauth_provider_not_found
+description: The OAuth provider was not found.
 ---
 
-## When this appears
+## What is it?
 
-Callback `providerId` is not configured in `social_providers`.
+This error occurs when RubyAuth cannot identify a provider for the callback path—either because the provider
+segment is missing or because no provider with that id is configured.
 
-Redirect URL shape:
+RubyAuth expects the callback route to be shaped like `/api/auth/callback/<provider>`.
+If the `<provider>` segment is absent (e.g., request hits `/api/auth/callback`),
+we cannot determine which integration should handle the callback and the
+request is rejected.
 
+## Common Causes
+
+* Visiting `/api/auth/callback` directly without the trailing provider segment.
+
+## How to resolve
+
+### Use the correct callback route shape
+
+* Ensure your application exposes a callback route like `/api/auth/callback/[provider]` (framework-specific).
+* When initiating the OAuth flow, ensure the redirect URI includes the provider segment so the provider
+  returns to `/api/auth/callback/<provider>`.
+
+### Configure infrastructure to preserve the path
+
+* Check proxy/CDN rewrites (Vercel, Cloudflare, Nginx) to make sure they do not strip the final path segment.
+* Align trailing slash behavior across environments so that `/api/auth/callback/<provider>` is preserved.
+
+### Avoid manual access to the base callback route
+
+* Do not navigate to `/api/auth/callback` directly; always start OAuth via RubyAuth APIs which generate
+  the correct provider-specific callback URL.
+
+## Debug locally
+
+* Inspect the request URL received by your server to confirm the `<provider>` segment is present.
+* Log router/path parameters in your callback handler to verify the provider value.
+* Compare environment configs (routes, base_path, rewrites) to ensure the same path structure is used everywhere.
+
+## Edge cases to consider
+
+* Trailing slash normalization may alter routing if your framework treats `/callback/google/` differently
+  from `/callback/google`. Configure consistent behavior.
+
+## When it occurs
+
+The request reached RubyAuth but failed validation for this specific callback or auth flow.
+
+## HTTP status
+
+RubyAuth normally returns `400 Bad Request` for this error, unless the route redirects to a configured error callback URL.
+
+## Example response
+
+```json
+{
+  "code": "OAUTH_PROVIDER_NOT_FOUND",
+  "message": "The request reached RubyAuth but failed validation for this specific callback or auth flow."
+}
 ```
-/api/auth/error?error=oauth_provider_not_found
-```
-
-Or your configured `errorCallbackURL` with the same query parameters.
-
-## Common causes
-
-- Typo in provider id
-- Plugin provider not loaded
-- Stale callback URL from old config
 
 ## How to fix
 
-- Match callback segment to configured provider id
-- Restart app after changing `social_providers`
-
-## Diagnostics
-
-```bash
-bundle exec better-auth doctor --cwd . --config config/better_auth.rb
-```
-
-## Related
-
-- [OAuth errors index](/docs/reference/errors)
-- [OAuth concepts](/docs/concepts/oauth)
+Verify the RubyAuth route, provider settings, callback URL, cookies, and `BETTER_AUTH_SECRET` used by every running instance. In Rails, also confirm the mounted auth path matches `config.base_path`; in Rack, confirm requests reach the same `auth` instance that initiated the flow.

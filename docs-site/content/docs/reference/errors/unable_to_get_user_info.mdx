@@ -1,39 +1,52 @@
 ---
-title: Unable To Get User Info
-description: OAuth error `unable_to_get_user_info` in RubyAuth.
+title: unable_to_get_user_info
+description: The user info was not found in the request.
 ---
 
-## When this appears
+## What is it?
 
-Token exchange succeeded but user profile could not be fetched.
+This error occurs only on the `/api/auth/callback` endpoint during an OAuth flow. After exchanging
+the authorization code for tokens, RubyAuth fetches the user's profile from the provider. If the
+provider response is incorrect, empty, or missing required fields (like id or email when needed),
+no usable user info can be derived and the request is rejected.
 
-Redirect URL shape:
+## Common Causes
 
+* Missing or insufficient scopes, so the provider does not return profile data.
+* The provider returned an error or an empty profile object for the user info request.
+* Token exchange succeeded, but the user info request failed (network error, 401/403, invalid token).
+* Provider configuration or environment mismatch (wrong client/tenant), causing unexpected or minimal claims.
+* Temporary provider outage or rate limiting.
+
+## How to resolve
+
+### Request the right data
+
+* Start the OAuth flow using RubyAuth methods so the correct scopes and parameters are used.
+* Ensure your provider app is configured to return basic profile details needed by your app.
+
+### Verify configuration and environment
+
+* Confirm the client credentials and callback URL match the environment you are testing (dev/staging/prod).
+* If the provider supports different response modes or endpoints, ensure they align with the integration you use.
+
+## When it occurs
+
+The request reached RubyAuth but failed validation for this specific callback or auth flow.
+
+## HTTP status
+
+RubyAuth normally returns `400 Bad Request` for this error, unless the route redirects to a configured error callback URL.
+
+## Example response
+
+```json
+{
+  "code": "UNABLE_TO_GET_USER_INFO",
+  "message": "The request reached RubyAuth but failed validation for this specific callback or auth flow."
+}
 ```
-/api/auth/error?error=unable_to_get_user_info
-```
-
-Or your configured `errorCallbackURL` with the same query parameters.
-
-## Common causes
-
-- Revoked tokens
-- Provider API outage
-- Missing userinfo scope
 
 ## How to fix
 
-- Check provider status
-- Verify scopes include profile/email
-- Inspect server logs for provider HTTP errors
-
-## Diagnostics
-
-```bash
-bundle exec better-auth doctor --cwd . --config config/better_auth.rb
-```
-
-## Related
-
-- [OAuth errors index](/docs/reference/errors)
-- [OAuth concepts](/docs/concepts/oauth)
+Verify the RubyAuth route, provider settings, callback URL, cookies, and `BETTER_AUTH_SECRET` used by every running instance. In Rails, also confirm the mounted auth path matches `config.base_path`; in Rack, confirm requests reach the same `auth` instance that initiated the flow.

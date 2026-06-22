@@ -12,35 +12,7 @@ import {
 	versionedDocsHref,
 } from "@/lib/docs-versions";
 
-function StaticVersionBadge({
-	label,
-	className,
-}: {
-	label: string;
-	className?: string;
-}) {
-	return (
-		<div
-			className={`flex items-center gap-1.5 px-3 py-1.5 h-full ${className ?? ""}`}
-		>
-			<GitBranch className="h-3 w-3 text-foreground/55 dark:text-foreground/40 shrink-0" />
-			<span className="font-mono text-[10px] uppercase tracking-wider text-foreground/65 dark:text-foreground/50 whitespace-nowrap">
-				{label}
-			</span>
-		</div>
-	);
-}
-
 export function VersionSwitcher({ className }: { className?: string }) {
-	if (docsVersions.length === 1) {
-		return (
-			<StaticVersionBadge
-				className={className}
-				label={docsVersions[0].label}
-			/>
-		);
-	}
-
 	return <VersionSwitcherDropdown className={className} />;
 }
 
@@ -93,6 +65,7 @@ function VersionSwitcherDropdown({ className }: { className?: string }) {
 				}}
 				className="flex items-center gap-1.5 px-3 py-1.5 h-full transition-colors duration-150 hover:bg-foreground/[0.04]"
 			>
+				<GitBranch className="h-3 w-3 text-foreground/55 dark:text-foreground/40 shrink-0" />
 				<span className="font-mono text-[10px] uppercase tracking-wider text-foreground/65 dark:text-foreground/50 whitespace-nowrap">
 					{displayLabel}
 				</span>
@@ -165,14 +138,6 @@ function VersionSwitcherDropdown({ className }: { className?: string }) {
 
 /** Simplified version for mobile — just a row of buttons. */
 export function MobileVersionSwitcher() {
-	if (docsVersions.length === 1) {
-		return (
-			<div className="flex items-center gap-1 px-2">
-				<StaticVersionBadge label={docsVersions[0].label} />
-			</div>
-		);
-	}
-
 	const pathname = usePathname() || "/docs";
 	const router = useRouter();
 	const currentVersion = getVersionFromPathname(pathname);
@@ -213,19 +178,6 @@ export function MobileVersionSwitcher() {
 
 /** Version switcher for the docs sidebar — full-width popover dropdown below the search bar. */
 export function SidebarVersionSwitcher() {
-	if (docsVersions.length === 1) {
-		return (
-			<div className="border-y border-foreground/5">
-				<div className="flex w-full items-center gap-2 px-4 py-[9px] text-sm text-foreground/55">
-					<GitBranch className="size-4 shrink-0 opacity-55" />
-					<span className="truncate font-mono text-[11px] uppercase tracking-wider">
-						{docsVersions[0].label}
-					</span>
-				</div>
-			</div>
-		);
-	}
-
 	const pathname = usePathname() || "/docs";
 	const router = useRouter();
 	const [open, setOpen] = useState(false);
