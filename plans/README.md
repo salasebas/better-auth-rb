@@ -20,7 +20,7 @@ Status values: TODO | IN PROGRESS | DONE | BLOCKED | REJECTED.
 | 008 | `008-docs-parity-foundation.md` | Docs parity foundation (tooling + manifest) | 001 rec. | DONE |
 | 009 | `009-docs-concepts-and-getting-started.md` | Concepts & getting started finish-pass | 008 | DONE |
 | 010 | `010-docs-adapters-authentication.md` | Adapters & authentication finish-pass | 008 | DONE |
-| 011 | `011-docs-plugins-parity.md` | Supported plugins copy-first parity | 008, 009 rec. | TODO |
+| 011 | `011-docs-plugins-parity.md` | Supported plugins copy-first parity | 008, 009 rec. | DONE |
 | 012 | `012-docs-schema-endpoint-resources.md` | Generated database schemas and endpoint resources | 008, 011 | TODO |
 | 013 | `013-docs-reference-guides.md` | Reference, guides & errors | 008 | TODO |
 | 014 | `014-organization-membership-limit-parity.md` | Organization membership limit parity | - | TODO |
