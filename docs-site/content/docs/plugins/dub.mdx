@@ -38,16 +38,16 @@ This plugins allows you to track leads when a user signs up using a Dub link. It
     Add the plugin to your auth config:
 
     ```ruby title="config/auth.rb"
-require "better_auth"
+    require "better_auth"
 
-auth = BetterAuth.auth(
-  secret: ENV.fetch("BETTER_AUTH_SECRET"),
-  base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
-  plugins: [
-    BetterAuth::Plugins.dub(api_key: ENV.fetch("DUB_API_KEY"))
-  ]
-)
-```
+    auth = BetterAuth.auth(
+      secret: ENV.fetch("BETTER_AUTH_SECRET"),
+      base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
+      plugins: [
+        BetterAuth::Plugins.dub(api_key: ENV.fetch("DUB_API_KEY"))
+      ]
+    )
+    ```
   </Step>
 </Steps>
 
@@ -77,16 +77,30 @@ First, you need to setup OAuth app in Dub. Dub supports OAuth 2.0 authentication
 
 Once you get the client ID and client secret, you can configure the plugin.
 
-```ruby title="server.rb"
-# Use the Ruby auth.api method or HTTP endpoint documented in this section.
-# HTTP paths and JSON keys keep the upstream wire shape.
+```ruby title="config/auth.rb"
+auth = BetterAuth.auth(
+  secret: ENV.fetch("BETTER_AUTH_SECRET"),
+  base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
+  plugins: [
+    BetterAuth::Plugins.dub(
+      api_key: ENV.fetch("DUB_API_KEY"),
+      oauth: {
+        client_id: ENV.fetch("DUB_CLIENT_ID"),
+        client_secret: ENV.fetch("DUB_CLIENT_SECRET")
+      }
+    )
+  ]
+)
 ```
 
-And in the client, you need to use the `dubAnalyticsClient` plugin.
+For server-rendered Ruby apps, keep Dub's `dub_id` value in a cookie before sign-up so the plugin can attribute the lead when the user is created.
 
 ```ruby title="server.rb"
-# Use the Ruby auth.api method or HTTP endpoint documented in this section.
-# HTTP paths and JSON keys keep the upstream wire shape.
+response.set_cookie("dub_id", {
+  value: request.params["dub_id"],
+  path: "/",
+  same_site: "Lax"
+})
 ```
 
 To link account with Dub, you need to use the `dub.link`.

@@ -34,19 +34,19 @@ description: Polar provider setup and usage in Better Auth Ruby.
     To configure the provider, you need to import the provider and pass it to the `social_providers` option of the auth instance.
 
     ```ruby title="config/auth.rb"
-require "better_auth"
+    require "better_auth"
 
-auth = BetterAuth.auth(
-  secret: ENV.fetch("BETTER_AUTH_SECRET"),
-  base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
-  social_providers: {
-    polar: BetterAuth::SocialProviders.polar(
-      client_id: ENV.fetch("POLAR_CLIENT_ID"),
-      client_secret: ENV.fetch("POLAR_CLIENT_SECRET")
+    auth = BetterAuth.auth(
+      secret: ENV.fetch("BETTER_AUTH_SECRET"),
+      base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
+      social_providers: {
+        polar: BetterAuth::SocialProviders.polar(
+          client_id: ENV.fetch("POLAR_CLIENT_ID"),
+          client_secret: ENV.fetch("POLAR_CLIENT_SECRET")
+        )
+      }
     )
-  }
-)
-```
+    ```
   </Step>
 
   <Step>
@@ -55,16 +55,16 @@ auth = BetterAuth.auth(
     To sign in with Polar, call `auth.api.sign_in_social` on your Ruby auth instance, where the `provider` should be set to `polar`.
 
     ```ruby title="server.rb"
-response = auth.api.sign_in_social(
-  body: {
-    provider: "polar",
-    callback_url: "/dashboard",
-    error_callback_url: "/login",
-    disable_redirect: true
-  }
-)
+    response = auth.api.sign_in_social(
+      body: {
+        provider: "polar",
+        callback_url: "/dashboard",
+        error_callback_url: "/login",
+        disable_redirect: true
+      }
+    )
 
-redirect_url = response.fetch(:url)
-```
+    redirect_url = response.fetch(:url)
+    ```
   </Step>
 </Steps>

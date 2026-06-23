@@ -610,34 +610,34 @@ Some examples are: `waitUntil` from `@vercel/functions` on Vercel, or `ctx.waitU
 <Tabs items={["Vercel", "Cloudflare Workers"]}>
   <Tab value="Vercel">
     ```ruby
-require "better_auth"
+    require "better_auth"
 
-auth = BetterAuth.auth(
-  secret: ENV.fetch("BETTER_AUTH_SECRET"),
-  base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
-  database: :postgres,
-  advanced: {
-    cookie_prefix: "better-auth",
-    use_secure_cookies: true
-  }
-)
-```
+    auth = BetterAuth.auth(
+      secret: ENV.fetch("BETTER_AUTH_SECRET"),
+      base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
+      database: :postgres,
+      advanced: {
+        cookie_prefix: "better-auth",
+        use_secure_cookies: true
+      }
+    )
+    ```
   </Tab>
 
   <Tab value="Cloudflare Workers">
     ```ruby
-require "better_auth"
+    require "better_auth"
 
-auth = BetterAuth.auth(
-  secret: ENV.fetch("BETTER_AUTH_SECRET"),
-  base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
-  database: :postgres,
-  advanced: {
-    cookie_prefix: "better-auth",
-    use_secure_cookies: true
-  }
-)
-```
+    auth = BetterAuth.auth(
+      secret: ENV.fetch("BETTER_AUTH_SECRET"),
+      base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
+      database: :postgres,
+      advanced: {
+        cookie_prefix: "better-auth",
+        use_secure_cookies: true
+      }
+    )
+    ```
   </Tab>
 </Tabs>
 

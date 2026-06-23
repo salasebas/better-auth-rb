@@ -31,20 +31,20 @@ description: Cognito provider setup and usage in Better Auth Ruby.
     Configure the `cognito` key in `social_providers` key of your `auth` instance.
 
     ```ruby title="config/auth.rb"
-require "better_auth"
+    require "better_auth"
 
-auth = BetterAuth.auth(
-  secret: ENV.fetch("BETTER_AUTH_SECRET"),
-  base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
-  social_providers: {
-    cognito: BetterAuth::SocialProviders.cognito(
-      client_id: ENV.fetch("COGNITO_CLIENT_ID"),
-      client_secret: ENV.fetch("COGNITO_CLIENT_SECRET"),
-      domain: ENV.fetch("COGNITO_DOMAIN")
+    auth = BetterAuth.auth(
+      secret: ENV.fetch("BETTER_AUTH_SECRET"),
+      base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
+      social_providers: {
+        cognito: BetterAuth::SocialProviders.cognito(
+          client_id: ENV.fetch("COGNITO_CLIENT_ID"),
+          client_secret: ENV.fetch("COGNITO_CLIENT_SECRET"),
+          domain: ENV.fetch("COGNITO_DOMAIN")
+        )
+      }
     )
-  }
-)
-```
+    ```
   </Step>
 
   <Step>
@@ -53,17 +53,17 @@ auth = BetterAuth.auth(
     To sign in with Cognito, use the `auth.api.sign_in_social` function from the client.
 
     ```ruby title="server.rb"
-response = auth.api.sign_in_social(
-  body: {
-    provider: "cognito",
-    callback_url: "/dashboard",
-    error_callback_url: "/login",
-    disable_redirect: true
-  }
-)
+    response = auth.api.sign_in_social(
+      body: {
+        provider: "cognito",
+        callback_url: "/dashboard",
+        error_callback_url: "/login",
+        disable_redirect: true
+      }
+    )
 
-redirect_url = response.fetch(:url)
-```
+    redirect_url = response.fetch(:url)
+    ```
 
     ### Additional Options:
 

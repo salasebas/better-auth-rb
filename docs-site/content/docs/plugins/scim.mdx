@@ -19,8 +19,8 @@ This plugin exposes a [SCIM](https://simplecloud.info/#Specification) server tha
     ### Install the plugin
 
     ```ruby title="Gemfile"
-gem "better_auth-scim"
-```
+    gem "better_auth-scim"
+    ```
 
 ```ruby title="config/auth.rb"
 require "better_auth"
@@ -40,17 +40,17 @@ auth = BetterAuth.auth(
     ### Add Plugin to the server
 
     ```ruby title="config/auth.rb"
-require "better_auth"
-require "better_auth/scim"
+    require "better_auth"
+    require "better_auth/scim"
 
-auth = BetterAuth.auth(
-  secret: ENV.fetch("BETTER_AUTH_SECRET"),
-  base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
-  plugins: [
-    BetterAuth::Plugins.scim
-  ]
-)
-```
+    auth = BetterAuth.auth(
+      secret: ENV.fetch("BETTER_AUTH_SECRET"),
+      base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
+      plugins: [
+        BetterAuth::Plugins.scim
+      ]
+    )
+    ```
   </Step>
 
   <Step>
@@ -62,24 +62,26 @@ auth = BetterAuth.auth(
     <Tabs items={["Next.js", "Solid Start"]}>
       <Tab value="Next.js">
         ```ruby title="server.rb"
-# Use the generated Ruby tab in the API block above, or call the same route over HTTP.
-# HTTP paths and JSON keys keep the upstream wire shape.
-```
+        # config.ru
+        require_relative "config/auth"
+
+        run auth
+        ```
       </Tab>
 
       <Tab value="Solid Start">
         ```ruby title="config/auth.rb"
-require "better_auth"
-require "better_auth/scim"
+        require "better_auth"
+        require "better_auth/scim"
 
-auth = BetterAuth.auth(
-  secret: ENV.fetch("BETTER_AUTH_SECRET"),
-  base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
-  plugins: [
-    BetterAuth::Plugins.scim
-  ]
-)
-```
+        auth = BetterAuth.auth(
+          secret: ENV.fetch("BETTER_AUTH_SECRET"),
+          base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
+          plugins: [
+            BetterAuth::Plugins.scim
+          ]
+        )
+        ```
       </Tab>
     </Tabs>
   </Step>

@@ -20,8 +20,8 @@ Single Sign-On (SSO) allows users to authenticate with multiple applications usi
     ### Install the plugin
 
     ```ruby title="Gemfile"
-gem "better_auth-sso"
-```
+    gem "better_auth-sso"
+    ```
 
 ```ruby title="config/auth.rb"
 require "better_auth"
@@ -41,17 +41,17 @@ auth = BetterAuth.auth(
     ### Add Plugin to the server
 
     ```ruby title="config/auth.rb"
-require "better_auth"
-require "better_auth/sso"
+    require "better_auth"
+    require "better_auth/sso"
 
-auth = BetterAuth.auth(
-  secret: ENV.fetch("BETTER_AUTH_SECRET"),
-  base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
-  plugins: [
-    BetterAuth::Plugins.sso
-  ]
-)
-```
+    auth = BetterAuth.auth(
+      secret: ENV.fetch("BETTER_AUTH_SECRET"),
+      base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
+      plugins: [
+        BetterAuth::Plugins.sso
+      ]
+    )
+    ```
   </Step>
 
   <Step>
@@ -99,32 +99,32 @@ A redirect URL will be automatically generated using the provider ID. For instan
 <Tabs items={["client", "server"]}>
   <Tab value="client">
     ```ruby title="config/auth.rb"
-require "better_auth"
-require "better_auth/sso"
+    require "better_auth"
+    require "better_auth/sso"
 
-auth = BetterAuth.auth(
-  secret: ENV.fetch("BETTER_AUTH_SECRET"),
-  base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
-  plugins: [
-    BetterAuth::Plugins.sso
-  ]
-)
-```
+    auth = BetterAuth.auth(
+      secret: ENV.fetch("BETTER_AUTH_SECRET"),
+      base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
+      plugins: [
+        BetterAuth::Plugins.sso
+      ]
+    )
+    ```
   </Tab>
 
   <Tab value="server">
     ```ruby title="config/auth.rb"
-require "better_auth"
-require "better_auth/sso"
+    require "better_auth"
+    require "better_auth/sso"
 
-auth = BetterAuth.auth(
-  secret: ENV.fetch("BETTER_AUTH_SECRET"),
-  base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
-  plugins: [
-    BetterAuth::Plugins.sso
-  ]
-)
-```
+    auth = BetterAuth.auth(
+      secret: ENV.fetch("BETTER_AUTH_SECRET"),
+      base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
+      plugins: [
+        BetterAuth::Plugins.sso
+      ]
+    )
+    ```
   </Tab>
 </Tabs>
 
@@ -206,8 +206,14 @@ Both the discovery endpoint as well as any URL resolved through the discovery pr
 Discovery will fail with the `discovery_untrusted_origin` code unless you explicitly update your `trustedOrigins` configuration:
 
 ```ruby title="server.rb"
-# Use the generated Ruby tab in the API block above, or call the same route over HTTP.
-# HTTP paths and JSON keys keep the upstream wire shape.
+auth = BetterAuth.auth(
+  secret: ENV.fetch("BETTER_AUTH_SECRET"),
+  base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
+  trusted_origins: ["https://your-org.okta.com"],
+  plugins: [
+    BetterAuth::Plugins.sso
+  ]
+)
 ```
 
 If your use-case requires to support multiple arbitrary but known IDPs (e.g Okta), we recommend to:
@@ -215,15 +221,35 @@ If your use-case requires to support multiple arbitrary but known IDPs (e.g Okta
 1. Register a list of well known IDPs ahead of time
 
 ```ruby title="server.rb"
-# Use the generated Ruby tab in the API block above, or call the same route over HTTP.
-# HTTP paths and JSON keys keep the upstream wire shape.
+trusted_idps = [
+  "https://acme.okta.com",
+  "https://login.partner.example.com"
+]
+
+auth = BetterAuth.auth(
+  secret: ENV.fetch("BETTER_AUTH_SECRET"),
+  base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
+  trusted_origins: trusted_idps,
+  plugins: [
+    BetterAuth::Plugins.sso
+  ]
+)
 ```
 
 2. Or dynamically compute the `trustedOrigins` by specifying a callback function:
 
 ```ruby title="server.rb"
-# Use the generated Ruby tab in the API block above, or call the same route over HTTP.
-# HTTP paths and JSON keys keep the upstream wire shape.
+auth = BetterAuth.auth(
+  secret: ENV.fetch("BETTER_AUTH_SECRET"),
+  base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
+  trusted_origins: ->(request) {
+    tenant = request.params["tenant"]
+    ["https://#{tenant}.okta.com"]
+  },
+  plugins: [
+    BetterAuth::Plugins.sso
+  ]
+)
 ```
 
 See the [`trustedOrigins`](/docs/reference/security#trusted-origins) docs for more information.
@@ -261,17 +287,17 @@ If the Identity Provider is misconfigured or unreachable, registration will fail
   If your IdP advertises only unsupported methods (e.g., `private_key_jwt`, `tls_client_auth`, or `"none"` for public clients), you can explicitly override the method:
 
   ```ruby title="config/auth.rb"
-require "better_auth"
-require "better_auth/sso"
+  require "better_auth"
+  require "better_auth/sso"
 
-auth = BetterAuth.auth(
-  secret: ENV.fetch("BETTER_AUTH_SECRET"),
-  base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
-  plugins: [
-    BetterAuth::Plugins.sso
-  ]
-)
-```
+  auth = BetterAuth.auth(
+    secret: ENV.fetch("BETTER_AUTH_SECRET"),
+    base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
+    plugins: [
+      BetterAuth::Plugins.sso
+    ]
+  )
+  ```
 
   This is especially common with mock OIDC servers or development IdPs that only advertise `"none"` as the supported method.
 </Callout>
@@ -292,32 +318,32 @@ To register a SAML provider, use the `registerSSOProvider` endpoint with SAML co
 <Tabs items={["client", "server"]}>
   <Tab value="client">
     ```ruby title="config/auth.rb"
-require "better_auth"
-require "better_auth/sso"
+    require "better_auth"
+    require "better_auth/sso"
 
-auth = BetterAuth.auth(
-  secret: ENV.fetch("BETTER_AUTH_SECRET"),
-  base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
-  plugins: [
-    BetterAuth::Plugins.sso
-  ]
-)
-```
+    auth = BetterAuth.auth(
+      secret: ENV.fetch("BETTER_AUTH_SECRET"),
+      base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
+      plugins: [
+        BetterAuth::Plugins.sso
+      ]
+    )
+    ```
   </Tab>
 
   <Tab value="server">
     ```ruby title="config/auth.rb"
-require "better_auth"
-require "better_auth/sso"
+    require "better_auth"
+    require "better_auth/sso"
 
-auth = BetterAuth.auth(
-  secret: ENV.fetch("BETTER_AUTH_SECRET"),
-  base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
-  plugins: [
-    BetterAuth::Plugins.sso
-  ]
-)
-```
+    auth = BetterAuth.auth(
+      secret: ENV.fetch("BETTER_AUTH_SECRET"),
+      base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
+      plugins: [
+        BetterAuth::Plugins.sso
+      ]
+    )
+    ```
   </Tab>
 </Tabs>
 
@@ -330,17 +356,17 @@ For IdP-initiated flows (e.g., via Okta dashboard), your framework may require a
     Create this file to prevent 404 errors:
 
     ```ruby title="config/auth.rb"
-require "better_auth"
-require "better_auth/sso"
+    require "better_auth"
+    require "better_auth/sso"
 
-auth = BetterAuth.auth(
-  secret: ENV.fetch("BETTER_AUTH_SECRET"),
-  base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
-  plugins: [
-    BetterAuth::Plugins.sso
-  ]
-)
-```
+    auth = BetterAuth.auth(
+      secret: ENV.fetch("BETTER_AUTH_SECRET"),
+      base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
+      plugins: [
+        BetterAuth::Plugins.sso
+      ]
+    )
+    ```
   </Tab>
 </Tabs>
 
@@ -349,8 +375,11 @@ auth = BetterAuth.auth(
 For SAML providers, you can retrieve the Service Provider metadata XML that needs to be configured in your Identity Provider:
 
 ```ruby title="server.rb"
-# Use the generated Ruby tab in the API block above, or call the same route over HTTP.
-# HTTP paths and JSON keys keep the upstream wire shape.
+metadata = auth.api.sp_metadata(
+  query: {providerId: "acme-saml"}
+)
+
+File.write("acme-sp-metadata.xml", metadata)
 ```
 
 ### Sign In with SSO
@@ -360,36 +389,59 @@ To sign in with an SSO provider, you can call `signIn.sso`
 You can sign in using the email with domain matching:
 
 ```ruby title="server.rb"
-# Use the generated Ruby tab in the API block above, or call the same route over HTTP.
-# HTTP paths and JSON keys keep the upstream wire shape.
+result = auth.api.sign_in_sso(
+  body: {
+    email: "ada@acme.test",
+    callbackURL: "/dashboard"
+  }
+)
+
+redirect_to result[:url]
 ```
 
 or you can specify the domain:
 
 ```ruby title="server.rb"
-# Use the generated Ruby tab in the API block above, or call the same route over HTTP.
-# HTTP paths and JSON keys keep the upstream wire shape.
+result = auth.api.sign_in_sso(
+  body: {
+    domain: "acme.test",
+    callbackURL: "/dashboard"
+  }
+)
 ```
 
 You can also sign in using the organization slug if a provider is associated with an organization:
 
 ```ruby title="server.rb"
-# Use the generated Ruby tab in the API block above, or call the same route over HTTP.
-# HTTP paths and JSON keys keep the upstream wire shape.
+result = auth.api.sign_in_sso(
+  body: {
+    organizationSlug: "acme",
+    callbackURL: "/dashboard"
+  }
+)
 ```
 
 Alternatively, you can sign in using the provider's ID:
 
 ```ruby title="server.rb"
-# Use the generated Ruby tab in the API block above, or call the same route over HTTP.
-# HTTP paths and JSON keys keep the upstream wire shape.
+result = auth.api.sign_in_sso(
+  body: {
+    providerId: "acme-oidc",
+    callbackURL: "/dashboard"
+  }
+)
 ```
 
 Optionally, you can pass a login hint (for example, an email address or another identifier) to prefill or direct the identity provider:
 
 ```ruby title="server.rb"
-# Use the generated Ruby tab in the API block above, or call the same route over HTTP.
-# HTTP paths and JSON keys keep the upstream wire shape.
+result = auth.api.sign_in_sso(
+  body: {
+    providerId: "acme-oidc",
+    loginHint: "ada@acme.test",
+    callbackURL: "/dashboard"
+  }
+)
 ```
 
 To use the server API you can use `signInSSO`
@@ -615,8 +667,13 @@ auth = BetterAuth.auth(
 If you enable `provisionUserOnEveryLogin`, make sure your provisioning functions can be safely run multiple times:
 
 ```ruby title="server.rb"
-# Use the generated Ruby tab in the API block above, or call the same route over HTTP.
-# HTTP paths and JSON keys keep the upstream wire shape.
+provision_user = lambda do |user:, userInfo:, token:, provider:|
+  CRM.upsert_user(
+    id: user.fetch("id"),
+    email: user.fetch("email"),
+    provider_id: provider.fetch("providerId")
+  )
+end
 ```
 
 #### 2. Error Handling
@@ -624,8 +681,11 @@ If you enable `provisionUserOnEveryLogin`, make sure your provisioning functions
 Handle errors gracefully to avoid blocking user sign-in:
 
 ```ruby title="server.rb"
-# Use the generated Ruby tab in the API block above, or call the same route over HTTP.
-# HTTP paths and JSON keys keep the upstream wire shape.
+provision_user = lambda do |user:, userInfo:, token:, provider:|
+  AuditLog.record!("sso.provision", user_id: user.fetch("id"))
+rescue StandardError => error
+  AppLogger.warn("SSO provisioning skipped: #{error.message}")
+end
 ```
 
 #### 3. Conditional Provisioning
@@ -633,8 +693,11 @@ Handle errors gracefully to avoid blocking user sign-in:
 Only run certain provisioning steps when needed:
 
 ```ruby title="server.rb"
-# Use the generated Ruby tab in the API block above, or call the same route over HTTP.
-# HTTP paths and JSON keys keep the upstream wire shape.
+provision_user = lambda do |user:, userInfo:, token:, provider:|
+  next unless provider.fetch("domain") == "enterprise.example.com"
+
+  Entitlements.sync_for(user.fetch("id"), userInfo)
+end
 ```
 
 ## SAML Configuration
@@ -707,8 +770,20 @@ You also need to provide Identity Provider (IdP) configuration:
 Configure how SAML attributes map to user fields:
 
 ```ruby title="server.rb"
-# Use the generated Ruby tab in the API block above, or call the same route over HTTP.
-# HTTP paths and JSON keys keep the upstream wire shape.
+auth.api.update_sso_provider(
+  headers: {"cookie" => admin_cookie},
+  body: {
+    providerId: "acme-saml",
+    samlConfig: {
+      fieldMappings: {
+        email: "Email",
+        name: "DisplayName",
+        firstName: "FirstName",
+        lastName: "LastName"
+      }
+    }
+  }
+)
 ```
 
 ## SAML Security

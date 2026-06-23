@@ -38,14 +38,14 @@ Here are examples of how you can do caching in different frameworks and environm
     Since Next v15, we can use the `"use cache"` directive to cache the response of a server function.
 
     ```ruby
-require "better_auth"
+    require "better_auth"
 
-auth = BetterAuth.auth(
-  secret: ENV.fetch("BETTER_AUTH_SECRET"),
-  base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
-  database: :postgres
-)
-```
+    auth = BetterAuth.auth(
+      secret: ENV.fetch("BETTER_AUTH_SECRET"),
+      base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
+      database: :postgres
+    )
+    ```
 
     Learn more about NextJS use cache directive <Link href="https://nextjs.org/docs/app/api-reference/directives/use-cache">here</Link>.
   </Tab>
@@ -54,28 +54,28 @@ auth = BetterAuth.auth(
     In React Router v7, you use HTTP `Cache-Control` headers in the loader function to cache responses. You must also export a headers function to send these headers. Here's an example:
 
     ```ruby
-require "better_auth"
+    require "better_auth"
 
-auth = BetterAuth.auth(
-  secret: ENV.fetch("BETTER_AUTH_SECRET"),
-  base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
-  database: :postgres
-)
-```
+    auth = BetterAuth.auth(
+      secret: ENV.fetch("BETTER_AUTH_SECRET"),
+      base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
+      database: :postgres
+    )
+    ```
   </Tab>
 
   <Tab value="SolidStart">
     In SolidStart, you can use the `query` function to cache data. Here’s an example:
 
     ```ruby
-require "better_auth"
+    require "better_auth"
 
-auth = BetterAuth.auth(
-  secret: ENV.fetch("BETTER_AUTH_SECRET"),
-  base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
-  database: :postgres
-)
-```
+    auth = BetterAuth.auth(
+      secret: ENV.fetch("BETTER_AUTH_SECRET"),
+      base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
+      database: :postgres
+    )
+    ```
 
     Learn more about SolidStart `query` function <Link href="https://docs.solidjs.com/solid-router/reference/data-apis/query">here</Link>.
   </Tab>
@@ -84,14 +84,14 @@ auth = BetterAuth.auth(
     With TanStack Query you can use the `useQuery` hook to cache data. Here’s an example:
 
     ```ruby
-require "better_auth"
+    require "better_auth"
 
-auth = BetterAuth.auth(
-  secret: ENV.fetch("BETTER_AUTH_SECRET"),
-  base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
-  database: :postgres
-)
-```
+    auth = BetterAuth.auth(
+      secret: ENV.fetch("BETTER_AUTH_SECRET"),
+      base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
+      database: :postgres
+    )
+    ```
 
     Learn more about TanStack Query <Link href="https://tanstack.com/query">here</Link>.
   </Tab>
@@ -160,38 +160,38 @@ Simply import from `better-auth/minimal` instead of `better-auth`:
 <Tabs items={["Prisma", "Drizzle", "MongoDB"]}>
   <Tab value="Prisma">
     ```ruby title="config/initializers/better_auth.rb"
-require "better_auth"
+    require "better_auth"
 
-auth = BetterAuth.auth(
-  secret: ENV.fetch("BETTER_AUTH_SECRET"),
-  base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
-  database: :postgres
-)
-```
+    auth = BetterAuth.auth(
+      secret: ENV.fetch("BETTER_AUTH_SECRET"),
+      base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
+      database: :postgres
+    )
+    ```
   </Tab>
 
   <Tab value="Drizzle">
     ```ruby title="config/initializers/better_auth.rb"
-require "better_auth"
+    require "better_auth"
 
-auth = BetterAuth.auth(
-  secret: ENV.fetch("BETTER_AUTH_SECRET"),
-  base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
-  database: :postgres
-)
-```
+    auth = BetterAuth.auth(
+      secret: ENV.fetch("BETTER_AUTH_SECRET"),
+      base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
+      database: :postgres
+    )
+    ```
   </Tab>
 
   <Tab value="MongoDB">
     ```ruby title="config/initializers/better_auth.rb"
-require "better_auth"
+    require "better_auth"
 
-auth = BetterAuth.auth(
-  secret: ENV.fetch("BETTER_AUTH_SECRET"),
-  base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
-  database: :postgres
-)
-```
+    auth = BetterAuth.auth(
+      secret: ENV.fetch("BETTER_AUTH_SECRET"),
+      base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
+      database: :postgres
+    )
+    ```
   </Tab>
 </Tabs>
 

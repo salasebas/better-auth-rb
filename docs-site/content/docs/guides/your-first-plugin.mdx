@@ -43,23 +43,23 @@ In this guide, we’ll walk you through the steps of creating your first RubyAut
     This will be what we will later add to our plugin list in the `config/initializers/better_auth.rb` file.
 
     ```ruby title="index.rb"
-module BetterAuth
-  module Plugins
-    module_function
+    module BetterAuth
+      module Plugins
+        module_function
 
-    def hello_world(**options)
-      BetterAuth::Plugin.new(
-        id: "hello-world",
-        endpoints: {
-          hello_world: BetterAuth::Endpoint.new(path: "/hello-world", method: "GET") do |ctx|
-            ctx.json({ message: options.fetch(:message, "Hello World") })
-          end
-        }
-      )
+        def hello_world(**options)
+          BetterAuth::Plugin.new(
+            id: "hello-world",
+            endpoints: {
+              hello_world: BetterAuth::Endpoint.new(path: "/hello-world", method: "GET") do |ctx|
+                ctx.json({ message: options.fetch(:message, "Hello World") })
+              end
+            }
+          )
+        end
+      end
     end
-  end
-end
-```
+    ```
 
     Although this does nothing, you have technically just made yourself your first plugin, congratulations! 🎉
   </Step>
@@ -76,23 +76,23 @@ end
     </Callout>
 
     ```ruby title="index.rb"
-module BetterAuth
-  module Plugins
-    module_function
+    module BetterAuth
+      module Plugins
+        module_function
 
-    def hello_world(**options)
-      BetterAuth::Plugin.new(
-        id: "hello-world",
-        endpoints: {
-          hello_world: BetterAuth::Endpoint.new(path: "/hello-world", method: "GET") do |ctx|
-            ctx.json({ message: options.fetch(:message, "Hello World") })
-          end
-        }
-      )
+        def hello_world(**options)
+          BetterAuth::Plugin.new(
+            id: "hello-world",
+            endpoints: {
+              hello_world: BetterAuth::Endpoint.new(path: "/hello-world", method: "GET") do |ctx|
+                ctx.json({ message: options.fetch(:message, "Hello World") })
+              end
+            }
+          )
+        end
+      end
     end
-  end
-end
-```
+    ```
   </Step>
 
   <Step>
@@ -104,70 +104,70 @@ end
     To do this, we’ll utilize <Link href="/docs/concepts/plugins#hooks">Hooks</Link>, which allows us to run code `before` or `after` an action is performed.
 
     ```ruby title="index.rb"
-module BetterAuth
-  module Plugins
-    module_function
+    module BetterAuth
+      module Plugins
+        module_function
 
-    def hello_world(**options)
-      BetterAuth::Plugin.new(
-        id: "hello-world",
-        endpoints: {
-          hello_world: BetterAuth::Endpoint.new(path: "/hello-world", method: "GET") do |ctx|
-            ctx.json({ message: options.fetch(:message, "Hello World") })
-          end
-        }
-      )
+        def hello_world(**options)
+          BetterAuth::Plugin.new(
+            id: "hello-world",
+            endpoints: {
+              hello_world: BetterAuth::Endpoint.new(path: "/hello-world", method: "GET") do |ctx|
+                ctx.json({ message: options.fetch(:message, "Hello World") })
+              end
+            }
+          )
+        end
+      end
     end
-  end
-end
-```
+    ```
 
     In our case we want to match any requests going to the signup path:
 
     ```ruby title="Before hook"
-BetterAuth::Plugin.new(
-  id: "hello-world",
-  middlewares: [
-    {
-      path: "/hello-world",
-      middleware: ->(ctx) { ctx.headers["x-plugin"] = "hello"; nil }
-    }
-  ]
-)
-```
+    BetterAuth::Plugin.new(
+      id: "hello-world",
+      middlewares: [
+        {
+          path: "/hello-world",
+          middleware: ->(ctx) { ctx.headers["x-plugin"] = "hello"; nil }
+        }
+      ]
+    )
+    ```
 
     And for our logic, we’ll write the following code to check the if user’s birthday makes them above 5 years old.
 
     ```ruby title="Imports"
-module BetterAuth
-  module Plugins
-    module_function
+    module BetterAuth
+      module Plugins
+        module_function
 
-    def hello_world(**options)
-      BetterAuth::Plugin.new(
-        id: "hello-world",
-        endpoints: {
-          hello_world: BetterAuth::Endpoint.new(path: "/hello-world", method: "GET") do |ctx|
-            ctx.json({ message: options.fetch(:message, "Hello World") })
-          end
-        }
-      )
+        def hello_world(**options)
+          BetterAuth::Plugin.new(
+            id: "hello-world",
+            endpoints: {
+              hello_world: BetterAuth::Endpoint.new(path: "/hello-world", method: "GET") do |ctx|
+                ctx.json({ message: options.fetch(:message, "Hello World") })
+              end
+            }
+          )
+        end
+      end
     end
-  end
-end
-```
+    ```
 
     ```ruby title="Before hook"
-BetterAuth::Plugin.new(
-  id: "hello-world",
-  middlewares: [
-    {
-      path: "/hello-world",
-      middleware: ->(ctx) { ctx.headers["x-plugin"] = "hello"; nil }
-    }
-  ]
-)
-```
+    BetterAuth::Plugin.new(
+      id: "hello-world",
+      middlewares: [
+        {
+          path: "/hello-world",
+          middleware: ->(ctx) { ctx.headers["x-plugin"] = "hello"; nil }
+        }
+      ]
+    )
+    ```
 
     **Authorized!** 🔒
 
@@ -195,9 +195,9 @@ BetterAuth::Plugin.new(
     Then, add the following code:
 
     ```ruby title="client.rb"
-# Client plugins are not part of RubyAuth's server-side plugin contract.
-# Expose server endpoints and call them with HTTP from your Rails/Rack app.
-```
+    # Client plugins are not part of RubyAuth's server-side plugin contract.
+    # Expose server endpoints and call them with HTTP from your Rails/Rack app.
+    ```
 
     What we’ve done is keep the Ruby plugin contract server-side while still giving the application a small, testable call site.
   </Step>
@@ -209,23 +209,23 @@ BetterAuth::Plugin.new(
     ### Server initiation
 
     ```ruby title="config.ru"
-module BetterAuth
-  module Plugins
-    module_function
+    module BetterAuth
+      module Plugins
+        module_function
 
-    def hello_world(**options)
-      BetterAuth::Plugin.new(
-        id: "hello-world",
-        endpoints: {
-          hello_world: BetterAuth::Endpoint.new(path: "/hello-world", method: "GET") do |ctx|
-            ctx.json({ message: options.fetch(:message, "Hello World") })
-          end
-        }
-      )
+        def hello_world(**options)
+          BetterAuth::Plugin.new(
+            id: "hello-world",
+            endpoints: {
+              hello_world: BetterAuth::Endpoint.new(path: "/hello-world", method: "GET") do |ctx|
+                ctx.json({ message: options.fetch(:message, "Hello World") })
+              end
+            }
+          )
+        end
+      end
     end
-  end
-end
-```
+    ```
 
     ### Client boundary
 

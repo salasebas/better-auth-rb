@@ -21,19 +21,19 @@ description: LINE provider setup and usage in Better Auth Ruby.
     Add your LINE credentials to `BetterAuth::SocialProviders.line` in your auth configuration.
 
     ```ruby title="config/auth.rb"
-require "better_auth"
+    require "better_auth"
 
-auth = BetterAuth.auth(
-  secret: ENV.fetch("BETTER_AUTH_SECRET"),
-  base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
-  social_providers: {
-    line: BetterAuth::SocialProviders.line(
-      client_id: ENV.fetch("LINE_CLIENT_ID"),
-      client_secret: ENV.fetch("LINE_CLIENT_SECRET")
+    auth = BetterAuth.auth(
+      secret: ENV.fetch("BETTER_AUTH_SECRET"),
+      base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
+      social_providers: {
+        line: BetterAuth::SocialProviders.line(
+          client_id: ENV.fetch("LINE_CLIENT_ID"),
+          client_secret: ENV.fetch("LINE_CLIENT_SECRET")
+        )
+      }
     )
-  }
-)
-```
+    ```
   </Step>
 </Steps>
 

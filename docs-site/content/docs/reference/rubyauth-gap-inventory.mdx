@@ -1,0 +1,40 @@
+---
+title: RubyAuth Gap Inventory
+description: Conservative inventory of current RubyAuth support gaps for later triage.
+---
+
+<RubyAuthDisclaimer />
+
+This holding page lists current under-development or unsupported areas for later triage. It is not linked from the sidebar and does not mark future or unsupported items as supported.
+
+## Real Gaps
+
+| Area | Current RubyAuth status |
+| --- | --- |
+| [Test Utils](/docs/plugins/test-utils) | RubyAuth does not expose `BetterAuth::Plugins.test_utils` or a public test helper module. |
+| [Open API](/docs/plugins/open-api) | The plugin docs currently describe Open API as early-stage and still filling gaps. |
+| [Programmatic migrations / `getMigrations`](/docs/concepts/database#programmatic-migrations) | RubyAuth does not expose server-side `getMigrations`; users should use CLI-generated SQL, `bundle exec better-auth migrate`, or framework migrations. |
+| [`reference/options` advanced option](/docs/reference/options#advanced) | The upstream parity section is not fully exposed or enforced server-side in Ruby. |
+
+## Upstream Helper APIs Not Packaged in RubyAuth
+
+| API | Current RubyAuth status |
+| --- | --- |
+| [`getSessionFromCtx`](/docs/concepts/plugins#server-plugin-helper-functions) | Not exposed as a packaged RubyAuth helper. |
+| [`sessionMiddleware`](/docs/concepts/plugins#server-plugin-helper-functions) | Not exposed as a standalone RubyAuth helper. |
+| [`requireResourceOwnership`](/docs/concepts/plugins#server-plugin-helper-functions) | Not exposed as a packaged RubyAuth helper. |
+| [`requireOrgRole`](/docs/concepts/plugins#server-plugin-helper-functions) | Not exposed as a packaged RubyAuth helper. |
+
+## Unsupported or Not Adapted
+
+| Area | Current RubyAuth status |
+| --- | --- |
+| [Community Plugins](/docs/plugins/community-plugins) | The page is not adapted or supported as Ruby documentation. |
+| [Unsupported upstream plugins](/docs/concepts/plugins#supported-plugins) | Upstream `mcp`, upstream `oidc-provider`, and non-Stripe payment plugins are intentionally not documented as supported RubyAuth plugins. |
+
+## Security Switches Not Supported for Production RubyAuth Docs
+
+| Switch | Current RubyAuth status |
+| --- | --- |
+| [`disable_csrf_check`](/docs/reference/security#disabling-security-checks) | Not exposed as a supported production switch in RubyAuth docs. |
+| [`disable_origin_check`](/docs/reference/security#disabling-security-checks) | Not exposed as a supported production switch in RubyAuth docs. |

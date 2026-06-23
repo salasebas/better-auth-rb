@@ -16,16 +16,16 @@ The Sign in with Ethereum (SIWE) plugin allows users to authenticate using their
     Add the SIWE plugin to your auth configuration:
 
     ```ruby title="config/auth.rb"
-require "better_auth"
+    require "better_auth"
 
-auth = BetterAuth.auth(
-  secret: ENV.fetch("BETTER_AUTH_SECRET"),
-  base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
-  plugins: [
-    BetterAuth::Plugins.siwe(get_nonce: -> { SecureRandom.hex(16) })
-  ]
-)
-```
+    auth = BetterAuth.auth(
+      secret: ENV.fetch("BETTER_AUTH_SECRET"),
+      base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
+      plugins: [
+        BetterAuth::Plugins.siwe(get_nonce: -> { SecureRandom.hex(16) })
+      ]
+    )
+    ```
   </Step>
 
   <Step>
@@ -59,8 +59,14 @@ auth = BetterAuth.auth(
 Before signing a SIWE message, you need to generate a nonce for the wallet address:
 
 ```ruby title="server.rb"
-# Use the matching Ruby auth.api method for this flow.
-# HTTP paths and JSON keys keep the upstream wire shape.
+nonce = auth.api.get_siwe_nonce(
+  body: {
+    walletAddress: "0x000000000000000000000000000000000000dEaD",
+    chainId: 1
+  }
+)
+
+nonce[:nonce]
 ```
 
 ### Sign In with Ethereum
@@ -68,8 +74,17 @@ Before signing a SIWE message, you need to generate a nonce for the wallet addre
 After generating a nonce and creating a SIWE message, verify the signature to authenticate:
 
 ```ruby title="server.rb"
-# Use the matching Ruby auth.api method for this flow.
-# HTTP paths and JSON keys keep the upstream wire shape.
+session = auth.api.verify_siwe_message(
+  body: {
+    walletAddress: "0x000000000000000000000000000000000000dEaD",
+    chainId: 1,
+    message: signed_message,
+    signature: signature,
+    email: "wallet@example.com"
+  }
+)
+
+session[:user]
 ```
 
 ### Chain-Specific Examples

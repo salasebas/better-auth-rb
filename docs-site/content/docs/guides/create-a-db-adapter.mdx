@@ -24,28 +24,28 @@ All you need to do is provide the database logic, and the `createAdapterFactory`
     3. Create the adapter!
 
     ```ruby
-class MyAdapter < BetterAuth::Adapters::Base
-  def create(model:, data:, select: nil)
-    # Insert data into the table for model and return the created row.
-  end
+    class MyAdapter < BetterAuth::Adapters::Base
+      def create(model:, data:, select: nil)
+        # Insert data into the table for model and return the created row.
+      end
 
-  def find_one(model:, where:, select: nil)
-    # Return one matching row or nil.
-  end
+      def find_one(model:, where:, select: nil)
+        # Return one matching row or nil.
+      end
 
-  def find_many(model:, where: nil, limit: nil, offset: nil, sort_by: nil, select: nil)
-    # Return matching rows.
-  end
+      def find_many(model:, where: nil, limit: nil, offset: nil, sort_by: nil, select: nil)
+        # Return matching rows.
+      end
 
-  def update(model:, where:, update:, select: nil)
-    # Update one row and return it.
-  end
+      def update(model:, where:, update:, select: nil)
+        # Update one row and return it.
+      end
 
-  def delete(model:, where:)
-    # Delete one matching row.
-  end
-end
-```
+      def delete(model:, where:)
+        # Delete one matching row.
+      end
+    end
+    ```
   </Step>
 
   <Step>
@@ -55,28 +55,28 @@ end
     We try to minimize the amount of code you need to write in your adapter functions, and these `config` options are used to help us do that.
 
     ```ruby
-class MyAdapter < BetterAuth::Adapters::Base
-  def create(model:, data:, select: nil)
-    # Insert data into the table for model and return the created row.
-  end
+    class MyAdapter < BetterAuth::Adapters::Base
+      def create(model:, data:, select: nil)
+        # Insert data into the table for model and return the created row.
+      end
 
-  def find_one(model:, where:, select: nil)
-    # Return one matching row or nil.
-  end
+      def find_one(model:, where:, select: nil)
+        # Return one matching row or nil.
+      end
 
-  def find_many(model:, where: nil, limit: nil, offset: nil, sort_by: nil, select: nil)
-    # Return matching rows.
-  end
+      def find_many(model:, where: nil, limit: nil, offset: nil, sort_by: nil, select: nil)
+        # Return matching rows.
+      end
 
-  def update(model:, where:, update:, select: nil)
-    # Update one row and return it.
-  end
+      def update(model:, where:, update:, select: nil)
+        # Update one row and return it.
+      end
 
-  def delete(model:, where:)
-    # Delete one matching row.
-  end
-end
-```
+      def delete(model:, where:)
+        # Delete one matching row.
+      end
+    end
+    ```
   </Step>
 
   <Step>
@@ -85,28 +85,28 @@ end
     The `adapter` function is where you write the code that interacts with your database.
 
     ```ruby
-class MyAdapter < BetterAuth::Adapters::Base
-  def create(model:, data:, select: nil)
-    # Insert data into the table for model and return the created row.
-  end
+    class MyAdapter < BetterAuth::Adapters::Base
+      def create(model:, data:, select: nil)
+        # Insert data into the table for model and return the created row.
+      end
 
-  def find_one(model:, where:, select: nil)
-    # Return one matching row or nil.
-  end
+      def find_one(model:, where:, select: nil)
+        # Return one matching row or nil.
+      end
 
-  def find_many(model:, where: nil, limit: nil, offset: nil, sort_by: nil, select: nil)
-    # Return matching rows.
-  end
+      def find_many(model:, where: nil, limit: nil, offset: nil, sort_by: nil, select: nil)
+        # Return matching rows.
+      end
 
-  def update(model:, where:, update:, select: nil)
-    # Update one row and return it.
-  end
+      def update(model:, where:, update:, select: nil)
+        # Update one row and return it.
+      end
 
-  def delete(model:, where:)
-    # Delete one matching row.
-  end
-end
-```
+      def delete(model:, where:)
+        # Delete one matching row.
+      end
+    end
+    ```
 
     <Callout>
       Learn more about the `adapter` here [here](/docs/concepts/database#adapters).

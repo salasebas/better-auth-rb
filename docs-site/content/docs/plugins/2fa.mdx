@@ -29,16 +29,16 @@ This plugin offers two main methods to do a second factor verification:
     Add the two-factor plugin to your auth configuration and specify your app name as the issuer.
 
     ```ruby title="config/auth.rb"
-require "better_auth"
+    require "better_auth"
 
-auth = BetterAuth.auth(
-  secret: ENV.fetch("BETTER_AUTH_SECRET"),
-  base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
-  plugins: [
-    BetterAuth::Plugins.two_factor(issuer: "My App")
-  ]
-)
-```
+    auth = BetterAuth.auth(
+      secret: ENV.fetch("BETTER_AUTH_SECRET"),
+      base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
+      plugins: [
+        BetterAuth::Plugins.two_factor(issuer: "My App")
+      ]
+    )
+    ```
   </Step>
 
   <Step>
@@ -112,9 +112,19 @@ Handle the second factor challenge on your server by checking the `twoFactorRedi
   If you chain multiple `auth.api.*` calls in the same server flow, make sure you forward the cookies from the previous auth response into the next call.
 
   ```ruby title="server.rb"
-# Use the matching Ruby auth.api method for this flow.
-# HTTP paths and JSON keys keep the upstream wire shape.
-```
+  status, headers, body = auth.api.sign_in_email(
+    body: {email: "ada@example.com", password: "password123"},
+    as_response: true
+  )
+
+  if body[:twoFactorRedirect]
+    two_factor_cookie = headers.fetch("set-cookie")
+    auth.api.verify_totp(
+      headers: {"cookie" => two_factor_cookie},
+      body: {code: params.fetch("code")}
+    )
+  end
+  ```
 </Callout>
 
 ### Disabling 2FA
@@ -158,8 +168,12 @@ After enabling 2FA, you can get the TOTP URI to display to the user. This URI is
 Once you have the TOTP URI, you can use it to generate a QR code for the user to scan with their authenticator app.
 
 ```ruby title="server.rb"
-# Use the matching Ruby auth.api method for this flow.
-# HTTP paths and JSON keys keep the upstream wire shape.
+totp = auth.api.get_totp_uri(
+  headers: {"cookie" => session_cookie},
+  body: {password: "password123"}
+)
+
+totp[:totpURI]
 ```
 
 <Callout>
@@ -289,8 +303,13 @@ To display the backup codes to the user, you can call `viewBackupCodes` on the s
 You can mark a device as trusted by passing `trustDevice` to `verifyTotp` or `verifyOtp`.
 
 ```ruby title="server.rb"
-# Use the matching Ruby auth.api method for this flow.
-# HTTP paths and JSON keys keep the upstream wire shape.
+auth.api.verify_totp(
+  headers: {"cookie" => two_factor_cookie},
+  body: {
+    code: params.fetch("code"),
+    trustDevice: true
+  }
+)
 ```
 
 When `trustDevice` is set to `true`, the current device will be remembered for 30 days. During this period, the user won't be prompted for 2FA on subsequent sign-ins from this device. The trust period is refreshed each time the user signs in successfully.
@@ -302,8 +321,13 @@ By adding an `issuer` you can set your application name for the 2fa application.
 For example, if your user uses Google Auth, the default appName will show up as `RubyAuth`. However, by using the following code, it will show up as `my-app-name`.
 
 ```ruby title="server.rb"
-# Use the matching Ruby auth.api method for this flow.
-# HTTP paths and JSON keys keep the upstream wire shape.
+auth = BetterAuth.auth(
+  secret: ENV.fetch("BETTER_AUTH_SECRET"),
+  base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
+  plugins: [
+    BetterAuth::Plugins.two_factor(issuer: "my-app-name")
+  ]
+)
 ```
 
 ***

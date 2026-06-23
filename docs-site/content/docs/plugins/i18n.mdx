@@ -6,7 +6,7 @@ description: Translate server error messages by locale.
 Translate server error messages by locale.
 
 <Callout type="info">
-This page documents the current Ruby port behavior. Ruby uses snake_case option names and `auth.api` method names; HTTP paths and JSON keys keep the upstream wire shape where implemented.
+This page documents the current Ruby port behavior. Ruby uses snake_case option names and `auth.api` method names; HTTP request bodies keep the upstream JSON key names where implemented.
 </Callout>
 
 ## Installation
@@ -47,7 +47,7 @@ When a translation exists, error responses include:
 - `message`: the translated message for the detected locale
 - `originalMessage`: the original English message
 
-```json
+```text
 {
   "code": "INVALID_EMAIL_OR_PASSWORD",
   "message": "Identifiants invalides",

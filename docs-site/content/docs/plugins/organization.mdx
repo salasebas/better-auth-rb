@@ -14,16 +14,16 @@ Organizations simplifies user access and permissions management. Assign roles an
     ### Add the plugin to your **auth** config
 
     ```ruby title="config/auth.rb"
-require "better_auth"
+    require "better_auth"
 
-auth = BetterAuth.auth(
-  secret: ENV.fetch("BETTER_AUTH_SECRET"),
-  base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
-  plugins: [
-    BetterAuth::Plugins.organization
-  ]
-)
-```
+    auth = BetterAuth.auth(
+      secret: ENV.fetch("BETTER_AUTH_SECRET"),
+      base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
+      plugins: [
+        BetterAuth::Plugins.organization
+      ]
+    )
+    ```
   </Step>
 
   <Step>
@@ -275,9 +275,10 @@ To list the organizations that a user is a member of, you can use `useListOrgani
 <Tabs items={["React", "Vue", "Svelte"]} default="React">
   <Tab value="React">
     ```ruby title="server.rb"
-# Use the generated Ruby tab in the API block above, or call the same route over HTTP.
-# HTTP paths and JSON keys keep the upstream wire shape.
-```
+    organizations = auth.api.list_organizations(
+      headers: {"cookie" => session_cookie}
+    )
+    ```
   </Tab>
 
   <Tab value="Svelte">
@@ -393,16 +394,19 @@ To retrieve the active organization for the user, you can call the `useActiveOrg
 <Tabs items={['React', 'Vue', 'Svelte']}>
   <Tab value="React">
     ```ruby title="server.rb"
-# Use the generated Ruby tab in the API block above, or call the same route over HTTP.
-# HTTP paths and JSON keys keep the upstream wire shape.
-```
+    active = auth.api.get_full_organization(
+      headers: {"cookie" => session_cookie}
+    )
+    ```
   </Tab>
 
   <Tab value="Svelte">
     ```ruby title="server.rb"
-# Use the generated Ruby tab in the API block above, or call the same route over HTTP.
-# HTTP paths and JSON keys keep the upstream wire shape.
-```
+    active = auth.api.get_full_organization(
+      headers: {"cookie" => session_cookie},
+      query: {organizationSlug: "acme"}
+    )
+    ```
   </Tab>
 
   <Tab value="Vue">
@@ -689,15 +693,18 @@ To list all invitations for a given organization you can use the `listInvitation
 To list all invitations for a given user you can use the `listUserInvitations` function available through the Ruby API or HTTP endpoint.
 
 ```ruby title="server.rb"
-# Use the generated Ruby tab in the API block above, or call the same route over HTTP.
-# HTTP paths and JSON keys keep the upstream wire shape.
+invitations = auth.api.list_user_invitations(
+  headers: {"cookie" => session_cookie}
+)
 ```
 
 On the server, you can pass the user ID as a query parameter.
 
 ```ruby title="server.rb"
-# Use the generated Ruby tab in the API block above, or call the same route over HTTP.
-# HTTP paths and JSON keys keep the upstream wire shape.
+invitations = auth.api.list_user_invitations(
+  headers: {"cookie" => admin_cookie},
+  query: {userId: "user_123"}
+)
 ```
 
 <Callout type="warn">
@@ -904,16 +911,16 @@ The plugin provides an easy way to define your own set of permissions for each r
     You first need to create access controller by calling `createAccessControl` function and passing the statement object. The statement object should have the resource name as the key and the array of actions as the value.
 
     ```ruby title="permissions.rb"
-statement = {
-  organization: ["update", "delete"],
-  member: ["create", "update", "delete"],
-  invitation: ["create", "cancel"]
-}
+    statement = {
+      organization: ["update", "delete"],
+      member: ["create", "update", "delete"],
+      invitation: ["create", "cancel"]
+    }
 
-access_control = BetterAuth::Plugins.create_access_control(statement)
-owner = access_control.new_role(organization: ["update", "delete"], member: ["create", "update", "delete"], invitation: ["create", "cancel"])
-member = access_control.new_role(organization: [], member: [], invitation: [])
-```
+    access_control = BetterAuth::Plugins.create_access_control(statement)
+    owner = access_control.new_role(organization: ["update", "delete"], member: ["create", "update", "delete"], invitation: ["create", "cancel"])
+    member = access_control.new_role(organization: [], member: [], invitation: [])
+    ```
 
     <Callout type="warning">
       To keep bundle sizes small, make sure to import from `better-auth/plugins/access` instead of `better-auth/plugins`.
@@ -926,30 +933,30 @@ member = access_control.new_role(organization: [], member: [], invitation: [])
     Once you have created the access controller you can create roles with the permissions you have defined.
 
     ```ruby title="permissions.rb"
-statement = {
-  organization: ["update", "delete"],
-  member: ["create", "update", "delete"],
-  invitation: ["create", "cancel"]
-}
+    statement = {
+      organization: ["update", "delete"],
+      member: ["create", "update", "delete"],
+      invitation: ["create", "cancel"]
+    }
 
-access_control = BetterAuth::Plugins.create_access_control(statement)
-owner = access_control.new_role(organization: ["update", "delete"], member: ["create", "update", "delete"], invitation: ["create", "cancel"])
-member = access_control.new_role(organization: [], member: [], invitation: [])
-```
+    access_control = BetterAuth::Plugins.create_access_control(statement)
+    owner = access_control.new_role(organization: ["update", "delete"], member: ["create", "update", "delete"], invitation: ["create", "cancel"])
+    member = access_control.new_role(organization: [], member: [], invitation: [])
+    ```
 
     When you create custom roles for existing roles, the predefined permissions for those roles will be overridden. To add the existing permissions to the custom role, you need to import `defaultStatements` and merge it with your new statement, plus merge the roles' permissions set with the default roles.
 
     ```ruby title="permissions.rb"
-statement = {
-  organization: ["update", "delete"],
-  member: ["create", "update", "delete"],
-  invitation: ["create", "cancel"]
-}
+    statement = {
+      organization: ["update", "delete"],
+      member: ["create", "update", "delete"],
+      invitation: ["create", "cancel"]
+    }
 
-access_control = BetterAuth::Plugins.create_access_control(statement)
-owner = access_control.new_role(organization: ["update", "delete"], member: ["create", "update", "delete"], invitation: ["create", "cancel"])
-member = access_control.new_role(organization: [], member: [], invitation: [])
-```
+    access_control = BetterAuth::Plugins.create_access_control(statement)
+    owner = access_control.new_role(organization: ["update", "delete"], member: ["create", "update", "delete"], invitation: ["create", "cancel"])
+    member = access_control.new_role(organization: [], member: [], invitation: [])
+    ```
   </Step>
 
 </Steps>
@@ -1470,23 +1477,38 @@ The teams feature supports several configuration options:
 * `maximumTeams`: Limit the number of teams per organization
 
   ```ruby title="server.rb"
-# Use the generated Ruby tab in the API block above, or call the same route over HTTP.
-# HTTP paths and JSON keys keep the upstream wire shape.
-```
+  BetterAuth::Plugins.organization(
+    teams: {
+      enabled: true,
+      maximum_teams: 5
+    }
+  )
+  ```
 
 * `allowRemovingAllTeams`: Control whether the last team can be removed
   ```ruby title="server.rb"
-# Use the generated Ruby tab in the API block above, or call the same route over HTTP.
-# HTTP paths and JSON keys keep the upstream wire shape.
-```
+  BetterAuth::Plugins.organization(
+    teams: {
+      enabled: true,
+      allow_removing_all_teams: true
+    }
+  )
+  ```
 
 ### Team Members
 
 When inviting members to an organization, you can specify a team:
 
 ```ruby title="server.rb"
-# Use the generated Ruby tab in the API block above, or call the same route over HTTP.
-# HTTP paths and JSON keys keep the upstream wire shape.
+auth.api.create_invitation(
+  headers: {"cookie" => session_cookie},
+  body: {
+    organizationId: "org_123",
+    email: "new-member@example.com",
+    role: "member",
+    teamId: "team_123"
+  }
+)
 ```
 
 The invited member will be added to the specified team upon accepting the invitation.

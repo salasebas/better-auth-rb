@@ -22,19 +22,19 @@ description: Vercel provider setup and usage in Better Auth Ruby.
     To configure the provider, you need to import the provider and pass it to the `social_providers` option of the auth instance.
 
     ```ruby title="config/auth.rb"
-require "better_auth"
+    require "better_auth"
 
-auth = BetterAuth.auth(
-  secret: ENV.fetch("BETTER_AUTH_SECRET"),
-  base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
-  social_providers: {
-    vercel: BetterAuth::SocialProviders.vercel(
-      client_id: ENV.fetch("VERCEL_CLIENT_ID"),
-      client_secret: ENV.fetch("VERCEL_CLIENT_SECRET")
+    auth = BetterAuth.auth(
+      secret: ENV.fetch("BETTER_AUTH_SECRET"),
+      base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
+      social_providers: {
+        vercel: BetterAuth::SocialProviders.vercel(
+          client_id: ENV.fetch("VERCEL_CLIENT_ID"),
+          client_secret: ENV.fetch("VERCEL_CLIENT_SECRET")
+        )
+      }
     )
-  }
-)
-```
+    ```
   </Step>
 </Steps>
 
