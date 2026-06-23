@@ -3,11 +3,13 @@ title: OAuth
 description: Learn how to configure social OAuth providers, sign in, link accounts, request scopes, refresh tokens, map profiles, and customize provider options.
 ---
 
-Better Auth Ruby supports built-in social providers and generic OAuth through plugins.
+Better Auth Ruby supports OAuth 2.0 and OpenID Connect through built-in social providers. Use these providers when you want users to authenticate with services such as Google, GitHub, Apple, Discord, Facebook, Microsoft Entra ID, and other supported providers.
 
-If a provider is not built in, use `BetterAuth::Plugins.generic_oauth`.
+If your provider is not built in, use [`BetterAuth::Plugins.generic_oauth`](/docs/plugins/generic-oauth) for a custom integration.
 
 ## Configuring Social Providers
+
+To enable a social provider, configure it with the Client ID and Client Secret issued by that provider. RubyAuth accepts idiomatic Ruby option names such as `client_id`, `client_secret`, and `redirect_uri`; camelCase provider options are normalized where the provider supports them.
 
 ```ruby
 auth = BetterAuth.auth(
@@ -30,7 +32,7 @@ auth = BetterAuth.auth(
 
 ### Sign In
 
-Start an OAuth flow:
+Start an OAuth flow with `sign_in_social`. The method returns an authorization URL; redirect the browser to that URL so the provider can complete the flow and call back to your app.
 
 ```ruby
 result = auth.api.sign_in_social(
@@ -49,7 +51,7 @@ Browsers can call `/sign-in/social` and follow the returned provider URL.
 
 ### Link Account
 
-Link a social account to the current user:
+Link a social account to the current signed-in user with `link_social`. The request must include the current session cookie. RubyAuth validates that the callback URL is trusted and that the provider account is not already owned by another user.
 
 ```ruby
 result = auth.api.link_social(
@@ -68,6 +70,8 @@ Ruby also supports native or ID-token linking for providers that expose `verify_
 
 ### Get Access Token
 
+Use `get_access_token` to read the stored access token for a linked provider account. If the stored access token is expired and the provider supports refresh, RubyAuth refreshes the token, persists the new values, and returns the fresh access token.
+
 ```ruby
 token = auth.api.get_access_token(
   headers: {"cookie" => cookie},
@@ -77,9 +81,11 @@ token = auth.api.get_access_token(
 )
 ```
 
-If the stored token is expired and the provider has a refresh callback, Better Auth refreshes and persists it.
+Pass `accountId` when a user may have more than one account for the same provider.
 
 ### Get Account Info Provided By The Provider
+
+Use `account_info` when you need provider-specific profile data from the linked account. RubyAuth detects the provider from the stored account and calls the provider's `get_user_info` implementation with a valid access token.
 
 ```ruby
 info = auth.api.account_info(
@@ -92,7 +98,9 @@ info = auth.api.account_info(
 
 ### Requesting Additional Scopes
 
-Use `link_social` with the same provider and additional scopes:
+Sometimes an app needs more OAuth scopes after the user already signed in, for example to read GitHub repositories or Google Drive files. Ask for the minimum scopes at sign-in, then use `link_social` with the same provider and extra scopes when the user enables that feature.
+
+This starts another OAuth flow while keeping the existing account connection.
 
 ```ruby
 auth.api.link_social(
@@ -117,7 +125,9 @@ BetterAuth::SocialProviders.github(
 
 ### Passing Additional Data Through OAuth Flow
 
-Pass a hash in `additionalData`. Reserved OAuth state keys are filtered out.
+Pass a hash in `additionalData` to carry temporary data through the OAuth flow without storing it in the database. This is useful for referral codes, analytics source names, selected plans, or other short-lived context that should be processed during the callback.
+
+Reserved OAuth state keys are filtered out so callers cannot override internal state such as callback URLs, code verifiers, linking metadata, or expiry timestamps.
 
 ```ruby
 auth.api.sign_in_social(
@@ -134,7 +144,7 @@ auth.api.sign_in_social(
 
 #### Accessing Additional Data In Hooks
 
-Hooks can inspect request body and callback state depending on which route they run around. Validate any additional data before using it.
+Hooks can inspect the request body before the flow starts and the callback state around OAuth callback routes. Treat this data as user-controlled input: validate formats, check database records before trusting identifiers, and avoid using it for authorization decisions by itself.
 
 ```ruby
 hooks: {
@@ -147,9 +157,22 @@ hooks: {
 }
 ```
 
+By default, OAuth state contains internal fields such as `callbackURL`, `codeVerifier`, `errorURL`, `newUserURL`, `link`, `requestSignUp`, and `expiresAt`, plus any allowed keys passed in `additionalData`.
+
 ## Handling Providers Without Email
 
-OAuth providers that do not return email cannot create or link a user directly. Use provider mapping to synthesize a placeholder email only when your app can safely treat it as non-contact identity.
+RubyAuth requires an email address on every user record. Most OAuth providers return one with the default email scopes, but some providers can legitimately omit it. When that happens, the OAuth flow cannot create or link a user directly and redirects with `error=email_not_found` for built-in social providers, or `error=email_is_missing` for the Generic OAuth plugin.
+
+Use provider mapping to synthesize a placeholder email only when your app can safely treat it as non-contact identity.
+
+| Provider | When `email` May Be Absent | Stable Fallback ID | Email Verification Notes |
+| --- | --- | --- | --- |
+| Apple | Every sign-in after first consent. | `profile["sub"]` | Apple emits email only during initial consent; persist it when present. |
+| Discord | Phone-only accounts or missing `email` scope. | `profile["id"]` | The `verified` field is the provider signal. |
+| GitHub | Private email or missing email permission. | `profile["id"]` | The primary verified email may require GitHub email access. |
+| Facebook | No valid email on file even with permission. | `profile["id"]` | No per-email verification flag; consider it unverified unless you verify it yourself. |
+| LinkedIn | No confirmed email or missing scope. | `profile["sub"]` | Reliable when present. |
+| Microsoft Entra ID | Managed users without `mail` unless configured as an optional claim. | `profile["oid"]` plus `profile["tid"]`, or `profile["sub"]` | Do not use `email` as an authorization identity. |
 
 ### Synthesize A Placeholder Email With `map_profile_to_user`
 
@@ -171,21 +194,35 @@ Use a domain you control or a reserved suffix such as `.invalid`.
 
 ### Provider-Specific Notes
 
-Some providers return email only on first consent, only with specific scopes, or only for verified accounts. Check the provider class and scopes for your provider before relying on email.
+- Apple provides no user-info endpoint, so store the first email you receive. `email_verified` and `is_private_email` may arrive as strings.
+- GitHub requests `user:email` by default, but private emails can still be absent from the profile response.
+- Microsoft Entra ID emails are tenant-mutable profile attributes. Use stable subject identifiers for identity decisions.
+- Facebook does not expose a reliable per-email verification flag.
+
+Placeholder emails are not contact addresses. Password reset, magic link, email verification, and invitation flows cannot deliver to them.
 
 ## Provider Options
 
 ### clientId
 
-Use Ruby `client_id`; camelCase provider options are normalized where applicable.
+`client_id` is the OAuth Client ID issued by the provider. Providers that verify ID tokens by audience, such as Google, Apple, Microsoft Entra ID, Facebook, and Cognito, can accept multiple Client IDs for cross-platform sign-in. The first entry is used when RubyAuth starts the authorization code flow, and every entry is accepted when verifying an ID token audience.
 
 ```ruby
-BetterAuth::SocialProviders.github(client_id: "...", client_secret: "...")
+BetterAuth::SocialProviders.google(
+  client_id: [
+    ENV.fetch("GOOGLE_WEB_CLIENT_ID"),
+    ENV.fetch("GOOGLE_IOS_CLIENT_ID"),
+    ENV.fetch("GOOGLE_ANDROID_CLIENT_ID")
+  ],
+  client_secret: ENV.fetch("GOOGLE_CLIENT_SECRET")
+)
 ```
+
+All Client IDs should belong to the same provider project so consent and token verification semantics stay aligned. For providers that do not verify ID token audiences, pass a single string.
 
 ### scope
 
-Use `scope` or `scopes`.
+`scope` controls the access requested from the provider. Use the provider's documentation to choose only the permissions your feature needs. RubyAuth accepts `scope` or `scopes` and combines provider defaults, configured scopes, and request-time scopes.
 
 ```ruby
 BetterAuth::SocialProviders.github(
@@ -197,7 +234,7 @@ BetterAuth::SocialProviders.github(
 
 ### redirectURI
 
-Override the redirect URI when required by the provider:
+`redirect_uri` overrides the callback URL sent to the provider. By default, RubyAuth uses the provider callback route under your auth base path, for example `/api/auth/callback/github`. Override it when the provider requires a specific registered URL.
 
 ```ruby
 BetterAuth::SocialProviders.github(
@@ -209,6 +246,8 @@ BetterAuth::SocialProviders.github(
 
 ### disableSignUp
 
+`disable_sign_up` prevents this provider from creating new users. Existing users can still sign in or link accounts when the rest of your account-linking rules allow it.
+
 ```ruby
 BetterAuth::SocialProviders.github(
   client_id: "...",
@@ -218,6 +257,8 @@ BetterAuth::SocialProviders.github(
 ```
 
 ### disableIdTokenSignIn
+
+`disable_id_token_sign_in` disables provider ID-token verification for sign-in. Some providers, such as Google and Apple, can use ID tokens as a fast path; disable it when your app must force the authorization code and user-info flow.
 
 ```ruby
 BetterAuth::SocialProviders.google(
@@ -229,7 +270,7 @@ BetterAuth::SocialProviders.google(
 
 ### verifyIdToken
 
-Provide custom ID token verification:
+`verify_id_token` lets you provide custom ID token verification. Use it when you need provider-specific checks that are not covered by the built-in verifier.
 
 ```ruby
 BetterAuth::SocialProviders.google(
@@ -241,7 +282,7 @@ BetterAuth::SocialProviders.google(
 
 ### overrideUserInfoOnSignIn
 
-Update profile fields from provider data when an existing user signs in:
+`override_user_info_on_sign_in` updates the stored user profile from provider data on later sign-ins. By default, RubyAuth does not overwrite the user every time they sign in. Enable this only when the provider should remain the source of truth for name, image, email, and email verification state.
 
 ```ruby
 BetterAuth::SocialProviders.github(
@@ -253,48 +294,67 @@ BetterAuth::SocialProviders.github(
 
 ### mapProfileToUser
 
+`map_profile_to_user` maps the raw provider profile to fields on your user record. Use it for additional user fields, provider-specific normalization, or fallback values such as placeholder emails.
+
 ```ruby
-BetterAuth::SocialProviders.github(
+BetterAuth::SocialProviders.google(
   client_id: "...",
   client_secret: "...",
-  map_profile_to_user: ->(profile) { {"name" => profile["login"]} }
+  map_profile_to_user: lambda do |profile|
+    {
+      "firstName" => profile["given_name"],
+      "lastName" => profile["family_name"]
+    }
+  end
 )
 ```
 
+If you map additional fields onto the user record, configure the corresponding `user.additional_fields` schema first.
+
 ### refreshAccessToken
 
-Provide a custom refresh callback:
+`refresh_access_token` customizes how a provider refreshes expired access tokens. Built-in social providers include default refresh behavior when the provider supports refresh tokens; provide a custom lambda when you need different request parameters or token normalization.
 
 ```ruby
-BetterAuth::SocialProviders.github(
+BetterAuth::SocialProviders.google(
   client_id: "...",
   client_secret: "...",
   refresh_access_token: lambda do |refresh_token|
-    MyOAuth.refresh_github_token(refresh_token)
+    MyGoogleTokenClient.refresh(refresh_token)
   end
 )
 ```
 
 ### clientKey
 
-Some providers require a client key in addition to client ID and secret. Pass `client_key` when the provider supports it.
+`client_key` is used by TikTok instead of the normal OAuth `client_id` parameter.
+
+```ruby
+BetterAuth::SocialProviders.tiktok(
+  client_id: ENV.fetch("TIKTOK_CLIENT_KEY"),
+  client_key: ENV.fetch("TIKTOK_CLIENT_KEY"),
+  client_secret: ENV.fetch("TIKTOK_CLIENT_SECRET")
+)
+```
 
 ### getUserInfo
 
-Override user-info fetching:
+`get_user_info` overrides the provider profile fetch and mapping step. Return a hash with `:user` and `:data` when you want to skip RubyAuth's default mapping, or return the raw provider profile and let the configured provider mapping run.
 
 ```ruby
-BetterAuth::SocialProviders.github(
+BetterAuth::SocialProviders.google(
   client_id: "...",
   client_secret: "...",
   get_user_info: lambda do |tokens|
-    profile = GitHubClient.new(tokens["accessToken"]).user
+    access_token = tokens[:accessToken] || tokens["accessToken"]
+    profile = MyGoogleClient.user_info(access_token)
     {
       user: {
-        "id" => profile.id,
-        "email" => profile.email,
-        "name" => profile.name,
-        "emailVerified" => true
+        id: profile.fetch("sub"),
+        email: profile.fetch("email"),
+        name: profile["name"],
+        image: profile["picture"],
+        emailVerified: !!profile["email_verified"]
       },
       data: profile
     }
@@ -304,17 +364,19 @@ BetterAuth::SocialProviders.github(
 
 ### disableImplicitSignUp
 
+`disable_implicit_sign_up` requires sign-in requests to explicitly pass `requestSignUp: true` before this provider can create new users. Use it when you want separate "sign in" and "sign up" entry points.
+
 ```ruby
-BetterAuth::SocialProviders.github(
+BetterAuth::SocialProviders.google(
   client_id: "...",
   client_secret: "...",
   disable_implicit_sign_up: true
 )
 ```
 
-Users must explicitly request sign-up for that provider.
-
 ### prompt
+
+`prompt` controls provider authorization behavior when the provider supports it. Common values include `select_account`, `consent`, `login`, and `none`; provider-specific docs define the exact values.
 
 ```ruby
 BetterAuth::SocialProviders.google(
@@ -326,19 +388,29 @@ BetterAuth::SocialProviders.google(
 
 ### responseMode
 
-Use provider-specific options when a provider class accepts response mode settings.
+`response_mode` controls how the authorization response is returned for providers that support it. Apple defaults to `form_post`; other providers may ignore this option.
+
+```ruby
+BetterAuth::SocialProviders.apple(
+  client_id: "...",
+  client_secret: "...",
+  response_mode: "form_post"
+)
+```
 
 ### disableDefaultScope
 
+`disable_default_scope` removes the provider's default scopes, such as `email` and `profile`, and sends only the scopes you configure or request.
+
 ```ruby
-BetterAuth::SocialProviders.github(
+BetterAuth::SocialProviders.google(
   client_id: "...",
   client_secret: "...",
   disable_default_scope: true,
-  scopes: ["read:user"]
+  scopes: ["https://www.googleapis.com/auth/userinfo.email"]
 )
 ```
 
 ### Other Provider Configurations
 
-Provider classes normalize common upstream option names to Ruby snake_case. Inspect the specific provider class for provider-specific settings such as tenant IDs, app bundle identifiers, profile photo settings, and endpoint overrides.
+Each provider can expose provider-specific options, such as tenant IDs, profile photo settings, bundle identifiers, or custom endpoints. Check the provider page under [Authentication](/docs/authentication/other-social-providers) when configuring a specific provider.

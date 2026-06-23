@@ -3,7 +3,7 @@ title: Rate Limit
 description: Learn how Better Auth Ruby rate limiting works, including IP handling, IPv6 subnet keys, storage, errors, and schema.
 ---
 
-Better Auth Ruby can rate limit requests before endpoint handlers run.
+Better Auth Ruby includes a built-in rate limiter to help manage traffic and slow down abusive clients before endpoint handlers run. In production, rate limiting is enabled by default unless you configure `rate_limit.enabled: false`; in development it is disabled unless explicitly enabled.
 
 ```ruby
 auth = BetterAuth.auth(
@@ -14,13 +14,15 @@ auth = BetterAuth.auth(
 )
 ```
 
-By default, general routes use `window: 10` and `max: 100`. Auth-sensitive paths such as `/sign-in`, `/sign-up`, `/change-password`, and `/change-email` use stricter upstream-compatible rules.
+By default, general routes use `window: 10` and `max: 100`. Auth-sensitive paths such as `/sign-in`, `/sign-up`, `/change-password`, and `/change-email` use stricter upstream-compatible rules of 3 requests per 10 seconds. Other sensitive flows, such as password reset and verification email requests, use 3 requests per 60 seconds.
+
+Plugin routes can also define their own rate-limit rules. For example, two-factor, magic-link, phone-number, and email-OTP flows apply plugin-specific limits where appropriate.
 
 ## Configuring Rate Limit
 
 ### Connecting IP Address
 
-Rate limiting keys include the client IP and route path. Configure trusted IP headers when your app runs behind a proxy.
+Rate limiting keys include the connecting client IP and route path. The default header checked is `x-forwarded-for`, which is common in production proxy setups. If your deployment uses a different trusted header, configure it explicitly.
 
 ```ruby
 auth = BetterAuth.auth(
@@ -36,7 +38,7 @@ auth = BetterAuth.auth(
 )
 ```
 
-Disable IP tracking when another layer handles rate limiting:
+Disable IP tracking when another layer handles rate limiting. When IP tracking is disabled, RubyAuth cannot build per-client rate-limit keys and skips its built-in limiter.
 
 ```ruby
 advanced: {
@@ -48,11 +50,13 @@ advanced: {
 
 #### IPv6 Address Support
 
-IPv6 addresses are normalized before becoming rate-limit keys. IPv4-mapped IPv6 addresses are normalized back to IPv4.
+IPv6 addresses are normalized before becoming rate-limit keys. This prevents bypasses where the same IPv6 address is written in multiple valid forms, such as `2001:db8::1` and `2001:0db8:0000:0000:0000:0000:0000:0001`.
+
+IPv4-mapped IPv6 addresses, such as `::ffff:192.0.2.1`, are normalized back to IPv4 so clients cannot switch representations to avoid limits.
 
 #### IPv6 Subnet Rate Limiting
 
-Configure IPv6 subnet grouping:
+IPv6 clients often receive a whole address block, so limiting each full `/128` address can be too easy to evade. Configure IPv6 subnet grouping when you want requests from the same IPv6 allocation to share a rate-limit key:
 
 ```ruby
 advanced: {
@@ -63,11 +67,20 @@ advanced: {
 }
 ```
 
-Requests from addresses within the same subnet share a rate-limit key.
+Common prefix lengths:
+
+| Prefix | Use |
+| --- | --- |
+| `128` | Individual IPv6 address. |
+| `64` | Typical home or business allocation. |
+| `48` | Larger network allocation. |
+| `32` | ISP-level allocation. |
+
+IPv6 subnet grouping only affects IPv6 addresses. IPv4 addresses are always limited individually.
 
 ### Rate Limit Window
 
-Configure a global window and max:
+Configure a global `window` in seconds and `max` requests per window:
 
 ```ruby
 rate_limit: {
@@ -77,7 +90,7 @@ rate_limit: {
 }
 ```
 
-Use custom route rules:
+Use custom route rules for specific paths. Wildcards match route path prefixes and suffixes, and a rule value of `false` disables rate limiting for that path.
 
 ```ruby
 rate_limit: {
@@ -89,7 +102,7 @@ rate_limit: {
 }
 ```
 
-Custom rules can also be lambdas:
+Custom rules can also be lambdas. The lambda receives the Rack request and the current rule so you can tighten, loosen, or disable the rule dynamically.
 
 ```ruby
 rate_limit: {
@@ -104,7 +117,7 @@ rate_limit: {
 
 ### Storage
 
-By default, rate limit data is stored in memory.
+By default, rate-limit data is stored in memory. Memory storage is fine for local development and single-process deployments, but it is not shared across processes, machines, or serverless instances. Use database, secondary storage, or custom storage for production deployments that need shared counters.
 
 **Using Database**
 
@@ -119,9 +132,11 @@ auth = BetterAuth.auth(
 )
 ```
 
-Run migrations after enabling database storage so the `rateLimit` table exists.
+Run migrations after enabling database storage so the `rateLimit` table exists. RubyAuth's generated physical table name is `rate_limits` by default, while the logical schema model remains `rateLimit`.
 
 **Using Secondary Storage**
+
+If you configured a [secondary storage](/docs/concepts/database#secondary-storage), the rate limiter can store counters there. This is typically a good fit for Redis-like shared storage.
 
 ```ruby
 auth = BetterAuth.auth(
@@ -135,6 +150,8 @@ auth = BetterAuth.auth(
 ```
 
 **Custom Storage**
+
+Implement a custom storage object when database and secondary storage do not fit your deployment. The object must respond to `get(key)` and `set(key, value, ...)`. RubyAuth passes a TTL when the storage supports it.
 
 ```ruby
 class RateLimitStorage
@@ -158,7 +175,7 @@ auth = BetterAuth.auth(
 
 ## Handling Rate Limit Errors
 
-When a request exceeds the limit, Better Auth returns `429` and the `x-retry-after` header.
+When a request exceeds the limit, Better Auth returns `429` and the `x-retry-after` header. The header value is the number of seconds until the client can retry.
 
 ```ruby
 status, headers, body = auth.call(env)
@@ -169,11 +186,11 @@ if status == 429
 end
 ```
 
-Server-side API calls that execute through Rack observe the same response behavior.
+Direct server-side API calls bypass the Rack request path unless you explicitly execute them as Rack responses. Client-initiated HTTP requests and API calls that execute through Rack observe the same response behavior.
 
 ### Schema
 
-When `rate_limit.storage` is `"database"`, the schema includes the `rateLimit` table.
+When `rate_limit.storage` is `"database"`, the schema includes the `rateLimit` model.
 
 | Field | Type | Purpose |
 | --- | --- | --- |
