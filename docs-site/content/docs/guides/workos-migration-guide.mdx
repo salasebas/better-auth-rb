@@ -58,63 +58,63 @@ Before getting started, let’s review which WorkOS authentication features are 
     RubyAuth supports various databases. Set up your preferred database. In this guide, we’ll use PostgreSQL with the default database adapter.
 
     ```ruby title="config/initializers/better_auth.rb"
-require "better_auth"
+    require "better_auth"
 
-auth = BetterAuth.auth(
-  secret: ENV.fetch("BETTER_AUTH_SECRET"),
-  base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
-  database: :postgres,
-  email_and_password: { enabled: true },
-  social_providers: {
-    google: {
-      client_id: ENV.fetch("GOOGLE_CLIENT_ID"),
-      client_secret: ENV.fetch("GOOGLE_CLIENT_SECRET")
-    }
-  }
-)
-```
+    auth = BetterAuth.auth(
+      secret: ENV.fetch("BETTER_AUTH_SECRET"),
+      base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
+      database: :postgres,
+      email_and_password: { enabled: true },
+      social_providers: {
+        google: {
+          client_id: ENV.fetch("GOOGLE_CLIENT_ID"),
+          client_secret: ENV.fetch("GOOGLE_CLIENT_SECRET")
+        }
+      }
+    )
+    ```
 
     ### Email & Password
 
     Enable Email & Password authentication as shown below. Since WorkOS verifies each user’s email by default, this setup is similar to the default behavior. You can adjust it if needed. For more information, see [here](/docs/authentication/email-password).
 
     ```ruby
-require "better_auth"
+    require "better_auth"
 
-auth = BetterAuth.auth(
-  secret: ENV.fetch("BETTER_AUTH_SECRET"),
-  base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
-  database: :postgres,
-  email_and_password: { enabled: true },
-  social_providers: {
-    google: {
-      client_id: ENV.fetch("GOOGLE_CLIENT_ID"),
-      client_secret: ENV.fetch("GOOGLE_CLIENT_SECRET")
-    }
-  }
-)
-```
+    auth = BetterAuth.auth(
+      secret: ENV.fetch("BETTER_AUTH_SECRET"),
+      base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
+      database: :postgres,
+      email_and_password: { enabled: true },
+      social_providers: {
+        google: {
+          client_id: ENV.fetch("GOOGLE_CLIENT_ID"),
+          client_secret: ENV.fetch("GOOGLE_CLIENT_SECRET")
+        }
+      }
+    )
+    ```
 
     ### Social Providers (optional)
 
     Set up the social providers you used in WorkOS as follows. RubyAuth supports a wider range of providers, so you can add more if needed. Since WorkOS ensures emails are unique, configure `account.account_linking` in RubyAuth to ensure the same behavior.
 
     ```ruby
-require "better_auth"
+    require "better_auth"
 
-auth = BetterAuth.auth(
-  secret: ENV.fetch("BETTER_AUTH_SECRET"),
-  base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
-  database: :postgres,
-  email_and_password: { enabled: true },
-  social_providers: {
-    google: {
-      client_id: ENV.fetch("GOOGLE_CLIENT_ID"),
-      client_secret: ENV.fetch("GOOGLE_CLIENT_SECRET")
-    }
-  }
-)
-```
+    auth = BetterAuth.auth(
+      secret: ENV.fetch("BETTER_AUTH_SECRET"),
+      base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
+      database: :postgres,
+      email_and_password: { enabled: true },
+      social_providers: {
+        google: {
+          client_id: ENV.fetch("GOOGLE_CLIENT_ID"),
+          client_secret: ENV.fetch("GOOGLE_CLIENT_SECRET")
+        }
+      }
+    )
+    ```
 
     ### Additional Fields
 
@@ -123,42 +123,42 @@ auth = BetterAuth.auth(
     You probably used metadata in WorkOS. To preserve that metadata and the user id from WorkOS (e.g., user\_01KBT4BMFF7ASGRDD0WZ6W63FF), extend the `user` schema as shown below. RubyAuth provides a more flexible way to store user data. For more information, see [here](/docs/concepts/database#extending-core-schema).
 
     ```ruby title="config/initializers/better_auth.rb"
-require "better_auth"
+    require "better_auth"
 
-auth = BetterAuth.auth(
-  secret: ENV.fetch("BETTER_AUTH_SECRET"),
-  base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
-  database: :postgres,
-  email_and_password: { enabled: true },
-  social_providers: {
-    google: {
-      client_id: ENV.fetch("GOOGLE_CLIENT_ID"),
-      client_secret: ENV.fetch("GOOGLE_CLIENT_SECRET")
-    }
-  }
-)
-```
+    auth = BetterAuth.auth(
+      secret: ENV.fetch("BETTER_AUTH_SECRET"),
+      base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
+      database: :postgres,
+      email_and_password: { enabled: true },
+      social_providers: {
+        google: {
+          client_id: ENV.fetch("GOOGLE_CLIENT_ID"),
+          client_secret: ENV.fetch("GOOGLE_CLIENT_SECRET")
+        }
+      }
+    )
+    ```
 
     ### Plugins
 
     Refer to the [section](#before-we-begin) mapping WorkOS features to RubyAuth. If a feature you used in WorkOS is available as a RubyAuth plugin, add it to the plugin options. RubyAuth provides a wider range of out-of-the-box features through plugins. For more information, see [here](/docs/concepts/plugins).
 
     ```ruby title="config/initializers/better_auth.rb"
-require "better_auth"
+    require "better_auth"
 
-auth = BetterAuth.auth(
-  secret: ENV.fetch("BETTER_AUTH_SECRET"),
-  base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
-  database: :postgres,
-  email_and_password: { enabled: true },
-  social_providers: {
-    google: {
-      client_id: ENV.fetch("GOOGLE_CLIENT_ID"),
-      client_secret: ENV.fetch("GOOGLE_CLIENT_SECRET")
-    }
-  }
-)
-```
+    auth = BetterAuth.auth(
+      secret: ENV.fetch("BETTER_AUTH_SECRET"),
+      base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
+      database: :postgres,
+      email_and_password: { enabled: true },
+      social_providers: {
+        google: {
+          client_id: ENV.fetch("GOOGLE_CLIENT_ID"),
+          client_secret: ENV.fetch("GOOGLE_CLIENT_SECRET")
+        }
+      }
+    )
+    ```
 
     <Callout type="info">
       If you rely on advanced WorkOS features beyond basic email+password and social login, refer to the feature mapping above to configure the appropriate plugins.
@@ -177,7 +177,7 @@ auth = BetterAuth.auth(
     ```ruby title="Gemfile"
     bundle exec better-auth migrate --cwd . --config config/better_auth.rb --yes
 
-```
+    ```
 
     ### Other database adapters
 
@@ -186,7 +186,7 @@ auth = BetterAuth.auth(
     ```ruby title="Gemfile"
     bundle exec better-auth generate --cwd . --dialect postgres --output db/better_auth/schema.sql --config config/better_auth.rb
 
-```
+    ```
   </Step>
 
   <Step>
@@ -197,30 +197,30 @@ auth = BetterAuth.auth(
     Create a migration script to import your user data from WorkOS into your database.
 
     ```ruby title="scripts/migration.rb"
-# scripts/migrate_workos.rb
-require "csv"
-require "better_auth"
+    # scripts/migrate_workos.rb
+    require "csv"
+    require "better_auth"
 
-auth = BetterAuth.auth(
-  secret: ENV.fetch("BETTER_AUTH_SECRET"),
-  base_url: ENV.fetch("BETTER_AUTH_URL"),
-  database: :postgres,
-  email_and_password: { enabled: true }
-)
+    auth = BetterAuth.auth(
+      secret: ENV.fetch("BETTER_AUTH_SECRET"),
+      base_url: ENV.fetch("BETTER_AUTH_URL"),
+      database: :postgres,
+      email_and_password: { enabled: true }
+    )
 
-CSV.foreach("exports/workos_users.csv", headers: true) do |row|
-  user = {
-    email: row.fetch("email"),
-    name: row["name"],
-    email_verified: row["email_verified"] == "true"
-  }
+    CSV.foreach("exports/workos_users.csv", headers: true) do |row|
+      user = {
+        email: row.fetch("email"),
+        name: row["name"],
+        email_verified: row["email_verified"] == "true"
+      }
 
-  # Prefer admin APIs when enabled; otherwise insert through your audited app import service.
-  auth.api.create_user(user: user) if auth.api.respond_to?(:create_user)
-end
+      # Prefer admin APIs when enabled; otherwise insert through your audited app import service.
+      auth.api.create_user(user: user) if auth.api.respond_to?(:create_user)
+    end
 
-# Existing workos sessions cannot be reused by RubyAuth. Plan a session invalidation window.
-```
+    # Existing workos sessions cannot be reused by RubyAuth. Plan a session invalidation window.
+    ```
 
     <Callout type="info">
       **Notes**
@@ -244,10 +244,16 @@ end
     This client instance includes a set of functions for interacting with the RubyAuth server instance. For more information, see [here](/docs/concepts/client).
 
 
-        plugins: [
-            // Add plugins that require a client, if needed
-        ]
-    });
+    ```ruby title="config/initializers/better_auth.rb"
+    require "better_auth"
+
+    auth = BetterAuth.auth(
+      secret: ENV.fetch("BETTER_AUTH_SECRET"),
+      base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
+      plugins: [
+        # Add plugins that require client helpers, if needed.
+      ]
+    )
     ```
   </Step>
 
@@ -257,21 +263,21 @@ end
     In WorkOS, the auth API was provided as a managed service. With RubyAuth, the auth API now lives directly within your application.
 
     ```ruby title="/app/api/auth/[...all]/route.rb"
-require "better_auth"
+    require "better_auth"
 
-auth = BetterAuth.auth(
-  secret: ENV.fetch("BETTER_AUTH_SECRET"),
-  base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
-  database: :postgres,
-  email_and_password: { enabled: true },
-  social_providers: {
-    google: {
-      client_id: ENV.fetch("GOOGLE_CLIENT_ID"),
-      client_secret: ENV.fetch("GOOGLE_CLIENT_SECRET")
-    }
-  }
-)
-```
+    auth = BetterAuth.auth(
+      secret: ENV.fetch("BETTER_AUTH_SECRET"),
+      base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
+      database: :postgres,
+      email_and_password: { enabled: true },
+      social_providers: {
+        google: {
+          client_id: ENV.fetch("GOOGLE_CLIENT_ID"),
+          client_secret: ENV.fetch("GOOGLE_CLIENT_SECRET")
+        }
+      }
+    )
+    ```
   </Step>
 
   <Step>
@@ -280,10 +286,10 @@ auth = BetterAuth.auth(
     In WorkOS, you probably fetched and used the URL like this.
 
     ```ruby
-# RubyAuth migration step
-# Export users from workos, import them through your app service,
-# then invalidate existing workos sessions and redirect users through RubyAuth.
-```
+    # RubyAuth migration step
+    # Export users from workos, import them through your app service,
+    # then invalidate existing workos sessions and redirect users through RubyAuth.
+    ```
 
     In RubyAuth, instead of fetching these values via an API, you can create the pages at your desired paths and use them directly.
   </Step>
@@ -298,42 +304,42 @@ auth = BetterAuth.auth(
     WorkOS provides Proxy (Middleware) authentication. RubyAuth doesn’t recommend protecting resources directly in middleware, so we don't provide dedicated helpers for that.
 
     ```ruby title="proxy.rb / app/controllers/application_controller.rb"
-# Rails controller/helper example
-before_action :require_current_user
+    # Rails controller/helper example
+    before_action :require_current_user
 
-def require_current_user
-  @session = BetterAuth::Rails.current_session(request)
-  redirect_to "/sign-in" unless @session
-end
-```
+    def require_current_user
+      @session = BetterAuth::Rails.current_session(request)
+      redirect_to "/sign-in" unless @session
+    end
+    ```
 
     In RubyAuth, for convenience rather than resource protection, the proxy (middleware) can be used as follows. This is supported in Next.js 15+ with the Node.js runtime.
 
     ```ruby title="proxy.rb"
-# scripts/migrate_workos.rb
-require "csv"
-require "better_auth"
+    # scripts/migrate_workos.rb
+    require "csv"
+    require "better_auth"
 
-auth = BetterAuth.auth(
-  secret: ENV.fetch("BETTER_AUTH_SECRET"),
-  base_url: ENV.fetch("BETTER_AUTH_URL"),
-  database: :postgres,
-  email_and_password: { enabled: true }
-)
+    auth = BetterAuth.auth(
+      secret: ENV.fetch("BETTER_AUTH_SECRET"),
+      base_url: ENV.fetch("BETTER_AUTH_URL"),
+      database: :postgres,
+      email_and_password: { enabled: true }
+    )
 
-CSV.foreach("exports/workos_users.csv", headers: true) do |row|
-  user = {
-    email: row.fetch("email"),
-    name: row["name"],
-    email_verified: row["email_verified"] == "true"
-  }
+    CSV.foreach("exports/workos_users.csv", headers: true) do |row|
+      user = {
+        email: row.fetch("email"),
+        name: row["name"],
+        email_verified: row["email_verified"] == "true"
+      }
 
-  # Prefer admin APIs when enabled; otherwise insert through your audited app import service.
-  auth.api.create_user(user: user) if auth.api.respond_to?(:create_user)
-end
+      # Prefer admin APIs when enabled; otherwise insert through your audited app import service.
+      auth.api.create_user(user: user) if auth.api.respond_to?(:create_user)
+    end
 
-# Existing workos sessions cannot be reused by RubyAuth. Plan a session invalidation window.
-```
+    # Existing workos sessions cannot be reused by RubyAuth. Plan a session invalidation window.
+    ```
 
     ### Page based auth
 
@@ -344,26 +350,26 @@ end
     <Tabs items={["WorkOS", "RubyAuth"]}>
       <Tab value="WorkOS">
         ```ruby title="app/dashboard/page.rb"
-# Rails controller/helper example
-before_action :require_current_user
+        # Rails controller/helper example
+        before_action :require_current_user
 
-def require_current_user
-  @session = BetterAuth::Rails.current_session(request)
-  redirect_to "/sign-in" unless @session
-end
-```
+        def require_current_user
+          @session = BetterAuth::Rails.current_session(request)
+          redirect_to "/sign-in" unless @session
+        end
+        ```
       </Tab>
 
       <Tab value="RubyAuth">
         ```ruby title="app/dashboard/page.rb"
-# Rails controller/helper example
-before_action :require_current_user
+        # Rails controller/helper example
+        before_action :require_current_user
 
-def require_current_user
-  @session = BetterAuth::Rails.current_session(request)
-  redirect_to "/sign-in" unless @session
-end
-```
+        def require_current_user
+          @session = BetterAuth::Rails.current_session(request)
+          redirect_to "/sign-in" unless @session
+        end
+        ```
       </Tab>
     </Tabs>
 
@@ -372,26 +378,26 @@ end
     <Tabs items={["WorkOS", "RubyAuth"]}>
       <Tab value="WorkOS">
         ```ruby title="app/dashboard/page.rb"
-# Rails controller/helper example
-before_action :require_current_user
+        # Rails controller/helper example
+        before_action :require_current_user
 
-def require_current_user
-  @session = BetterAuth::Rails.current_session(request)
-  redirect_to "/sign-in" unless @session
-end
-```
+        def require_current_user
+          @session = BetterAuth::Rails.current_session(request)
+          redirect_to "/sign-in" unless @session
+        end
+        ```
       </Tab>
 
       <Tab value="RubyAuth">
         ```ruby title="app/dashboard/page.rb"
-# Rails controller/helper example
-before_action :require_current_user
+        # Rails controller/helper example
+        before_action :require_current_user
 
-def require_current_user
-  @session = BetterAuth::Rails.current_session(request)
-  redirect_to "/sign-in" unless @session
-end
-```
+        def require_current_user
+          @session = BetterAuth::Rails.current_session(request)
+          redirect_to "/sign-in" unless @session
+        end
+        ```
       </Tab>
     </Tabs>
 
@@ -405,10 +411,9 @@ end
 
     After verifying everything works, remove WorkOS dependencies:
 
-    ```ruby title="Gemfile"
+    ```bash title="Terminal"
     npm uninstall @workos-inc/node @workos-inc/authkit-nextjs
-
-```
+    ```
   </Step>
 </Steps>
 

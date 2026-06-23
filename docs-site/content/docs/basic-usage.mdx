@@ -198,9 +198,9 @@ You can redirect to your login page after the response succeeds.
 
 ## Session
 
-Once a user is signed in, you'll want to access the user session. RubyAuth allows you to easily access the session data from both the server and client sides.
+Once a user is signed in, you'll want to access the user session. RubyAuth exposes the same session data through HTTP routes and Ruby server APIs.
 
-### Client Side
+### HTTP Clients
 
 #### Use Session
 
@@ -220,11 +220,11 @@ GET /api/auth/get-session?disableCookieCache=true
 Cookie: better-auth.session_token=...
 ```
 
-You can also use it with client-side data-fetching libraries like [TanStack Query](https://tanstack.com/query/latest).
+You can also use it with your app's data-fetching layer. The route returns `null` when the session cookie is missing, expired, or invalid.
 
 ### Server Side
 
-The server provides a `session` object that you can use to access the session data. It requires request headers object to be passed to the `getSession` method.
+The server provides a session object that you can use to access the current user and session data. Pass request headers to `auth.api.get_session`.
 
 **Example: Using Ruby frameworks**
 
@@ -253,6 +253,19 @@ The server provides a `session` object that you can use to access the session da
     ```
   </Tab>
 </Tabs>
+
+You can update session fields declared in your schema with `update_session`, list active sessions, or revoke sessions:
+
+```ruby title="server.rb"
+auth.api.update_session(
+  headers: {"cookie" => cookie_header},
+  body: {activeOrganizationId: organization_id}
+)
+
+sessions = auth.api.list_sessions(headers: {"cookie" => cookie_header})
+
+auth.api.revoke_other_sessions(headers: {"cookie" => cookie_header})
+```
 
 <Callout>
   For more details check [session-management](/docs/concepts/session-management) documentation.

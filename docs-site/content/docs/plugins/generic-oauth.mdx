@@ -16,16 +16,16 @@ The Generic OAuth plugin provides a flexible way to integrate authentication wit
     To use the Generic OAuth plugin, add it to your auth config.
 
     ```ruby title="config/auth.rb"
-require "better_auth"
+    require "better_auth"
 
-auth = BetterAuth.auth(
-  secret: ENV.fetch("BETTER_AUTH_SECRET"),
-  base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
-  plugins: [
-    BetterAuth::Plugins.generic_oauth(providers: [{ provider_id: "custom", client_id: ENV.fetch("OAUTH_CLIENT_ID"), client_secret: ENV.fetch("OAUTH_CLIENT_SECRET"), discovery_url: "https://provider.example/.well-known/openid-configuration" }])
-  ]
-)
-```
+    auth = BetterAuth.auth(
+      secret: ENV.fetch("BETTER_AUTH_SECRET"),
+      base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
+      plugins: [
+        BetterAuth::Plugins.generic_oauth(config: [{ provider_id: "custom", client_id: ENV.fetch("OAUTH_CLIENT_ID"), client_secret: ENV.fetch("OAUTH_CLIENT_SECRET"), discovery_url: "https://provider.example/.well-known/openid-configuration" }])
+      ]
+    )
+    ```
   </Step>
 
 </Steps>
@@ -110,7 +110,7 @@ auth = BetterAuth.auth(
   secret: ENV.fetch("BETTER_AUTH_SECRET"),
   base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
   plugins: [
-    BetterAuth::Plugins.generic_oauth(providers: [{ provider_id: "custom", client_id: ENV.fetch("OAUTH_CLIENT_ID"), client_secret: ENV.fetch("OAUTH_CLIENT_SECRET"), discovery_url: "https://provider.example/.well-known/openid-configuration" }])
+    BetterAuth::Plugins.generic_oauth(config: [{ provider_id: "custom", client_id: ENV.fetch("OAUTH_CLIENT_ID"), client_secret: ENV.fetch("OAUTH_CLIENT_SECRET"), discovery_url: "https://provider.example/.well-known/openid-configuration" }])
   ]
 )
 ```
@@ -144,8 +144,20 @@ When adding the plugin to your auth config, you can configure multiple OAuth pro
 Each provider configuration object supports the following options:
 
 ```ruby title="server.rb"
-# Use the Ruby auth.api method or HTTP endpoint documented in this section.
-# HTTP paths and JSON keys keep the upstream wire shape.
+BetterAuth::Plugins.generic_oauth(
+  config: [
+    {
+      provider_id: "my-provider",
+      client_id: ENV.fetch("OAUTH_CLIENT_ID"),
+      client_secret: ENV.fetch("OAUTH_CLIENT_SECRET"),
+      authorization_url: "https://provider.example.com/oauth/authorize",
+      token_url: "https://provider.example.com/oauth/token",
+      user_info_url: "https://provider.example.com/oauth/userinfo",
+      scopes: ["openid", "email", "profile"],
+      pkce: true
+    }
+  ]
+)
 ```
 
 ### Other Provider Configurations
@@ -217,22 +229,52 @@ When an OAuth provider supports RFC 9207, it includes an `iss` (issuer) paramete
 **Auto-discovery (recommended for OIDC providers):**
 
 ```ruby title="server.rb"
-# Use the Ruby auth.api method or HTTP endpoint documented in this section.
-# HTTP paths and JSON keys keep the upstream wire shape.
+BetterAuth::Plugins.generic_oauth(
+  config: [
+    {
+      provider_id: "okta",
+      client_id: ENV.fetch("OKTA_CLIENT_ID"),
+      client_secret: ENV.fetch("OKTA_CLIENT_SECRET"),
+      discovery_url: "https://dev-123456.okta.com/.well-known/openid-configuration",
+      scopes: ["openid", "email", "profile"]
+    }
+  ]
+)
 ```
 
 **Manual issuer configuration:**
 
 ```ruby title="server.rb"
-# Use the Ruby auth.api method or HTTP endpoint documented in this section.
-# HTTP paths and JSON keys keep the upstream wire shape.
+BetterAuth::Plugins.generic_oauth(
+  config: [
+    {
+      provider_id: "acme",
+      issuer: "https://idp.acme.test",
+      client_id: ENV.fetch("ACME_CLIENT_ID"),
+      client_secret: ENV.fetch("ACME_CLIENT_SECRET"),
+      authorization_url: "https://idp.acme.test/authorize",
+      token_url: "https://idp.acme.test/token",
+      user_info_url: "https://idp.acme.test/userinfo"
+    }
+  ]
+)
 ```
 
 **Strict mode (recommended for modern providers):**
 
 ```ruby title="server.rb"
-# Use the Ruby auth.api method or HTTP endpoint documented in this section.
-# HTTP paths and JSON keys keep the upstream wire shape.
+BetterAuth::Plugins.generic_oauth(
+  config: [
+    {
+      provider_id: "modern-oidc",
+      issuer: "https://idp.example.com",
+      discovery_url: "https://idp.example.com/.well-known/openid-configuration",
+      require_issuer_validation: true,
+      client_id: ENV.fetch("OIDC_CLIENT_ID"),
+      client_secret: ENV.fetch("OIDC_CLIENT_SECRET")
+    }
+  ]
+)
 ```
 
 ### Validation Behavior
@@ -255,8 +297,18 @@ When an OAuth provider supports RFC 9207, it includes an `iss` (issuer) paramete
 For providers with non-standard token endpoints that use GET requests or custom parameters, you can provide a custom `getToken` function:
 
 ```ruby title="server.rb"
-# Use the Ruby auth.api method or HTTP endpoint documented in this section.
-# HTTP paths and JSON keys keep the upstream wire shape.
+get_token = lambda do |code:, redirect_uri:, **_data|
+  response = Net::HTTP.get_response(
+    URI("https://provider.example.com/token?code=#{URI.encode_www_form_component(code)}")
+  )
+
+  payload = JSON.parse(response.body)
+  {
+    accessToken: payload.fetch("access_token"),
+    refreshToken: payload["refresh_token"],
+    idToken: payload["id_token"]
+  }.compact
+end
 ```
 
 ### Custom User Info Fetching
@@ -264,8 +316,14 @@ For providers with non-standard token endpoints that use GET requests or custom 
 You can provide a custom `getUserInfo` function to handle specific provider requirements:
 
 ```ruby title="server.rb"
-# Use the Ruby auth.api method or HTTP endpoint documented in this section.
-# HTTP paths and JSON keys keep the upstream wire shape.
+get_user_info = lambda do |tokens|
+  response = Net::HTTP.get_response(
+    URI("https://provider.example.com/me"),
+    {"authorization" => "Bearer #{tokens[:accessToken] || tokens["accessToken"]}"}
+  )
+
+  JSON.parse(response.body)
+end
 ```
 
 ### Map User Info Fields
@@ -273,8 +331,14 @@ You can provide a custom `getUserInfo` function to handle specific provider requ
 If the user info returned by the provider does not match the expected format, or you need to map additional fields, you can use the `mapProfileToUser`:
 
 ```ruby title="server.rb"
-# Use the Ruby auth.api method or HTTP endpoint documented in this section.
-# HTTP paths and JSON keys keep the upstream wire shape.
+map_profile_to_user = lambda do |profile|
+  {
+    id: profile.fetch("sub"),
+    email: profile.fetch("mail"),
+    name: profile.fetch("displayName"),
+    emailVerified: true
+  }
+end
 ```
 
 ### Accessing Raw Token Data
@@ -282,8 +346,16 @@ If the user info returned by the provider does not match the expected format, or
 The `tokens` parameter includes a `raw` field that preserves the original token response from the provider. This is useful for accessing provider-specific fields:
 
 ```ruby title="server.rb"
-# Use the Ruby auth.api method or HTTP endpoint documented in this section.
-# HTTP paths and JSON keys keep the upstream wire shape.
+get_user_info = lambda do |tokens|
+  raw = tokens[:raw] || tokens["raw"] || {}
+  access_token = tokens[:accessToken] || tokens["accessToken"]
+
+  profile = JSON.parse(
+    Net::HTTP.get(URI("https://provider.example.com/me?token=#{access_token}"))
+  )
+
+  profile.merge("tenant" => raw["tenant_id"])
+end
 ```
 
 ### Error Handling

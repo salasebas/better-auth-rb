@@ -1,0 +1,65 @@
+---
+title: Test Utils
+description: Testing utilities for integration and E2E testing
+---
+
+<RubyAuthDisclaimer />
+
+<UnderDevelopment />
+
+RubyAuth does not yet expose `BetterAuth::Plugins.test_utils` or a public test helper module. This page is visible as future work only; do not add it to production or test auth configs as if it were implemented.
+
+Upstream Better Auth ships a Test Utils plugin for integration and E2E tests. RubyAuth has repeated internal helper patterns in its test suite, including cookie helpers, authenticated sign-up helpers, verification value setup, and test database setup. Those patterns are not currently packaged as a supported public API.
+
+## Current Status
+
+There is no Ruby plugin file at `packages/better_auth/lib/better_auth/plugins/test_utils.rb`, no `BetterAuth::Plugins.test_utils` factory, and no documented runtime route for test utilities.
+
+Existing tests use local support helpers such as:
+
+* `sign_up_cookie` helpers for creating an authenticated session cookie.
+* `cookie_header` helpers for turning `set-cookie` responses into request cookies.
+* Direct adapter calls for creating verification values.
+* Package-specific factories or fixture helpers for users, organizations, sessions, and plugin records.
+
+These helpers are useful evidence for future design, but they remain internal to tests.
+
+## Future Goals
+
+A future RubyAuth test-utils package could provide:
+
+* Factories for users, sessions, accounts, organizations, and plugin records.
+* Database helpers that save and delete common auth records safely.
+* Auth helpers that return Rack headers, cookies, session tokens, and users.
+* Cookie helpers for Rack, Rails integration tests, and browser E2E tests.
+* OTP or verification capture helpers for email, phone, and one-time-token flows.
+* Reset helpers that clear generated auth records between tests.
+
+## Proposed Future Shape
+
+The following is pseudocode for a possible Ruby API. It is not implemented.
+
+```ruby
+# Not implemented.
+auth = BetterAuth.auth(
+  secret: "test-secret-with-enough-entropy",
+  database: :memory,
+  plugins: [
+    # Future API only.
+    BetterAuth::Plugins.test_utils(
+      capture_otp: true
+    )
+  ]
+)
+
+# Future API only.
+test = auth.context.test
+user = test.create_user(email: "user@example.com")
+session = test.login(user_id: user.fetch("id"))
+headers = test.auth_headers(user_id: user.fetch("id"))
+cookies = test.browser_cookies(user_id: user.fetch("id"), domain: "localhost")
+```
+
+## Future Implementation
+
+Runtime implementation is tracked by [Plan 025: test-utils future runtime and underdevelopment docs](/plans/025-test-utils-future-runtime-and-underdevelopment-docs.md). Until that runtime work exists, this page is intentionally an under-development placeholder and not supported API documentation.

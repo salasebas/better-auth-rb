@@ -31,11 +31,15 @@ auth = BetterAuth.auth(
 
 ### 1. Obtain the Bearer Token
 
-After a successful sign-in, you'll receive a session token in the response headers. Store this token securely (e.g., in `localStorage`):
+After a successful sign-in, the plugin exposes the session token in the `set-auth-token` response header. Store this token only in storage appropriate for your server or API client:
 
 ```ruby title="server.rb"
-# Use the Ruby auth.api method or HTTP endpoint documented in this section.
-# HTTP paths and JSON keys keep the upstream wire shape.
+_status, headers, _body = auth.api.sign_in_email(
+  body: {email: "ada@example.com", password: "password123"},
+  as_response: true
+)
+
+token = headers.fetch("set-auth-token")
 ```
 
 You can pass the bearer token through the standard `Authorization` header when calling session-aware endpoints.
@@ -52,8 +56,9 @@ Keep bearer tokens in server-side storage appropriate to your application, and p
 Now you can make authenticated API calls:
 
 ```ruby title="server.rb"
-# Use the Ruby auth.api method or HTTP endpoint documented in this section.
-# HTTP paths and JSON keys keep the upstream wire shape.
+sessions = auth.api.list_sessions(
+  headers: {"authorization" => "Bearer #{token}"}
+)
 ```
 
 ### 4. Per-Request Token (Optional)
@@ -61,8 +66,10 @@ Now you can make authenticated API calls:
 You can also provide the token for individual requests:
 
 ```ruby title="server.rb"
-# Use the Ruby auth.api method or HTTP endpoint documented in this section.
-# HTTP paths and JSON keys keep the upstream wire shape.
+headers = {"authorization" => "Bearer #{token}"}
+
+session = auth.api.get_session(headers: headers)
+accounts = auth.api.list_user_accounts(headers: headers)
 ```
 
 ### 5. Using Bearer Tokens Outside the Auth Client
@@ -70,18 +77,34 @@ You can also provide the token for individual requests:
 The Bearer token can be used to authenticate any request to your API, even when not using the Ruby auth object:
 
 ```ruby title="server.rb"
-# Use the Ruby auth.api method or HTTP endpoint documented in this section.
-# HTTP paths and JSON keys keep the upstream wire shape.
+require "net/http"
+require "uri"
+
+request = Net::HTTP::Get.new(URI("https://api.example.com/profile"))
+request["authorization"] = "Bearer #{token}"
 ```
 
-On the server, you can authenticate requests using the `auth.api.getSession` function,
+On the server, you can authenticate requests using the `auth.api.get_session` function,
 as long as the Authorization Bearer token header is present in the request:
 
 ```ruby title="server.rb"
-# Use the Ruby auth.api method or HTTP endpoint documented in this section.
-# HTTP paths and JSON keys keep the upstream wire shape.
+class ProfileEndpoint
+  def initialize(auth)
+    @auth = auth
+  end
+
+  def call(env)
+    session = @auth.api.get_session(
+      headers: {"authorization" => env["HTTP_AUTHORIZATION"].to_s}
+    )
+
+    return [401, {"content-type" => "text/plain"}, ["Unauthorized"]] unless session
+
+    [200, {"content-type" => "text/plain"}, [session[:user]["email"]]]
+  end
+end
 ```
 
 ## Options
 
-**requireSignature** (boolean): Require the token to be signed. Default: `false`.
+**require_signature** (`Boolean`): Require the token to be signed. Default: `false`.

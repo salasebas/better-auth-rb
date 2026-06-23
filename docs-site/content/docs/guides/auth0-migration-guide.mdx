@@ -24,26 +24,26 @@ Before starting the migration process, set up RubyAuth in your project. Follow t
     ```ruby title="Gemfile"
     gem "pg"
 
-```
+    ```
 
     And then you can use the following code to connect to your database.
 
     ```ruby title="config/initializers/better_auth.rb"
-require "better_auth"
+    require "better_auth"
 
-auth = BetterAuth.auth(
-  secret: ENV.fetch("BETTER_AUTH_SECRET"),
-  base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
-  database: :postgres,
-  email_and_password: { enabled: true },
-  social_providers: {
-    google: {
-      client_id: ENV.fetch("GOOGLE_CLIENT_ID"),
-      client_secret: ENV.fetch("GOOGLE_CLIENT_SECRET")
-    }
-  }
-)
-```
+    auth = BetterAuth.auth(
+      secret: ENV.fetch("BETTER_AUTH_SECRET"),
+      base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
+      database: :postgres,
+      email_and_password: { enabled: true },
+      social_providers: {
+        google: {
+          client_id: ENV.fetch("GOOGLE_CLIENT_ID"),
+          client_secret: ENV.fetch("GOOGLE_CLIENT_SECRET")
+        }
+      }
+    )
+    ```
   </Step>
 
   <Step>
@@ -52,21 +52,21 @@ auth = BetterAuth.auth(
     Enable the email and password in your auth config and implement your own logic for sending verification emails, reset password emails, etc.
 
     ```ruby title="config/initializers/better_auth.rb"
-require "better_auth"
+    require "better_auth"
 
-auth = BetterAuth.auth(
-  secret: ENV.fetch("BETTER_AUTH_SECRET"),
-  base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
-  database: :postgres,
-  email_and_password: { enabled: true },
-  social_providers: {
-    google: {
-      client_id: ENV.fetch("GOOGLE_CLIENT_ID"),
-      client_secret: ENV.fetch("GOOGLE_CLIENT_SECRET")
-    }
-  }
-)
-```
+    auth = BetterAuth.auth(
+      secret: ENV.fetch("BETTER_AUTH_SECRET"),
+      base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
+      database: :postgres,
+      email_and_password: { enabled: true },
+      social_providers: {
+        google: {
+          client_id: ENV.fetch("GOOGLE_CLIENT_ID"),
+          client_secret: ENV.fetch("GOOGLE_CLIENT_SECRET")
+        }
+      }
+    )
+    ```
 
     See [Email and Password](/docs/authentication/email-password) for more configuration options.
   </Step>
@@ -77,21 +77,21 @@ auth = BetterAuth.auth(
     Add social providers you have enabled in your Auth0 project in your auth config.
 
     ```ruby title="config/initializers/better_auth.rb"
-require "better_auth"
+    require "better_auth"
 
-auth = BetterAuth.auth(
-  secret: ENV.fetch("BETTER_AUTH_SECRET"),
-  base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
-  database: :postgres,
-  email_and_password: { enabled: true },
-  social_providers: {
-    google: {
-      client_id: ENV.fetch("GOOGLE_CLIENT_ID"),
-      client_secret: ENV.fetch("GOOGLE_CLIENT_SECRET")
-    }
-  }
-)
-```
+    auth = BetterAuth.auth(
+      secret: ENV.fetch("BETTER_AUTH_SECRET"),
+      base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
+      database: :postgres,
+      email_and_password: { enabled: true },
+      social_providers: {
+        google: {
+          client_id: ENV.fetch("GOOGLE_CLIENT_ID"),
+          client_secret: ENV.fetch("GOOGLE_CLIENT_SECRET")
+        }
+      }
+    )
+    ```
   </Step>
 
   <Step>
@@ -106,30 +106,30 @@ auth = BetterAuth.auth(
     [Username](/docs/plugins/username) Plugin will allow you to add username authentication to your application.
 
     ```ruby title="config/initializers/better_auth.rb"
-# scripts/migrate_auth0.rb
-require "csv"
-require "better_auth"
+    # scripts/migrate_auth0.rb
+    require "csv"
+    require "better_auth"
 
-auth = BetterAuth.auth(
-  secret: ENV.fetch("BETTER_AUTH_SECRET"),
-  base_url: ENV.fetch("BETTER_AUTH_URL"),
-  database: :postgres,
-  email_and_password: { enabled: true }
-)
+    auth = BetterAuth.auth(
+      secret: ENV.fetch("BETTER_AUTH_SECRET"),
+      base_url: ENV.fetch("BETTER_AUTH_URL"),
+      database: :postgres,
+      email_and_password: { enabled: true }
+    )
 
-CSV.foreach("exports/auth0_users.csv", headers: true) do |row|
-  user = {
-    email: row.fetch("email"),
-    name: row["name"],
-    email_verified: row["email_verified"] == "true"
-  }
+    CSV.foreach("exports/auth0_users.csv", headers: true) do |row|
+      user = {
+        email: row.fetch("email"),
+        name: row["name"],
+        email_verified: row["email_verified"] == "true"
+      }
 
-  # Prefer admin APIs when enabled; otherwise insert through your audited app import service.
-  auth.api.create_user(user: user) if auth.api.respond_to?(:create_user)
-end
+      # Prefer admin APIs when enabled; otherwise insert through your audited app import service.
+      auth.api.create_user(user: user) if auth.api.respond_to?(:create_user)
+    end
 
-# Existing auth0 sessions cannot be reused by RubyAuth. Plan a session invalidation window.
-```
+    # Existing auth0 sessions cannot be reused by RubyAuth. Plan a session invalidation window.
+    ```
   </Step>
 
   <Step>
@@ -176,37 +176,37 @@ end
       Example:
 
       ```ruby
-# RubyAuth migration step
-# Export users from auth0, import them through your app service,
-# then invalidate existing auth0 sessions and redirect users through RubyAuth.
-```
+      # RubyAuth migration step
+      # Export users from auth0, import them through your app service,
+      # then invalidate existing auth0 sessions and redirect users through RubyAuth.
+      ```
     </Callout>
 
     ```ruby title="scripts/migrate-auth0.rb"
-# scripts/migrate_auth0.rb
-require "csv"
-require "better_auth"
+    # scripts/migrate_auth0.rb
+    require "csv"
+    require "better_auth"
 
-auth = BetterAuth.auth(
-  secret: ENV.fetch("BETTER_AUTH_SECRET"),
-  base_url: ENV.fetch("BETTER_AUTH_URL"),
-  database: :postgres,
-  email_and_password: { enabled: true }
-)
+    auth = BetterAuth.auth(
+      secret: ENV.fetch("BETTER_AUTH_SECRET"),
+      base_url: ENV.fetch("BETTER_AUTH_URL"),
+      database: :postgres,
+      email_and_password: { enabled: true }
+    )
 
-CSV.foreach("exports/auth0_users.csv", headers: true) do |row|
-  user = {
-    email: row.fetch("email"),
-    name: row["name"],
-    email_verified: row["email_verified"] == "true"
-  }
+    CSV.foreach("exports/auth0_users.csv", headers: true) do |row|
+      user = {
+        email: row.fetch("email"),
+        name: row["name"],
+        email_verified: row["email_verified"] == "true"
+      }
 
-  # Prefer admin APIs when enabled; otherwise insert through your audited app import service.
-  auth.api.create_user(user: user) if auth.api.respond_to?(:create_user)
-end
+      # Prefer admin APIs when enabled; otherwise insert through your audited app import service.
+      auth.api.create_user(user: user) if auth.api.respond_to?(:create_user)
+    end
 
-# Existing auth0 sessions cannot be reused by RubyAuth. Plan a session invalidation window.
-```
+    # Existing auth0 sessions cannot be reused by RubyAuth. Plan a session invalidation window.
+    ```
 
     Make sure to replace the Auth0 environment variables with your own values:
 
@@ -249,21 +249,21 @@ end
     Then update your auth configuration:
 
     ```ruby title="config/initializers/better_auth.rb"
-require "better_auth"
+    require "better_auth"
 
-auth = BetterAuth.auth(
-  secret: ENV.fetch("BETTER_AUTH_SECRET"),
-  base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
-  database: :postgres,
-  email_and_password: { enabled: true },
-  social_providers: {
-    google: {
-      client_id: ENV.fetch("GOOGLE_CLIENT_ID"),
-      client_secret: ENV.fetch("GOOGLE_CLIENT_SECRET")
-    }
-  }
-)
-```
+    auth = BetterAuth.auth(
+      secret: ENV.fetch("BETTER_AUTH_SECRET"),
+      base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
+      database: :postgres,
+      email_and_password: { enabled: true },
+      social_providers: {
+        google: {
+          client_id: ENV.fetch("GOOGLE_CLIENT_ID"),
+          client_secret: ENV.fetch("GOOGLE_CLIENT_SECRET")
+        }
+      }
+    )
+    ```
   </Step>
 
   <Step>
@@ -284,14 +284,14 @@ auth = BetterAuth.auth(
     Now that the data is migrated, update your components to use RubyAuth. Here's an example for the sign-in component:
 
     ```ruby title="components/auth/sign-in.rb"
-# Rails controller/helper example
-before_action :require_current_user
+    # Rails controller/helper example
+    before_action :require_current_user
 
-def require_current_user
-  @session = BetterAuth::Rails.current_session(request)
-  redirect_to "/sign-in" unless @session
-end
-```
+    def require_current_user
+      @session = BetterAuth::Rails.current_session(request)
+      redirect_to "/sign-in" unless @session
+    end
+    ```
   </Step>
 
   <Step>
@@ -300,14 +300,14 @@ end
     Replace your Auth0 middleware with RubyAuth's middleware:
 
     ```ruby title="app/controllers/application_controller.rb"
-# Rails controller/helper example
-before_action :require_current_user
+    # Rails controller/helper example
+    before_action :require_current_user
 
-def require_current_user
-  @session = BetterAuth::Rails.current_session(request)
-  redirect_to "/sign-in" unless @session
-end
-```
+    def require_current_user
+      @session = BetterAuth::Rails.current_session(request)
+      redirect_to "/sign-in" unless @session
+    end
+    ```
   </Step>
 
   <Step>

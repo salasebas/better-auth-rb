@@ -22,19 +22,19 @@ Enabling OAuth with Microsoft Azure Entra ID (formerly Active Directory) allows 
     To configure the provider, you need to pass the `client_id` and `client_secret` to `BetterAuth::SocialProviders.microsoft` in your auth configuration.
 
     ```ruby title="config/auth.rb"
-require "better_auth"
+    require "better_auth"
 
-auth = BetterAuth.auth(
-  secret: ENV.fetch("BETTER_AUTH_SECRET"),
-  base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
-  social_providers: {
-    microsoft: BetterAuth::SocialProviders.microsoft(
-      client_id: ENV.fetch("MICROSOFT_CLIENT_ID"),
-      client_secret: ENV.fetch("MICROSOFT_CLIENT_SECRET")
+    auth = BetterAuth.auth(
+      secret: ENV.fetch("BETTER_AUTH_SECRET"),
+      base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
+      social_providers: {
+        microsoft: BetterAuth::SocialProviders.microsoft(
+          client_id: ENV.fetch("MICROSOFT_CLIENT_ID"),
+          client_secret: ENV.fetch("MICROSOFT_CLIENT_SECRET")
+        )
+      }
     )
-  }
-)
-```
+    ```
 
     **Authority URL**: Use the default `https://login.microsoftonline.com` for standard Entra ID scenarios or `https://<tenant-id>.ciamlogin.com` for CIAM (Customer Identity and Access Management) scenarios.
 

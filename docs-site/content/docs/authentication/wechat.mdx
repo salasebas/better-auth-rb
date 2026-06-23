@@ -16,40 +16,40 @@ description: WeChat provider setup and usage in Better Auth Ruby.
     To configure the provider, you need to import the provider and pass it to the `social_providers` option of the auth instance.
 
     ```ruby title="config/auth.rb"
-require "better_auth"
+    require "better_auth"
 
-auth = BetterAuth.auth(
-  secret: ENV.fetch("BETTER_AUTH_SECRET"),
-  base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
-  social_providers: {
-    wechat: BetterAuth::SocialProviders.wechat(
-      client_id: ENV.fetch("WECHAT_CLIENT_ID"),
-      client_secret: ENV.fetch("WECHAT_CLIENT_SECRET")
+    auth = BetterAuth.auth(
+      secret: ENV.fetch("BETTER_AUTH_SECRET"),
+      base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
+      social_providers: {
+        wechat: BetterAuth::SocialProviders.wechat(
+          client_id: ENV.fetch("WECHAT_CLIENT_ID"),
+          client_secret: ENV.fetch("WECHAT_CLIENT_SECRET")
+        )
+      }
     )
-  }
-)
-```
+    ```
 
     #### Optional Configuration
 
     You can customize the WeChat provider with additional options:
 
     ```ruby title="config/auth.rb"
-require "better_auth"
+    require "better_auth"
 
-auth = BetterAuth.auth(
-  secret: ENV.fetch("BETTER_AUTH_SECRET"),
-  base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
-  social_providers: {
-    wechat: BetterAuth::SocialProviders.wechat(
-      client_id: ENV.fetch("WECHAT_CLIENT_ID"),
-      client_secret: ENV.fetch("WECHAT_CLIENT_SECRET"),
-      scopes: ["snsapi_login"],
-      lang: "en"
+    auth = BetterAuth.auth(
+      secret: ENV.fetch("BETTER_AUTH_SECRET"),
+      base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
+      social_providers: {
+        wechat: BetterAuth::SocialProviders.wechat(
+          client_id: ENV.fetch("WECHAT_CLIENT_ID"),
+          client_secret: ENV.fetch("WECHAT_CLIENT_SECRET"),
+          scopes: ["snsapi_login"],
+          lang: "en"
+        )
+      }
     )
-  }
-)
-```
+    ```
   </Step>
 
   <Step>
@@ -60,17 +60,17 @@ auth = BetterAuth.auth(
     * `provider`: The provider to use. It should be set to `wechat`.
 
     ```ruby title="server.rb"
-response = auth.api.sign_in_social(
-  body: {
-    provider: "wechat",
-    callback_url: "/dashboard",
-    error_callback_url: "/login",
-    disable_redirect: true
-  }
-)
+    response = auth.api.sign_in_social(
+      body: {
+        provider: "wechat",
+        callback_url: "/dashboard",
+        error_callback_url: "/login",
+        disable_redirect: true
+      }
+    )
 
-redirect_url = response.fetch(:url)
-```
+    redirect_url = response.fetch(:url)
+    ```
   </Step>
 </Steps>
 

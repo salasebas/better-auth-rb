@@ -28,8 +28,8 @@ The Stripe plugin integrates Stripe's payment and subscription functionality wit
     First, install the plugin:
 
     ```ruby title="Gemfile"
-gem "better_auth-stripe"
-```
+    gem "better_auth-stripe"
+    ```
 
 ```ruby title="config/auth.rb"
 require "better_auth"
@@ -55,8 +55,8 @@ auth = BetterAuth.auth(
     Next, install the Stripe SDK on your server:
 
     ```ruby title="Gemfile"
-gem "better_auth-stripe"
-```
+    gem "better_auth-stripe"
+    ```
 
 ```ruby title="config/auth.rb"
 require "better_auth"
@@ -228,8 +228,16 @@ To create a subscription, use the `subscription.upgrade` method:
 **Simple Example:**
 
 ```ruby title="server.rb"
-# Use the generated Ruby tab in the API block above, or call the same route over HTTP.
-# HTTP paths and JSON keys keep the upstream wire shape.
+checkout = auth.api.upgrade_subscription(
+  headers: {"cookie" => session_cookie},
+  body: {
+    plan: "pro",
+    successUrl: "/billing/success",
+    cancelUrl: "/billing"
+  }
+)
+
+redirect_to checkout[:url]
 ```
 
 This will create a Checkout Session and redirect the user to the Stripe Checkout page.
@@ -243,8 +251,15 @@ This will create a Checkout Session and redirect the user to the Stripe Checkout
 > **Important:** The `successUrl` parameter will be internally modified to handle race conditions between checkout completion and webhook processing. The plugin creates an intermediate redirect that ensures subscription status is properly updated before redirecting to your success page.
 
 ```ruby title="server.rb"
-# Use the generated Ruby tab in the API block above, or call the same route over HTTP.
-# HTTP paths and JSON keys keep the upstream wire shape.
+checkout = auth.api.upgrade_subscription(
+  headers: {"cookie" => session_cookie},
+  body: {
+    plan: "pro",
+    successUrl: "/billing/success",
+    cancelUrl: "/billing",
+    returnUrl: "/billing"
+  }
+)
 ```
 
 #### Switching Plans
@@ -252,8 +267,16 @@ This will create a Checkout Session and redirect the user to the Stripe Checkout
 To switch a subscription to a different plan, use the `subscription.upgrade` method:
 
 ```ruby title="server.rb"
-# Use the generated Ruby tab in the API block above, or call the same route over HTTP.
-# HTTP paths and JSON keys keep the upstream wire shape.
+checkout = auth.api.upgrade_subscription(
+  headers: {"cookie" => session_cookie},
+  body: {
+    subscriptionId: "sub_current",
+    plan: "team",
+    successUrl: "/billing/success",
+    cancelUrl: "/billing",
+    returnUrl: "/billing"
+  }
+)
 ```
 
 This ensures that the user only pays for the new plan, and not both.
@@ -263,8 +286,17 @@ This ensures that the user only pays for the new plan, and not both.
 By default, plan changes take effect immediately with prorated billing. You may want to defer the change to the end of the current billing period so the user can continue using their current plan until it expires:
 
 ```ruby title="server.rb"
-# Use the generated Ruby tab in the API block above, or call the same route over HTTP.
-# HTTP paths and JSON keys keep the upstream wire shape.
+scheduled = auth.api.upgrade_subscription(
+  headers: {"cookie" => session_cookie},
+  body: {
+    subscriptionId: "sub_current",
+    plan: "enterprise",
+    scheduleAtPeriodEnd: true,
+    successUrl: "/billing/success",
+    cancelUrl: "/billing",
+    returnUrl: "/billing"
+  }
+)
 ```
 
 This uses the [Stripe Subscription Schedules API](https://docs.stripe.com/billing/subscriptions/subscription-schedules) to create a two-phase schedule: the current plan continues until the billing period ends, then the new plan starts automatically with no proration.
@@ -439,8 +471,16 @@ This endpoint creates a Stripe billing portal session and returns a URL in the r
 By default, subscriptions are associated with the user ID. However, you can use a custom reference ID to associate subscriptions with other entities, such as organizations:
 
 ```ruby title="server.rb"
-# Use the generated Ruby tab in the API block above, or call the same route over HTTP.
-# HTTP paths and JSON keys keep the upstream wire shape.
+checkout = auth.api.upgrade_subscription(
+  headers: {"cookie" => session_cookie},
+  body: {
+    plan: "team",
+    customerType: "organization",
+    referenceId: organization.fetch("id"),
+    successUrl: "/billing/success",
+    cancelUrl: "/billing"
+  }
+)
 ```
 
 #### Team Subscriptions with Seats
@@ -448,8 +488,17 @@ By default, subscriptions are associated with the user ID. However, you can use 
 For team or organization plans, you can specify the number of seats:
 
 ```ruby title="server.rb"
-# Use the generated Ruby tab in the API block above, or call the same route over HTTP.
-# HTTP paths and JSON keys keep the upstream wire shape.
+checkout = auth.api.upgrade_subscription(
+  headers: {"cookie" => session_cookie},
+  body: {
+    plan: "team",
+    customerType: "organization",
+    referenceId: organization.fetch("id"),
+    seats: 5,
+    successUrl: "/billing/success",
+    cancelUrl: "/billing"
+  }
+)
 ```
 
 The `seats` parameter is passed to Stripe as the quantity for the subscription item. You can use this value in your application logic to limit the number of members in a team or organization.
@@ -698,14 +747,170 @@ auth = BetterAuth.auth(
 
 ## Options
 
-<UnderDevelopment />
+Common Ruby options accepted by `BetterAuth::Plugins.stripe`:
 
-This upstream helper surface is not publicly supported by RubyAuth docs. Use the server plugin and documented HTTP/Rack endpoints instead.
+* `stripe_client`: Stripe client or test adapter. Production apps usually pass a Stripe SDK client configured with the account API key.
+* `stripe_webhook_secret`: webhook signing secret used by the Stripe webhook route.
+* `create_customer_on_sign_up`: creates or reuses a Stripe customer during user sign-up and stores `stripeCustomerId`.
+* `subscription`: subscription configuration. Set `enabled: true` and provide `plans` to register subscription routes.
+* `organization`: organization billing configuration. Set `enabled: true` to allow organization subscriptions and organization customer records.
+* `schema`: custom table and field configuration.
+
+```ruby title="config/auth.rb"
+require "better_auth"
+require "better_auth/stripe"
+
+auth = BetterAuth.auth(
+  secret: ENV.fetch("BETTER_AUTH_SECRET"),
+  base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
+  plugins: [
+    BetterAuth::Plugins.stripe(
+      stripe_webhook_secret: ENV.fetch("STRIPE_WEBHOOK_SECRET"),
+      create_customer_on_sign_up: true,
+      subscription: {
+        enabled: true,
+        plans: [
+          {name: "basic", price_id: "price_basic"},
+          {
+            name: "pro",
+            price_id: "price_pro",
+            annual_discount_price_id: "price_pro_year",
+            limits: {projects: 10},
+            free_trial: {days: 14}
+          }
+        ]
+      }
+    )
+  ]
+)
+```
+
 ## Advanced Usage
 
-<UnderDevelopment />
+### Subscription plans
 
-This upstream helper surface is not publicly supported by RubyAuth docs. Use the server plugin and documented HTTP/Rack endpoints instead.
+Enable subscriptions with a `subscription` hash and define each plan by name and Stripe price ID. The `/subscription/upgrade` route accepts `plan`, `annual`, `seats`, `successUrl`, `cancelUrl`, `returnUrl`, `subscriptionId`, and `scheduleAtPeriodEnd` where applicable.
+
+```ruby title="server.rb"
+checkout = auth.api.upgrade_subscription(
+  headers: {"cookie" => request.env["HTTP_COOKIE"]},
+  body: {
+    plan: "pro",
+    annual: true,
+    successUrl: "/billing/success",
+    cancelUrl: "/billing",
+    returnUrl: "/billing"
+  }
+)
+
+checkout.fetch(:url)
+```
+
+### Free trials and hooks
+
+Plans can include `free_trial: {days: 14}`. RubyAuth starts the trial only when the reference has not already trialed. The Stripe webhook handler stores `trialStart` and `trialEnd`, and calls `free_trial[:on_trial_start]` when configured.
+
+```ruby title="config/auth.rb"
+BetterAuth::Plugins.stripe(
+  subscription: {
+    enabled: true,
+    plans: [
+      {
+        name: "pro",
+        price_id: "price_pro",
+        free_trial: {
+          days: 14,
+          on_trial_start: ->(subscription) {
+            Rails.logger.info("Trial started for #{subscription.fetch("referenceId")}")
+          }
+        }
+      }
+    ],
+    on_subscription_complete: ->(data) {
+      Rails.logger.info("Subscription complete: #{data.inspect}")
+    },
+    on_subscription_cancel: ->(data) {
+      Rails.logger.info("Subscription canceled: #{data.inspect}")
+    }
+  }
+)
+```
+
+### Custom checkout/session params
+
+Use `subscription.get_checkout_session_params` to pass additional Stripe Checkout params or request options. RubyAuth deep-merges custom params with required customer, line item, metadata, success, and cancel values.
+
+```ruby title="config/auth.rb"
+BetterAuth::Plugins.stripe(
+  subscription: {
+    enabled: true,
+    plans: [{name: "pro", price_id: "price_pro"}],
+    get_checkout_session_params: ->(data, _request, _ctx) {
+      {
+        params: {
+          locale: "auto",
+          tax_id_collection: {enabled: true},
+          metadata: {
+            plan: data.fetch(:plan).fetch(:name)
+          }
+        }
+      }
+    }
+  }
+)
+```
+
+### Billing portal
+
+Use the billing portal route for existing Stripe customers. `returnUrl` must be trusted by the configured auth base URL rules.
+
+```ruby title="server.rb"
+portal = auth.api.create_billing_portal(
+  headers: {"cookie" => request.env["HTTP_COOKIE"]},
+  body: {
+    returnUrl: "/billing",
+    locale: "auto"
+  }
+)
+```
+
+### Organization support and seats
+
+When organization billing is enabled, pass `customerType: "organization"` and `referenceId` for organization subscription operations. Plans with `seat_price_id` use organization member count for automatic seat management; organization hooks sync seats after members are added, removed, or invited members accept.
+
+```ruby title="config/auth.rb"
+BetterAuth::Plugins.stripe(
+  organization: {enabled: true},
+  subscription: {
+    enabled: true,
+    plans: [
+      {
+        name: "team",
+        price_id: "price_team_base",
+        seat_price_id: "price_team_seat",
+        proration_behavior: "create_prorations"
+      }
+    ],
+    authorize_reference: ->(data, _ctx) {
+      data.fetch(:customer_type) == "organization"
+    }
+  }
+)
+```
+
+```ruby title="server.rb"
+checkout = auth.api.upgrade_subscription(
+  headers: {"cookie" => request.env["HTTP_COOKIE"]},
+  body: {
+    customerType: "organization",
+    referenceId: organization.fetch("id"),
+    plan: "team",
+    successUrl: "/billing/success",
+    cancelUrl: "/billing"
+  }
+)
+```
+
 ## Troubleshooting
 
 ### Webhook Issues

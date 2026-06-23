@@ -1,0 +1,113 @@
+---
+title: Redis Storage
+description: Configure the better_auth-redis-storage package for RubyAuth secondary storage.
+---
+
+<RubyAuthDisclaimer />
+
+`better_auth-redis-storage` provides an official Redis-backed secondary storage implementation for RubyAuth. It tracks the server-side behavior of upstream `@better-auth/redis-storage` pinned at Better Auth `v1.6.9`, while using Ruby naming and the Ruby `redis` client.
+
+## Installation
+
+Add the storage gem and Redis client to your Gemfile:
+
+```ruby
+gem "better_auth-redis-storage"
+gem "redis"
+```
+
+Then install your bundle:
+
+```bash
+bundle install
+```
+
+## Basic Usage
+
+Require the package before configuring auth:
+
+```ruby title="config/better_auth.rb"
+require "redis"
+require "better_auth/redis_storage"
+
+redis = Redis.new(url: ENV.fetch("REDIS_URL"))
+
+auth = BetterAuth.auth(
+  secret: ENV.fetch("BETTER_AUTH_SECRET"),
+  database: :memory,
+  secondary_storage: BetterAuth.redis_storage(client: redis)
+)
+```
+
+The canonical Ruby class form is also available:
+
+```ruby
+storage = BetterAuth::RedisStorage.new(client: redis)
+```
+
+For upstream-shaped call sites, `BetterAuth.redisStorage(client: redis)` and the `keyPrefix:` keyword are also accepted.
+
+## Configuration
+
+```ruby
+storage = BetterAuth::RedisStorage.new(
+  client: redis,
+  key_prefix: "better-auth:",
+  scan_count: BetterAuth::RedisStorage::SCAN_DEFAULT_COUNT,
+  atomic_clear: false
+)
+```
+
+### `client`
+
+The Redis client must respond to `get`, `set`, `setex`, `del`, and `scan`. It should also respond to `keys` only when `scan_count: nil` is configured, and to `incr` when `atomic_clear: true` is enabled.
+
+### `key_prefix`
+
+`key_prefix` defaults to `"better-auth:"`. Passing `nil` falls back to the default. Any other value, including the empty string, is honored verbatim.
+
+<Callout type="warning">
+  Passing `key_prefix: ""` puts Better Auth keys at the root of the selected Redis logical namespace. `list_keys` and `clear` then match `*`, so `clear` deletes every key in that Redis database. Use an application-specific prefix unless the Redis database is fully dedicated to Better Auth.
+</Callout>
+
+### `scan_count`
+
+`scan_count` defaults to `BetterAuth::RedisStorage::SCAN_DEFAULT_COUNT` and uses Redis `SCAN` for `list_keys` and `clear`.
+
+```ruby
+storage = BetterAuth::RedisStorage.new(client: redis, scan_count: 500)
+```
+
+Set `scan_count: nil` for exact legacy upstream behavior using blocking `KEYS "#{key_prefix}*"`. Use that only for small or dedicated Redis databases because `KEYS` can block Redis while it walks the keyspace.
+
+```ruby
+storage = BetterAuth::RedisStorage.new(client: redis, scan_count: nil)
+```
+
+### `atomic_clear`
+
+`atomic_clear` is a Ruby-only opt-in for applications that need `clear` to be logically atomic under concurrent writers.
+
+```ruby
+storage = BetterAuth::RedisStorage.new(
+  client: redis,
+  scan_count: 500,
+  atomic_clear: true
+)
+```
+
+When enabled, data keys are stored under a generation prefix such as `better-auth:v1:<key>`. Calling `clear` atomically increments the generation key so new reads and writes immediately move to the next generation. The previous generation is then deleted best-effort.
+
+## When to Use It
+
+Use Redis Storage when you want RubyAuth secondary storage backed by Redis for short-lived auth data, session payloads, active-session indexes, verification values, rate limiting counters, or API key storage.
+
+Related docs:
+
+* [Secondary Storage](/docs/concepts/database#secondary-storage)
+* [Sessions in Secondary Storage](/docs/concepts/session-management#sessions-in-secondary-storage)
+* [API Key secondary storage](/docs/plugins/api-key/advanced#secondary-storage)
+
+## Verification
+
+The package includes unit coverage and Redis integration tests. The normal test suite skips real Redis unless explicitly enabled; the package README documents `REDIS_INTEGRATION=1 REDIS_URL=redis://localhost:6379/15 bundle exec rake test:integration` for maintainers who need to run the integration suite.

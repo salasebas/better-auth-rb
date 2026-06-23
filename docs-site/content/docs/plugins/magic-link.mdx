@@ -16,16 +16,16 @@ Magic link or email link is a way to authenticate users without a password. When
     Add the magic link plugin to your server:
 
     ```ruby title="config/auth.rb"
-require "better_auth"
+    require "better_auth"
 
-auth = BetterAuth.auth(
-  secret: ENV.fetch("BETTER_AUTH_SECRET"),
-  base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
-  plugins: [
-    BetterAuth::Plugins.magic_link(send_magic_link: ->(data, _ctx) { MagicLinkMailer.deliver(data[:email], data[:url]) })
-  ]
-)
-```
+    auth = BetterAuth.auth(
+      secret: ENV.fetch("BETTER_AUTH_SECRET"),
+      base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
+      plugins: [
+        BetterAuth::Plugins.magic_link(send_magic_link: ->(data, _ctx) { MagicLinkMailer.deliver(data[:email], data[:url]) })
+      ]
+    )
+    ```
   </Step>
 
 </Steps>

@@ -14,16 +14,16 @@ The phone number plugin extends the authentication system by allowing users to s
     ### Add Plugin to the server
 
     ```ruby title="config/auth.rb"
-require "better_auth"
+    require "better_auth"
 
-auth = BetterAuth.auth(
-  secret: ENV.fetch("BETTER_AUTH_SECRET"),
-  base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
-  plugins: [
-    BetterAuth::Plugins.phone_number(send_otp: ->(data, _ctx) { Sms.deliver(data[:phone_number], data[:code]) })
-  ]
-)
-```
+    auth = BetterAuth.auth(
+      secret: ENV.fetch("BETTER_AUTH_SECRET"),
+      base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
+      plugins: [
+        BetterAuth::Plugins.phone_number(send_otp: ->(data, _ctx) { Sms.deliver(data[:phone_number], data[:code]) })
+      ]
+    )
+    ```
   </Step>
 
   <Step>
@@ -136,15 +136,22 @@ In addition to signing in a user using send-verify flow, you can also use phone 
 Already logged-in users can change their phone number to a new one. First, send an OTP to the new phone number:
 
 ```ruby title="server.rb"
-# Use the matching Ruby auth.api method for this flow.
-# HTTP paths and JSON keys keep the upstream wire shape.
+auth.api.send_phone_number_otp(
+  body: {phoneNumber: "+14155550123"}
+)
 ```
 
 Then verify the new phone number with `updatePhoneNumber: true`:
 
 ```ruby title="server.rb"
-# Use the matching Ruby auth.api method for this flow.
-# HTTP paths and JSON keys keep the upstream wire shape.
+auth.api.verify_phone_number(
+  headers: {"cookie" => session_cookie},
+  body: {
+    phoneNumber: "+14155550123",
+    code: otp_code,
+    updatePhoneNumber: true
+  }
+)
 ```
 
 ### Remove Phone Number
@@ -152,8 +159,10 @@ Then verify the new phone number with `updatePhoneNumber: true`:
 Logged-in users can release their phone number by passing `null` to `updateUser`. The plugin atomically clears the phone number and resets the verified flag, freeing the number so another account can claim it through the standard verification flow.
 
 ```ruby title="server.rb"
-# Use the matching Ruby auth.api method for this flow.
-# HTTP paths and JSON keys keep the upstream wire shape.
+auth.api.update_user(
+  headers: {"cookie" => session_cookie},
+  body: {phoneNumber: nil}
+)
 ```
 
 For security, non-null phone number updates through `updateUser` remain blocked. Changing to a different phone number always requires OTP verification via `verify` with `updatePhoneNumber: true`.
@@ -163,8 +172,13 @@ For security, non-null phone number updates through `updateUser` remain blocked.
 By default, the plugin creates a session for the user after verifying the phone number. You can disable this behavior by passing `disableSession: true` to the `verify` method.
 
 ```ruby title="server.rb"
-# Use the matching Ruby auth.api method for this flow.
-# HTTP paths and JSON keys keep the upstream wire shape.
+auth.api.verify_phone_number(
+  body: {
+    phoneNumber: "+14155550123",
+    code: otp_code,
+    disableSession: true
+  }
+)
 ```
 
 ### Request Password Reset
@@ -302,8 +316,18 @@ export const phoneNumberUserTableFields = [
 The phone number plugin includes a built-in protection against brute force attacks by limiting the number of verification attempts for each OTP code.
 
 ```ruby title="server.rb"
-# Use the matching Ruby auth.api method for this flow.
-# HTTP paths and JSON keys keep the upstream wire shape.
+3.times do
+  begin
+    auth.api.verify_phone_number(
+      body: {
+        phoneNumber: "+14155550123",
+        code: "000000"
+      }
+    )
+  rescue BetterAuth::APIError
+    next
+  end
+end
 ```
 
 When a user exceeds the allowed number of verification attempts:

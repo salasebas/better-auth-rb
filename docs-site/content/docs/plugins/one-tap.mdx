@@ -17,16 +17,16 @@ provides a simple way to integrate One Tap into your application, handling the s
     Add the One Tap plugin to your auth configuration:
 
     ```ruby title="config/auth.rb"
-require "better_auth"
+    require "better_auth"
 
-auth = BetterAuth.auth(
-  secret: ENV.fetch("BETTER_AUTH_SECRET"),
-  base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
-  plugins: [
-    BetterAuth::Plugins.one_tap(client_id: ENV.fetch("GOOGLE_CLIENT_ID"))
-  ]
-)
-```
+    auth = BetterAuth.auth(
+      secret: ENV.fetch("BETTER_AUTH_SECRET"),
+      base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
+      plugins: [
+        BetterAuth::Plugins.one_tap(client_id: ENV.fetch("GOOGLE_CLIENT_ID"))
+      ]
+    )
+    ```
   </Step>
 
 </Steps>
@@ -56,16 +56,22 @@ To render a "Sign In with Google" button instead of showing the automatic prompt
 <Tabs items={["Vanilla JS", "React Ref"]}>
   <Tab value="Vanilla JS">
     ```ruby title="server.rb"
-# Use the matching Ruby auth.api method for this flow.
-# HTTP paths and JSON keys keep the upstream wire shape.
-```
+    session = auth.api.one_tap_callback(
+      body: {id_token: params.fetch("credential")}
+    )
+
+    session[:user]
+    ```
   </Tab>
 
   <Tab value="React Ref">
     ```ruby title="server.rb"
-# Use the matching Ruby auth.api method for this flow.
-# HTTP paths and JSON keys keep the upstream wire shape.
-```
+    session = auth.api.one_tap_callback(
+      body: {id_token: params.fetch("credential")}
+    )
+
+    session[:token]
+    ```
   </Tab>
 </Tabs>
 
@@ -94,8 +100,11 @@ auth = BetterAuth.auth(
 To perform a hard redirect to a different page after login, use the callbackURL option:
 
 ```ruby title="server.rb"
-# Use the matching Ruby auth.api method for this flow.
-# HTTP paths and JSON keys keep the upstream wire shape.
+session = auth.api.one_tap_callback(
+  body: {id_token: params.fetch("credential")}
+)
+
+redirect_to "/dashboard"
 ```
 
 #### Handling Prompt Dismissals with Exponential Backoff

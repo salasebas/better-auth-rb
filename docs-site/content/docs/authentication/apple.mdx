@@ -74,8 +74,8 @@ description: Apple provider setup and usage in Better Auth Ruby.
     The Ruby port uses the `jwt` gem and Ruby OpenSSL support to generate the client secret JWT.
 
     ```ruby title="Gemfile"
-# The better_auth gem already depends on jwt for Apple client-secret JWTs.
-```
+    # The better_auth gem already depends on jwt for Apple client-secret JWTs.
+    ```
   </Step>
 
   <Step>
@@ -86,46 +86,46 @@ description: Apple provider setup and usage in Better Auth Ruby.
     You also need to add `https://appleid.apple.com` to the `trusted_origins` array in your auth instance configuration to allow communication with Apple's authentication servers.
 
     ```ruby title="config/auth.rb"
-require "better_auth"
-require "jwt"
-require "openssl"
+    require "better_auth"
+    require "jwt"
+    require "openssl"
 
-def generate_apple_client_secret(client_id:, team_id:, key_id:, private_key:)
-  now = Time.now.to_i
-  key = OpenSSL::PKey::EC.new(private_key)
+    def generate_apple_client_secret(client_id:, team_id:, key_id:, private_key:)
+      now = Time.now.to_i
+      key = OpenSSL::PKey::EC.new(private_key)
 
-  JWT.encode(
-    {
-      iss: team_id,
-      iat: now,
-      exp: now + 180 * 24 * 60 * 60,
-      aud: "https://appleid.apple.com",
-      sub: client_id
-    },
-    key,
-    "ES256",
-    { kid: key_id }
-  )
-end
+      JWT.encode(
+        {
+          iss: team_id,
+          iat: now,
+          exp: now + 180 * 24 * 60 * 60,
+          aud: "https://appleid.apple.com",
+          sub: client_id
+        },
+        key,
+        "ES256",
+        { kid: key_id }
+      )
+    end
 
-auth = BetterAuth.auth(
-  secret: ENV.fetch("BETTER_AUTH_SECRET"),
-  base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
-  social_providers: {
-    apple: BetterAuth::SocialProviders.apple(
-      client_id: ENV.fetch("APPLE_CLIENT_ID"),
-      client_secret: generate_apple_client_secret(
-        client_id: ENV.fetch("APPLE_CLIENT_ID"),
-        team_id: ENV.fetch("APPLE_TEAM_ID"),
-        key_id: ENV.fetch("APPLE_KEY_ID"),
-        private_key: ENV.fetch("APPLE_PRIVATE_KEY")
-      ),
-      app_bundle_identifier: ENV["APPLE_APP_BUNDLE_IDENTIFIER"]
+    auth = BetterAuth.auth(
+      secret: ENV.fetch("BETTER_AUTH_SECRET"),
+      base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
+      social_providers: {
+        apple: BetterAuth::SocialProviders.apple(
+          client_id: ENV.fetch("APPLE_CLIENT_ID"),
+          client_secret: generate_apple_client_secret(
+            client_id: ENV.fetch("APPLE_CLIENT_ID"),
+            team_id: ENV.fetch("APPLE_TEAM_ID"),
+            key_id: ENV.fetch("APPLE_KEY_ID"),
+            private_key: ENV.fetch("APPLE_PRIVATE_KEY")
+          ),
+          app_bundle_identifier: ENV["APPLE_APP_BUNDLE_IDENTIFIER"]
+        )
+      },
+      trusted_origins: ["https://appleid.apple.com"]
     )
-  },
-  trusted_origins: ["https://appleid.apple.com"]
-)
-```
+    ```
 
     On native iOS, it doesn't use the service ID but the app ID (bundle ID) as client ID, so if using the service ID as `client_id` in `auth.api.sign_in_social` with `id_token`, it throws an error: `JWTClaimValidationFailed: unexpected "aud" claim value`. So you need to provide the `app_bundle_identifier` when you want to sign in with Apple using the ID Token.
 

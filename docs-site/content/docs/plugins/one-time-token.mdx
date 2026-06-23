@@ -16,16 +16,16 @@ The One-Time Token (OTT) plugin provides functionality to generate and verify se
     To use the One-Time Token plugin, add it to your auth config.
 
     ```ruby title="config/auth.rb"
-require "better_auth"
+    require "better_auth"
 
-auth = BetterAuth.auth(
-  secret: ENV.fetch("BETTER_AUTH_SECRET"),
-  base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
-  plugins: [
-    BetterAuth::Plugins.one_time_token
-  ]
-)
-```
+    auth = BetterAuth.auth(
+      secret: ENV.fetch("BETTER_AUTH_SECRET"),
+      base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
+      plugins: [
+        BetterAuth::Plugins.one_time_token
+      ]
+    )
+    ```
   </Step>
 
 </Steps>
@@ -62,19 +62,27 @@ This will return the session that was attached to the token.
 
 ## Options
 
-These options can be configured when adding the `oneTimeToken` plugin:
+These options can be configured when adding the `one_time_token` plugin:
 
-* **`disableClientRequest`** (boolean): Optional. If `true`, the token will only be generated on the server side. Default: `false`.
-* **`expiresIn`** (number): Optional. The duration for which the token is valid in minutes. Default: `3`.
+* **`disable_client_request`** (`Boolean`): Optional. If `true`, the token will only be generated on the server side. Default: `false`.
+* **`expires_in`** (`Integer`): Optional. The duration for which the token is valid in minutes. Default: `3`.
 
-```ruby title="server.rb"
-# Use the Ruby auth.api method or HTTP endpoint documented in this section.
-# HTTP paths and JSON keys keep the upstream wire shape.
+```ruby title="config/auth.rb"
+auth = BetterAuth.auth(
+  secret: ENV.fetch("BETTER_AUTH_SECRET"),
+  base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
+  plugins: [
+    BetterAuth::Plugins.one_time_token(
+      disable_client_request: true,
+      expires_in: 5
+    )
+  ]
+)
 ```
 
-* **`generateToken`**: A custom token generator function that takes `session` object and a `ctx` as parameters.
+* **`generate_token`**: A custom token generator function that takes the session object and `ctx` as parameters.
 
-* **`storeToken`**: Optional. This option allows you to configure how the token is stored in your database.
+* **`store_token`**: Optional. This option allows you to configure how the token is stored in your database.
 
   * **`plain`**: The token is stored in plain text. (Default)
   * **`hashed`**: The token is hashed using the default hasher.
@@ -87,16 +95,30 @@ These options can be configured when adding the `oneTimeToken` plugin:
 Examples:
 
 ```ruby title="server.rb"
-# Use the Ruby auth.api method or HTTP endpoint documented in this section.
-# HTTP paths and JSON keys keep the upstream wire shape.
+generated = auth.api.generate_one_time_token(
+  headers: {"cookie" => session_cookie}
+)
+
+generated[:token]
 ```
 
 ```ruby title="server.rb"
-# Use the Ruby auth.api method or HTTP endpoint documented in this section.
-# HTTP paths and JSON keys keep the upstream wire shape.
+restored = auth.api.verify_one_time_token(
+  body: {token: generated[:token]}
+)
+
+restored[:user]
 ```
 
-```ruby title="server.rb"
-# Use the Ruby auth.api method or HTTP endpoint documented in this section.
-# HTTP paths and JSON keys keep the upstream wire shape.
+```ruby title="config/auth.rb"
+auth = BetterAuth.auth(
+  secret: ENV.fetch("BETTER_AUTH_SECRET"),
+  base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
+  plugins: [
+    BetterAuth::Plugins.one_time_token(
+      store_token: "hashed",
+      generate_token: ->(_session, _ctx) { SecureRandom.hex(24) }
+    )
+  ]
+)
 ```

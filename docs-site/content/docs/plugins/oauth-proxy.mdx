@@ -14,16 +14,16 @@ A proxy plugin that allows you to proxy OAuth requests. Useful for development a
     ### Add the plugin to your auth config
 
     ```ruby title="config/auth.rb"
-require "better_auth"
+    require "better_auth"
 
-auth = BetterAuth.auth(
-  secret: ENV.fetch("BETTER_AUTH_SECRET"),
-  base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
-  plugins: [
-    BetterAuth::Plugins.oauth_proxy
-  ]
-)
-```
+    auth = BetterAuth.auth(
+      secret: ENV.fetch("BETTER_AUTH_SECRET"),
+      base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
+      plugins: [
+        BetterAuth::Plugins.oauth_proxy
+      ]
+    )
+    ```
 
     The plugin will automatically route OAuth requests through your production server.
   </Step>
@@ -46,16 +46,16 @@ auth = BetterAuth.auth(
     Since preview and development servers redirect through production, you need to add them as `trustedOrigins` in your auth config:
 
     ```ruby title="config/auth.rb"
-require "better_auth"
+    require "better_auth"
 
-auth = BetterAuth.auth(
-  secret: ENV.fetch("BETTER_AUTH_SECRET"),
-  base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
-  plugins: [
-    BetterAuth::Plugins.oauth_proxy
-  ]
-)
-```
+    auth = BetterAuth.auth(
+      secret: ENV.fetch("BETTER_AUTH_SECRET"),
+      base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
+      plugins: [
+        BetterAuth::Plugins.oauth_proxy
+      ]
+    )
+    ```
   </Step>
 </Steps>
 
@@ -74,8 +74,14 @@ The plugin allows you to use a single OAuth client (registered with your product
 5. Preview server decrypts the profile, creates user/session in its own database, and sets the session cookie
 
 ```ruby title="server.rb"
-# Use the Ruby auth.api method or HTTP endpoint documented in this section.
-# HTTP paths and JSON keys keep the upstream wire shape.
+sign_in = auth.api.sign_in_social(
+  body: {
+    provider: "google",
+    callbackURL: "https://preview.example.com/dashboard"
+  }
+)
+
+redirect_to sign_in[:url]
 ```
 
 The encrypted profile data is passed via URL query parameters and can only be decrypted by servers sharing the same secret. This also allows preview deployments to use separate databases from production if needed.

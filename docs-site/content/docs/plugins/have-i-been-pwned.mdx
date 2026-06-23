@@ -28,8 +28,20 @@ auth = BetterAuth.auth(
 When a user attempts to create an account or update their password with a compromised password, they'll receive the following default error:
 
 ```ruby title="server.rb"
-# Use the Ruby auth.api method or HTTP endpoint documented in this section.
-# HTTP paths and JSON keys keep the upstream wire shape.
+begin
+  auth.api.sign_up_email(
+    body: {
+      email: "ada@example.com",
+      password: "compromised-password",
+      name: "Ada"
+    }
+  )
+rescue BetterAuth::APIError => error
+  error.code
+  # => "PASSWORD_COMPROMISED"
+  error.message
+  # => "The password you entered has been compromised. Please choose a different password."
+end
 ```
 
 ## Options

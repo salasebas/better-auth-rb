@@ -18,16 +18,16 @@ The JWT plugin provides endpoints to retrieve a JWT token and a JWKS endpoint to
     ### Add the plugin to your **auth** config
 
     ```ruby title="config/auth.rb"
-require "better_auth"
+    require "better_auth"
 
-auth = BetterAuth.auth(
-  secret: ENV.fetch("BETTER_AUTH_SECRET"),
-  base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
-  plugins: [
-    BetterAuth::Plugins.jwt
-  ]
-)
-```
+    auth = BetterAuth.auth(
+      secret: ENV.fetch("BETTER_AUTH_SECRET"),
+      base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
+      plugins: [
+        BetterAuth::Plugins.jwt
+      ]
+    )
+    ```
   </Step>
 
   <Step>
@@ -67,8 +67,11 @@ There are multiple ways to retrieve JWT tokens:
 1. **Using the server plugin (recommended)**
 
 ```ruby title="server.rb"
-# Use the Ruby auth.api method or HTTP endpoint documented in this section.
-# HTTP paths and JSON keys keep the upstream wire shape.
+token_response = auth.api.get_token(
+  headers: {"cookie" => request.env.fetch("HTTP_COOKIE", "")}
+)
+
+jwt = token_response[:token]
 ```
 
 This is the recommended approach for client applications that need JWT tokens for external API authentication.
@@ -78,24 +81,38 @@ This is the recommended approach for client applications that need JWT tokens fo
 To get the token, call the `/token` endpoint. This will return the following:
 
 ```ruby title="server.rb"
-# Use the Ruby auth.api method or HTTP endpoint documented in this section.
-# HTTP paths and JSON keys keep the upstream wire shape.
+require "json"
+require "net/http"
+require "uri"
+
+request = Net::HTTP::Get.new(URI("http://localhost:3000/api/auth/token"))
+request["cookie"] = session_cookie
+
+response = Net::HTTP.start(request.uri.hostname, request.uri.port) do |http|
+  http.request(request)
+end
+
+jwt = JSON.parse(response.body).fetch("token")
 ```
 
 Make sure to include the token in the `Authorization` header of your requests if the `bearer` plugin is added in your auth configuration.
 
 ```ruby title="server.rb"
-# Use the Ruby auth.api method or HTTP endpoint documented in this section.
-# HTTP paths and JSON keys keep the upstream wire shape.
+api_request = Net::HTTP::Get.new(URI("https://api.example.com/reports"))
+api_request["authorization"] = "Bearer #{jwt}"
 ```
 
 3. **From `set-auth-jwt` header**
 
-When you call `getSession` method, a JWT is returned in the `set-auth-jwt` header, which you can use to send to your services directly.
+When you call `get_session`, a JWT is returned in the `set-auth-jwt` header, which you can use to send to your services directly.
 
 ```ruby title="server.rb"
-# Use the Ruby auth.api method or HTTP endpoint documented in this section.
-# HTTP paths and JSON keys keep the upstream wire shape.
+_status, headers, _body = auth.api.get_session(
+  headers: {"cookie" => session_cookie},
+  as_response: true
+)
+
+jwt = headers.fetch("set-auth-jwt")
 ```
 
 ### Verifying the token
@@ -108,22 +125,34 @@ The key ID (`kid`) that was used to sign a JWT is included in the header of the 
 In case a JWT with a different `kid` is received, it is recommended to fetch the JWKS again.
 
 ```ruby title="server.rb"
-# Use the Ruby auth.api method or HTTP endpoint documented in this section.
-# HTTP paths and JSON keys keep the upstream wire shape.
+jwks = auth.api.get_jwks
+verified = auth.api.verify_jwt(body: {token: jwt})
+
+payload = verified[:payload]
+raise "Invalid token" unless payload
 ```
 
-#### Example using jose with remote JWKS
+#### Example using RubyAuth verification
 
 ```ruby title="server.rb"
-# Use the Ruby auth.api method or HTTP endpoint documented in this section.
-# HTTP paths and JSON keys keep the upstream wire shape.
+verified = auth.api.verify_jwt(
+  body: {
+    token: jwt,
+    issuer: "https://auth.example.com"
+  }
+)
+
+user_id = verified[:payload]&.fetch("sub")
 ```
 
 #### Example with local JWKS
 
 ```ruby title="server.rb"
-# Use the Ruby auth.api method or HTTP endpoint documented in this section.
-# HTTP paths and JSON keys keep the upstream wire shape.
+jwks = auth.api.get_jwks
+kid = JWT.decode(jwt, nil, false).last.fetch("kid")
+
+public_key = jwks[:keys].find { |key| key[:kid] == kid || key["kid"] == kid }
+raise "Unknown signing key" unless public_key
 ```
 
 ### OAuth Provider Mode
@@ -188,12 +217,15 @@ auth = BetterAuth.auth(
 
 **Client Configuration:**
 
-When using a custom `jwksPath` on the server, clients and services that fetch JWKS must use the same path. In Ruby, call `auth.api.get_jwks` or request that configured endpoint over HTTP:
+When using a custom `jwks_path` on the server, clients and services that fetch JWKS must use the same path. In Ruby, call `auth.api.get_jwks` or request that configured endpoint over HTTP:
 
 
 ```ruby title="server.rb"
-# Use the Ruby auth.api method or HTTP endpoint documented in this section.
-# HTTP paths and JSON keys keep the upstream wire shape.
+jwks = auth.api.get_jwks
+
+request = Net::HTTP::Get.new(
+  URI("https://auth.example.com/api/auth/.well-known/jwks.json")
+)
 ```
 
 <Callout type="warning">

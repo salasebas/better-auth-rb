@@ -1,0 +1,270 @@
+---
+title: API Key
+description: API Key plugin for Better Auth.
+---
+
+<RubyAuthDisclaimer />
+
+The API Key plugin allows you to create and manage API keys for your application. It provides a way to authenticate and authorize API requests by verifying API keys.
+
+## Features
+
+* Create, manage, and verify API keys
+* [Built-in rate limiting](/docs/plugins/api-key/advanced#rate-limiting)
+* [Custom expiration times, remaining count, and refill systems](/docs/plugins/api-key/advanced#remaining-refill-and-expiration)
+* [Metadata for API keys](/docs/plugins/api-key/advanced#metadata)
+* Custom prefix
+* [Sessions from API keys](/docs/plugins/api-key/advanced#sessions-from-api-keys)
+* [Secondary storage support](/docs/plugins/api-key/advanced#storage-modes) for high-performance API key lookups
+* [Multiple configurations](/docs/plugins/api-key/advanced#multiple-configurations) for different API key types
+* [Organization-owned API keys](/docs/plugins/api-key/advanced#organization-owned-api-keys) in addition to user-owned keys
+
+## Installation
+
+<Steps>
+  <Step>
+    ### Install the plugin
+
+    ```ruby title="Gemfile"
+    gem "better_auth-api-key"
+    ```
+  </Step>
+
+  <Step>
+    ### Add Plugin to the server
+
+    ```ruby title="config/auth.rb"
+    require "better_auth"
+    require "better_auth/api_key"
+
+    auth = BetterAuth.auth(
+      secret: ENV.fetch("BETTER_AUTH_SECRET"),
+      base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
+      plugins: [
+        BetterAuth::Plugins.api_key(
+          enable_session_for_api_keys: true
+        )
+      ]
+    )
+    ```
+  </Step>
+
+  <Step>
+    ### Migrate the database
+
+    Run the migration or generate the schema to add the necessary fields and tables to the database.
+
+    <Tabs items={["migrate", "generate"]}>
+      <Tab value="migrate">
+        ```bash
+        bundle exec better-auth migrate --cwd . --config config/better_auth.rb --yes
+        ```
+      </Tab>
+
+      <Tab value="generate">
+        ```bash
+        bundle exec better-auth generate --cwd . --dialect postgres --output db/better_auth/schema.sql --config config/better_auth.rb
+        ```
+      </Tab>
+    </Tabs>
+
+    See the [Schema](/docs/plugins/api-key/reference#schema) section to add the fields manually.
+  </Step>
+</Steps>
+
+## Usage
+
+You can view the list of API Key plugin options [here](/docs/plugins/api-key/reference#api-key-plugin-options).
+
+### Create an API key
+
+`POST /api-key/create`
+
+If you're creating an API key on the server, without access to headers, you must pass the `userId` property (for user-owned keys) or `organizationId` (for organization-owned keys).
+
+```ruby
+result = auth.api.create_api_key(
+  headers: {"cookie" => request.env["HTTP_COOKIE"]},
+  body: {
+    name: "Production key",
+    expiresIn: 60 * 60 * 24 * 30,
+    metadata: {plan: "premium"},
+    permissions: {project: ["read"]}
+  }
+)
+```
+
+The create body accepts the upstream public wire keys: `configId`, `name`, `expiresIn`, `userId`, `organizationId`, `prefix`, `remaining`, `metadata`, `refillAmount`, `refillInterval`, `rateLimitTimeWindow`, `rateLimitMax`, `rateLimitEnabled`, and `permissions`.
+
+<Callout>API keys can be owned by either a user or an organization, depending on the configuration's `references` setting.</Callout>
+
+#### Result
+
+It'll return the `ApiKey` object which includes the `key` value for you to use. Otherwise if it throws, it will throw an `APIError`.
+
+```ruby
+result[:key]
+result[:configId]
+result[:referenceId]
+```
+
+***
+
+### Verify an API key
+
+`POST /api-key/verify`
+
+```ruby
+result = auth.api.verify_api_key(
+  body: {
+    key: params.fetch("api_key"),
+    permissions: {project: ["read"]}
+  }
+)
+```
+
+#### Result
+
+```ruby
+{
+  valid: true,
+  error: nil,
+  key: {
+    id: "api_key_id",
+    configId: "default",
+    referenceId: "user_id"
+  }
+}
+```
+
+***
+
+### Get an API key
+
+`GET /api-key/get`
+
+Requires a session.
+
+```ruby
+api_key = auth.api.get_api_key(
+  headers: {"cookie" => request.env["HTTP_COOKIE"]},
+  query: {
+    id: params.fetch("id"),
+    configId: "default"
+  }
+)
+```
+
+#### Result
+
+You'll receive everything about the API key details, except for the `key` value itself. If it fails, it will throw an `APIError`.
+
+***
+
+### Update an API key
+
+`POST /api-key/update`
+
+```ruby
+api_key = auth.api.update_api_key(
+  headers: {"cookie" => request.env["HTTP_COOKIE"]},
+  body: {
+    keyId: params.fetch("key_id"),
+    name: "Renamed key",
+    enabled: true,
+    permissions: {project: ["read", "write"]}
+  }
+)
+```
+
+The update body accepts `keyId`, `configId`, `userId`, `name`, `expiresIn`, `remaining`, `metadata`, `refillAmount`, `refillInterval`, `rateLimitTimeWindow`, `rateLimitMax`, `rateLimitEnabled`, `permissions`, and `enabled`.
+
+***
+
+### Delete an API key
+
+`POST /api-key/delete`
+
+```ruby
+auth.api.delete_api_key(
+  headers: {"cookie" => request.env["HTTP_COOKIE"]},
+  body: {
+    keyId: params.fetch("key_id"),
+    configId: "default"
+  }
+)
+```
+
+#### Result
+
+```ruby
+{success: true}
+```
+
+***
+
+### List API keys
+
+`GET /api-key/list`
+
+Requires a session.
+
+```ruby
+keys = auth.api.list_api_keys(
+  headers: {"cookie" => request.env["HTTP_COOKIE"]},
+  query: {
+    configId: "default",
+    limit: 20,
+    offset: 0,
+    sortBy: "createdAt",
+    sortDirection: "desc"
+  }
+)
+```
+
+For organization-owned keys, pass `organizationId` in the query.
+
+#### Result
+
+```ruby
+{
+  apiKeys: [
+    {
+      id: "api_key_id",
+      configId: "default",
+      referenceId: "user_id"
+    }
+  ],
+  total: 1,
+  limit: 20,
+  offset: 0
+}
+```
+
+***
+
+### Delete expired API keys
+
+`POST /api-key/delete-all-expired-api-keys`
+
+```ruby
+auth.api.delete_all_expired_api_keys
+```
+
+#### Result
+
+```ruby
+{success: true, error: nil}
+```
+
+## Next Steps
+
+<Cards>
+  <Card href="/docs/plugins/api-key/advanced" title="Advanced Features">
+    Sessions, multiple configurations, organization keys, storage, rate limiting, and more.
+  </Card>
+
+  <Card href="/docs/plugins/api-key/reference" title="Reference">
+    Plugin options, permissions, and schema.
+  </Card>
+</Cards>

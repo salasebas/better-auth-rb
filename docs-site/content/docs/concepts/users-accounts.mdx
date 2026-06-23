@@ -98,7 +98,7 @@ user: {
 
 If a verification sender is configured, Better Auth sends a normal verification link for the new email after the update.
 
-#### Client Usage
+#### HTTP Usage
 
 HTTP clients call:
 
@@ -204,6 +204,8 @@ Deletion requires one of:
 - A valid delete-account verification token.
 - A fresh session when no password or token is supplied.
 
+When a password is provided, RubyAuth verifies the credential account before deleting. When a verification sender is configured, the delete route requires the token from that email before it deletes the user.
+
 ### Callbacks
 
 ```ruby
@@ -223,8 +225,10 @@ Accounts represent credentials and linked OAuth providers.
 ### List User Accounts
 
 ```ruby
-auth.api.list_accounts(headers: {"cookie" => cookie})
+accounts = auth.api.list_accounts(headers: {"cookie" => cookie})
 ```
+
+The response omits sensitive token and password fields. OAuth accounts include provider identifiers, scopes, and expiry metadata that can be used to display connected accounts.
 
 ### Token Encryption
 
@@ -237,6 +241,24 @@ account: {
 ```
 
 `get_access_token` returns decrypted access tokens when the current user has access.
+
+```ruby
+token = auth.api.get_access_token(
+  headers: {"cookie" => cookie},
+  query: {
+    providerId: "github",
+    accountId: "github-user-id"
+  }
+)
+
+refreshed = auth.api.refresh_token(
+  headers: {"cookie" => cookie},
+  body: {
+    providerId: "github",
+    accountId: "github-user-id"
+  }
+)
+```
 
 ### Account Linking
 
@@ -268,10 +290,12 @@ account: {
 }
 ```
 
+Forced linking is only appropriate for providers whose email or subject claims your app trusts. If the provider does not verify ownership, leave automatic linking disabled and require an explicit user action.
+
 #### Manually Linking Accounts
 
 ```ruby
-auth.api.link_social(
+link = auth.api.link_social(
   headers: {"cookie" => cookie},
   body: {
     provider: "github",
@@ -281,6 +305,8 @@ auth.api.link_social(
 ```
 
 Native ID-token linking is available for providers with ID token verification.
+
+For redirect-based linking, send the user to the returned URL and let the provider callback complete the link. RubyAuth rejects unsafe callback URLs and accounts owned by another user.
 
 ### Account Unlinking
 
@@ -295,3 +321,5 @@ auth.api.unlink_account(
 ```
 
 By default, Better Auth prevents unlinking the user's last account. Set `account.account_linking.allow_unlinking_all` only when your app has another recovery path.
+
+Unlinking requires a fresh sensitive session and only removes the account owned by the current user.

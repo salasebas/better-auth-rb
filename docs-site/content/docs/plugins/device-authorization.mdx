@@ -40,16 +40,16 @@ This will demonstrate the complete device authorization flow by:
     Add the device authorization plugin to your server configuration.
 
     ```ruby title="config/auth.rb"
-require "better_auth"
+    require "better_auth"
 
-auth = BetterAuth.auth(
-  secret: ENV.fetch("BETTER_AUTH_SECRET"),
-  base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
-  plugins: [
-    BetterAuth::Plugins.device_authorization
-  ]
-)
-```
+    auth = BetterAuth.auth(
+      secret: ENV.fetch("BETTER_AUTH_SECRET"),
+      base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
+      plugins: [
+        BetterAuth::Plugins.device_authorization
+      ]
+    )
+    ```
   </Step>
 
   <Step>
@@ -109,8 +109,15 @@ To initiate device authorization, call `device.code` with the client ID:
 Example usage:
 
 ```ruby title="server.rb"
-# Use the Ruby auth.api method or HTTP endpoint documented in this section.
-# HTTP paths and JSON keys keep the upstream wire shape.
+issued = auth.api.device_code(
+  body: {
+    client_id: "demo-cli",
+    scope: "openid profile email"
+  }
+)
+
+puts "Visit #{issued[:verification_uri]}"
+puts "Enter code: #{issued[:user_code]}"
 ```
 
 ### Polling for Token
@@ -139,8 +146,19 @@ After displaying the user code, poll for the access token:
 Example polling implementation:
 
 ```ruby title="server.rb"
-# Use the Ruby auth.api method or HTTP endpoint documented in this section.
-# HTTP paths and JSON keys keep the upstream wire shape.
+begin
+  token = auth.api.device_token(
+    body: {
+      grant_type: "urn:ietf:params:oauth:grant-type:device_code",
+      device_code: issued[:device_code],
+      client_id: "demo-cli"
+    }
+  )
+
+  access_token = token[:access_token]
+rescue BetterAuth::APIError => error
+  raise unless error.code == "authorization_pending"
+end
 ```
 
 ### User Authorization Flow
@@ -157,8 +175,24 @@ The user authorization flow requires two steps:
 Create a page where users can enter their code:
 
 ```ruby title="server.rb"
-# Use the Ruby auth.api method or HTTP endpoint documented in this section.
-# HTTP paths and JSON keys keep the upstream wire shape.
+class DeviceVerificationPage
+  def initialize(auth)
+    @auth = auth
+  end
+
+  def call(env)
+    request = Rack::Request.new(env)
+    user_code = request.params["user_code"]
+
+    verification = @auth.api.device_verify(query: {user_code: user_code})
+
+    [200, {"content-type" => "text/plain"}, [
+      "Device request is #{verification[:status]}"
+    ]]
+  rescue BetterAuth::APIError
+    [400, {"content-type" => "text/plain"}, ["Invalid or expired code"]]
+  end
+end
 ```
 
 ### Approving or Denying Device
@@ -194,8 +228,20 @@ Users must be authenticated to approve or deny device authorization requests:
 #### Example Approval Page
 
 ```ruby title="server.rb"
-# Use the Ruby auth.api method or HTTP endpoint documented in this section.
-# HTTP paths and JSON keys keep the upstream wire shape.
+cookie = request.env.fetch("HTTP_COOKIE", "")
+user_code = request.params.fetch("user_code")
+
+if request.post? && request.params["decision"] == "approve"
+  auth.api.device_approve(
+    headers: {"cookie" => cookie},
+    body: {userCode: user_code}
+  )
+else
+  auth.api.device_deny(
+    headers: {"cookie" => cookie},
+    body: {userCode: user_code}
+  )
+end
 ```
 
 ## Advanced Configuration
@@ -204,18 +250,36 @@ Users must be authenticated to approve or deny device authorization requests:
 
 You can validate client IDs to ensure only authorized applications can use the device flow:
 
-```ruby title="server.rb"
-# Use the Ruby auth.api method or HTTP endpoint documented in this section.
-# HTTP paths and JSON keys keep the upstream wire shape.
+```ruby title="config/auth.rb"
+auth = BetterAuth.auth(
+  secret: ENV.fetch("BETTER_AUTH_SECRET"),
+  base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
+  plugins: [
+    BetterAuth::Plugins.device_authorization(
+      verification_uri: "/activate",
+      validate_client: ->(client_id) {
+        %w[demo-cli tv-app].include?(client_id)
+      }
+    )
+  ]
+)
 ```
 
 ### Custom Code Generation
 
 Customize how device and user codes are generated:
 
-```ruby title="server.rb"
-# Use the Ruby auth.api method or HTTP endpoint documented in this section.
-# HTTP paths and JSON keys keep the upstream wire shape.
+```ruby title="config/auth.rb"
+auth = BetterAuth.auth(
+  secret: ENV.fetch("BETTER_AUTH_SECRET"),
+  base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
+  plugins: [
+    BetterAuth::Plugins.device_authorization(
+      generate_device_code: -> { SecureRandom.alphanumeric(48) },
+      generate_user_code: -> { "ABCD-EFGH" }
+    )
+  ]
+)
 ```
 
 ## Error Handling

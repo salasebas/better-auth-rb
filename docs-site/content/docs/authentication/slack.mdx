@@ -28,19 +28,19 @@ description: Slack provider setup and usage in Better Auth Ruby.
     To configure the provider, you need to pass the `client_id` and `client_secret` to `BetterAuth::SocialProviders.slack` in your auth configuration.
 
     ```ruby title="config/auth.rb"
-require "better_auth"
+    require "better_auth"
 
-auth = BetterAuth.auth(
-  secret: ENV.fetch("BETTER_AUTH_SECRET"),
-  base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
-  social_providers: {
-    slack: BetterAuth::SocialProviders.slack(
-      client_id: ENV.fetch("SLACK_CLIENT_ID"),
-      client_secret: ENV.fetch("SLACK_CLIENT_SECRET")
+    auth = BetterAuth.auth(
+      secret: ENV.fetch("BETTER_AUTH_SECRET"),
+      base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
+      social_providers: {
+        slack: BetterAuth::SocialProviders.slack(
+          client_id: ENV.fetch("SLACK_CLIENT_ID"),
+          client_secret: ENV.fetch("SLACK_CLIENT_SECRET")
+        )
+      }
     )
-  }
-)
-```
+    ```
   </Step>
 </Steps>
 

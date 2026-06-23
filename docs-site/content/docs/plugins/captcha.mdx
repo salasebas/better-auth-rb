@@ -23,16 +23,16 @@ The **Captcha Plugin** integrates bot protection into your RubyAuth system by ad
     ### Add the plugin to your **auth** config
 
     ```ruby title="config/auth.rb"
-require "better_auth"
+    require "better_auth"
 
-auth = BetterAuth.auth(
-  secret: ENV.fetch("BETTER_AUTH_SECRET"),
-  base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
-  plugins: [
-    BetterAuth::Plugins.captcha(provider: "cloudflare-turnstile", secret_key: ENV.fetch("TURNSTILE_SECRET_KEY"))
-  ]
-)
-```
+    auth = BetterAuth.auth(
+      secret: ENV.fetch("BETTER_AUTH_SECRET"),
+      base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
+      plugins: [
+        BetterAuth::Plugins.captcha(provider: "cloudflare-turnstile", secret_key: ENV.fetch("TURNSTILE_SECRET_KEY"))
+      ]
+    )
+    ```
   </Step>
 
   <Step>
@@ -45,9 +45,14 @@ auth = BetterAuth.auth(
     Add the captcha token to your request headers for all protected endpoints. This example shows how to include it in a `signIn` request:
 
     ```ruby title="server.rb"
-# Use the Ruby auth.api method or HTTP endpoint documented in this section.
-# HTTP paths and JSON keys keep the upstream wire shape.
-```
+    auth.api.sign_in_email(
+      headers: {"x-captcha-response" => captcha_token},
+      body: {
+        email: "ada@example.com",
+        password: "password123"
+      }
+    )
+    ```
 
     * To implement Cloudflare Turnstile on the client side, follow the official [Cloudflare Turnstile documentation](https://developers.cloudflare.com/turnstile/) or use a library like [react-turnstile](https://www.npmjs.com/package/@marsidev/react-turnstile).
     * To implement Google reCAPTCHA on the client side, follow the official [Google reCAPTCHA documentation](https://developers.google.com/recaptcha/intro) or use libraries like [react-google-recaptcha](https://www.npmjs.com/package/react-google-recaptcha) (v2) and [react-google-recaptcha-v3](https://www.npmjs.com/package/react-google-recaptcha-v3) (v3).

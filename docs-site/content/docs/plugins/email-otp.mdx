@@ -16,16 +16,16 @@ The Email OTP plugin allows user to sign in, verify their email, or reset their 
     Add the `emailOTP` plugin to your auth config and implement the `sendVerificationOTP()` method.
 
     ```ruby title="config/auth.rb"
-require "better_auth"
+    require "better_auth"
 
-auth = BetterAuth.auth(
-  secret: ENV.fetch("BETTER_AUTH_SECRET"),
-  base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
-  plugins: [
-    BetterAuth::Plugins.email_otp(send_verification_otp: ->(data, _ctx) { OtpMailer.deliver(data[:email], data[:otp]) })
-  ]
-)
-```
+    auth = BetterAuth.auth(
+      secret: ENV.fetch("BETTER_AUTH_SECRET"),
+      base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
+      plugins: [
+        BetterAuth::Plugins.email_otp(send_verification_otp: ->(data, _ctx) { OtpMailer.deliver(data[:email], data[:otp]) })
+      ]
+    )
+    ```
   </Step>
 
 </Steps>
