@@ -46,6 +46,18 @@ module BetterAuth
       runtime_fetch(:base_url, @base_url)
     end
 
+    def token_link_base_url
+      if unsafe_request_inferred_token_link_base_url?
+        raise APIError.new(
+          "INTERNAL_SERVER_ERROR",
+          code: "TOKEN_LINK_BASE_URL_NOT_CONFIGURED",
+          message: "Token links require an explicit base_url or a dynamic base_url with allowed_hosts in production."
+        )
+      end
+
+      base_url
+    end
+
     def trusted_origins
       runtime_fetch(:trusted_origins, @trusted_origins)
     end
@@ -194,6 +206,13 @@ module BetterAuth
     end
 
     private
+
+    def unsafe_request_inferred_token_link_base_url?
+      options.production? &&
+        @base_url.to_s.empty? &&
+        !options.dynamic_base_url? &&
+        !options.advanced[:allow_unsafe_token_link_base_url_inference]
+    end
 
     def inferred_base_url(request)
       origin = inferred_origin(request)

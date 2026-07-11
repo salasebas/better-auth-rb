@@ -29,6 +29,7 @@ module BetterAuth
       ) do |ctx|
         sender = ctx.context.options.email_verification[:send_verification_email]
         raise APIError.new("BAD_REQUEST", message: BASE_ERROR_CODES["VERIFICATION_EMAIL_NOT_ENABLED"]) unless sender.respond_to?(:call)
+        ctx.context.token_link_base_url
 
         body = normalize_hash(ctx.body)
         email = body["email"].to_s.downcase
@@ -95,6 +96,7 @@ module BetterAuth
         payload = verify_email_token(ctx, token, callback_url)
         email = payload["email"].to_s.downcase
         update_to = payload["updateTo"] || payload["update_to"]
+        preflight_follow_up_verification_token_link!(ctx, payload, update_to)
         user_data = ctx.context.internal_adapter.find_user_by_email(email)
         return redirect_or_error(ctx, callback_url, "user_not_found") unless user_data
 
@@ -139,7 +141,7 @@ module BetterAuth
     def self.send_verification_email_payload(ctx, user, callback_url)
       token = create_email_verification_token(ctx, user["email"])
       callback = URI.encode_www_form_component(callback_url || "/")
-      url = "#{ctx.context.base_url}/verify-email?token=#{URI.encode_www_form_component(token)}&callbackURL=#{callback}"
+      url = "#{ctx.context.token_link_base_url}/verify-email?token=#{URI.encode_www_form_component(token)}&callbackURL=#{callback}"
       ctx.context.options.email_verification[:send_verification_email].call({user: user, url: url, token: token}, ctx.request)
     end
 
@@ -149,8 +151,16 @@ module BetterAuth
 
       token = create_email_verification_token(ctx, user["email"], update_to: update_to, extra: {"requestType" => "change-email-verification"})
       callback = URI.encode_www_form_component(callback_url || "/")
-      url = "#{ctx.context.base_url}/verify-email?token=#{URI.encode_www_form_component(token)}&callbackURL=#{callback}"
+      url = "#{ctx.context.token_link_base_url}/verify-email?token=#{URI.encode_www_form_component(token)}&callbackURL=#{callback}"
       sender.call({user: user.merge("email" => update_to), url: url, token: token}, ctx.request)
+    end
+
+    def self.preflight_follow_up_verification_token_link!(ctx, payload, update_to)
+      return unless update_to
+      return unless ctx.context.options.email_verification[:send_verification_email].respond_to?(:call)
+
+      request_type = payload["requestType"] || payload["request_type"]
+      ctx.context.token_link_base_url unless request_type == "change-email-verification"
     end
 
     def self.create_email_verification_token(ctx, email, update_to: nil, extra: {})

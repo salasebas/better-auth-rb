@@ -58,6 +58,11 @@ base_url: {
 }
 ```
 
+In production, outbound links containing password-reset, email-verification,
+account-deletion, or magic-link tokens require a static `base_url` or the
+dynamic `allowed_hosts` form. RubyAuth rejects these operations rather than
+putting an untrusted request host into a security-token link.
+
 ## base_path
 
 Mount path prefix for auth routes. Default: `"/api/auth"`.
@@ -169,6 +174,11 @@ rate_limit: {
 ## advanced
 
 IP address headers, secure cookies, default cookie attributes, ID generation overrides.
+
+`allow_unsafe_token_link_base_url_inference` restores request-host inference for
+production token links when no static or dynamic `base_url` is configured. It
+is intended only as a temporary compatibility escape hatch and is a security
+risk unless the ingress strictly validates `Host` and forwarded host headers.
 
 <UnderDevelopment>
   Upstream `crossSubDomainCookies` / `customizeDefaultErrorPage` theming is not fully ported — use `advanced` keys documented in `configuration.rb` only.

@@ -58,6 +58,7 @@ module BetterAuth
         if email_config[:enabled] != true || email_config[:disable_sign_up]
           raise APIError.new("BAD_REQUEST", code: "EMAIL_PASSWORD_SIGN_UP_DISABLED", message: BASE_ERROR_CODES["EMAIL_PASSWORD_SIGN_UP_DISABLED"])
         end
+        preflight_sign_up_token_link!(ctx)
 
         body = normalize_hash(ctx.body)
         name = body["name"].to_s
@@ -242,8 +243,15 @@ module BetterAuth
         expires_in: verification[:expires_in] || 3600
       )
       callback = URI.encode_www_form_component(callback_url || "/")
-      url = "#{ctx.context.base_url}/verify-email?token=#{URI.encode_www_form_component(token)}&callbackURL=#{callback}"
+      url = "#{ctx.context.token_link_base_url}/verify-email?token=#{URI.encode_www_form_component(token)}&callbackURL=#{callback}"
       sender.call({user: user, url: url, token: token}, ctx.request)
+    end
+
+    def self.preflight_sign_up_token_link!(ctx)
+      verification = ctx.context.options.email_verification
+      password_config = ctx.context.options.email_and_password
+      send_on_sign_up = verification.key?(:send_on_sign_up) ? verification[:send_on_sign_up] : password_config[:require_email_verification]
+      ctx.context.token_link_base_url if send_on_sign_up && verification[:send_verification_email].respond_to?(:call)
     end
 
     def self.session_overrides(ctx)

@@ -61,10 +61,19 @@ gem install better_auth
 require 'better_auth'
 
 auth = BetterAuth.auth(
+  base_url: ENV.fetch("BETTER_AUTH_URL"),
   secret: ENV.fetch("BETTER_AUTH_SECRET"),
   database: :memory
 )
 ```
+
+In production, token-bearing email links require either a static `base_url`
+(including `BETTER_AUTH_URL`) or a dynamic `base_url` with `allowed_hosts`.
+Request-host inference remains available for other routes and in development.
+Legacy deployments can opt out with
+`advanced: { allow_unsafe_token_link_base_url_inference: true }`, but doing so
+allows request headers to select the origin used in security-token links and is
+not recommended.
 
 ### Secret Rotation
 

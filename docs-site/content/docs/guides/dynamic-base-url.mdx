@@ -58,6 +58,18 @@ Misconfigured allowlists raise at boot: `baseURL.allowedHosts cannot be empty`.
 
 OAuth redirect mismatches usually mean the resolved host was not in `allowed_hosts` — check provider console redirect URIs against the resolved URL.
 
+## Token links in production
+
+Production routes that send absolute links containing security tokens require
+this allowlisted form or a static `base_url`. General request handling can still
+infer a base URL, but RubyAuth will not use an unallowlisted request host for
+password-reset, email-verification, account-deletion, or magic-link URLs.
+
+For a temporary legacy migration, you can set
+`advanced: { allow_unsafe_token_link_base_url_inference: true }`. This restores
+request-host inference for token links and should only be used when your ingress
+strictly validates `Host` and forwarded host headers.
+
 ## Related
 
 - [Options — base_url](/docs/reference/options#base_url)
