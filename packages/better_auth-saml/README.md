@@ -21,14 +21,15 @@ require "better_auth/sso"
 
 BetterAuth.auth(
   plugins: [
-    BetterAuth::Plugins.sso(
-      BetterAuth::SSO::SAMLHooks.merge_options(
-        {},
-        BetterAuth::SSO::SAML.sso_options
-      )
-    )
+    BetterAuth::Plugins.sso
   ]
 )
 ```
+
+With `better_auth-saml` in the bundle, the public SSO factory automatically wires
+`ruby-saml` for AuthnRequest generation and SAML response verification. No manual
+option merge is required. SAML responses without a callable parser are rejected;
+there is no JSON/base64 assertion fallback. Custom parsers are supported only when
+configured explicitly and must validate the SAML response before returning attributes.
 
 SAML is a protocol used by SSO; it is not the same feature as SSO itself. See `better_auth-sso` for provider management and composed routes.

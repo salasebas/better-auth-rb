@@ -115,6 +115,44 @@ class BetterAuthPluginsSSOSAMLTest < Minitest::Test
     assert_nil auth.context.internal_adapter.find_user_by_email("saml@example.com")
   end
 
+  def test_saml_response_parser_rejects_base64_json_without_a_callable_parser
+    response = Base64.strict_encode64(JSON.generate({email: "forged@example.com", id: "forged"}))
+
+    error = assert_raises(BetterAuth::APIError) do
+      BetterAuth::Plugins.sso_parse_saml_response(response)
+    end
+
+    assert_equal 400, error.status_code
+    assert_equal "Invalid SAML response", error.message
+  end
+
+  def test_saml_route_rejects_base64_json_when_parser_is_explicitly_disabled
+    auth = build_auth(
+      plugins: [
+        BetterAuth::Plugins.sso(saml: {parse_response: nil})
+      ]
+    )
+    cookie = sign_up_cookie(auth)
+    auth.api.register_sso_provider(
+      headers: {"cookie" => cookie},
+      body: {
+        providerId: "saml",
+        issuer: "https://idp.example.com",
+        domain: "example.com",
+        samlConfig: {entryPoint: "https://idp.example.com/sso", cert: "test-cert", audience: "better-auth-ruby"}
+      }
+    )
+    response = Base64.strict_encode64(JSON.generate({email: "forged@example.com", name: "Forged User", id: "forged"}))
+
+    error = assert_raises(BetterAuth::APIError) do
+      auth.api.acs_endpoint(params: {providerId: "saml"}, body: {SAMLResponse: response})
+    end
+
+    assert_equal 400, error.status_code
+    assert_equal "Invalid SAML response", error.message
+    assert_nil auth.context.internal_adapter.find_user_by_email("forged@example.com")
+  end
+
   def test_saml_rejects_malicious_relay_state_and_replayed_response
     auth = build_auth(
       plugins: [
