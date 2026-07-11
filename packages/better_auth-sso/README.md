@@ -35,25 +35,24 @@ SAML loads automatically when `better_auth-saml` is in the bundle, when
 add `gem "better_auth-saml"` before using SAML providers.
 
 SAML XML validation is provided by `better_auth-saml` and backed by `ruby-saml`.
-Production XML SAML deployments should configure `BetterAuth::SSO::SAML.sso_options`
-or compatible SAML hooks so AuthnRequest generation and SAMLResponse parsing use
-the real XML/SAML boundary instead of the lightweight JSON/base64 fallback used by
-local tests:
+When that gem is available, the public `BetterAuth::Plugins.sso` factory loads the
+SAML integration automatically. AuthnRequest generation and SAMLResponse parsing
+then use `ruby-saml` verification; no manual option merge is required:
 
 ```ruby
 require "better_auth/sso"
 
 BetterAuth.auth(
   plugins: [
-    BetterAuth::Plugins.sso(
-      BetterAuth::SSO::SAMLHooks.merge_options(
-        {},
-        BetterAuth::SSO::SAML.sso_options
-      )
-    )
+    BetterAuth::Plugins.sso
   ]
 )
 ```
+
+SAML responses require a callable parser. The package does not decode JSON/base64
+assertions as a fallback. Custom parsers remain available for explicitly configured
+integrations and tests; production parsers must validate the SAML response before
+returning attributes.
 
 ## SAML Single Logout
 
@@ -63,7 +62,8 @@ SAML SLO follows upstream route shapes when `saml.enableSingleLogout` is enabled
 - `GET|POST /sso/saml2/sp/slo/:providerId` handles IdP LogoutRequest and LogoutResponse payloads.
 - ACS stores SAML `NameID` and `SessionIndex` lookup records so IdP-initiated logout can revoke the matching Better Auth session.
 
-Ruby keeps the lightweight JSON/base64 fallback used by the local SAML test adapter, and real XML deployments should configure `BetterAuth::SSO::SAML.sso_options` or compatible SAML hooks.
+With `better_auth-saml` installed, SAML ACS responses are verified by `ruby-saml`
+before they reach the SSO flow.
 
 SCIM is a separate provisioning feature and lives in `better_auth-scim`.
 
