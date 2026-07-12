@@ -196,6 +196,90 @@ class BetterAuthSchemaSQLTest < Minitest::Test
     assert_includes sql, 'FOREIGN KEY ("client_id") REFERENCES "oauth_clients" ("client_id") ON DELETE CASCADE'
   end
 
+  def test_disabled_plugin_table_remains_available_at_runtime_but_is_omitted_from_sql
+    plugin = BetterAuth::Plugin.new(
+      id: "external-audit-log",
+      schema: {
+        auditLog: {
+          model_name: "audit_logs",
+          disable_migration: true,
+          fields: {
+            userId: {type: "string", required: true, references: {model: "user", field: "id"}, index: true},
+            eventType: {type: "string", required: true, unique: true}
+          }
+        }
+      }
+    )
+    config = BetterAuth::Configuration.new(secret: SECRET, database: :memory, plugins: [plugin])
+
+    runtime_tables = BetterAuth::Schema.auth_tables(config)
+    migration_tables = BetterAuth::Schema.migration_tables(config)
+    sql = BetterAuth::Schema::SQL.create_statements(config, dialect: :postgres).join("\n")
+    adapter = BetterAuth::Adapters::Memory.new(config)
+    record = adapter.create(model: "auditLog", data: {userId: "user-1", eventType: "login"})
+
+    assert runtime_tables.key?("auditLog")
+    assert_equal true, runtime_tables.dig("auditLog", :disable_migration)
+    refute migration_tables.key?("audit_logs")
+    refute_includes sql, 'CREATE TABLE IF NOT EXISTS "audit_logs"'
+    refute_includes sql, "index_audit_logs_on_user_id"
+    assert_equal "login", record.fetch("eventType")
+  end
+
+  def test_camel_case_disable_migration_on_core_extension_omits_the_core_physical_table
+    config = BetterAuth::Configuration.new(
+      secret: SECRET,
+      database: :memory,
+      plugins: [
+        {
+          id: "external-users",
+          schema: {
+            user: {
+              disableMigration: true,
+              fields: {externalId: {type: "string", required: false, index: true}}
+            }
+          }
+        }
+      ]
+    )
+
+    runtime_user = BetterAuth::Schema.auth_tables(config).fetch("user")
+    sql = BetterAuth::Schema::SQL.create_statements(config, dialect: :postgres).join("\n")
+
+    assert_equal true, runtime_user[:disable_migration]
+    assert runtime_user.fetch(:fields).key?("externalId")
+    refute BetterAuth::Schema.migration_tables(config).key?("users")
+    refute_includes sql, 'CREATE TABLE IF NOT EXISTS "users"'
+    refute_includes sql, "index_users_on_external_id"
+  end
+
+  def test_any_disabled_contributor_omits_a_shared_physical_table
+    plugin = BetterAuth::Plugin.new(
+      id: "shared-external-table",
+      schema: {
+        managedContributor: {
+          model_name: "shared_records",
+          disable_migration: false,
+          fields: {managedValue: {type: "string", required: false, index: true}}
+        },
+        externalContributor: {
+          model_name: "shared_records",
+          disable_migration: true,
+          fields: {externalValue: {type: "string", required: false, unique: true}}
+        }
+      }
+    )
+    config = BetterAuth::Configuration.new(secret: SECRET, database: :memory, plugins: [plugin])
+    runtime_tables = BetterAuth::Schema.auth_tables(config)
+
+    assert runtime_tables.key?("managedContributor")
+    assert runtime_tables.key?("externalContributor")
+    refute BetterAuth::Schema.migration_tables(config).key?("shared_records")
+    sql = BetterAuth::Schema::SQL.create_statements(config, dialect: :postgres).join("\n")
+    refute_includes sql, 'CREATE TABLE IF NOT EXISTS "shared_records"'
+    refute_includes sql, "index_shared_records_on_managed_value"
+  end
+
   def test_migration_sql_merges_logical_tables_by_physical_table_name
     plugin = BetterAuth::Plugin.new(
       id: "profile-collision",

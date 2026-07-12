@@ -47,6 +47,23 @@ RSpec.describe BetterAuth::Hanami::Migration do
     expect(migration).to include("index :action, unique: true")
   end
 
+  it "omits plugin tables with migrations disabled" do
+    plugin = BetterAuth::Plugin.new(
+      id: "external-audit",
+      schema: {
+        auditLog: {
+          disableMigration: true,
+          fields: {userId: {type: "string", required: true, references: {model: "user", field: "id"}, index: true}}
+        }
+      }
+    )
+    plugin_config = BetterAuth::Configuration.new(secret: secret, database: :memory, plugins: [plugin])
+
+    migration = described_class.render(plugin_config)
+
+    expect(migration).not_to include("create_table :audit_logs")
+  end
+
   it "renders non-id foreign key targets with explicit keys" do
     plugin = BetterAuth::Plugin.new(
       id: "profile",

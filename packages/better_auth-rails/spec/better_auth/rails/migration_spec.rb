@@ -94,6 +94,25 @@ RSpec.describe BetterAuth::Rails::Migration do
     expect(migration).to include("add_foreign_key :audit_logs, :users, column: :user_id, on_delete: :cascade")
   end
 
+  it "omits plugin tables with migrations disabled" do
+    plugin = BetterAuth::Plugin.new(
+      id: "external-audit",
+      schema: {
+        auditLog: {
+          disable_migration: true,
+          fields: {userId: {type: "string", required: true, references: {model: "user", field: "id"}, index: true}}
+        }
+      }
+    )
+    plugin_config = BetterAuth::Configuration.new(secret: "test-secret-that-is-long-enough-for-validation", database: :memory, plugins: [plugin])
+
+    migration = described_class.render(plugin_config)
+
+    expect(migration).not_to include("create_table :audit_logs")
+    expect(migration).not_to include("add_index :audit_logs")
+    expect(migration).not_to include("add_foreign_key :audit_logs")
+  end
+
   it "renders foreign keys against physical target field names" do
     plugin = BetterAuth::Plugin.new(
       id: "oauth-like",

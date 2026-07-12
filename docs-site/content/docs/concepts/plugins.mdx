@@ -223,7 +223,19 @@ The key is the column name and the value is the column definition. The column de
 
 **Other Schema Properties**
 
-`disable_migration`: if the table should not be migrated. (default: `false`)
+`disable_migration`: prevents migration and schema generators from creating or
+altering the table. The camel-case `disableMigration` spelling is also accepted
+for compatibility with upstream plugin metadata. The table remains available to
+runtime adapters, so use this only when another system manages its storage.
+(default: `false`)
+
+<Callout type="warn">
+  Migration-disabled tables are not provisioned by RubyAuth. Operators must
+  create the table, fields, foreign keys, and indexes themselves before the
+  plugin uses them. If multiple logical schema entries share one physical table,
+  setting either spelling to `true` on any contributor disables migrations for
+  that entire physical table.
+</Callout>
 
 ```ruby title="my_plugin.rb"
 require "better_auth"
