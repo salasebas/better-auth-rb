@@ -564,6 +564,10 @@ auth = BetterAuth.auth(
 ```
 
 * `ip_address`: IP address configuration for rate limiting and session tracking
+  * `disable_ip_tracking`: Disable IP tracking and the built-in per-IP limiter.
+  * `ip_address_headers`: Explicitly trusted, ingress-controlled header names, checked in order.
+  * `trusted_proxies`: Proxy IP addresses or CIDR ranges used to resolve configured forwarded chains from right to left.
+  * `ipv6_subnet`: IPv6 prefix length used to group rate-limit keys (default: `64`).
 * `use_secure_cookies`: By default, cookies are secure in production environments. Set this to `true` to force the `Secure` cookie attribute in all environments.
 * `disable_csrf_check`: Disable all CSRF protection including origin header validation and Fetch Metadata checks (⚠️ security risk)
 * `disable_origin_check`: Disable URL validation for `callback_url`, `redirectTo`, and other redirect URLs (⚠️ security risk)

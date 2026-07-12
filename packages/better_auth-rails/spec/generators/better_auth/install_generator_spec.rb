@@ -25,7 +25,7 @@ RSpec.describe BetterAuth::Generators::InstallGenerator do
     expect(initializer_contents).to include("config.trusted_origins")
     expect(initializer_contents).to include("config.session do |session|")
     expect(initializer_contents).to include("cookie.strategy = \"jwe\"")
-    expect(initializer_contents).to include("config.advanced do |advanced|")
+    expect(initializer_contents).not_to include("ip_address_headers")
     expect(initializer_contents).to include("config.experimental do |experimental|")
     expect(initializer_contents).to include("config.social_providers do |providers|")
     expect(initializer_contents).to include("config.plugins")

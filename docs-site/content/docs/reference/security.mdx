@@ -160,9 +160,9 @@ RubyAuth includes built-in rate limiting to safeguard against brute-force attack
 
 ## IP Address Headers
 
-RubyAuth uses client IP addresses for rate limiting and security monitoring. By default, it reads the IP address from the standard `X-Forwarded-For` header. However, you can configure a specific trusted header to ensure accurate IP address detection and prevent IP spoofing attacks.
+Better Auth Ruby uses client IP addresses for rate limiting and session metadata. By default, it relies on the address resolved by the hosting framework or Rack and does not directly trust raw forwarded headers.
 
-You can configure the IP address header in your RubyAuth configuration:
+If a reverse proxy overwrites a dedicated single-value client-IP header, opt in to that trusted header explicitly:
 
 ```ruby
 require "better_auth"
@@ -172,17 +172,38 @@ auth = BetterAuth.auth(
   base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
   database: :postgres,
   trusted_origins: ["https://app.example.com"],
-  rate_limit: { enabled: true, window: 10, max: 100 }
+  advanced: {
+    ip_address: {
+      ip_address_headers: ["x-real-ip"]
+    }
+  },
+  rate_limit: {enabled: true, window: 10, max: 100}
 )
 ```
 
-This ensures that RubyAuth only accepts IP addresses from your trusted proxy's header, making it more difficult for attackers to bypass rate limiting or other IP-based security measures by spoofing headers.
+For a comma-separated header such as `X-Forwarded-For`, configure both the header and the actual proxy IP addresses or CIDR ranges:
+
+```ruby
+advanced: {
+  ip_address: {
+    ip_address_headers: ["x-forwarded-for"],
+    trusted_proxies: ["192.0.2.10", "10.0.0.0/24"]
+  }
+}
+```
+
+Better Auth first verifies that the direct network peer matches `trusted_proxies`. It then walks the chain from right to left, skips trusted hops, and selects the first untrusted IP. A missing or untrusted peer, malformed proxy configuration, malformed chain, chain containing only trusted proxies, or multi-hop chain without valid `trusted_proxies` is rejected. If no safe framework or direct-peer fallback exists, rate limiting uses one shared per-path bucket instead of being skipped.
 
 <Callout type="info">
   **Important**
 
-  * When setting a custom IP address header, ensure that your proxy or load balancer is properly configured to set this header, and that it cannot be set by end users directly.
+  * A configured IP address header is an explicit trust decision. Ensure your proxy or load balancer overwrites or sanitizes it and that end users cannot reach the origin directly.
+  * `trusted_proxies` verifies the direct peer before interpreting a chain. Use the narrow addresses of your actual proxies rather than broad private ranges that may also include clients.
   * In dev/test environments, if the IP cannot be retrieved from headers, 127.0.0.1 is used as a fallback.
+</Callout>
+
+<Callout type="warning">
+  Earlier Better Auth Ruby releases trusted the leftmost `X-Forwarded-For` value by default. After upgrading, configure framework-level trusted proxies or an explicit ingress-controlled header. A missing or rejected address now fails closed into a shared bucket, so validate the deployment before enabling production traffic.
 </Callout>
 
 ## Trusted Proxy Headers
