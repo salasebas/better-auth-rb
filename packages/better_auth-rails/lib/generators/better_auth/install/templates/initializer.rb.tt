@@ -28,13 +28,6 @@ BetterAuth::Rails.configure do |config|
     end
   end
 
-  config.advanced do |advanced|
-    advanced.ip_address do |ip|
-      ip.ip_address_headers = ["x-forwarded-for"]
-      ip.disable_ip_tracking = false
-    end
-  end
-
   config.experimental do |experimental|
     experimental.joins = false
   end

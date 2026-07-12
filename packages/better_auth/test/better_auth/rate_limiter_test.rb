@@ -96,27 +96,69 @@ class BetterAuthRateLimiterTest < Minitest::Test
     assert_equal 429, status
   end
 
-  def test_rate_limiter_warns_once_when_client_ip_is_missing_outside_development
+  def test_rate_limiter_warns_once_and_uses_shared_bucket_when_client_ip_is_missing
     previous_rack_env = ENV["RACK_ENV"]
     ENV["RACK_ENV"] = "production"
     messages = []
+    storage = RecordingRateLimitStorage.new
     auth = build_auth(
       logger: ->(level, message) { messages << [level, message] },
-      rate_limit: {enabled: true, window: 60, max: 1}
+      rate_limit: {enabled: true, window: 60, max: 1, custom_storage: storage}
     )
     limiter = BetterAuth::RateLimiter.new
     env = Rack::MockRequest.env_for("/limited")
     env.delete("REMOTE_ADDR")
 
-    2.times { limiter.call(Rack::Request.new(env), auth.context, "/limited") }
+    assert_nil limiter.call(Rack::Request.new(env), auth.context, "/limited")
+    status, = limiter.call(Rack::Request.new(env), auth.context, "/limited")
 
-    warning_messages = messages.select { |level, message| level == :warn && message.include?("could not determine client IP address") }
+    assert_equal 429, status
+    assert_equal ["no-trusted-ip|/limited"], storage.keys
+    warning_messages = messages.select { |level, message| level == :warn && message.include?("single shared per-path bucket") }
     assert_equal 1, warning_messages.length
   ensure
     if previous_rack_env
       ENV["RACK_ENV"] = previous_rack_env
     else
       ENV.delete("RACK_ENV")
+    end
+  end
+
+  def test_rotating_raw_forwarded_header_cannot_evade_default_bucket
+    auth = build_auth(rate_limit: {enabled: true, window: 60, max: 1})
+    limiter = BetterAuth::RateLimiter.new
+
+    assert_nil limiter.call(
+      rack_request(
+        "GET",
+        "/limited",
+        headers: {"REMOTE_ADDR" => "203.0.113.10", "HTTP_X_FORWARDED_FOR" => "198.51.100.20"}
+      ),
+      auth.context,
+      "/limited"
+    )
+    status, = limiter.call(
+      rack_request(
+        "GET",
+        "/limited",
+        headers: {"REMOTE_ADDR" => "203.0.113.10", "HTTP_X_FORWARDED_FOR" => "198.51.100.21"}
+      ),
+      auth.context,
+      "/limited"
+    )
+
+    assert_equal 429, status
+  end
+
+  def test_disable_ip_tracking_still_skips_rate_limiting
+    auth = build_auth(
+      advanced: {ip_address: {disable_ip_tracking: true}},
+      rate_limit: {enabled: true, window: 60, max: 1}
+    )
+    limiter = BetterAuth::RateLimiter.new
+
+    2.times do
+      assert_nil limiter.call(rack_request("GET", "/limited"), auth.context, "/limited")
     end
   end
 

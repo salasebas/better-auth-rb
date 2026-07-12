@@ -811,7 +811,7 @@ class BetterAuthRouterTest < Minitest::Test
     assert_equal 200, auth.call(rack_env("GET", "/api/auth/limited")).first
   end
 
-  def test_rate_limit_warns_and_skips_when_client_ip_is_missing_outside_development
+  def test_rate_limit_warns_and_uses_shared_bucket_when_client_ip_is_missing_outside_development
     previous_rack_env = ENV["RACK_ENV"]
     ENV["RACK_ENV"] = "production"
     messages = []
@@ -832,11 +832,13 @@ class BetterAuthRouterTest < Minitest::Test
 
     env = rack_env("GET", "/api/auth/limited")
     env.delete("REMOTE_ADDR")
-    status, = auth.call(env)
+    first_status, = auth.call(env)
+    second_status, = auth.call(env)
 
-    assert_equal 200, status
-    assert messages.any? { |level, message| level == :warn && message.include?("could not determine client IP address") }
-    refute messages.any? { |_level, message| message.include?("trustedProxies") }
+    assert_equal 200, first_status
+    assert_equal 429, second_status
+    assert messages.any? { |level, message| level == :warn && message.include?("single shared per-path bucket") }
+    assert messages.any? { |_level, message| message.include?("trusted_proxies") }
   ensure
     if previous_rack_env
       ENV["RACK_ENV"] = previous_rack_env

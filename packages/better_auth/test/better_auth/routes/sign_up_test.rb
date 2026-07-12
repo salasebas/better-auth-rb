@@ -134,7 +134,7 @@ class BetterAuthRoutesSignUpTest < Minitest::Test
     assert auth.api.sign_in_email(body: {email: "custom@example.com", password: "password123"})[:token]
   end
 
-  def test_sign_up_email_allows_empty_name_and_captures_session_headers
+  def test_sign_up_email_allows_empty_name_without_trusting_raw_forwarded_header
     auth = build_auth
 
     result = auth.api.sign_up_email(
@@ -144,7 +144,7 @@ class BetterAuthRoutesSignUpTest < Minitest::Test
     session = auth.context.internal_adapter.find_session(result[:token])
 
     assert_equal "", result[:user]["name"]
-    assert_equal "127.0.0.1", session[:session]["ipAddress"]
+    assert_equal "", session[:session]["ipAddress"]
     assert_equal "SignUpTest", session[:session]["userAgent"]
   end
 

@@ -22,14 +22,16 @@ Plugin routes can also define their own rate-limit rules. For example, two-facto
 
 ### Connecting IP Address
 
-Rate limiting keys include the connecting client IP and route path. The default header checked is `x-forwarded-for`, which is common in production proxy setups. If your deployment uses a different trusted header, configure it explicitly.
+Rate limiting keys include the connecting client IP and route path. By default, Better Auth Ruby uses the IP resolved by your framework or Rack. It does not parse a raw `X-Forwarded-For` header itself, so the framework's trusted-proxy policy remains the source of truth.
+
+If your ingress overwrites a single client-IP header, opt in to that header explicitly. Only do this for a header that clients cannot supply or preserve themselves.
 
 ```ruby
 auth = BetterAuth.auth(
   secret: ENV.fetch("BETTER_AUTH_SECRET"),
   advanced: {
     ip_address: {
-      ip_address_headers: ["x-forwarded-for"]
+      ip_address_headers: ["x-real-ip"]
     }
   },
   rate_limit: {
@@ -38,7 +40,26 @@ auth = BetterAuth.auth(
 )
 ```
 
-Disable IP tracking when another layer handles rate limiting. When IP tracking is disabled, RubyAuth cannot build per-client rate-limit keys and skips its built-in limiter.
+Comma-separated forwarded chains are rejected unless you also configure the proxy IP addresses or CIDR ranges that Better Auth may skip. Better Auth first verifies that the direct network peer is one of those trusted proxies, then walks the chain from right to left, skips trusted proxy hops, and selects the first untrusted address:
+
+```ruby
+advanced: {
+  ip_address: {
+    ip_address_headers: ["x-forwarded-for"],
+    trusted_proxies: ["192.0.2.10", "10.0.0.0/24"]
+  }
+}
+```
+
+List the actual addresses of your proxies, not a broad private range that could also contain clients. Better Auth rejects the configured chain when the direct peer is missing or untrusted, or when any `trusted_proxies` entry is malformed. Still keep the application origin reachable only through those proxies, and configure every proxy to overwrite or sanitize forwarded IP headers. Explicit single-value headers remain an ingress trust decision and require the same sanitation even when `trusted_proxies` is not configured.
+
+<Callout type="warning">
+  This is a security-related compatibility change from earlier Better Auth Ruby releases, which trusted the leftmost `X-Forwarded-For` value by default. Deployments that relied on that behavior must either configure their framework's trusted proxies or opt in to an ingress-controlled header and, for chains, `trusted_proxies`.
+</Callout>
+
+When IP tracking is enabled but no trustworthy address can be resolved, requests share a fail-closed per-path bucket. This preserves rate-limit enforcement, but a proxy configuration error can cause unrelated clients to share a limit.
+
+Disable IP tracking when another layer handles rate limiting. When IP tracking is disabled, Better Auth Ruby intentionally skips its built-in per-IP limiter.
 
 ```ruby
 advanced: {
@@ -61,7 +82,7 @@ IPv6 clients often receive a whole address block, so limiting each full `/128` a
 ```ruby
 advanced: {
   ip_address: {
-    ip_address_headers: ["x-forwarded-for"],
+    ip_address_headers: ["x-real-ip"],
     ipv6_subnet: 64
   }
 }
