@@ -194,7 +194,7 @@ module BetterAuth
       generator = config[:generate_token]
       return generator.call(email) if generator.respond_to?(:call)
 
-      Array.new(32) { [*"a".."z", *"A".."Z"].sample }.join
+      Crypto.random_string(32, alphabet: Crypto::ALPHABETIC_ALPHABET)
     end
 
     def magic_link_attempts_exceeded?(attempt, config)

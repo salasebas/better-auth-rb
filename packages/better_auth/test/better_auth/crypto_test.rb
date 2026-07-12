@@ -10,6 +10,22 @@ class BetterAuthCryptoTest < Minitest::Test
     assert_match(/\A[A-Za-z0-9\-_]+\z/, value)
   end
 
+  def test_random_string_uses_custom_alphabet
+    indexes = [2, 1, 0]
+    upper_bounds = []
+    random_number = lambda do |upper_bound|
+      upper_bounds << upper_bound
+      indexes.shift
+    end
+
+    value = SecureRandom.stub(:random_number, random_number) do
+      BetterAuth::Crypto.random_string(3, alphabet: %w[x y z])
+    end
+
+    assert_equal "zyx", value
+    assert_equal [3, 3, 3], upper_bounds
+  end
+
   def test_hmac_signatures_verify_in_constant_time
     signature = BetterAuth::Crypto.hmac_signature("session-token", "secret")
 
