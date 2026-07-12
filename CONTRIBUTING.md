@@ -140,15 +140,15 @@ end
 - **Avoid mocks** unless the real dependency is truly impractical
 - Test actual behavior, not implementation details
 - If you need database containers: `make db-up`
-- Check upstream tests (`reference/upstream-src/1.6.9/repository/packages/better-auth/src/**/*.test.ts`) for test case ideas
+- Check upstream tests (`reference/upstream-src/1.6.23/repository/packages/better-auth/src/**/*.test.ts`) for test case ideas
 
 ## Porting from Upstream
 
 If you're porting a feature from the TypeScript upstream:
 
-1. Read the upstream implementation in `reference/upstream-src/1.6.9/repository/packages/better-auth/src/` (run `./scripts/fetch-upstream-better-auth.sh` if missing)
+1. Read the upstream implementation in `reference/upstream-src/1.6.23/repository/packages/better-auth/src/` (run `./scripts/fetch-upstream-better-auth.sh` if missing)
 2. Translate to idiomatic Ruby (not a line-by-line copy)
-3. Port relevant test cases from `reference/upstream-src/1.6.9/repository/packages/better-auth/src/**/*.test.ts`
+3. Port relevant test cases from `reference/upstream-src/1.6.23/repository/packages/better-auth/src/**/*.test.ts`
 4. Reference the upstream PR/commit in your PR description
 
 ## Pull Request Process

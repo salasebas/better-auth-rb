@@ -1,6 +1,6 @@
 # Docs parity rules
 
-These rules define the source-of-truth workflow for porting Better Auth v1.6.9
+These rules define the source-of-truth workflow for porting Better Auth v1.6.23
 MDX pages into RubyAuth docs.
 
 ## Literal upstream copy workflow
@@ -13,7 +13,7 @@ section order unless the section is client-only or explicitly unsupported.
 For each `port` page:
 
 1. Copy verbatim the upstream file:
-   `reference/upstream-src/1.6.9/repository/docs/content/docs/<slug>` to
+   `reference/upstream-src/1.6.23/repository/docs/content/docs/<slug>` to
    `docs-site/content/docs/<slug>` and overwrite local content.
 2. Run mechanical transforms from this file: product names, CLI commands, links.
 3. Replace only TypeScript/JavaScript code blocks with Ruby from tests or

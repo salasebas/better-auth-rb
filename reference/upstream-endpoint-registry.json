@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-06-17T06:02:19Z",
-  "upstream_version": "1.6.9",
+  "generated_at": "2026-07-12T02:30:04Z",
+  "upstream_version": "1.6.23",
   "entries": [
     {
       "plugin_id": "core",
@@ -12,7 +12,7 @@
       "ruby_api": "auth.api.account_info",
       "upstream_client": "accountInfo",
       "deprecated": false,
-      "source_file": "reference/upstream-src/1.6.9/repository/packages/better-auth/src/api/routes/account.ts"
+      "source_file": "reference/upstream-src/1.6.23/repository/packages/better-auth/src/api/routes/account.ts"
     },
     {
       "plugin_id": "admin",
@@ -24,7 +24,7 @@
       "ruby_api": "auth.api.ban_user",
       "upstream_client": "admin.BanUser",
       "deprecated": false,
-      "source_file": "reference/upstream-src/1.6.9/repository/packages/better-auth/src/plugins/admin/routes.ts"
+      "source_file": "reference/upstream-src/1.6.23/repository/packages/better-auth/src/plugins/admin/routes.ts"
     },
     {
       "plugin_id": "admin",
@@ -36,7 +36,7 @@
       "ruby_api": "auth.api.create_user",
       "upstream_client": "admin.CreateUser",
       "deprecated": false,
-      "source_file": "reference/upstream-src/1.6.9/repository/packages/better-auth/src/plugins/admin/routes.ts"
+      "source_file": "reference/upstream-src/1.6.23/repository/packages/better-auth/src/plugins/admin/routes.ts"
     },
     {
       "plugin_id": "admin",
@@ -48,7 +48,7 @@
       "ruby_api": "auth.api.get_user",
       "upstream_client": "admin.GetUser",
       "deprecated": false,
-      "source_file": "reference/upstream-src/1.6.9/repository/packages/better-auth/src/plugins/admin/routes.ts"
+      "source_file": "reference/upstream-src/1.6.23/repository/packages/better-auth/src/plugins/admin/routes.ts"
     },
     {
       "plugin_id": "admin",
@@ -60,7 +60,7 @@
       "ruby_api": "auth.api.user_has_permission",
       "upstream_client": "admin.HasPermission",
       "deprecated": false,
-      "source_file": "reference/upstream-src/1.6.9/repository/packages/better-auth/src/plugins/admin/routes.ts"
+      "source_file": "reference/upstream-src/1.6.23/repository/packages/better-auth/src/plugins/admin/routes.ts"
     },
     {
       "plugin_id": "admin",
@@ -72,7 +72,7 @@
       "ruby_api": "auth.api.impersonate_user",
       "upstream_client": "admin.ImpersonateUser",
       "deprecated": false,
-      "source_file": "reference/upstream-src/1.6.9/repository/packages/better-auth/src/plugins/admin/routes.ts"
+      "source_file": "reference/upstream-src/1.6.23/repository/packages/better-auth/src/plugins/admin/routes.ts"
     },
     {
       "plugin_id": "admin",
@@ -84,7 +84,7 @@
       "ruby_api": "auth.api.list_user_sessions",
       "upstream_client": "admin.ListUserSessions",
       "deprecated": false,
-      "source_file": "reference/upstream-src/1.6.9/repository/packages/better-auth/src/plugins/admin/routes.ts"
+      "source_file": "reference/upstream-src/1.6.23/repository/packages/better-auth/src/plugins/admin/routes.ts"
     },
     {
       "plugin_id": "admin",
@@ -96,7 +96,7 @@
       "ruby_api": "auth.api.list_users",
       "upstream_client": "admin.ListUsers",
       "deprecated": false,
-      "source_file": "reference/upstream-src/1.6.9/repository/packages/better-auth/src/plugins/admin/routes.ts"
+      "source_file": "reference/upstream-src/1.6.23/repository/packages/better-auth/src/plugins/admin/routes.ts"
     },
     {
       "plugin_id": "oauth-provider",
@@ -108,7 +108,7 @@
       "ruby_api": "auth.api.admin_create_oauth_client",
       "upstream_client": "admin.Oauth2.CreateClient",
       "deprecated": false,
-      "source_file": "reference/upstream-src/1.6.9/repository/packages/oauth-provider/src/oauthClient/index.ts"
+      "source_file": "reference/upstream-src/1.6.23/repository/packages/oauth-provider/src/oauthClient/index.ts"
     },
     {
       "plugin_id": "oauth-provider",
@@ -120,7 +120,7 @@
       "ruby_api": "auth.api.admin_update_oauth_client",
       "upstream_client": "admin.Oauth2.UpdateClient",
       "deprecated": false,
-      "source_file": "reference/upstream-src/1.6.9/repository/packages/oauth-provider/src/oauthClient/index.ts"
+      "source_file": "reference/upstream-src/1.6.23/repository/packages/oauth-provider/src/oauthClient/index.ts"
     },
     {
       "plugin_id": "admin",
@@ -132,7 +132,7 @@
       "ruby_api": "auth.api.remove_user",
       "upstream_client": "admin.RemoveUser",
       "deprecated": false,
-      "source_file": "reference/upstream-src/1.6.9/repository/packages/better-auth/src/plugins/admin/routes.ts"
+      "source_file": "reference/upstream-src/1.6.23/repository/packages/better-auth/src/plugins/admin/routes.ts"
     },
     {
       "plugin_id": "admin",
@@ -144,7 +144,7 @@
       "ruby_api": "auth.api.revoke_user_session",
       "upstream_client": "admin.RevokeUserSession",
       "deprecated": false,
-      "source_file": "reference/upstream-src/1.6.9/repository/packages/better-auth/src/plugins/admin/routes.ts"
+      "source_file": "reference/upstream-src/1.6.23/repository/packages/better-auth/src/plugins/admin/routes.ts"
     },
     {
       "plugin_id": "admin",
@@ -156,7 +156,7 @@
       "ruby_api": "auth.api.revoke_user_sessions",
       "upstream_client": "admin.RevokeUserSessions",
       "deprecated": false,
-      "source_file": "reference/upstream-src/1.6.9/repository/packages/better-auth/src/plugins/admin/routes.ts"
+      "source_file": "reference/upstream-src/1.6.23/repository/packages/better-auth/src/plugins/admin/routes.ts"
     },
     {
       "plugin_id": "admin",
@@ -168,7 +168,7 @@
       "ruby_api": "auth.api.set_role",
       "upstream_client": "admin.SetRole",
       "deprecated": false,
-      "source_file": "reference/upstream-src/1.6.9/repository/packages/better-auth/src/plugins/admin/routes.ts"
+      "source_file": "reference/upstream-src/1.6.23/repository/packages/better-auth/src/plugins/admin/routes.ts"
     },
     {
       "plugin_id": "admin",
@@ -180,7 +180,7 @@
       "ruby_api": "auth.api.set_user_password",
       "upstream_client": "admin.SetUserPassword",
       "deprecated": false,
-      "source_file": "reference/upstream-src/1.6.9/repository/packages/better-auth/src/plugins/admin/routes.ts"
+      "source_file": "reference/upstream-src/1.6.23/repository/packages/better-auth/src/plugins/admin/routes.ts"
     },
     {
       "plugin_id": "admin",
@@ -192,7 +192,7 @@
       "ruby_api": "auth.api.stop_impersonating",
       "upstream_client": "admin.StopImpersonating",
       "deprecated": false,
-      "source_file": "reference/upstream-src/1.6.9/repository/packages/better-auth/src/plugins/admin/routes.ts"
+      "source_file": "reference/upstream-src/1.6.23/repository/packages/better-auth/src/plugins/admin/routes.ts"
     },
     {
       "plugin_id": "admin",
@@ -204,7 +204,7 @@
       "ruby_api": "auth.api.unban_user",
       "upstream_client": "admin.UnbanUser",
       "deprecated": false,
-      "source_file": "reference/upstream-src/1.6.9/repository/packages/better-auth/src/plugins/admin/routes.ts"
+      "source_file": "reference/upstream-src/1.6.23/repository/packages/better-auth/src/plugins/admin/routes.ts"
     },
     {
       "plugin_id": "admin",
@@ -216,7 +216,7 @@
       "ruby_api": "auth.api.admin_update_user",
       "upstream_client": "admin.UpdateUser",
       "deprecated": false,
-      "source_file": "reference/upstream-src/1.6.9/repository/packages/better-auth/src/plugins/admin/routes.ts"
+      "source_file": "reference/upstream-src/1.6.23/repository/packages/better-auth/src/plugins/admin/routes.ts"
     },
     {
       "plugin_id": "core",
@@ -228,7 +228,7 @@
       "ruby_api": "auth.api.callback_oauth",
       "upstream_client": "callback.:id",
       "deprecated": false,
-      "source_file": "reference/upstream-src/1.6.9/repository/packages/better-auth/src/api/routes/callback.ts"
+      "source_file": "reference/upstream-src/1.6.23/repository/packages/better-auth/src/api/routes/callback.ts"
     },
     {
       "plugin_id": "core",
@@ -240,7 +240,7 @@
       "ruby_api": "auth.api.change_email",
       "upstream_client": "changeEmail",
       "deprecated": false,
-      "source_file": "reference/upstream-src/1.6.9/repository/packages/better-auth/src/api/routes/update-user.ts"
+      "source_file": "reference/upstream-src/1.6.23/repository/packages/better-auth/src/api/routes/update-user.ts"
     },
     {
       "plugin_id": "core",
@@ -252,7 +252,7 @@
       "ruby_api": "auth.api.change_password",
       "upstream_client": "changePassword",
       "deprecated": false,
-      "source_file": "reference/upstream-src/1.6.9/repository/packages/better-auth/src/api/routes/update-user.ts"
+      "source_file": "reference/upstream-src/1.6.23/repository/packages/better-auth/src/api/routes/update-user.ts"
     },
     {
       "plugin_id": "core",
@@ -264,7 +264,7 @@
       "ruby_api": "auth.api.delete_user",
       "upstream_client": "deleteUser",
       "deprecated": false,
-      "source_file": "reference/upstream-src/1.6.9/repository/packages/better-auth/src/api/routes/update-user.ts"
+      "source_file": "reference/upstream-src/1.6.23/repository/packages/better-auth/src/api/routes/update-user.ts"
     },
     {
       "plugin_id": "core",
@@ -276,7 +276,7 @@
       "ruby_api": "auth.api.delete_user_callback",
       "upstream_client": "deleteUser.Callback",
       "deprecated": false,
-      "source_file": "reference/upstream-src/1.6.9/repository/packages/better-auth/src/api/routes/update-user.ts"
+      "source_file": "reference/upstream-src/1.6.23/repository/packages/better-auth/src/api/routes/update-user.ts"
     },
     {
       "plugin_id": "device-authorization",
@@ -288,7 +288,7 @@
       "ruby_api": "auth.api.device_verify",
       "upstream_client": "device",
       "deprecated": false,
-      "source_file": "reference/upstream-src/1.6.9/repository/packages/better-auth/src/plugins/device-authorization/routes.ts"
+      "source_file": "reference/upstream-src/1.6.23/repository/packages/better-auth/src/plugins/device-authorization/routes.ts"
     },
     {
       "plugin_id": "device-authorization",
@@ -300,7 +300,7 @@
       "ruby_api": "auth.api.device_approve",
       "upstream_client": "device.Approve",
       "deprecated": false,
-      "source_file": "reference/upstream-src/1.6.9/repository/packages/better-auth/src/plugins/device-authorization/routes.ts"
+      "source_file": "reference/upstream-src/1.6.23/repository/packages/better-auth/src/plugins/device-authorization/routes.ts"
     },
     {
       "plugin_id": "device-authorization",
@@ -312,7 +312,7 @@
       "ruby_api": "auth.api.device_code",
       "upstream_client": "device.Code",
       "deprecated": false,
-      "source_file": "reference/upstream-src/1.6.9/repository/packages/better-auth/src/plugins/device-authorization/routes.ts"
+      "source_file": "reference/upstream-src/1.6.23/repository/packages/better-auth/src/plugins/device-authorization/routes.ts"
     },
     {
       "plugin_id": "device-authorization",
@@ -324,7 +324,7 @@
       "ruby_api": "auth.api.device_deny",
       "upstream_client": "device.Deny",
       "deprecated": false,
-      "source_file": "reference/upstream-src/1.6.9/repository/packages/better-auth/src/plugins/device-authorization/routes.ts"
+      "source_file": "reference/upstream-src/1.6.23/repository/packages/better-auth/src/plugins/device-authorization/routes.ts"
     },
     {
       "plugin_id": "device-authorization",
@@ -336,7 +336,7 @@
       "ruby_api": "auth.api.device_token",
       "upstream_client": "device.Token",
       "deprecated": false,
-      "source_file": "reference/upstream-src/1.6.9/repository/packages/better-auth/src/plugins/device-authorization/routes.ts"
+      "source_file": "reference/upstream-src/1.6.23/repository/packages/better-auth/src/plugins/device-authorization/routes.ts"
     },
     {
       "plugin_id": "electron",
@@ -348,7 +348,7 @@
       "ruby_api": "auth.api.electron_init_oauth_proxy",
       "upstream_client": "electron.InitOauthProxy",
       "deprecated": false,
-      "source_file": "reference/upstream-src/1.6.9/repository/packages/electron/src/routes.ts"
+      "source_file": "reference/upstream-src/1.6.23/repository/packages/electron/src/routes.ts"
     },
     {
       "plugin_id": "electron",
@@ -360,7 +360,7 @@
       "ruby_api": "auth.api.electron_token",
       "upstream_client": "electron.Token",
       "deprecated": false,
-      "source_file": "reference/upstream-src/1.6.9/repository/packages/electron/src/routes.ts"
+      "source_file": "reference/upstream-src/1.6.23/repository/packages/electron/src/routes.ts"
     },
     {
       "plugin_id": "email-otp",
@@ -372,7 +372,7 @@
       "ruby_api": "auth.api.change_email_email_otp",
       "upstream_client": "emailOtp.ChangeEmail",
       "deprecated": false,
-      "source_file": "reference/upstream-src/1.6.9/repository/packages/better-auth/src/plugins/email-otp/routes.ts"
+      "source_file": "reference/upstream-src/1.6.23/repository/packages/better-auth/src/plugins/email-otp/routes.ts"
     },
     {
       "plugin_id": "email-otp",
@@ -384,7 +384,7 @@
       "ruby_api": "auth.api.check_verification_otp",
       "upstream_client": "emailOtp.CheckVerificationOtp",
       "deprecated": false,
-      "source_file": "reference/upstream-src/1.6.9/repository/packages/better-auth/src/plugins/email-otp/routes.ts"
+      "source_file": "reference/upstream-src/1.6.23/repository/packages/better-auth/src/plugins/email-otp/routes.ts"
     },
     {
       "plugin_id": "email-otp",
@@ -396,7 +396,7 @@
       "ruby_api": "auth.api.request_email_change_email_otp",
       "upstream_client": "emailOtp.RequestEmailChange",
       "deprecated": false,
-      "source_file": "reference/upstream-src/1.6.9/repository/packages/better-auth/src/plugins/email-otp/routes.ts"
+      "source_file": "reference/upstream-src/1.6.23/repository/packages/better-auth/src/plugins/email-otp/routes.ts"
     },
     {
       "plugin_id": "email-otp",
@@ -408,7 +408,7 @@
       "ruby_api": "auth.api.request_password_reset_email_otp",
       "upstream_client": "emailOtp.RequestPasswordReset",
       "deprecated": true,
-      "source_file": "reference/upstream-src/1.6.9/repository/packages/better-auth/src/plugins/email-otp/routes.ts"
+      "source_file": "reference/upstream-src/1.6.23/repository/packages/better-auth/src/plugins/email-otp/routes.ts"
     },
     {
       "plugin_id": "email-otp",
@@ -420,7 +420,7 @@
       "ruby_api": "auth.api.reset_password_email_otp",
       "upstream_client": "emailOtp.ResetPassword",
       "deprecated": false,
-      "source_file": "reference/upstream-src/1.6.9/repository/packages/better-auth/src/plugins/email-otp/routes.ts"
+      "source_file": "reference/upstream-src/1.6.23/repository/packages/better-auth/src/plugins/email-otp/routes.ts"
     },
     {
       "plugin_id": "email-otp",
@@ -432,7 +432,7 @@
       "ruby_api": "auth.api.verify_email_otp",
       "upstream_client": "emailOtp.VerifyEmail",
       "deprecated": false,
-      "source_file": "reference/upstream-src/1.6.9/repository/packages/better-auth/src/plugins/email-otp/routes.ts"
+      "source_file": "reference/upstream-src/1.6.23/repository/packages/better-auth/src/plugins/email-otp/routes.ts"
     },
     {
       "plugin_id": "expo",
@@ -444,7 +444,7 @@
       "ruby_api": "auth.api.expo_authorization_proxy",
       "upstream_client": "expoAuthorizationProxy",
       "deprecated": false,
-      "source_file": "reference/upstream-src/1.6.9/repository/packages/expo/src/routes.ts"
+      "source_file": "reference/upstream-src/1.6.23/repository/packages/expo/src/routes.ts"
     },
     {
       "plugin_id": "email-otp",
@@ -456,7 +456,7 @@
       "ruby_api": "auth.api.forget_password_email_otp",
       "upstream_client": "forgetPassword.EmailOtp",
       "deprecated": false,
-      "source_file": "reference/upstream-src/1.6.9/repository/packages/better-auth/src/plugins/email-otp/routes.ts"
+      "source_file": "reference/upstream-src/1.6.23/repository/packages/better-auth/src/plugins/email-otp/routes.ts"
     },
     {
       "plugin_id": "core",
@@ -468,7 +468,7 @@
       "ruby_api": "auth.api.get_access_token",
       "upstream_client": "getAccessToken",
       "deprecated": false,
-      "source_file": "reference/upstream-src/1.6.9/repository/packages/better-auth/src/api/routes/account.ts"
+      "source_file": "reference/upstream-src/1.6.23/repository/packages/better-auth/src/api/routes/account.ts"
     },
     {
       "plugin_id": "core",
@@ -480,7 +480,7 @@
       "ruby_api": "auth.api.get_session",
       "upstream_client": "getSession",
       "deprecated": false,
-      "source_file": "reference/upstream-src/1.6.9/repository/packages/better-auth/src/api/routes/session.ts"
+      "source_file": "reference/upstream-src/1.6.23/repository/packages/better-auth/src/api/routes/session.ts"
     },
     {
       "plugin_id": "core",
@@ -492,7 +492,7 @@
       "ruby_api": "auth.api.link_social",
       "upstream_client": "linkSocial",
       "deprecated": false,
-      "source_file": "reference/upstream-src/1.6.9/repository/packages/better-auth/src/api/routes/account.ts"
+      "source_file": "reference/upstream-src/1.6.23/repository/packages/better-auth/src/api/routes/account.ts"
     },
     {
       "plugin_id": "core",
@@ -504,7 +504,7 @@
       "ruby_api": "auth.api.list_accounts",
       "upstream_client": "listAccounts",
       "deprecated": false,
-      "source_file": "reference/upstream-src/1.6.9/repository/packages/better-auth/src/api/routes/account.ts"
+      "source_file": "reference/upstream-src/1.6.23/repository/packages/better-auth/src/api/routes/account.ts"
     },
     {
       "plugin_id": "core",
@@ -516,7 +516,7 @@
       "ruby_api": "auth.api.list_sessions",
       "upstream_client": "listSessions",
       "deprecated": false,
-      "source_file": "reference/upstream-src/1.6.9/repository/packages/better-auth/src/api/routes/session.ts"
+      "source_file": "reference/upstream-src/1.6.23/repository/packages/better-auth/src/api/routes/session.ts"
     },
     {
       "plugin_id": "generic-oauth",
@@ -528,7 +528,7 @@
       "ruby_api": "auth.api.oauth2_callback",
       "upstream_client": "oauth2.Callback.:providerid",
       "deprecated": false,
-      "source_file": "reference/upstream-src/1.6.9/repository/packages/better-auth/src/plugins/generic-oauth/routes.ts"
+      "source_file": "reference/upstream-src/1.6.23/repository/packages/better-auth/src/plugins/generic-oauth/routes.ts"
     },
     {
       "plugin_id": "oauth-provider",
@@ -540,7 +540,7 @@
       "ruby_api": "auth.api.rotate_oauth_client_secret",
       "upstream_client": "oauth2.Client.RotateSecret",
       "deprecated": false,
-      "source_file": "reference/upstream-src/1.6.9/repository/packages/oauth-provider/src/oauthClient/index.ts"
+      "source_file": "reference/upstream-src/1.6.23/repository/packages/oauth-provider/src/oauthClient/index.ts"
     },
     {
       "plugin_id": "oauth-provider",
@@ -552,7 +552,7 @@
       "ruby_api": "auth.api.create_oauth_client",
       "upstream_client": "oauth2.CreateClient",
       "deprecated": false,
-      "source_file": "reference/upstream-src/1.6.9/repository/packages/oauth-provider/src/oauthClient/index.ts"
+      "source_file": "reference/upstream-src/1.6.23/repository/packages/oauth-provider/src/oauthClient/index.ts"
     },
     {
       "plugin_id": "oauth-provider",
@@ -564,7 +564,7 @@
       "ruby_api": "auth.api.delete_oauth_client",
       "upstream_client": "oauth2.DeleteClient",
       "deprecated": false,
-      "source_file": "reference/upstream-src/1.6.9/repository/packages/oauth-provider/src/oauthClient/index.ts"
+      "source_file": "reference/upstream-src/1.6.23/repository/packages/oauth-provider/src/oauthClient/index.ts"
     },
     {
       "plugin_id": "oauth-provider",
@@ -576,7 +576,7 @@
       "ruby_api": "auth.api.delete_oauth_consent",
       "upstream_client": "oauth2.DeleteConsent",
       "deprecated": false,
-      "source_file": "reference/upstream-src/1.6.9/repository/packages/oauth-provider/src/oauthConsent/index.ts"
+      "source_file": "reference/upstream-src/1.6.23/repository/packages/oauth-provider/src/oauthConsent/index.ts"
     },
     {
       "plugin_id": "oauth-provider",
@@ -588,7 +588,7 @@
       "ruby_api": "auth.api.get_oauth_client",
       "upstream_client": "oauth2.GetClient",
       "deprecated": false,
-      "source_file": "reference/upstream-src/1.6.9/repository/packages/oauth-provider/src/oauthClient/index.ts"
+      "source_file": "reference/upstream-src/1.6.23/repository/packages/oauth-provider/src/oauthClient/index.ts"
     },
     {
       "plugin_id": "oauth-provider",
@@ -600,7 +600,7 @@
       "ruby_api": "auth.api.get_oauth_clients",
       "upstream_client": "oauth2.GetClients",
       "deprecated": false,
-      "source_file": "reference/upstream-src/1.6.9/repository/packages/oauth-provider/src/oauthClient/index.ts"
+      "source_file": "reference/upstream-src/1.6.23/repository/packages/oauth-provider/src/oauthClient/index.ts"
     },
     {
       "plugin_id": "oauth-provider",
@@ -612,7 +612,7 @@
       "ruby_api": "auth.api.get_oauth_consent",
       "upstream_client": "oauth2.GetConsent",
       "deprecated": false,
-      "source_file": "reference/upstream-src/1.6.9/repository/packages/oauth-provider/src/oauthConsent/index.ts"
+      "source_file": "reference/upstream-src/1.6.23/repository/packages/oauth-provider/src/oauthConsent/index.ts"
     },
     {
       "plugin_id": "oauth-provider",
@@ -624,7 +624,7 @@
       "ruby_api": "auth.api.get_oauth_consents",
       "upstream_client": "oauth2.GetConsents",
       "deprecated": false,
-      "source_file": "reference/upstream-src/1.6.9/repository/packages/oauth-provider/src/oauthConsent/index.ts"
+      "source_file": "reference/upstream-src/1.6.23/repository/packages/oauth-provider/src/oauthConsent/index.ts"
     },
     {
       "plugin_id": "generic-oauth",
@@ -636,7 +636,7 @@
       "ruby_api": "auth.api.oauth2_link_account",
       "upstream_client": "oauth2.Link",
       "deprecated": false,
-      "source_file": "reference/upstream-src/1.6.9/repository/packages/better-auth/src/plugins/generic-oauth/routes.ts"
+      "source_file": "reference/upstream-src/1.6.23/repository/packages/better-auth/src/plugins/generic-oauth/routes.ts"
     },
     {
       "plugin_id": "oauth-provider",
@@ -648,7 +648,7 @@
       "ruby_api": "auth.api.get_oauth_client_public",
       "upstream_client": "oauth2.PublicClient",
       "deprecated": false,
-      "source_file": "reference/upstream-src/1.6.9/repository/packages/oauth-provider/src/oauthClient/index.ts"
+      "source_file": "reference/upstream-src/1.6.23/repository/packages/oauth-provider/src/oauthClient/index.ts"
     },
     {
       "plugin_id": "oauth-provider",
@@ -660,7 +660,7 @@
       "ruby_api": "auth.api.update_oauth_client",
       "upstream_client": "oauth2.UpdateClient",
       "deprecated": false,
-      "source_file": "reference/upstream-src/1.6.9/repository/packages/oauth-provider/src/oauthClient/index.ts"
+      "source_file": "reference/upstream-src/1.6.23/repository/packages/oauth-provider/src/oauthClient/index.ts"
     },
     {
       "plugin_id": "oauth-provider",
@@ -672,7 +672,7 @@
       "ruby_api": "auth.api.update_oauth_consent",
       "upstream_client": "oauth2.UpdateConsent",
       "deprecated": false,
-      "source_file": "reference/upstream-src/1.6.9/repository/packages/oauth-provider/src/oauthConsent/index.ts"
+      "source_file": "reference/upstream-src/1.6.23/repository/packages/oauth-provider/src/oauthConsent/index.ts"
     },
     {
       "plugin_id": "organization",
@@ -684,7 +684,7 @@
       "ruby_api": "auth.api.accept_invitation",
       "upstream_client": "organization.AcceptInvitation",
       "deprecated": false,
-      "source_file": "reference/upstream-src/1.6.9/repository/packages/better-auth/src/plugins/organization/routes/crud-invites.ts"
+      "source_file": "reference/upstream-src/1.6.23/repository/packages/better-auth/src/plugins/organization/routes/crud-invites.ts"
     },
     {
       "plugin_id": "organization",
@@ -696,7 +696,7 @@
       "ruby_api": "auth.api.cancel_invitation",
       "upstream_client": "organization.CancelInvitation",
       "deprecated": false,
-      "source_file": "reference/upstream-src/1.6.9/repository/packages/better-auth/src/plugins/organization/routes/crud-invites.ts"
+      "source_file": "reference/upstream-src/1.6.23/repository/packages/better-auth/src/plugins/organization/routes/crud-invites.ts"
     },
     {
       "plugin_id": "organization",
@@ -708,7 +708,7 @@
       "ruby_api": "auth.api.check_organization_slug",
       "upstream_client": "organization.CheckSlug",
       "deprecated": false,
-      "source_file": "reference/upstream-src/1.6.9/repository/packages/better-auth/src/plugins/organization/routes/crud-org.ts"
+      "source_file": "reference/upstream-src/1.6.23/repository/packages/better-auth/src/plugins/organization/routes/crud-org.ts"
     },
     {
       "plugin_id": "organization",
@@ -720,7 +720,7 @@
       "ruby_api": "auth.api.create_organization",
       "upstream_client": "organization.Create",
       "deprecated": false,
-      "source_file": "reference/upstream-src/1.6.9/repository/packages/better-auth/src/plugins/organization/routes/crud-org.ts"
+      "source_file": "reference/upstream-src/1.6.23/repository/packages/better-auth/src/plugins/organization/routes/crud-org.ts"
     },
     {
       "plugin_id": "organization",
@@ -732,7 +732,7 @@
       "ruby_api": "auth.api.delete_organization",
       "upstream_client": "organization.Delete",
       "deprecated": false,
-      "source_file": "reference/upstream-src/1.6.9/repository/packages/better-auth/src/plugins/organization/routes/crud-org.ts"
+      "source_file": "reference/upstream-src/1.6.23/repository/packages/better-auth/src/plugins/organization/routes/crud-org.ts"
     },
     {
       "plugin_id": "organization",
@@ -744,7 +744,7 @@
       "ruby_api": "auth.api.get_active_member",
       "upstream_client": "organization.GetActiveMember",
       "deprecated": false,
-      "source_file": "reference/upstream-src/1.6.9/repository/packages/better-auth/src/plugins/organization/routes/crud-members.ts"
+      "source_file": "reference/upstream-src/1.6.23/repository/packages/better-auth/src/plugins/organization/routes/crud-members.ts"
     },
     {
       "plugin_id": "organization",
@@ -756,7 +756,7 @@
       "ruby_api": "auth.api.get_active_member_role",
       "upstream_client": "organization.GetActiveMemberRole",
       "deprecated": false,
-      "source_file": "reference/upstream-src/1.6.9/repository/packages/better-auth/src/plugins/organization/routes/crud-members.ts"
+      "source_file": "reference/upstream-src/1.6.23/repository/packages/better-auth/src/plugins/organization/routes/crud-members.ts"
     },
     {
       "plugin_id": "organization",
@@ -768,7 +768,7 @@
       "ruby_api": "auth.api.get_full_organization",
       "upstream_client": "organization.GetFullOrganization",
       "deprecated": false,
-      "source_file": "reference/upstream-src/1.6.9/repository/packages/better-auth/src/plugins/organization/routes/crud-org.ts"
+      "source_file": "reference/upstream-src/1.6.23/repository/packages/better-auth/src/plugins/organization/routes/crud-org.ts"
     },
     {
       "plugin_id": "organization",
@@ -780,7 +780,7 @@
       "ruby_api": "auth.api.get_invitation",
       "upstream_client": "organization.GetInvitation",
       "deprecated": false,
-      "source_file": "reference/upstream-src/1.6.9/repository/packages/better-auth/src/plugins/organization/routes/crud-invites.ts"
+      "source_file": "reference/upstream-src/1.6.23/repository/packages/better-auth/src/plugins/organization/routes/crud-invites.ts"
     },
     {
       "plugin_id": "organization",
@@ -792,7 +792,7 @@
       "ruby_api": "auth.api.create_invitation",
       "upstream_client": "organization.InviteMember",
       "deprecated": false,
-      "source_file": "reference/upstream-src/1.6.9/repository/packages/better-auth/src/plugins/organization/routes/crud-invites.ts"
+      "source_file": "reference/upstream-src/1.6.23/repository/packages/better-auth/src/plugins/organization/routes/crud-invites.ts"
     },
     {
       "plugin_id": "organization",
@@ -804,7 +804,7 @@
       "ruby_api": "auth.api.leave_organization",
       "upstream_client": "organization.Leave",
       "deprecated": false,
-      "source_file": "reference/upstream-src/1.6.9/repository/packages/better-auth/src/plugins/organization/routes/crud-members.ts"
+      "source_file": "reference/upstream-src/1.6.23/repository/packages/better-auth/src/plugins/organization/routes/crud-members.ts"
     },
     {
       "plugin_id": "organization",
@@ -816,7 +816,7 @@
       "ruby_api": "auth.api.list_organizations",
       "upstream_client": "organization.List",
       "deprecated": false,
-      "source_file": "reference/upstream-src/1.6.9/repository/packages/better-auth/src/plugins/organization/routes/crud-org.ts"
+      "source_file": "reference/upstream-src/1.6.23/repository/packages/better-auth/src/plugins/organization/routes/crud-org.ts"
     },
     {
       "plugin_id": "organization",
@@ -828,7 +828,7 @@
       "ruby_api": "auth.api.list_invitations",
       "upstream_client": "organization.ListInvitations",
       "deprecated": false,
-      "source_file": "reference/upstream-src/1.6.9/repository/packages/better-auth/src/plugins/organization/routes/crud-invites.ts"
+      "source_file": "reference/upstream-src/1.6.23/repository/packages/better-auth/src/plugins/organization/routes/crud-invites.ts"
     },
     {
       "plugin_id": "organization",
@@ -840,7 +840,7 @@
       "ruby_api": "auth.api.list_members",
       "upstream_client": "organization.ListMembers",
       "deprecated": false,
-      "source_file": "reference/upstream-src/1.6.9/repository/packages/better-auth/src/plugins/organization/routes/crud-members.ts"
+      "source_file": "reference/upstream-src/1.6.23/repository/packages/better-auth/src/plugins/organization/routes/crud-members.ts"
     },
     {
       "plugin_id": "organization",
@@ -852,7 +852,7 @@
       "ruby_api": "auth.api.list_user_invitations",
       "upstream_client": "organization.ListUserInvitations",
       "deprecated": false,
-      "source_file": "reference/upstream-src/1.6.9/repository/packages/better-auth/src/plugins/organization/routes/crud-invites.ts"
+      "source_file": "reference/upstream-src/1.6.23/repository/packages/better-auth/src/plugins/organization/routes/crud-invites.ts"
     },
     {
       "plugin_id": "organization",
@@ -864,7 +864,7 @@
       "ruby_api": "auth.api.reject_invitation",
       "upstream_client": "organization.RejectInvitation",
       "deprecated": false,
-      "source_file": "reference/upstream-src/1.6.9/repository/packages/better-auth/src/plugins/organization/routes/crud-invites.ts"
+      "source_file": "reference/upstream-src/1.6.23/repository/packages/better-auth/src/plugins/organization/routes/crud-invites.ts"
     },
     {
       "plugin_id": "organization",
@@ -876,7 +876,7 @@
       "ruby_api": "auth.api.remove_member",
       "upstream_client": "organization.RemoveMember",
       "deprecated": false,
-      "source_file": "reference/upstream-src/1.6.9/repository/packages/better-auth/src/plugins/organization/routes/crud-members.ts"
+      "source_file": "reference/upstream-src/1.6.23/repository/packages/better-auth/src/plugins/organization/routes/crud-members.ts"
     },
     {
       "plugin_id": "organization",
@@ -888,7 +888,7 @@
       "ruby_api": "auth.api.set_active_organization",
       "upstream_client": "organization.SetActive",
       "deprecated": false,
-      "source_file": "reference/upstream-src/1.6.9/repository/packages/better-auth/src/plugins/organization/routes/crud-org.ts"
+      "source_file": "reference/upstream-src/1.6.23/repository/packages/better-auth/src/plugins/organization/routes/crud-org.ts"
     },
     {
       "plugin_id": "organization",
@@ -900,7 +900,7 @@
       "ruby_api": "auth.api.update_organization",
       "upstream_client": "organization.Update",
       "deprecated": false,
-      "source_file": "reference/upstream-src/1.6.9/repository/packages/better-auth/src/plugins/organization/routes/crud-org.ts"
+      "source_file": "reference/upstream-src/1.6.23/repository/packages/better-auth/src/plugins/organization/routes/crud-org.ts"
     },
     {
       "plugin_id": "organization",
@@ -912,7 +912,7 @@
       "ruby_api": "auth.api.update_member_role",
       "upstream_client": "organization.UpdateMemberRole",
       "deprecated": false,
-      "source_file": "reference/upstream-src/1.6.9/repository/packages/better-auth/src/plugins/organization/routes/crud-members.ts"
+      "source_file": "reference/upstream-src/1.6.23/repository/packages/better-auth/src/plugins/organization/routes/crud-members.ts"
     },
     {
       "plugin_id": "passkey",
@@ -924,7 +924,7 @@
       "ruby_api": "auth.api.delete_passkey",
       "upstream_client": "passkey.DeletePasskey",
       "deprecated": false,
-      "source_file": "reference/upstream-src/1.6.9/repository/packages/passkey/src/routes.ts"
+      "source_file": "reference/upstream-src/1.6.23/repository/packages/passkey/src/routes.ts"
     },
     {
       "plugin_id": "passkey",
@@ -936,7 +936,7 @@
       "ruby_api": "auth.api.list_passkeys",
       "upstream_client": "passkey.ListUserPasskeys",
       "deprecated": false,
-      "source_file": "reference/upstream-src/1.6.9/repository/packages/passkey/src/routes.ts"
+      "source_file": "reference/upstream-src/1.6.23/repository/packages/passkey/src/routes.ts"
     },
     {
       "plugin_id": "passkey",
@@ -948,7 +948,7 @@
       "ruby_api": "auth.api.update_passkey",
       "upstream_client": "passkey.UpdatePasskey",
       "deprecated": false,
-      "source_file": "reference/upstream-src/1.6.9/repository/packages/passkey/src/routes.ts"
+      "source_file": "reference/upstream-src/1.6.23/repository/packages/passkey/src/routes.ts"
     },
     {
       "plugin_id": "passkey",
@@ -960,7 +960,7 @@
       "ruby_api": "auth.api.verify_passkey_authentication",
       "upstream_client": "passkey.VerifyAuthentication",
       "deprecated": false,
-      "source_file": "reference/upstream-src/1.6.9/repository/packages/passkey/src/routes.ts"
+      "source_file": "reference/upstream-src/1.6.23/repository/packages/passkey/src/routes.ts"
     },
     {
       "plugin_id": "passkey",
@@ -972,7 +972,7 @@
       "ruby_api": "auth.api.verify_passkey_registration",
       "upstream_client": "passkey.VerifyRegistration",
       "deprecated": false,
-      "source_file": "reference/upstream-src/1.6.9/repository/packages/passkey/src/routes.ts"
+      "source_file": "reference/upstream-src/1.6.23/repository/packages/passkey/src/routes.ts"
     },
     {
       "plugin_id": "phone-number",
@@ -984,7 +984,7 @@
       "ruby_api": "auth.api.verify_phone_number",
       "upstream_client": "phoneNumber.Verify",
       "deprecated": false,
-      "source_file": "reference/upstream-src/1.6.9/repository/packages/better-auth/src/plugins/phone-number/routes.ts"
+      "source_file": "reference/upstream-src/1.6.23/repository/packages/better-auth/src/plugins/phone-number/routes.ts"
     },
     {
       "plugin_id": "core",
@@ -996,7 +996,7 @@
       "ruby_api": "auth.api.refresh_token",
       "upstream_client": "refreshToken",
       "deprecated": false,
-      "source_file": "reference/upstream-src/1.6.9/repository/packages/better-auth/src/api/routes/account.ts"
+      "source_file": "reference/upstream-src/1.6.23/repository/packages/better-auth/src/api/routes/account.ts"
     },
     {
       "plugin_id": "core",
@@ -1008,7 +1008,7 @@
       "ruby_api": "auth.api.request_password_reset",
       "upstream_client": "requestPasswordReset",
       "deprecated": false,
-      "source_file": "reference/upstream-src/1.6.9/repository/packages/better-auth/src/api/routes/password.ts"
+      "source_file": "reference/upstream-src/1.6.23/repository/packages/better-auth/src/api/routes/password.ts"
     },
     {
       "plugin_id": "core",
@@ -1020,7 +1020,7 @@
       "ruby_api": "auth.api.reset_password",
       "upstream_client": "resetPassword",
       "deprecated": false,
-      "source_file": "reference/upstream-src/1.6.9/repository/packages/better-auth/src/api/routes/password.ts"
+      "source_file": "reference/upstream-src/1.6.23/repository/packages/better-auth/src/api/routes/password.ts"
     },
     {
       "plugin_id": "core",
@@ -1032,7 +1032,7 @@
       "ruby_api": "auth.api.request_password_reset_callback",
       "upstream_client": "resetPassword.:token",
       "deprecated": false,
-      "source_file": "reference/upstream-src/1.6.9/repository/packages/better-auth/src/api/routes/password.ts"
+      "source_file": "reference/upstream-src/1.6.23/repository/packages/better-auth/src/api/routes/password.ts"
     },
     {
       "plugin_id": "core",
@@ -1044,7 +1044,7 @@
       "ruby_api": "auth.api.revoke_other_sessions",
       "upstream_client": "revokeOtherSessions",
       "deprecated": false,
-      "source_file": "reference/upstream-src/1.6.9/repository/packages/better-auth/src/api/routes/session.ts"
+      "source_file": "reference/upstream-src/1.6.23/repository/packages/better-auth/src/api/routes/session.ts"
     },
     {
       "plugin_id": "core",
@@ -1056,7 +1056,7 @@
       "ruby_api": "auth.api.revoke_session",
       "upstream_client": "revokeSession",
       "deprecated": false,
-      "source_file": "reference/upstream-src/1.6.9/repository/packages/better-auth/src/api/routes/session.ts"
+      "source_file": "reference/upstream-src/1.6.23/repository/packages/better-auth/src/api/routes/session.ts"
     },
     {
       "plugin_id": "core",
@@ -1068,7 +1068,7 @@
       "ruby_api": "auth.api.revoke_sessions",
       "upstream_client": "revokeSessions",
       "deprecated": false,
-      "source_file": "reference/upstream-src/1.6.9/repository/packages/better-auth/src/api/routes/session.ts"
+      "source_file": "reference/upstream-src/1.6.23/repository/packages/better-auth/src/api/routes/session.ts"
     },
     {
       "plugin_id": "scim",
@@ -1080,7 +1080,7 @@
       "ruby_api": "auth.api.delete_scim_provider_connection",
       "upstream_client": "scim.DeleteProviderConnection",
       "deprecated": false,
-      "source_file": "reference/upstream-src/1.6.9/repository/packages/scim/src/routes.ts"
+      "source_file": "reference/upstream-src/1.6.23/repository/packages/scim/src/routes.ts"
     },
     {
       "plugin_id": "scim",
@@ -1092,7 +1092,7 @@
       "ruby_api": "auth.api.generate_scim_token",
       "upstream_client": "scim.GenerateToken",
       "deprecated": false,
-      "source_file": "reference/upstream-src/1.6.9/repository/packages/scim/src/routes.ts"
+      "source_file": "reference/upstream-src/1.6.23/repository/packages/scim/src/routes.ts"
     },
     {
       "plugin_id": "scim",
@@ -1104,7 +1104,7 @@
       "ruby_api": "auth.api.get_scim_provider_connection",
       "upstream_client": "scim.GetProviderConnection",
       "deprecated": false,
-      "source_file": "reference/upstream-src/1.6.9/repository/packages/scim/src/routes.ts"
+      "source_file": "reference/upstream-src/1.6.23/repository/packages/scim/src/routes.ts"
     },
     {
       "plugin_id": "scim",
@@ -1116,7 +1116,7 @@
       "ruby_api": "auth.api.list_scim_provider_connections",
       "upstream_client": "scim.ListProviderConnections",
       "deprecated": false,
-      "source_file": "reference/upstream-src/1.6.9/repository/packages/scim/src/routes.ts"
+      "source_file": "reference/upstream-src/1.6.23/repository/packages/scim/src/routes.ts"
     },
     {
       "plugin_id": "scim",
@@ -1128,7 +1128,7 @@
       "ruby_api": "auth.api.get_scim_resource_types",
       "upstream_client": "scim.V2.Resourcetypes",
       "deprecated": false,
-      "source_file": "reference/upstream-src/1.6.9/repository/packages/scim/src/routes.ts"
+      "source_file": "reference/upstream-src/1.6.23/repository/packages/scim/src/routes.ts"
     },
     {
       "plugin_id": "scim",
@@ -1140,7 +1140,7 @@
       "ruby_api": "auth.api.get_scim_resource_type",
       "upstream_client": "scim.V2.Resourcetypes.:resourcetypeid",
       "deprecated": false,
-      "source_file": "reference/upstream-src/1.6.9/repository/packages/scim/src/routes.ts"
+      "source_file": "reference/upstream-src/1.6.23/repository/packages/scim/src/routes.ts"
     },
     {
       "plugin_id": "scim",
@@ -1152,7 +1152,7 @@
       "ruby_api": "auth.api.get_scim_schemas",
       "upstream_client": "scim.V2.Schemas",
       "deprecated": false,
-      "source_file": "reference/upstream-src/1.6.9/repository/packages/scim/src/routes.ts"
+      "source_file": "reference/upstream-src/1.6.23/repository/packages/scim/src/routes.ts"
     },
     {
       "plugin_id": "scim",
@@ -1164,7 +1164,7 @@
       "ruby_api": "auth.api.get_scim_schema",
       "upstream_client": "scim.V2.Schemas.:schemaid",
       "deprecated": false,
-      "source_file": "reference/upstream-src/1.6.9/repository/packages/scim/src/routes.ts"
+      "source_file": "reference/upstream-src/1.6.23/repository/packages/scim/src/routes.ts"
     },
     {
       "plugin_id": "scim",
@@ -1176,7 +1176,7 @@
       "ruby_api": "auth.api.get_scim_service_provider_config",
       "upstream_client": "scim.V2.Serviceproviderconfig",
       "deprecated": false,
-      "source_file": "reference/upstream-src/1.6.9/repository/packages/scim/src/routes.ts"
+      "source_file": "reference/upstream-src/1.6.23/repository/packages/scim/src/routes.ts"
     },
     {
       "plugin_id": "scim",
@@ -1188,7 +1188,7 @@
       "ruby_api": "auth.api.list_scim_users",
       "upstream_client": "scim.V2.Users",
       "deprecated": false,
-      "source_file": "reference/upstream-src/1.6.9/repository/packages/scim/src/routes.ts"
+      "source_file": "reference/upstream-src/1.6.23/repository/packages/scim/src/routes.ts"
     },
     {
       "plugin_id": "scim",
@@ -1200,7 +1200,7 @@
       "ruby_api": "auth.api.create_scim_user",
       "upstream_client": "scim.V2.Users",
       "deprecated": false,
-      "source_file": "reference/upstream-src/1.6.9/repository/packages/scim/src/routes.ts"
+      "source_file": "reference/upstream-src/1.6.23/repository/packages/scim/src/routes.ts"
     },
     {
       "plugin_id": "scim",
@@ -1212,7 +1212,7 @@
       "ruby_api": "auth.api.delete_scim_user",
       "upstream_client": "scim.V2.Users.:userid",
       "deprecated": false,
-      "source_file": "reference/upstream-src/1.6.9/repository/packages/scim/src/routes.ts"
+      "source_file": "reference/upstream-src/1.6.23/repository/packages/scim/src/routes.ts"
     },
     {
       "plugin_id": "scim",
@@ -1224,7 +1224,7 @@
       "ruby_api": "auth.api.get_scim_user",
       "upstream_client": "scim.V2.Users.:userid",
       "deprecated": false,
-      "source_file": "reference/upstream-src/1.6.9/repository/packages/scim/src/routes.ts"
+      "source_file": "reference/upstream-src/1.6.23/repository/packages/scim/src/routes.ts"
     },
     {
       "plugin_id": "scim",
@@ -1236,7 +1236,7 @@
       "ruby_api": "auth.api.patch_scim_user",
       "upstream_client": "scim.V2.Users.:userid",
       "deprecated": false,
-      "source_file": "reference/upstream-src/1.6.9/repository/packages/scim/src/routes.ts"
+      "source_file": "reference/upstream-src/1.6.23/repository/packages/scim/src/routes.ts"
     },
     {
       "plugin_id": "scim",
@@ -1248,7 +1248,7 @@
       "ruby_api": "auth.api.update_scim_user",
       "upstream_client": "scim.V2.Users.:userid",
       "deprecated": false,
-      "source_file": "reference/upstream-src/1.6.9/repository/packages/scim/src/routes.ts"
+      "source_file": "reference/upstream-src/1.6.23/repository/packages/scim/src/routes.ts"
     },
     {
       "plugin_id": "core",
@@ -1260,7 +1260,7 @@
       "ruby_api": "auth.api.send_verification_email",
       "upstream_client": "sendVerificationEmail",
       "deprecated": false,
-      "source_file": "reference/upstream-src/1.6.9/repository/packages/better-auth/src/api/routes/email-verification.ts"
+      "source_file": "reference/upstream-src/1.6.23/repository/packages/better-auth/src/api/routes/email-verification.ts"
     },
     {
       "plugin_id": "core",
@@ -1272,7 +1272,7 @@
       "ruby_api": "auth.api.sign_in_email",
       "upstream_client": "signIn.Email",
       "deprecated": false,
-      "source_file": "reference/upstream-src/1.6.9/repository/packages/better-auth/src/api/routes/sign-in.ts"
+      "source_file": "reference/upstream-src/1.6.23/repository/packages/better-auth/src/api/routes/sign-in.ts"
     },
     {
       "plugin_id": "email-otp",
@@ -1284,7 +1284,7 @@
       "ruby_api": "auth.api.sign_in_email_otp",
       "upstream_client": "signIn.EmailOtp",
       "deprecated": false,
-      "source_file": "reference/upstream-src/1.6.9/repository/packages/better-auth/src/plugins/email-otp/routes.ts"
+      "source_file": "reference/upstream-src/1.6.23/repository/packages/better-auth/src/plugins/email-otp/routes.ts"
     },
     {
       "plugin_id": "generic-oauth",
@@ -1296,7 +1296,7 @@
       "ruby_api": "auth.api.sign_in_with_oauth2",
       "upstream_client": "signIn.Oauth2",
       "deprecated": false,
-      "source_file": "reference/upstream-src/1.6.9/repository/packages/better-auth/src/plugins/generic-oauth/routes.ts"
+      "source_file": "reference/upstream-src/1.6.23/repository/packages/better-auth/src/plugins/generic-oauth/routes.ts"
     },
     {
       "plugin_id": "phone-number",
@@ -1308,7 +1308,7 @@
       "ruby_api": "auth.api.sign_in_phone_number",
       "upstream_client": "signIn.PhoneNumber",
       "deprecated": false,
-      "source_file": "reference/upstream-src/1.6.9/repository/packages/better-auth/src/plugins/phone-number/routes.ts"
+      "source_file": "reference/upstream-src/1.6.23/repository/packages/better-auth/src/plugins/phone-number/routes.ts"
     },
     {
       "plugin_id": "core",
@@ -1320,7 +1320,7 @@
       "ruby_api": "auth.api.sign_in_social",
       "upstream_client": "signIn.Social",
       "deprecated": false,
-      "source_file": "reference/upstream-src/1.6.9/repository/packages/better-auth/src/api/routes/sign-in.ts"
+      "source_file": "reference/upstream-src/1.6.23/repository/packages/better-auth/src/api/routes/sign-in.ts"
     },
     {
       "plugin_id": "sso",
@@ -1332,7 +1332,7 @@
       "ruby_api": "auth.api.sign_in_sso",
       "upstream_client": "signIn.Sso",
       "deprecated": false,
-      "source_file": "reference/upstream-src/1.6.9/repository/packages/sso/src/routes/sso.ts"
+      "source_file": "reference/upstream-src/1.6.23/repository/packages/sso/src/routes/sso.ts"
     },
     {
       "plugin_id": "core",
@@ -1344,7 +1344,7 @@
       "ruby_api": "auth.api.sign_out",
       "upstream_client": "signOut",
       "deprecated": false,
-      "source_file": "reference/upstream-src/1.6.9/repository/packages/better-auth/src/api/routes/sign-out.ts"
+      "source_file": "reference/upstream-src/1.6.23/repository/packages/better-auth/src/api/routes/sign-out.ts"
     },
     {
       "plugin_id": "core",
@@ -1356,7 +1356,7 @@
       "ruby_api": "auth.api.sign_up_email",
       "upstream_client": "signUp.Email",
       "deprecated": false,
-      "source_file": "reference/upstream-src/1.6.9/repository/packages/better-auth/src/api/routes/sign-up.ts"
+      "source_file": "reference/upstream-src/1.6.23/repository/packages/better-auth/src/api/routes/sign-up.ts"
     },
     {
       "plugin_id": "sso",
@@ -1368,7 +1368,7 @@
       "ruby_api": "auth.api.callback_sso_shared",
       "upstream_client": "sso.Callback",
       "deprecated": false,
-      "source_file": "reference/upstream-src/1.6.9/repository/packages/sso/src/routes/sso.ts"
+      "source_file": "reference/upstream-src/1.6.23/repository/packages/sso/src/routes/sso.ts"
     },
     {
       "plugin_id": "sso",
@@ -1380,7 +1380,7 @@
       "ruby_api": "auth.api.callback_sso",
       "upstream_client": "sso.Callback.:providerid",
       "deprecated": false,
-      "source_file": "reference/upstream-src/1.6.9/repository/packages/sso/src/routes/sso.ts"
+      "source_file": "reference/upstream-src/1.6.23/repository/packages/sso/src/routes/sso.ts"
     },
     {
       "plugin_id": "sso",
@@ -1392,7 +1392,7 @@
       "ruby_api": "auth.api.delete_sso_provider",
       "upstream_client": "sso.DeleteProvider",
       "deprecated": false,
-      "source_file": "reference/upstream-src/1.6.9/repository/packages/sso/src/routes/providers.ts"
+      "source_file": "reference/upstream-src/1.6.23/repository/packages/sso/src/routes/providers.ts"
     },
     {
       "plugin_id": "sso",
@@ -1404,7 +1404,7 @@
       "ruby_api": "auth.api.get_sso_provider",
       "upstream_client": "sso.GetProvider",
       "deprecated": false,
-      "source_file": "reference/upstream-src/1.6.9/repository/packages/sso/src/routes/providers.ts"
+      "source_file": "reference/upstream-src/1.6.23/repository/packages/sso/src/routes/providers.ts"
     },
     {
       "plugin_id": "sso",
@@ -1416,7 +1416,7 @@
       "ruby_api": "auth.api.list_sso_providers",
       "upstream_client": "sso.Providers",
       "deprecated": false,
-      "source_file": "reference/upstream-src/1.6.9/repository/packages/sso/src/routes/providers.ts"
+      "source_file": "reference/upstream-src/1.6.23/repository/packages/sso/src/routes/providers.ts"
     },
     {
       "plugin_id": "sso",
@@ -1428,7 +1428,7 @@
       "ruby_api": "auth.api.register_sso_provider",
       "upstream_client": "sso.Register",
       "deprecated": false,
-      "source_file": "reference/upstream-src/1.6.9/repository/packages/sso/src/routes/sso.ts"
+      "source_file": "reference/upstream-src/1.6.23/repository/packages/sso/src/routes/sso.ts"
     },
     {
       "plugin_id": "sso",
@@ -1440,7 +1440,7 @@
       "ruby_api": "auth.api.callback_sso_saml",
       "upstream_client": "sso.Saml2.Callback.:providerid",
       "deprecated": false,
-      "source_file": "reference/upstream-src/1.6.9/repository/packages/sso/src/routes/sso.ts"
+      "source_file": "reference/upstream-src/1.6.23/repository/packages/sso/src/routes/sso.ts"
     },
     {
       "plugin_id": "sso",
@@ -1452,7 +1452,7 @@
       "ruby_api": "auth.api.initiate_slo",
       "upstream_client": "sso.Saml2.Logout.:providerid",
       "deprecated": false,
-      "source_file": "reference/upstream-src/1.6.9/repository/packages/sso/src/routes/sso.ts"
+      "source_file": "reference/upstream-src/1.6.23/repository/packages/sso/src/routes/sso.ts"
     },
     {
       "plugin_id": "sso",
@@ -1464,7 +1464,7 @@
       "ruby_api": "auth.api.acs_endpoint",
       "upstream_client": "sso.Saml2.Sp.Acs.:providerid",
       "deprecated": false,
-      "source_file": "reference/upstream-src/1.6.9/repository/packages/sso/src/routes/sso.ts"
+      "source_file": "reference/upstream-src/1.6.23/repository/packages/sso/src/routes/sso.ts"
     },
     {
       "plugin_id": "sso",
@@ -1476,7 +1476,7 @@
       "ruby_api": "auth.api.sp_metadata",
       "upstream_client": "sso.Saml2.Sp.Metadata",
       "deprecated": false,
-      "source_file": "reference/upstream-src/1.6.9/repository/packages/sso/src/routes/sso.ts"
+      "source_file": "reference/upstream-src/1.6.23/repository/packages/sso/src/routes/sso.ts"
     },
     {
       "plugin_id": "sso",
@@ -1488,7 +1488,7 @@
       "ruby_api": "auth.api.slo_endpoint",
       "upstream_client": "sso.Saml2.Sp.Slo.:providerid",
       "deprecated": false,
-      "source_file": "reference/upstream-src/1.6.9/repository/packages/sso/src/routes/sso.ts"
+      "source_file": "reference/upstream-src/1.6.23/repository/packages/sso/src/routes/sso.ts"
     },
     {
       "plugin_id": "sso",
@@ -1500,7 +1500,7 @@
       "ruby_api": "auth.api.update_sso_provider",
       "upstream_client": "sso.UpdateProvider",
       "deprecated": false,
-      "source_file": "reference/upstream-src/1.6.9/repository/packages/sso/src/routes/providers.ts"
+      "source_file": "reference/upstream-src/1.6.23/repository/packages/sso/src/routes/providers.ts"
     },
     {
       "plugin_id": "stripe",
@@ -1512,7 +1512,7 @@
       "ruby_api": "auth.api.stripe_webhook",
       "upstream_client": "stripe.Webhook",
       "deprecated": false,
-      "source_file": "reference/upstream-src/1.6.9/repository/packages/stripe/src/routes.ts"
+      "source_file": "reference/upstream-src/1.6.23/repository/packages/stripe/src/routes.ts"
     },
     {
       "plugin_id": "core",
@@ -1524,7 +1524,7 @@
       "ruby_api": "auth.api.unlink_account",
       "upstream_client": "unlinkAccount",
       "deprecated": false,
-      "source_file": "reference/upstream-src/1.6.9/repository/packages/better-auth/src/api/routes/account.ts"
+      "source_file": "reference/upstream-src/1.6.23/repository/packages/better-auth/src/api/routes/account.ts"
     },
     {
       "plugin_id": "core",
@@ -1536,7 +1536,7 @@
       "ruby_api": "auth.api.update_session",
       "upstream_client": "updateSession",
       "deprecated": false,
-      "source_file": "reference/upstream-src/1.6.9/repository/packages/better-auth/src/api/routes/update-session.ts"
+      "source_file": "reference/upstream-src/1.6.23/repository/packages/better-auth/src/api/routes/update-session.ts"
     },
     {
       "plugin_id": "core",
@@ -1548,7 +1548,7 @@
       "ruby_api": "auth.api.update_user",
       "upstream_client": "updateUser",
       "deprecated": false,
-      "source_file": "reference/upstream-src/1.6.9/repository/packages/better-auth/src/api/routes/update-user.ts"
+      "source_file": "reference/upstream-src/1.6.23/repository/packages/better-auth/src/api/routes/update-user.ts"
     },
     {
       "plugin_id": "core",
@@ -1560,7 +1560,7 @@
       "ruby_api": "auth.api.verify_email",
       "upstream_client": "verifyEmail",
       "deprecated": false,
-      "source_file": "reference/upstream-src/1.6.9/repository/packages/better-auth/src/api/routes/email-verification.ts"
+      "source_file": "reference/upstream-src/1.6.23/repository/packages/better-auth/src/api/routes/email-verification.ts"
     },
     {
       "plugin_id": "core",
@@ -1572,7 +1572,7 @@
       "ruby_api": "auth.api.verify_password",
       "upstream_client": "verifyPassword",
       "deprecated": false,
-      "source_file": "reference/upstream-src/1.6.9/repository/packages/better-auth/src/api/routes/password.ts"
+      "source_file": "reference/upstream-src/1.6.23/repository/packages/better-auth/src/api/routes/password.ts"
     }
   ]
 }

@@ -13,7 +13,7 @@ Ruby packages for selected Better Auth plugins.
 [Upstream Better Auth](https://better-auth.com) -
 [Issues](https://github.com/sebasxsala/better-auth-rb/issues)
 
-Current upstream target: Better Auth `v1.6.9` (see
+Current upstream reference target: Better Auth `v1.6.23` (see
 [`reference/upstream-better-auth/VERSION.md`](reference/upstream-better-auth/VERSION.md);
 fetch local sources with `./scripts/fetch-upstream-better-auth.sh`).
 

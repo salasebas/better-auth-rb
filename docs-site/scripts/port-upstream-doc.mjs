@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * Usage: node docs-site/scripts/port-upstream-doc.mjs plugins/2fa.mdx
- * Copies upstream v1.6.9 MDX, applies mechanical transforms, writes to content/docs/.
+ * Copies pinned upstream MDX, applies mechanical transforms, writes to content/docs/.
  * Does NOT auto-generate Ruby examples - executor must edit code blocks after.
  */
 
@@ -13,9 +13,20 @@ import { fileURLToPath } from "node:url";
 const scriptPath = fileURLToPath(import.meta.url);
 const scriptDir = path.dirname(scriptPath);
 const repoRoot = path.resolve(scriptDir, "../..");
+const versionFile = path.join(
+	repoRoot,
+	"reference/upstream-better-auth/VERSION.md",
+);
+const versionMatch = readFileSync(versionFile, "utf8").match(
+	/^\| Version \| `([0-9]+\.[0-9]+\.[0-9]+)` \|$/m,
+);
+if (!versionMatch) {
+	throw new Error(`Could not read pinned upstream version from ${versionFile}`);
+}
+const upstreamVersion = versionMatch[1];
 const upstreamRoot = path.join(
 	repoRoot,
-	"reference/upstream-src/1.6.9/repository/docs/content/docs",
+	`reference/upstream-src/${upstreamVersion}/repository/docs/content/docs`,
 );
 const localRoot = path.join(repoRoot, "docs-site/content/docs");
 const manifestPath = path.join(

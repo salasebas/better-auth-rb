@@ -7,7 +7,7 @@ Better Auth Ruby ports. It is not part of the published gem API.
 - **Documentation:** https://www.better-auth.com/docs
 - **License:** MIT (see [LICENSE.md](LICENSE.md))
 - **Local dev clone (gitignored):** `reference/upstream-src/` — shallow clone for parity work; not shipped
-- **Snapshot commit:** `f484269228b7eb8df0e2325e7d264bb8d7796311` (tag `v1.6.9`, checked 2026-05-09)
+- **Snapshot commit:** `9dfceee14021fc15a2fb93023f39635f25b0b5ba` (tag `v1.6.23`, checked 2026-07-11)
 
 Better Auth Ruby is an independent implementation and is not affiliated with or
 endorsed by the upstream authors.

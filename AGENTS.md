@@ -11,8 +11,8 @@ root first, then the local package.
 
 ## Upstream
 
-Target: Better Auth `v1.6.9` at commit
-`f484269228b7eb8df0e2325e7d264bb8d7796311` (see
+Reference target: Better Auth `v1.6.23` at commit
+`9dfceee14021fc15a2fb93023f39635f25b0b5ba` (see
 `reference/upstream-better-auth/VERSION.md`).
 
 Fetch sources and tests when needed:
@@ -21,7 +21,7 @@ Fetch sources and tests when needed:
 ./scripts/fetch-upstream-better-auth.sh
 ```
 
-Clone path: `reference/upstream-src/1.6.9/repository/`. Do not commit files
+Clone path: `reference/upstream-src/1.6.23/repository/`. Do not commit files
 under `reference/upstream-src/<version>/`.
 
 Before changing upstream-backed behavior: read the matching source and tests,

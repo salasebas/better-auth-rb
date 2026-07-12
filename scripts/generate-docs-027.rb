@@ -658,7 +658,7 @@ write(File.join(REF, "contributing.mdx"), <<~MDX)
 
   ## Parity work
 
-  Before changing auth behavior, read matching upstream tests at `reference/upstream-src/1.6.9/` (fetch with `./scripts/fetch-upstream-better-auth.sh`) and update `packages/better_auth/test/support/upstream_server_parity.rb`.
+  Before changing auth behavior, read matching upstream tests at `reference/upstream-src/1.6.23/` (fetch with `./scripts/fetch-upstream-better-auth.sh`) and update `packages/better_auth/test/support/upstream_server_parity.rb`.
 
   ## Docs
 

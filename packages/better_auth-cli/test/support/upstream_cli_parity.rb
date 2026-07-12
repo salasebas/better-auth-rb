@@ -3,9 +3,14 @@
 module BetterAuth
   module CLITestSupport
     module UpstreamCLIParity
+      REPOSITORY_ROOT = File.expand_path("../../../..", __dir__)
+      VERSION_FILE = File.join(REPOSITORY_ROOT, "reference/upstream-better-auth/VERSION.md")
+      UPSTREAM_VERSION = File.read(VERSION_FILE)[/^\| Version \| `(\d+\.\d+\.\d+)` \|$/, 1]
+      raise "Could not read pinned upstream version from #{VERSION_FILE}" unless UPSTREAM_VERSION
+
       UPSTREAM_ROOT = File.expand_path(
-        "../../../../reference/upstream-src/1.6.9/repository/packages/cli",
-        __dir__
+        "reference/upstream-src/#{UPSTREAM_VERSION}/repository/packages/cli",
+        REPOSITORY_ROOT
       )
 
       EXCLUDED_UPSTREAM_TESTS = {

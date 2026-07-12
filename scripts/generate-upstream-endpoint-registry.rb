@@ -6,9 +6,12 @@ require "time"
 require_relative "support/endpoint_naming"
 
 ROOT = File.expand_path("..", __dir__)
-UPSTREAM_PACKAGES = File.join(ROOT, "reference", "upstream-src", "1.6.9", "repository", "packages")
 OUTPUT = File.join(ROOT, "reference", "upstream-endpoint-registry.json")
 VERSION_FILE = File.join(ROOT, "reference", "upstream-better-auth", "VERSION.md")
+UPSTREAM_VERSION = File.read(VERSION_FILE)[/^\| Version \| `(\d+\.\d+\.\d+)` \|$/, 1]
+raise "Could not read pinned upstream version from #{VERSION_FILE}" unless UPSTREAM_VERSION
+
+UPSTREAM_PACKAGES = File.join(ROOT, "reference", "upstream-src", UPSTREAM_VERSION, "repository", "packages")
 
 DENY_PATH_PREFIXES = %w[
   /body
@@ -301,9 +304,7 @@ module UpstreamEndpointRegistry
   end
 
   def upstream_version
-    return "1.6.9" unless File.exist?(VERSION_FILE)
-
-    File.read(VERSION_FILE)[/v(\d+\.\d+\.\d+)/, 1] || "1.6.9"
+    UPSTREAM_VERSION
   end
 
   def stringify_keys(value)

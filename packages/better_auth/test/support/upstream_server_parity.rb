@@ -3,21 +3,31 @@
 module BetterAuth
   module TestSupport
     module UpstreamServerParity
+      REPOSITORY_ROOT = File.expand_path("../../../..", __dir__)
+      VERSION_FILE = File.join(REPOSITORY_ROOT, "reference/upstream-better-auth/VERSION.md")
+      UPSTREAM_VERSION = File.read(VERSION_FILE)[/^\| Version \| `(\d+\.\d+\.\d+)` \|$/, 1]
+      raise "Could not read pinned upstream version from #{VERSION_FILE}" unless UPSTREAM_VERSION
+
       UPSTREAM_ROOT = File.expand_path(
-        "../../../../reference/upstream-src/1.6.9/repository/packages/better-auth/src",
-        __dir__
+        "reference/upstream-src/#{UPSTREAM_VERSION}/repository/packages/better-auth/src",
+        REPOSITORY_ROOT
       )
 
       EXCLUDED_UPSTREAM_TESTS = {
         "client/client-ssr.test.ts" => "Browser client SSR behavior; no Ruby server equivalent",
         "client/client.test.ts" => "Browser client API surface; no Ruby server equivalent",
+        "client/client-declaration.test.ts" => "TypeScript client declaration surface; no Ruby server equivalent",
+        "client/equality.test.ts" => "TypeScript client type equality assertions; no Ruby server equivalent",
+        "client/parser.test.ts" => "Browser client response parser; no Ruby server equivalent",
         "client/proxy.test.ts" => "Client proxy and generated client shape; no Ruby server equivalent",
         "client/query.test.ts" => "Client query helpers; no Ruby server equivalent",
         "client/session-refresh.test.ts" => "Browser client session refresh; no Ruby server equivalent",
         "client/url.test.ts" => "Client URL helpers; no Ruby server equivalent",
         "integrations/next-js.test.ts" => "Next.js framework integration; not a Ruby server target",
         "plugins/mcp/client/mcp-client.test.ts" => "MCP browser/client plugin; server MCP tests live elsewhere",
+        "plugins/oauth-popup/oauth-popup.client.test.ts" => "OAuth popup browser client behavior; no Ruby server equivalent",
         "plugins/organization/client.test.ts" => "Organization client plugin API; not server organization behavior",
+        "plugins/organization/organization-client-declaration.test.ts" => "TypeScript organization client declaration surface; no Ruby server equivalent",
         "plugins/test-utils/test-utils.test.ts" => "Upstream test harness utilities; not runtime server behavior",
         "types/types.test.ts" => "TypeScript type inference assertions; no Ruby server runtime equivalent"
       }.freeze
@@ -58,6 +68,12 @@ module BetterAuth
           status: :covered,
           plan: "009",
           notes: "Account listing, unlink guards, access-token refresh, account cookie, refresh-token errors, and account info covered in account_test"
+        },
+        "api/routes/cookie-cache-fallback.test.ts" => {
+          owner: ["better_auth/cookies_test.rb", "better_auth/session_test.rb"],
+          status: :partial,
+          plan: "008",
+          notes: "New v1.6.23 cookie-cache fallback cases require parity review"
         },
         "api/routes/email-verification.test.ts" => {
           owner: "better_auth/routes/email_verification_test.rb",
@@ -112,6 +128,12 @@ module BetterAuth
           status: :covered,
           plan: "007",
           notes: "Endpoint conversion and direct API dispatch covered in api_test"
+        },
+        "api/server-only-endpoints.test.ts" => {
+          owner: "better_auth/api_test.rb",
+          status: :partial,
+          plan: "007",
+          notes: "New v1.6.23 server-only endpoint cases require parity review"
         },
         "auth/full.test.ts" => {
           owner: ["better_auth/auth_test.rb", "better_auth/auth_context_upstream_parity_test.rb"],
@@ -220,6 +242,12 @@ module BetterAuth
           plan: "006",
           notes: "OAuth2 account linking covered in oauth2_test"
         },
+        "oauth2/state.test.ts" => {
+          owner: "better_auth/oauth2_test.rb",
+          status: :partial,
+          plan: "006",
+          notes: "New v1.6.23 OAuth state cases require parity review"
+        },
         "oauth2/utils.test.ts" => {
           owner: "better_auth/oauth2_test.rb",
           status: :covered,
@@ -243,6 +271,12 @@ module BetterAuth
           status: :partial,
           plan: "010",
           notes: "Admin plugin overlaps organization access control; gaps tracked in plan 010"
+        },
+        "plugins/admin/admin-username.test.ts" => {
+          owner: "better_auth/plugins/admin_test.rb",
+          status: :partial,
+          plan: "010",
+          notes: "New v1.6.23 admin username cases require parity review"
         },
         "plugins/anonymous/anon.test.ts" => {
           owner: "better_auth/plugins/anonymous_test.rb",
@@ -348,11 +382,22 @@ module BetterAuth
           plan: "006",
           notes: "OAuth proxy plugin covered in oauth_proxy_test"
         },
+        "plugins/oauth-popup/oauth-popup.test.ts" => {
+          status: :ruby_not_applicable,
+          plan: "unplanned",
+          notes: "OAuth popup plugin is not currently implemented by the Ruby server"
+        },
         "plugins/oidc-provider/oidc.test.ts" => {
           owner: "../../better_auth-oauth-provider/test/better_auth/oauth_provider_test.rb",
           status: :covered,
           plan: "019",
           notes: "OIDC provider behavior superseded by oauth-provider package"
+        },
+        "plugins/oidc-provider/redirect-uri.test.ts" => {
+          owner: "../../better_auth-oauth-provider/test/better_auth/oauth_provider_test.rb",
+          status: :partial,
+          plan: "019",
+          notes: "New v1.6.23 redirect URI cases require parity review in oauth-provider"
         },
         "plugins/oidc-provider/utils/prompt.test.ts" => {
           owner: "../../better_auth-oauth-provider/test/better_auth/oauth_provider/prompt_test.rb",
@@ -365,6 +410,12 @@ module BetterAuth
           status: :covered,
           plan: "011",
           notes: "One-time-token plugin covered; disable_client_request applies to generate only"
+        },
+        "plugins/one-tap/one-tap.test.ts" => {
+          owner: "better_auth/plugins/one_tap_test.rb",
+          status: :partial,
+          plan: "012",
+          notes: "New v1.6.23 one-tap cases require parity review"
         },
         "plugins/open-api/open-api.test.ts" => {
           owner: "better_auth/plugins/open_api_test.rb",
@@ -400,6 +451,15 @@ module BetterAuth
           status: :covered,
           plan: "010",
           notes: "Dynamic access-control routes covered in organization plugin tests"
+        },
+        "plugins/organization/routes/crud-invites.test.ts" => {
+          owner: [
+            "better_auth/plugins/organization_test.rb",
+            "better_auth/plugins/organization_members_test.rb"
+          ],
+          status: :partial,
+          plan: "010",
+          notes: "New v1.6.23 invitation CRUD cases require parity review"
         },
         "plugins/organization/routes/crud-members.test.ts" => {
           owner: [
@@ -446,6 +506,24 @@ module BetterAuth
           status: :covered,
           plan: "006",
           notes: "Two-factor plugin covered in two_factor_test"
+        },
+        "plugins/two-factor/two-factor.account-lockout.test.ts" => {
+          owner: "better_auth/plugins/two_factor_test.rb",
+          status: :partial,
+          plan: "006",
+          notes: "New v1.6.23 account lockout cases require parity review"
+        },
+        "plugins/two-factor/two-factor.attempt-cap.test.ts" => {
+          owner: "better_auth/plugins/two_factor_test.rb",
+          status: :partial,
+          plan: "006",
+          notes: "New v1.6.23 attempt cap cases require parity review"
+        },
+        "plugins/two-factor/two-factor.security.test.ts" => {
+          owner: "better_auth/plugins/two_factor_test.rb",
+          status: :partial,
+          plan: "006",
+          notes: "New v1.6.23 two-factor security cases require parity review"
         },
         "plugins/username/username.test.ts" => {
           owner: "better_auth/plugins/username_test.rb",
