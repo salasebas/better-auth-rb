@@ -105,6 +105,8 @@ class BetterAuthRouterTest < Minitest::Test
     captured = []
     auth = BetterAuth.auth(
       secret: SECRET,
+      base_url: "https://auth.example",
+      serving_origins: ["https://tenant.example"],
       trusted_origins: ->(request) { [request.get_header("HTTP_ORIGIN")] },
       plugins: [
         {
@@ -884,6 +886,7 @@ class BetterAuthRouterTest < Minitest::Test
     captured = []
     auth = BetterAuth.auth(
       secret: SECRET,
+      serving_origins: ["https://example.com:8080"],
       advanced: {trusted_proxy_headers: true},
       hooks: {
         before: lambda do |ctx|

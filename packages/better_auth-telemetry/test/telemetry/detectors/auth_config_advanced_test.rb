@@ -85,7 +85,7 @@ class AuthConfigAdvancedTest < Minitest::Test
     logger_level: 44_002
   }.freeze
 
-  TRUSTED_ORIGINS = %w[a b c].freeze
+  TRUSTED_ORIGINS = ["https://auth.example.com", "b", "c"].freeze
 
   # Build the full sentinel-laden configuration. Wrapping the
   # constructor in `with_env` ensures the `BETTER_AUTH_TRUSTED_ORIGINS`
@@ -100,6 +100,7 @@ class AuthConfigAdvancedTest < Minitest::Test
     ) do
       BetterAuth::Configuration.new(
         secret: REDACTED_SENTINELS[:secret],
+        base_url: "https://auth.example.com",
         secondary_storage: REDACTED_SENTINELS[:secondary_storage],
         trusted_origins: TRUSTED_ORIGINS.dup,
         advanced: {
@@ -227,14 +228,14 @@ class AuthConfigAdvancedTest < Minitest::Test
     assert_equal TRUSTED_ORIGINS.length, payload[:trustedOrigins]
   end
 
-  def test_trusted_origins_is_zero_when_configuration_normalized_to_empty
+  def test_trusted_origins_contains_required_canonical_origin_when_no_extras_are_configured
     with_env(
       "BETTER_AUTH_TRUSTED_ORIGINS" => nil,
       "BETTER_AUTH_URL" => nil,
       "BASE_URL" => nil
     ) do
-      config = BetterAuth::Configuration.new(secret: "0" * 40)
-      assert_equal 0, AuthConfig.call(config, nil)[:trustedOrigins]
+      config = BetterAuth::Configuration.new(secret: "0" * 40, base_url: "https://auth.example.com")
+      assert_equal 1, AuthConfig.call(config, nil)[:trustedOrigins]
     end
   end
 

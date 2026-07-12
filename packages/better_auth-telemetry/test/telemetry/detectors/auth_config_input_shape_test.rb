@@ -53,6 +53,7 @@ class AuthConfigInputShapeTest < Minitest::Test
   def build_logical_configuration
     {
       secret: "0" * 40,
+      base_url: "https://auth.example.com",
       database: :memory,
       email_verification: {
         send_verification_email: ->(*) {},
@@ -80,7 +81,7 @@ class AuthConfigInputShapeTest < Minitest::Test
         cookie_prefix: "ba",
         use_secure_cookies: true
       },
-      trusted_origins: ["https://example.com"],
+      trusted_origins: ["https://auth.example.com", "https://example.com"],
       rate_limit: {
         enabled: false,
         window: 10,

@@ -55,6 +55,8 @@ class BetterAuthAuthTest < Minitest::Test
     captured = []
     auth = BetterAuth.auth(
       secret: SECRET,
+      base_url: "https://auth.example.com",
+      serving_origins: ["https://preview.example.com:8443"],
       advanced: {trusted_proxy_headers: true},
       plugins: [capture_base_url_plugin(captured)]
     )
@@ -67,13 +69,14 @@ class BetterAuthAuthTest < Minitest::Test
 
     assert_equal 200, status
     assert_equal "https://preview.example.com:8443/api/auth", captured.first
-    assert_equal "", auth.context.base_url
+    assert_equal "https://auth.example.com/api/auth", auth.context.base_url
   end
 
   def test_inferred_base_url_rejects_malicious_forwarded_and_host_headers
     captured = []
     auth = BetterAuth.auth(
       secret: SECRET,
+      base_url: "https://auth.example.com",
       advanced: {trusted_proxy_headers: true},
       plugins: [capture_base_url_plugin(captured)]
     )
@@ -87,8 +90,8 @@ class BetterAuthAuthTest < Minitest::Test
     }))
 
     assert_equal 200, status
-    assert_equal "http://localhost:3000/api/auth", captured.first
-    assert_equal "", auth.context.base_url
+    assert_equal "https://auth.example.com/api/auth", captured.first
+    assert_equal "https://auth.example.com/api/auth", auth.context.base_url
   end
 
   private

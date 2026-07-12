@@ -271,24 +271,24 @@ class BetterAuthCookiesTest < Minitest::Test
 
     assert_equal "app.example.com", cookie.attributes[:domain]
 
-    static_config = BetterAuth::Configuration.new(
-      secret: SECRET,
-      database: :memory,
-      advanced: {cross_subdomain_cookies: {enabled: true}}
-    )
-    assert_raises(BetterAuth::Error, "base_url is required when cross_subdomain_cookies are enabled") do
-      BetterAuth::Cookies.create_cookie(static_config, "session_token")
+    with_env("BETTER_AUTH_URL" => nil, "OPEN_AUTH_URL" => nil, "BASE_URL" => nil) do
+      assert_raises(BetterAuth::Error, "base_url is required") do
+        BetterAuth::Configuration.new(
+          secret: SECRET,
+          database: :memory,
+          advanced: {cross_subdomain_cookies: {enabled: true}}
+        )
+      end
     end
 
-    dynamic_config = BetterAuth::Configuration.new(
-      secret: SECRET,
-      database: :memory,
-      base_url: {allowed_hosts: ["example.com"], fallback: "https://example.com"},
-      advanced: {cross_subdomain_cookies: {enabled: true}}
-    )
-    dynamic_cookie = BetterAuth::Cookies.create_cookie(dynamic_config, "session_token")
-
-    assert_equal "example.com", dynamic_cookie.attributes[:domain]
+    assert_raises(BetterAuth::Error, "dynamic base_url is unsupported") do
+      BetterAuth::Configuration.new(
+        secret: SECRET,
+        database: :memory,
+        base_url: {allowed_hosts: ["example.com"], fallback: "https://example.com"},
+        advanced: {cross_subdomain_cookies: {enabled: true}}
+      )
+    end
   end
 
   def test_default_cookie_attributes_merge_before_per_cookie_overrides

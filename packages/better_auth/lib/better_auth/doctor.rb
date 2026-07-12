@@ -58,7 +58,7 @@ module BetterAuth
     def check_base_url(config, result)
       base_url = config.base_url.to_s
       if base_url.empty?
-        result.warnings << "base_url is not configured; set it explicitly in production"
+        result.errors << "base_url is not configured"
       elsif !base_url.start_with?("https://")
         result.warnings << "base_url is not HTTPS"
       else

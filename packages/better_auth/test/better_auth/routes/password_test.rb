@@ -35,6 +35,70 @@ class BetterAuthRoutesPasswordTest < Minitest::Test
     assert auth.api.sign_in_email(body: {email: "reset@example.com", password: "new-password"})[:token]
   end
 
+  def test_rack_host_and_forwarded_host_cannot_control_password_reset_link
+    sent = []
+    auth = build_auth(
+      advanced: {trusted_proxy_headers: true},
+      email_and_password: {send_reset_password: ->(data, _request = nil) { sent << data }}
+    )
+    auth.api.sign_up_email(body: {email: "rack-host-reset@example.com", password: "old-password", name: "Reset"})
+
+    status, = auth.call(rack_env(
+      "POST",
+      "/api/auth/request-password-reset",
+      body: {email: "rack-host-reset@example.com"},
+      headers: {
+        "HTTP_HOST" => "attacker.example",
+        "HTTP_X_FORWARDED_HOST" => "proxy-attacker.example",
+        "HTTP_X_FORWARDED_PROTO" => "https"
+      }
+    ))
+
+    assert_equal 200, status
+    assert sent.first.fetch(:url).start_with?("http://localhost:3000/api/auth/reset-password/")
+  end
+
+  def test_password_reset_links_do_not_reuse_hosts_across_sequential_requests
+    sent = []
+    auth = build_auth(
+      base_url: "https://auth.example.com",
+      serving_origins: ["https://tenant.example.com"],
+      advanced: {trusted_proxy_headers: true},
+      email_and_password: {send_reset_password: ->(data, _request = nil) { sent << data }}
+    )
+    auth.api.sign_up_email(body: {email: "sequential-host-reset@example.com", password: "old-password", name: "Reset"})
+
+    first_status, = auth.call(rack_env(
+      "POST",
+      "/api/auth/request-password-reset",
+      body: {email: "sequential-host-reset@example.com"},
+      headers: {
+        "HTTP_HOST" => "internal.example",
+        "HTTP_X_FORWARDED_HOST" => "attacker.example",
+        "HTTP_X_FORWARDED_PROTO" => "https",
+        "HTTP_ORIGIN" => "https://auth.example.com"
+      }
+    ))
+    second_status, = auth.call(rack_env(
+      "POST",
+      "/api/auth/request-password-reset",
+      body: {email: "sequential-host-reset@example.com"},
+      headers: {
+        "HTTP_HOST" => "internal.example",
+        "HTTP_X_FORWARDED_HOST" => "tenant.example.com",
+        "HTTP_X_FORWARDED_PROTO" => "https",
+        "HTTP_ORIGIN" => "https://auth.example.com"
+      }
+    ))
+
+    assert_equal [200, 200], [first_status, second_status]
+    assert sent[0].fetch(:url).start_with?("https://auth.example.com/api/auth/reset-password/")
+    assert sent[1].fetch(:url).start_with?("https://tenant.example.com/api/auth/reset-password/")
+    refute_includes sent[0].fetch(:url), "tenant.example.com"
+    refute_includes sent[1].fetch(:url), "attacker.example"
+    assert_equal "https://auth.example.com/api/auth", auth.context.base_url
+  end
+
   def test_reset_password_updates_credential_account_updated_at
     sent = []
     auth = build_auth(email_and_password: {send_reset_password: ->(data, _request = nil) { sent << data }})
@@ -304,7 +368,7 @@ class BetterAuthRoutesPasswordTest < Minitest::Test
     set_cookie.lines.map { |line| line.split(";").first }.join("; ")
   end
 
-  def rack_env(method, path, body: nil, cookie: nil)
+  def rack_env(method, path, body: nil, cookie: nil, headers: {})
     payload = body ? JSON.generate(body) : ""
     {
       "REQUEST_METHOD" => method,
@@ -319,6 +383,6 @@ class BetterAuthRoutesPasswordTest < Minitest::Test
       "CONTENT_LENGTH" => payload.bytesize.to_s,
       "HTTP_COOKIE" => cookie,
       "HTTP_ORIGIN" => "http://localhost:3000"
-    }.compact
+    }.compact.merge(headers)
   end
 end

@@ -13,6 +13,30 @@ class BetterAuthRoutesSocialTest < Minitest::Test
     assert_equal "/callback/:id", auth.api.endpoints.fetch(:callback_oauth).path
   end
 
+  def test_social_provider_redirect_uri_stays_canonical_on_an_alternate_serving_origin
+    redirect_uri = nil
+    auth = build_auth(
+      base_url: "https://auth.example.com",
+      serving_origins: ["https://tenant.example.com"],
+      social_providers: {
+        github: {
+          id: "github",
+          create_authorization_url: lambda do |data|
+            redirect_uri = data.fetch(:redirect_uri)
+            "https://provider.example/authorize"
+          end
+        }
+      }
+    )
+
+    auth.api.sign_in_social(
+      headers: {"host" => "tenant.example.com"},
+      body: {provider: "github", callbackURL: "/", disableRedirect: true}
+    )
+
+    assert_equal "https://auth.example.com/api/auth/callback/github", redirect_uri
+  end
+
   def test_sign_in_social_with_id_token_creates_user_account_and_session
     auth = build_auth(
       social_providers: {
