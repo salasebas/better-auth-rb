@@ -526,13 +526,54 @@ module BetterAuth
       Endpoint.new(path: "/organization/update-member-role", method: "POST", metadata: organization_openapi("updateOrganizationMemberRole", "Update an organization member role", response: organization_ref_schema("Member"))) do |ctx|
         session = Routes.current_session(ctx)
         body = normalize_hash(ctx.body)
-        member = member_by_id(ctx, body[:member_id]) || require_member(ctx, body[:user_id], body[:organization_id])
+        organization_id = body[:organization_id] || session[:session]["activeOrganizationId"]
+        raise APIError.new("BAD_REQUEST", message: ORGANIZATION_ERROR_CODES.fetch("NO_ACTIVE_ORGANIZATION")) unless organization_id
+
+        role_names = normalized_role_names(body[:role])
+        raise APIError.new("BAD_REQUEST") if role_names.empty?
+
+        validate_organization_roles!(ctx, config, organization_id, role_names)
+
+        updating_member = require_member(ctx, session[:user]["id"], organization_id)
+        raise APIError.new("BAD_REQUEST", message: ORGANIZATION_ERROR_CODES.fetch("MEMBER_NOT_FOUND")) unless updating_member
+
+        member = if body[:member_id]
+          (body[:member_id].to_s == updating_member["id"]) ? updating_member : member_by_id(ctx, body[:member_id])
+        else
+          require_member(ctx, body[:user_id], organization_id)
+        end
         raise APIError.new("BAD_REQUEST", message: ORGANIZATION_ERROR_CODES.fetch("MEMBER_NOT_FOUND")) unless member
-        require_org_permission!(ctx, config, session, member["organizationId"], {member: ["update"]}, ORGANIZATION_ERROR_CODES.fetch("YOU_ARE_NOT_ALLOWED_TO_UPDATE_THIS_MEMBER"))
-        organization = organization_by_id(ctx, member["organizationId"])
+        unless member["organizationId"] == organization_id
+          raise APIError.new("FORBIDDEN", message: ORGANIZATION_ERROR_CODES.fetch("YOU_ARE_NOT_ALLOWED_TO_UPDATE_THIS_MEMBER"))
+        end
+
+        creator_role = config[:creator_role]
+        updating_member_roles = normalized_role_names(updating_member["role"])
+        member_roles = normalized_role_names(member["role"])
+        updater_is_creator = updating_member_roles.include?(creator_role)
+        updating_creator = member_roles.include?(creator_role)
+        setting_creator_role = role_names.include?(creator_role)
+
+        if (updating_creator && !updater_is_creator) || (setting_creator_role && !updater_is_creator)
+          raise APIError.new("FORBIDDEN", message: ORGANIZATION_ERROR_CODES.fetch("YOU_ARE_NOT_ALLOWED_TO_UPDATE_THIS_MEMBER"))
+        end
+
+        if updater_is_creator && updating_member["id"] == member["id"] && !setting_creator_role
+          creator_count = count_members_with_role(ctx, organization_id, creator_role)
+          if creator_count <= 1
+            raise APIError.new("BAD_REQUEST", message: ORGANIZATION_ERROR_CODES.fetch("YOU_CANNOT_LEAVE_THE_ORGANIZATION_WITHOUT_AN_OWNER"))
+          end
+        end
+
+        unless updater_is_creator
+          require_org_permission!(ctx, config, session, organization_id, {member: ["update"]}, ORGANIZATION_ERROR_CODES.fetch("YOU_ARE_NOT_ALLOWED_TO_UPDATE_THIS_MEMBER"))
+        end
+        organization = organization_by_id(ctx, organization_id)
+        raise APIError.new("BAD_REQUEST", message: ORGANIZATION_ERROR_CODES.fetch("ORGANIZATION_NOT_FOUND")) unless organization
         user = ctx.context.internal_adapter.find_user_by_id(member["userId"])
+        raise APIError.new("BAD_REQUEST", message: BASE_ERROR_CODES.fetch("USER_NOT_FOUND")) unless user
         previous_role = member["role"]
-        update = {role: parse_roles(body[:role])}
+        update = {role: parse_roles(role_names)}
         merge_hook_data!(update, run_org_hook(config, :before_update_member_role, {member: member_wire(ctx, member), new_role: update[:role], user: user, organization: organization_wire(ctx, organization)}, ctx))
         updated = ctx.context.adapter.update(model: "member", where: [{field: "id", value: member["id"]}], update: update)
         run_org_hook(config, :after_update_member_role, {member: member_wire(ctx, updated), previous_role: previous_role, user: user, organization: organization_wire(ctx, organization)}, ctx)
@@ -986,6 +1027,35 @@ module BetterAuth
 
     def parse_roles(roles)
       Array(roles).join(",")
+    end
+
+    def normalized_role_names(roles)
+      Array(roles).flat_map { |role| role.to_s.split(",") }.map(&:strip).reject(&:empty?)
+    end
+
+    def validate_organization_roles!(ctx, config, organization_id, role_names)
+      valid_static_roles = (organization_default_roles(config).keys + organization_roles(config).keys).uniq
+      unknown_roles = role_names.reject { |role| valid_static_roles.include?(role) }.uniq
+      return if unknown_roles.empty?
+
+      if org_truthy?(config.dig(:dynamic_access_control, :enabled))
+        found_roles = ctx.context.adapter.find_many(
+          model: "organizationRole",
+          where: [{field: "organizationId", value: organization_id}, {field: "role", value: unknown_roles, operator: "in"}]
+        ).map { |role| role["role"] }
+        unknown_roles -= found_roles
+      end
+      return if unknown_roles.empty?
+
+      raise APIError.new("BAD_REQUEST", message: ORGANIZATION_ERROR_CODES.fetch("ROLE_NOT_FOUND"))
+    end
+
+    def count_members_with_role(ctx, organization_id, role)
+      count = 0
+      organization_each_adapter_record(ctx.context.adapter, "member", where: [{field: "organizationId", value: organization_id}]) do |member|
+        count += 1 if normalized_role_names(member["role"]).include?(role)
+      end
+      count
     end
 
     def organization_roles(config)
