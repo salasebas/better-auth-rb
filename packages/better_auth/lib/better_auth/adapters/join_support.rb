@@ -58,6 +58,16 @@ module BetterAuth
           end
         end
       end
+
+      def join_limit(config)
+        value = config[:limit]
+        return 100 if value.nil?
+
+        parsed = Integer(value)
+        parsed.positive? ? parsed : 100
+      rescue ArgumentError, TypeError
+        100
+      end
     end
   end
 end

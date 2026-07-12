@@ -32,7 +32,7 @@ module BetterAuth
         records = sort_records(model, records, sort_by) if sort_by
         records = records.drop(offset.to_i) if offset
         records = records.first(limit.to_i) if limit
-        records = records.map { |record| select_fields(model, record, select) } if select && !select.empty?
+        records = records.map { |record| select_fields(model, record, select, join: join) } if select && !select.empty?
         records
       end
 
@@ -301,9 +301,13 @@ module BetterAuth
         value.nil? ? "" : value
       end
 
-      def select_fields(_model, record, select)
+      def select_fields(model, record, select, join: nil)
         fields = Array(select).map { |field| Schema.storage_key(field) }
-        record.slice(*fields)
+        selected = record.slice(*fields)
+        normalized_join(model, join).each_key do |join_model|
+          selected[join_model] = record[join_model] if record.key?(join_model)
+        end
+        selected
       end
 
       def apply_join(model, record, join)
@@ -324,16 +328,6 @@ module BetterAuth
 
       def one_to_one_join?(config)
         config[:relation] == "one-to-one" || config[:unique] == true
-      end
-
-      def join_limit(config)
-        value = config[:limit]
-        return 100 if value.nil?
-
-        parsed = Integer(value)
-        parsed.positive? ? parsed : 100
-      rescue ArgumentError, TypeError
-        100
       end
 
       def inferred_join_config(model, join_model)

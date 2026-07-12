@@ -440,6 +440,8 @@ module BetterAuth
             if config[:relation] == "one-to-one" || config[:unique] == true
               grouped[key][join_model] = joined
             else
+              next if grouped[key][join_model].length >= join_limit(config)
+
               grouped[key][join_model] << joined
             end
           end

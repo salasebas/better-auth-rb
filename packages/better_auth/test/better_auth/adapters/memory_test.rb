@@ -152,6 +152,27 @@ class BetterAuthMemoryAdapterTest < Minitest::Test
     assert_equal user, found["user"]
   end
 
+  def test_find_one_preserves_joined_relations_when_selecting_base_fields
+    user = @adapter.create(model: "user", data: {id: "user-1", name: "Ada", email: "ada@example.com"}, force_allow_id: true)
+    session = @adapter.create(
+      model: "session",
+      data: {userId: user["id"], token: "token-1", expiresAt: Time.now + 60},
+      force_allow_id: true
+    )
+
+    found = @adapter.find_one(
+      model: "user",
+      where: [{field: "id", value: user["id"]}],
+      select: ["id"],
+      join: {session: true}
+    )
+
+    assert_equal user["id"], found["id"]
+    refute found.key?("email")
+    refute found.key?("name")
+    assert_equal [session], found["session"]
+  end
+
   def test_find_one_with_join_infers_plugin_one_to_one_reference
     plugin = BetterAuth::Plugin.new(
       id: "profile",
