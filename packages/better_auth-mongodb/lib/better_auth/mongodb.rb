@@ -115,7 +115,10 @@ module BetterAuth
 
       def ensure_indexes!
         seen_indexes = {}
+        migration_table_names = Schema.migration_tables(options).keys
         Schema.auth_tables(options).flat_map do |model, table|
+          next [] unless migration_table_names.include?(table.fetch(:model_name))
+
           table.fetch(:fields).filter_map do |field, attributes|
             next if field == "id"
             next unless attributes[:unique] || attributes[:index]

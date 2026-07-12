@@ -90,6 +90,30 @@ class BetterAuthMongoDBAdapterTest < Minitest::Test
     assert_equal 1, @database.collection("users").indexes.create_one_calls.count([{"shared_handle" => 1}, {}])
   end
 
+  def test_mongodb_adapter_omits_indexes_for_migration_disabled_collections
+    plugin = BetterAuth::Plugin.new(
+      id: "external-audit",
+      schema: {
+        auditLog: {
+          model_name: "audit_logs",
+          disableMigration: true,
+          fields: {
+            userId: {type: "string", required: true, references: {model: "user", field: "id"}, index: true},
+            eventType: {type: "string", required: true, unique: true}
+          }
+        }
+      }
+    )
+    config = BetterAuth::Configuration.new(secret: SECRET, database: :memory, plugins: [plugin])
+    adapter = BetterAuth::Adapters::MongoDB.new(config, database: @database)
+
+    summary = adapter.ensure_indexes!
+
+    refute summary.any? { |entry| entry.fetch(:collection) == "audit_logs" }
+    assert_empty @database.collection("audit_logs").indexes.create_one_calls
+    assert BetterAuth::Schema.auth_tables(config).key?("auditLog")
+  end
+
   def test_mongodb_adapter_ensures_external_plugin_schema_indexes
     config = BetterAuth::Configuration.new(
       secret: SECRET,

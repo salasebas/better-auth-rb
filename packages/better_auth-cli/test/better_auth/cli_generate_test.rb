@@ -164,6 +164,38 @@ class CliGenerateTest < BetterAuthCLITestCase
     end
   end
 
+  def test_generate_omits_plugin_schema_with_migrations_disabled
+    Dir.mktmpdir("better-auth-cli") do |dir|
+      config_path = write_sqlite_config(
+        dir,
+        plugins_source: <<~RUBY.strip
+          [
+            BetterAuth::Plugin.new(
+              id: "external-audit",
+              schema: {
+                auditLog: {
+                  model_name: "audit_logs",
+                  disableMigration: true,
+                  fields: {
+                    userId: {type: "string", required: true, references: {model: "user", field: "id"}, index: true}
+                  }
+                }
+              }
+            )
+          ]
+        RUBY
+      )
+      output = File.join(dir, "auth.sql")
+
+      status, _stdout, stderr = run_cli("generate", "--cwd", dir, "--config", config_path, "--dialect", "sqlite", "--output", output)
+
+      assert_equal 0, status, stderr
+      sql = File.read(output)
+      refute_includes sql, 'CREATE TABLE IF NOT EXISTS "audit_logs"'
+      refute_includes sql, "index_audit_logs_on_user_id"
+    end
+  end
+
   def test_generate_includes_database_rate_limit_table
     Dir.mktmpdir("better-auth-cli") do |dir|
       config_path = write_sqlite_config(dir, rate_limit: {enabled: true, storage: "database"})

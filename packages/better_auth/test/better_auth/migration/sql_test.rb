@@ -171,6 +171,28 @@ class BetterAuthMigrationSQLTest < Minitest::Test
     assert_equal ["index_api_keys_on_user_id"], plan.to_index.map(&:name)
   end
 
+  def test_does_not_plan_disabled_plugin_tables
+    connection = SQLite3::Database.new(":memory:")
+    connection.results_as_hash = true
+    plugin = BetterAuth::Plugin.new(
+      id: "external-audit-log",
+      schema: {
+        auditLog: {
+          disableMigration: true,
+          fields: {
+            userId: {type: "string", required: true, references: {model: "user", field: "id"}, index: true}
+          }
+        }
+      }
+    )
+    config = BetterAuth::Configuration.new(secret: SECRET, database: :memory, plugins: [plugin])
+
+    plan = BetterAuth::SQLMigration.plan(config, connection: connection, dialect: :sqlite)
+
+    refute_includes plan.to_create.map(&:table_name), "audit_logs"
+    refute_includes plan.to_index.map(&:name), "index_audit_logs_on_user_id"
+  end
+
   def test_plans_plugin_fields_on_existing_physical_table_as_one_addition
     connection = SQLite3::Database.new(":memory:")
     connection.results_as_hash = true

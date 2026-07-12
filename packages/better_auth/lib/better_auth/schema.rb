@@ -33,11 +33,13 @@ module BetterAuth
           fields: {},
           order: table[:order] || Float::INFINITY,
           source_order: index,
-          logical_names: []
+          logical_names: [],
+          disable_migration: false
         }
         target[:order] = [target[:order], table[:order] || Float::INFINITY].min
         target[:source_order] = [target[:source_order], index].min
         target[:logical_names] << logical_name
+        target[:disable_migration] ||= table[:disable_migration] == true
 
         table.fetch(:fields).each do |logical_field, attributes|
           column = attributes[:field_name] || physical_name(logical_field)
@@ -47,9 +49,10 @@ module BetterAuth
       end
 
       grouped
+        .reject { |_name, table| table[:disable_migration] }
         .sort_by { |_name, table| [table[:order], table[:source_order]] }
         .to_h do |name, table|
-          [name, table.except(:source_order)]
+          [name, table.except(:source_order, :disable_migration)]
         end
     end
 
@@ -84,6 +87,7 @@ module BetterAuth
       table(
         model_name: model_option(options, :user, :model_name) || "users",
         order: 1,
+        disable_migration: plugin_table&.fetch(:disable_migration, false),
         fields: id_field.merge(
           "name" => field("string", required: true, sortable: true, field_name: mapped_field(options, :user, "name")),
           "email" => field("string", required: true, unique: true, sortable: true, field_name: mapped_field(options, :user, "email")),
@@ -98,6 +102,7 @@ module BetterAuth
       table(
         model_name: model_option(options, :session, :model_name) || "sessions",
         order: 2,
+        disable_migration: plugin_table&.fetch(:disable_migration, false),
         fields: base_fields.merge(
           "expiresAt" => field("date", required: true, field_name: mapped_field(options, :session, "expiresAt")),
           "token" => field("string", required: true, unique: true, field_name: mapped_field(options, :session, "token")),
@@ -113,6 +118,7 @@ module BetterAuth
       table(
         model_name: model_option(options, :account, :model_name) || "accounts",
         order: 3,
+        disable_migration: plugin_table&.fetch(:disable_migration, false),
         fields: base_fields.merge(
           "accountId" => field("string", required: true, field_name: mapped_field(options, :account, "accountId")),
           "providerId" => field("string", required: true, field_name: mapped_field(options, :account, "providerId")),
@@ -133,6 +139,7 @@ module BetterAuth
       table(
         model_name: model_option(options, :verification, :model_name) || "verifications",
         order: 4,
+        disable_migration: plugin_table&.fetch(:disable_migration, false),
         fields: base_fields.merge(
           "identifier" => field("string", required: true, index: true, field_name: mapped_field(options, :verification, "identifier")),
           "value" => field("string", required: true, field_name: mapped_field(options, :verification, "value")),
@@ -222,12 +229,12 @@ module BetterAuth
       }
     end
 
-    private_class_method def self.table(model_name:, fields:, extra_fields:, order:)
+    private_class_method def self.table(model_name:, fields:, extra_fields:, order:, disable_migration: false)
       {
         model_name: model_name,
         fields: merge_fields(fields, *extra_fields),
         order: order
-      }
+      }.tap { |data| data[:disable_migration] = true if disable_migration == true }
     end
 
     private_class_method def self.merge_fields(base, *extras)
@@ -249,6 +256,7 @@ module BetterAuth
           existing = tables[key] || {model_name: table_data[:model_name] || physical_table_name(key), fields: {}}
           existing[:model_name] = table_data[:model_name] || existing[:model_name] || physical_table_name(key)
           existing[:fields] = existing[:fields].merge(normalize_fields(table_data[:fields] || {}))
+          existing[:disable_migration] = true if table_data[:disable_migration] == true
           existing[:fields] = id_field.merge(existing[:fields]) unless core_table?(key) || existing[:fields].key?("id")
           tables[key] = existing
         end

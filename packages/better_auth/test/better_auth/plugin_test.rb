@@ -30,6 +30,21 @@ class BetterAuthPluginTest < Minitest::Test
     assert plugin.on_response
   end
 
+  def test_plugin_contract_normalizes_camel_case_migration_control
+    plugin = BetterAuth::Plugin.new(
+      id: "external-schema",
+      schema: {
+        auditLog: {
+          disableMigration: true,
+          fields: {eventType: {type: "string", required: true}}
+        }
+      }
+    )
+
+    assert_equal true, plugin.schema.dig(:audit_log, :disable_migration)
+    assert_equal "string", plugin.schema.dig(:audit_log, :fields, :event_type, :type)
+  end
+
   def test_plugin_init_runs_in_sequence_and_merges_context_and_options_as_defaults
     order = []
 

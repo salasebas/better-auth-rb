@@ -121,6 +121,24 @@ RSpec.describe BetterAuth::Sinatra::Migration do
     expect(sql).to include('CREATE INDEX IF NOT EXISTS "index_api_keys_on_user_id"')
   end
 
+  it "omits plugin tables with migrations disabled" do
+    plugin = BetterAuth::Plugin.new(
+      id: "external-audit",
+      schema: {
+        auditLog: {
+          disableMigration: true,
+          fields: {userId: {type: "string", required: true, references: {model: "user", field: "id"}, index: true}}
+        }
+      }
+    )
+    config = BetterAuth::Configuration.new(secret: secret, database: :memory, plugins: [plugin])
+
+    sql = described_class.render(config, dialect: :postgres)
+
+    expect(sql).not_to include('CREATE TABLE IF NOT EXISTS "audit_logs"')
+    expect(sql).not_to include("index_audit_logs_on_user_id")
+  end
+
   it "delegates SQL rendering for supported core dialects" do
     config = BetterAuth::Configuration.new(secret: secret, database: :memory)
 
