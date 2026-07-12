@@ -57,9 +57,15 @@ auth.api.change_email(
 
 By default, RubyAuth sends a verification email to the new address. The user email is updated only after the verification link is used.
 
+<Callout type="warning">
+  Treat change-email confirmation and verification links as bearer credentials: anyone who possesses a valid link can use it. The links work across devices and do not require the session that requested the change. Redeeming the final verification link creates a session when one is not already present, even when `email_verification.auto_sign_in_after_verification` is `false`.
+</Callout>
+
+Change-email confirmation and verification links are single-use. RubyAuth records a hash of each issued token and consumes that record before performing the change. Deploying this behavior invalidates outstanding typed change-email links issued by an older version because those links do not have a corresponding verification record; users must request a new link. Ordinary email-verification links are unaffected.
+
 #### Confirming With Current Email
 
-For added security, require the current email to approve the change before RubyAuth sends verification to the new address. This helps protect accounts where the active session is present but the email change should still require control of the current inbox.
+For added security, require the current email to approve the change before RubyAuth sends verification to the new address. This optional confirmation helps protect accounts where the active session is present but the email change should still require control of the current inbox.
 
 ```ruby
 auth = BetterAuth.auth(
