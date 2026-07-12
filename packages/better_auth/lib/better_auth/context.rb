@@ -18,7 +18,8 @@ module BetterAuth
 
     def initialize(configuration)
       @app_name = configuration.app_name
-      @base_url = configuration.context_base_url
+      @canonical_base_url = configuration.context_base_url
+      @base_url = @canonical_base_url
       @version = BetterAuth::VERSION
       @options = configuration
       @social_providers = configuration.social_providers
@@ -46,6 +47,8 @@ module BetterAuth
     def base_url
       runtime_fetch(:base_url, @base_url)
     end
+
+    attr_reader :canonical_base_url
 
     def trusted_origins
       runtime_fetch(:trusted_origins, @trusted_origins)
@@ -156,12 +159,7 @@ module BetterAuth
       runtime = request_runtime
       runtime[:current_session] = nil
       runtime[:new_session] = nil
-      if options.dynamic_base_url?
-        runtime[:base_url] = resolved_dynamic_base_url(request)
-        refresh_cookies!
-      elsif options.base_url.to_s.empty?
-        runtime[:base_url] = inferred_base_url(request)
-      end
+      runtime[:base_url] = serving_base_url(request)
       runtime[:trusted_origins] = current_trusted_origins(request)
     end
 
@@ -169,61 +167,30 @@ module BetterAuth
       runtime = request_runtime
       runtime[:current_session] = nil
       runtime[:new_session] = nil
-      if options.dynamic_base_url?
-        runtime[:base_url] = resolved_dynamic_base_url(source)
-        refresh_cookies!
-      end
+      runtime[:base_url] = serving_base_url(source)
       runtime[:trusted_origins] = current_trusted_origins(request_for_callbacks(source))
     end
 
     def reset_runtime!
       Thread.current[runtime_key] = nil if request_runtime?
-      options.clear_runtime_base_url! if options.respond_to?(:clear_runtime_base_url!)
       @current_session = nil
       @new_session = nil
     end
 
     def clear_runtime!
       Thread.current[runtime_key] = nil
-      options.clear_runtime_base_url! if options.respond_to?(:clear_runtime_base_url!)
-    end
-
-    def refresh_cookies!
-      cookies = Cookies.get_cookies(options)
-      if request_runtime?
-        runtime_store(:auth_cookies, cookies)
-        runtime_store(:cookies, cookies)
-      else
-        @auth_cookies = cookies
-        @cookies = cookies
-      end
     end
 
     private
 
-    def inferred_base_url(request)
-      origin = inferred_origin(request)
+    def serving_base_url(source)
+      candidate = inferred_origin(source)
+      return canonical_base_url unless candidate
+      return canonical_base_url if candidate == options.base_url
+      return canonical_base_url unless options.serving_origins.any? { |pattern| Configuration.matches_origin_pattern?(candidate, pattern) }
+
       path = options.base_path
-      path.empty? ? origin : "#{origin}#{path}"
-    end
-
-    def resolved_dynamic_base_url(request)
-      resolved = URLHelpers.resolve_base_url(
-        options.base_url_config,
-        options.base_path,
-        request,
-        load_env: true,
-        trusted_proxy_headers: dynamic_trusted_proxy_headers?
-      )
-      origin = Configuration.origin_for(URI.parse(resolved))
-      options.set_runtime_base_url(origin) if options.respond_to?(:set_runtime_base_url)
-      resolved
-    end
-
-    def dynamic_trusted_proxy_headers?
-      return true unless options.advanced.key?(:trusted_proxy_headers)
-
-      !!options.advanced[:trusted_proxy_headers]
+      path.empty? ? candidate : "#{candidate}#{path}"
     end
 
     def request_for_callbacks(source)
@@ -263,26 +230,25 @@ module BetterAuth
       :"better_auth_context_runtime_#{object_id}"
     end
 
-    def inferred_origin(request)
-      forwarded_host = request.get_header("HTTP_X_FORWARDED_HOST")
-      forwarded_proto = request.get_header("HTTP_X_FORWARDED_PROTO")
-      if options.advanced[:trusted_proxy_headers] && valid_forwarded?(forwarded_host, forwarded_proto)
+    def inferred_origin(source)
+      return nil unless source
+
+      trusted_proxy_headers = options.advanced[:trusted_proxy_headers] == true
+      forwarded_host = URLHelpers.header_value(URLHelpers.headers_from_source(source), "x-forwarded-host")
+      if trusted_proxy_headers && forwarded_host
+        forwarded_proto = URLHelpers.header_value(URLHelpers.headers_from_source(source), "x-forwarded-proto")
+        return nil unless valid_proxy_host?(forwarded_host.to_s) && valid_proxy_proto?(forwarded_proto.to_s)
+
         return "#{forwarded_proto}://#{forwarded_host}"
       end
 
-      scheme = request.get_header("rack.url_scheme") || request.scheme
-      scheme = "https" unless valid_proxy_proto?(scheme.to_s)
-      host_header = request.get_header("HTTP_HOST")
-      return "#{scheme}://#{host_header}" if host_header && valid_proxy_host?(host_header.to_s)
+      host = URLHelpers.host_from_source(source, trusted_proxy_headers: false)
+      return nil unless host && valid_proxy_host?(host)
 
-      host = request.get_header("SERVER_NAME") || request.host
-      port = (request.get_header("SERVER_PORT") || request.port).to_i
-      default_port = (scheme == "http" && port == 80) || (scheme == "https" && port == 443)
-      default_port ? "#{scheme}://#{host}" : "#{scheme}://#{host}:#{port}"
-    end
+      protocol = URLHelpers.protocol_from_source(source, trusted_proxy_headers: false)
+      return nil unless valid_proxy_proto?(protocol)
 
-    def valid_forwarded?(host, proto)
-      valid_proxy_proto?(proto.to_s) && valid_proxy_host?(host.to_s)
+      "#{protocol}://#{host}"
     end
 
     def valid_proxy_proto?(proto)
@@ -322,9 +288,7 @@ module BetterAuth
     end
 
     def current_trusted_origins(request)
-      origins = []
-      origins << Configuration.origin_for(URI.parse(base_url)) unless base_url.to_s.empty?
-      origins.concat(options.trusted_origins)
+      origins = options.trusted_origins.dup
       dynamic_origins = []
       if options.trusted_origins_callback
         dynamic_origins.concat(Array(options.trusted_origins_callback.call(request)).compact)
@@ -333,8 +297,6 @@ module BetterAuth
       origins.concat(Env.csv("BETTER_AUTH_TRUSTED_ORIGINS"))
       runtime_store(:explicit_trusted_origins, (options.explicit_trusted_origins + dynamic_origins.map(&:to_s)).uniq)
       origins.map(&:to_s).reject(&:empty?).uniq
-    rescue URI::InvalidURIError
-      options.trusted_origins
     end
 
     def normalize_context(value)

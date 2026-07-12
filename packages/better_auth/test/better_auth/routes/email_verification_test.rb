@@ -20,6 +20,35 @@ class BetterAuthRoutesEmailVerificationTest < Minitest::Test
     assert_includes sent.first[:url], "callbackURL=%2Fdashboard"
   end
 
+  def test_verification_links_only_use_canonical_or_allowlisted_serving_origins
+    sent = []
+    auth = build_auth(
+      base_url: "https://auth.example.com",
+      serving_origins: ["https://tenant.example.com"],
+      trusted_origins: ["https://frontend.example.com"],
+      advanced: {trusted_proxy_headers: true},
+      email_verification: {send_verification_email: ->(data, _request = nil) { sent << data }}
+    )
+    auth.api.sign_up_email(body: {email: "host-boundary@example.com", password: "password123", name: "Verify"})
+
+    auth.api.send_verification_email(
+      headers: {"host" => "attacker.example", "x-forwarded-host" => "proxy-attacker.example", "x-forwarded-proto" => "https"},
+      body: {email: "host-boundary@example.com"}
+    )
+    auth.api.send_verification_email(
+      headers: {"host" => "frontend.example.com"},
+      body: {email: "host-boundary@example.com"}
+    )
+    auth.api.send_verification_email(
+      headers: {"host" => "tenant.example.com"},
+      body: {email: "host-boundary@example.com"}
+    )
+
+    assert sent[0].fetch(:url).start_with?("https://auth.example.com/api/auth/verify-email?")
+    assert sent[1].fetch(:url).start_with?("https://auth.example.com/api/auth/verify-email?")
+    assert sent[2].fetch(:url).start_with?("https://tenant.example.com/api/auth/verify-email?")
+  end
+
   def test_send_verification_email_rejects_mismatched_authenticated_user
     sent = []
     auth = build_auth(email_verification: {send_verification_email: ->(data, _request = nil) { sent << data }})

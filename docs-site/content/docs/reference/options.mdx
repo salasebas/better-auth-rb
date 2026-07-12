@@ -25,55 +25,41 @@ auth = BetterAuth.auth(
 
 ## `base_url`
 
-Base URL for RubyAuth. This is typically the root URL where your application server is hosted. You can configure it as either:
+The required canonical URL for RubyAuth. Pass a static HTTP(S) URL or set `BETTER_AUTH_URL`. RubyAuth fails during initialization when neither is present. Request headers are never used to infer this canonical identity.
 
-* a static string for single-domain deployments
-* an object for dynamic per-request resolution across multiple allowed hosts
-
-If you include a path in the base_url string, it will take precedence over the default path.
+If the URL includes a path, that path takes precedence over `base_path`.
 
 ```ruby
-require "better_auth"
-
 auth = BetterAuth.auth(
   secret: ENV.fetch("BETTER_AUTH_SECRET"),
-  base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
-  database: :postgres,
-  base_url: "https://example.com"
-)
-```
-
-If not explicitly set, the system will check for the environment variable `BETTER_AUTH_URL`. If that's also not set, it will be inferred from the incoming request.
-
-<Callout type="warn">
-  Relying on request inference is not recommended. For security and stability, always set `base_url` explicitly in your config or via the `BETTER_AUTH_URL` environment variable.
-</Callout>
-
-### Dynamic Base URL
-
-Use the object form when your app can be reached through multiple domains, such as preview deployments, branch environments, or multiple production hosts. RubyAuth derives the host from the incoming request, validates it against `allowed_hosts`, and constructs the request-specific base URL from that match.
-
-```ruby
-require "better_auth"
-
-auth = BetterAuth.auth(
-  secret: ENV.fetch("BETTER_AUTH_SECRET"),
-  base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
+  base_url: ENV.fetch("BETTER_AUTH_URL"),
   database: :postgres
 )
 ```
 
-* `allowed_hosts`: List of accepted host patterns. Supports exact matches (`myapp.com`), wildcards (`*.vercel.app`, `preview-*.myapp.com`), and port wildcards (`localhost:*`). Automatically added to [`trusted_origins`](#trustedorigins) (localhost entries get both `http` and `https`)
-* `protocol`: Protocol for URL construction. `"http"`, `"https"`, or `"auto"` (default). `"auto"` derives from `x-forwarded-proto`, then request URL, then defaults to HTTPS. Also affects the cookie `Secure` flag: `"https"` → secure, `"http"` → not secure, `"auto"` or unset → `NODE_ENV === "production"`. Override with `advanced.use_secure_cookies`
-* `fallback`: URL to use when the incoming host does not match. Without it, unknown hosts throw. Its origin is also added to `trusted_origins`
+JWT issuer/audience defaults, OAuth/OIDC issuer metadata, provider redirect URI defaults, and OpenAPI servers always use this canonical URL.
 
 <Callout type="warn">
-  Use `fallback` carefully. It can hide deployment or proxy misconfiguration that would otherwise fail loudly.
+  The legacy hash form of `base_url` is no longer supported. Use a static canonical `base_url` plus `serving_origins`.
 </Callout>
 
-When `cross_sub_domain_cookies` is enabled, the cookie domain is derived from the resolved request host unless you set `domain` explicitly.
+## `serving_origins`
 
-For deployment patterns and end-to-end examples, see the [Dynamic Base URL guide](/docs/guides/dynamic-base-url).
+Optional request-facing origins from which RubyAuth may serve auth routes. Entries are full HTTP(S) origin patterns without paths. Exact and wildcard matching use the same syntax as `trusted_origins`. The canonical origin from `base_url` is always included.
+
+```ruby
+auth = BetterAuth.auth(
+  secret: ENV.fetch("BETTER_AUTH_SECRET"),
+  base_url: "https://auth.example.com",
+  serving_origins: ["https://tenant.example.com", "https://*.preview.example.com"]
+)
+```
+
+For each request, RubyAuth uses the inbound `Host` only when the resulting origin matches this allowlist. It honors `X-Forwarded-Host` and `X-Forwarded-Proto` only when `advanced.trusted_proxy_headers` is explicitly `true`. Unknown or malformed candidates fall back to the canonical URL.
+
+Serving origins are automatically added to `trusted_origins`. This relationship is one-way: a `trusted_origins` entry cannot become a serving origin or control token-bearing links.
+
+See [Multiple Serving Origins](/docs/guides/dynamic-base-url) for deployment examples and migration from dynamic `base_url`.
 
 ## `base_path`
 
