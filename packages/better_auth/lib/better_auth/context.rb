@@ -31,6 +31,7 @@ module BetterAuth
       @session_config = configuration.session
       @rate_limit_config = configuration.rate_limit
       @trusted_origins = configuration.trusted_origins
+      @explicit_trusted_origins = configuration.explicit_trusted_origins
       @secret = configuration.secret
       @secret_config = configuration.secret_config
       @current_session = nil
@@ -51,6 +52,10 @@ module BetterAuth
 
     def trusted_origins
       runtime_fetch(:trusted_origins, @trusted_origins)
+    end
+
+    def explicit_trusted_origins
+      runtime_fetch(:explicit_trusted_origins, @explicit_trusted_origins)
     end
 
     def auth_cookies
@@ -134,6 +139,7 @@ module BetterAuth
       @session_config = options.session
       @rate_limit_config = options.rate_limit
       @trusted_origins = options.trusted_origins
+      @explicit_trusted_origins = options.explicit_trusted_origins
       @secret = options.secret
       @secret_config = options.secret_config
     end
@@ -197,6 +203,7 @@ module BetterAuth
       Thread.current[runtime_key] ||= {
         base_url: @base_url,
         trusted_origins: @trusted_origins,
+        explicit_trusted_origins: @explicit_trusted_origins,
         auth_cookies: @auth_cookies,
         cookies: @cookies,
         current_session: nil,
@@ -282,10 +289,13 @@ module BetterAuth
 
     def current_trusted_origins(request)
       origins = options.trusted_origins.dup
+      dynamic_origins = []
       if options.trusted_origins_callback
-        origins.concat(Array(options.trusted_origins_callback.call(request)).compact)
+        dynamic_origins.concat(Array(options.trusted_origins_callback.call(request)).compact)
       end
+      origins.concat(dynamic_origins)
       origins.concat(Env.csv("BETTER_AUTH_TRUSTED_ORIGINS"))
+      runtime_store(:explicit_trusted_origins, (options.explicit_trusted_origins + dynamic_origins.map(&:to_s)).uniq)
       origins.map(&:to_s).reject(&:empty?).uniq
     end
 

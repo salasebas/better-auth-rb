@@ -101,6 +101,7 @@ class BetterAuthConfigurationTest < Minitest::Test
     assert_equal "http://localhost:3000/custom-path", config.context_base_url
     assert_equal "/custom-path", config.base_path
     assert_equal ["http://localhost:3000", "http://example.com"], config.trusted_origins
+    assert_equal ["http://example.com"], config.explicit_trusted_origins
     assert_equal 1000, config.session[:update_age]
     assert_equal 2000, config.session[:expires_in]
     assert_equal 0, config.session[:fresh_age]

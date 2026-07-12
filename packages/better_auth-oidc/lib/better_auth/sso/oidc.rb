@@ -1,7 +1,8 @@
 # frozen_string_literal: true
 
-require_relative "oidc/discovery"
 require_relative "oidc/errors"
+require_relative "oidc/endpoint_policy"
+require_relative "oidc/discovery"
 
 module BetterAuth
   module SSO
