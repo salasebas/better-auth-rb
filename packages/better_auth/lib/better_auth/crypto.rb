@@ -9,7 +9,8 @@ require_relative "crypto/jwe"
 
 module BetterAuth
   module Crypto
-    URL_SAFE_ALPHABET = [*"a".."z", *"A".."Z", *"0".."9", "-", "_"].freeze
+    ALPHABETIC_ALPHABET = [*"a".."z", *"A".."Z"].freeze
+    URL_SAFE_ALPHABET = [*ALPHABETIC_ALPHABET, *"0".."9", "-", "_"].freeze
     MASK_64 = (1 << 64) - 1
     KECCAK_ROUND_CONSTANTS = [
       0x0000000000000001, 0x0000000000008082, 0x800000000000808a, 0x8000000080008000,
@@ -29,8 +30,8 @@ module BetterAuth
 
     module_function
 
-    def random_string(length = 32)
-      Array.new(length) { URL_SAFE_ALPHABET[SecureRandom.random_number(URL_SAFE_ALPHABET.length)] }.join
+    def random_string(length = 32, alphabet: URL_SAFE_ALPHABET)
+      Array.new(length) { alphabet[SecureRandom.random_number(alphabet.length)] }.join
     end
 
     def uuid

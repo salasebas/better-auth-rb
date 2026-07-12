@@ -136,6 +136,32 @@ class BetterAuthPluginsMagicLinkTest < Minitest::Test
     assert_equal({source: "cli", nested: {plan: "parity"}}, sent.first.fetch(:metadata))
   end
 
+  def test_magic_link_default_token_uses_crypto_random_string
+    sent = []
+    requested_length = nil
+    requested_alphabet = nil
+    secure_token = "A" * 32
+    auth = build_auth(
+      plugins: [
+        BetterAuth::Plugins.magic_link(send_magic_link: ->(data, _ctx = nil) { sent << data })
+      ]
+    )
+
+    random_string = lambda do |length, alphabet:|
+      requested_length = length
+      requested_alphabet = alphabet
+      secure_token
+    end
+    BetterAuth::Crypto.stub(:random_string, random_string) do
+      auth.api.sign_in_magic_link(body: {email: "secure-token@example.com"})
+    end
+
+    assert_equal 32, requested_length
+    assert_same BetterAuth::Crypto::ALPHABETIC_ALPHABET, requested_alphabet
+    assert_equal secure_token, sent.first.fetch(:token)
+    assert auth.context.internal_adapter.find_verification_value(secure_token)
+  end
+
   def test_magic_link_respects_allowed_attempts
     sent = []
     auth = build_auth(
