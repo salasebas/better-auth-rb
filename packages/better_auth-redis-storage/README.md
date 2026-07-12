@@ -54,7 +54,7 @@ storage = BetterAuth::RedisStorage.new(
 )
 ```
 
-`client` must respond to `get`, `set`, `setex`, `del`, and `scan`. It should
+`client` must respond to `get`, `set`, `setex`, `del`, `eval`, and `scan`. It should
 also respond to `keys` only when `scan_count: nil` is configured, and to `incr`
 when `atomic_clear:` is enabled. This matches the interfaces exposed by the
 `redis` and `redis-namespace` gems.
@@ -114,13 +114,22 @@ The storage object implements the Better Auth secondary storage contract:
 
 ```ruby
 storage.get(key)
+storage.get_and_delete(key)
+storage.increment(key, ttl)
+storage.set_if_absent(key, value, ttl = nil)
 storage.set(key, value, ttl = nil)
 storage.delete(key)
 storage.list_keys
 storage.clear
 ```
 
-`listKeys` is available as a camelCase alias for upstream parity.
+`get_and_delete` atomically returns and removes a value. It uses Redis `GETDEL`
+when available and falls back to a Lua script on older servers. `increment`
+atomically increments a counter and applies its TTL only when the counter is
+created, so subsequent traffic never extends the fixed window.
+`set_if_absent` uses Redis `SET NX` (with `EX` when a TTL is supplied) for
+cross-process first-writer-wins reservations. `getAndDelete`, `setIfAbsent`,
+and `listKeys` are available as camelCase aliases for upstream parity.
 
 `list_keys` returns every matching logical key but Redis does not guarantee key
 order for `KEYS` or `SCAN`. The SCAN path removes duplicate cursor results while
@@ -183,8 +192,18 @@ Custom secondary storage backends should implement:
 - `get(key)`
 - `set(key, value, ttl = nil)`
 - `delete(key)`
+- `get_and_delete(key)` for cross-process-safe single-use verification values
+- `set_if_absent(key, value, ttl = nil)` for cross-process-safe first-writer-wins verification reservations; return a boolean
+- `increment(key, ttl)` for fixed-window atomic counters; return the new value
 - Optional: `list_keys` or `listKeys`
 - Optional: `clear`
+
+Verification consumption and reservation fail closed when a custom secondary
+backend lacks `get_and_delete` or `set_if_absent`. Use database-backed
+verification storage when the backend cannot implement these atomic methods.
+Reservation markers intentionally omit a non-atomic reverse index and are
+consumed or deleted by identifier. This is a Ruby safety adaptation from the
+upstream compatibility behavior.
 
 ## Testing
 

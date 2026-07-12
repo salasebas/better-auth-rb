@@ -128,6 +128,61 @@ class RedisStorageTest < Minitest::Test
     refute @client.data.key?("better-auth:session-token")
   end
 
+  def test_get_and_delete_uses_getdel_and_has_one_winner
+    @storage.set("verification", "payload")
+
+    assert_equal "payload", @storage.get_and_delete("verification")
+    assert_nil @storage.get_and_delete("verification")
+    assert_equal [["GETDEL", "better-auth:verification"], ["GETDEL", "better-auth:verification"]], @client.call_calls
+  end
+
+  def test_get_and_delete_falls_back_to_lua_when_getdel_is_unavailable
+    client = UnknownGetdelFakeRedisClient.new
+    storage = BetterAuth::RedisStorage.new(client: client)
+    storage.set("verification", "payload")
+
+    assert_equal "payload", storage.get_and_delete("verification")
+    assert_nil storage.get_and_delete("verification")
+    assert_equal 1, client.call_calls.length
+    assert_equal 2, client.eval_calls.length
+  end
+
+  def test_set_if_absent_uses_redis_set_nx_with_expiry_and_has_one_winner
+    first = BetterAuth::RedisStorage.new(client: @client)
+    second = BetterAuth::RedisStorage.new(client: @client)
+    ready = Queue.new
+    start = Queue.new
+    threads = [first, second].map do |storage|
+      Thread.new do
+        ready << true
+        start.pop
+        storage.set_if_absent("reservation", "payload", 60)
+      end
+    end
+    2.times { ready.pop }
+    2.times { start << true }
+
+    assert_equal [false, true], threads.map(&:value).sort_by(&:to_s)
+    assert_equal "payload", first.get("reservation")
+    assert_equal 60, @client.expirations.fetch("better-auth:reservation")
+    assert_equal 2, @client.set_calls.count { |key, _value, options| key == "better-auth:reservation" && options == {nx: true, ex: 60} }
+  end
+
+  def test_camel_case_set_if_absent_alias_matches_upstream_style
+    assert @storage.setIfAbsent("reservation", "first", 60)
+    refute @storage.setIfAbsent("reservation", "second", 60)
+    assert_equal "first", @storage.get("reservation")
+  end
+
+  def test_increment_is_atomic_and_sets_ttl_only_when_opening_the_window
+    assert_equal 1, @storage.increment("rate", 60)
+    assert_equal 2, @storage.increment("rate", 30)
+    assert_equal 3, @storage.increment("rate", 10)
+
+    assert_equal "3", @storage.get("rate").to_s
+    assert_equal 60, @client.expirations.fetch("better-auth:rate")
+  end
+
   def test_nil_logical_key_raises
     assert_raises(ArgumentError) { @storage.get(nil) }
     assert_raises(ArgumentError) { @storage.set(nil, "v") }
@@ -510,7 +565,7 @@ class RedisStorageTest < Minitest::Test
   class ExpectedRedisError < StandardError; end
 
   class FakeRedisClient
-    attr_reader :data, :set_calls, :setex_calls, :del_calls, :keys_calls, :incr_calls, :scan_calls
+    attr_reader :data, :set_calls, :setex_calls, :del_calls, :keys_calls, :incr_calls, :scan_calls, :call_calls, :eval_calls, :expirations
 
     def initialize
       @data = {}
@@ -520,15 +575,22 @@ class RedisStorageTest < Minitest::Test
       @keys_calls = []
       @incr_calls = []
       @scan_calls = []
+      @call_calls = []
+      @eval_calls = []
+      @expirations = {}
     end
 
     def get(key)
       data[key]
     end
 
-    def set(key, value)
-      set_calls << [key, value]
+    def set(key, value, **options)
+      set_calls << (options.empty? ? [key, value] : [key, value, options])
+      return nil if options[:nx] && data.key?(key)
+
       data[key] = value
+      expirations[key] = options[:ex] if options[:ex]
+      "OK"
     end
 
     def setex(key, ttl, value)
@@ -544,6 +606,26 @@ class RedisStorageTest < Minitest::Test
     def incr(key)
       incr_calls << key
       data[key] = data.fetch(key, 0).to_i + 1
+    end
+
+    def call(command, key)
+      call_calls << [command, key]
+      raise "ERR unknown command '#{command}'" unless command == "GETDEL"
+
+      data.delete(key)
+    end
+
+    def eval(script, keys: nil, argv: nil, **)
+      eval_calls << [script, keys, argv]
+      key = keys.fetch(0)
+      if script.include?('redis.call("INCR"')
+        value = data.fetch(key, 0).to_i + 1
+        data[key] = value
+        expirations[key] = argv.fetch(0).to_i if value == 1
+        value
+      else
+        data.delete(key)
+      end
     end
 
     def keys(pattern)
@@ -591,6 +673,13 @@ class RedisStorageTest < Minitest::Test
       end
       regex << "\\z"
       Regexp.new(regex).match?(key)
+    end
+  end
+
+  class UnknownGetdelFakeRedisClient < FakeRedisClient
+    def call(command, key)
+      call_calls << [command, key]
+      raise "ERR unknown command '#{command}'"
     end
   end
 
@@ -653,7 +742,7 @@ class RedisStorageTest < Minitest::Test
       nil
     end
 
-    def set(_key, _value)
+    def set(_key, _value, **)
       raise ExpectedRedisError if @failing_command == :set
     end
 

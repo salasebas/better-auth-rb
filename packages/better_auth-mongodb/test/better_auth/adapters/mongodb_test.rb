@@ -19,6 +19,69 @@ class BetterAuthMongoDBAdapterTest < Minitest::Test
     assert_instance_of BetterAuth::Adapters::MongoDB, BetterAuth::Adapters::MongoDB.new(@config, database: @database)
   end
 
+  def test_mongodb_create_if_absent_uses_id_targeted_upsert
+    data = {id: "reservation", name: "Winner", email: "reservation@example.com"}
+
+    assert @adapter.create_if_absent(model: "user", data: data, conflict_field: "id", force_allow_id: true)
+    refute @adapter.create_if_absent(model: "user", data: data.merge(name: "Loser"), conflict_field: "id", force_allow_id: true)
+    assert_equal "Winner", @adapter.find_one(model: "user", where: [{field: "id", value: "reservation"}]).fetch("name")
+  end
+
+  def test_mongodb_increment_rejects_non_numeric_fields
+    user = @adapter.create(model: "user", data: {name: "Ada", email: "increment-invalid@example.com"})
+
+    %i[id email emailVerified createdAt].each do |field|
+      assert_raises(BetterAuth::APIError) do
+        @adapter.increment_one(model: "user", where: [{field: "id", value: user.fetch("id")}], increment: {field => 1})
+      end
+    end
+  end
+
+  def test_mongodb_atomic_consume_increment_and_nested_transaction_reuse
+    config = BetterAuth::Configuration.new(
+      secret: SECRET,
+      database: :memory,
+      user: {additional_fields: {credits: {type: "number", required: false}}}
+    )
+    database = FakeMongoDatabase.new
+    client = FakeMongoClient.new
+    adapter = BetterAuth::Adapters::MongoDB.new(config, database: database, client: client)
+    user = adapter.create(model: "user", data: {id: "atomic-user", name: "Atomic", email: "atomic@example.com", credits: 0}, force_allow_id: true)
+
+    ready = Queue.new
+    start = Queue.new
+    consume_threads = 8.times.map do
+      Thread.new do
+        ready << true
+        start.pop
+        adapter.consume_one(model: "user", where: [{field: "id", value: user.fetch("id")}])
+      end
+    end
+    8.times { ready.pop }
+    8.times { start << true }
+    assert_equal 1, consume_threads.map(&:value).compact.length
+
+    counter = adapter.create(model: "user", data: {id: "counter-user", name: "Counter", email: "counter@example.com", credits: 0}, force_allow_id: true)
+    ready = Queue.new
+    start = Queue.new
+    increment_threads = 8.times.map do
+      Thread.new do
+        ready << true
+        start.pop
+        adapter.increment_one(model: "user", where: [{field: "id", value: counter.fetch("id")}], increment: {credits: 1})
+      end
+    end
+    8.times { ready.pop }
+    8.times { start << true }
+    assert_equal 8, increment_threads.map(&:value).compact.length
+    assert_equal 8, adapter.find_one(model: "user", where: [{field: "id", value: counter.fetch("id")}]).fetch("credits")
+
+    adapter.transaction do |outer|
+      outer.transaction { |inner| assert_same outer, inner }
+    end
+    assert_equal 1, client.sessions.length
+  end
+
   def test_mongodb_adapter_ensures_schema_indexes_explicitly
     plugin = {
       id: "profile-indexes",

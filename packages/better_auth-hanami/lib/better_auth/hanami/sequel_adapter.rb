@@ -66,6 +66,25 @@ module BetterAuth
         lookup ? find_one(model: model, where: [lookup]) : input
       end
 
+      def create_if_absent(model:, data:, conflict_field: "id", force_allow_id: true)
+        model = model.to_s
+        field = atomic_schema_field(schema_for(model).fetch(:fields), conflict_field)
+        input = transform_input(model, data, "create", force_allow_id)
+        raise APIError.new("BAD_REQUEST", message: "Missing conflict field #{conflict_field}") unless input.key?(field)
+
+        begin
+          connection.transaction(savepoint: true, rollback: :reraise) do
+            table_dataset(model).insert(physical_attributes(model, input))
+          end
+          true
+        rescue Sequel::UniqueConstraintViolation => error
+          existing = find_one(model: model, where: [{field: field, value: input.fetch(field)}])
+          return false if existing
+
+          raise error
+        end
+      end
+
       def find_one(model:, where: [], select: nil, join: nil)
         find_many(model: model, where: where, select: select, join: join, limit: 1).first
       end
@@ -130,8 +149,49 @@ module BetterAuth
         apply_where(model, table_dataset(model), where || []).count
       end
 
+      def consume_one(model:, where:)
+        model = model.to_s
+        transaction do
+          dataset = apply_where(model, table_dataset(model), where || []).limit(1).for_update
+          row = dataset.first
+          if row
+            target = normalize_record(model, row)
+            lookup = record_lookup(model, target)
+            raise BetterAuth::Error, "Sequel cannot atomically identify a #{model} row" unless lookup
+
+            deleted = apply_where(model, table_dataset(model), Array(where) + [lookup.merge(connector: "AND")]).delete
+            ensure_numeric_affected_rows!(deleted, "delete")
+            deleted.positive? ? target : nil
+          end
+        end
+      end
+
+      def increment_one(model:, where:, increment:, set: nil)
+        model = model.to_s
+        increments, assignments = normalize_atomic_update(model, increment, set)
+        transaction do
+          row = apply_where(model, table_dataset(model), where || []).limit(1).for_update.first
+          if row
+            target = normalize_record(model, row)
+            lookup = record_lookup(model, target)
+            raise BetterAuth::Error, "Sequel cannot atomically identify a #{model} row" unless lookup
+
+            updates = increments.each_with_object({}) do |(field, delta), result|
+              column = storage_field(model, field).to_sym
+              result[column] = Sequel.function(:coalesce, Sequel[column], 0) + delta
+            end
+            updates.merge!(physical_attributes(model, assignments))
+            updated = apply_where(model, table_dataset(model), Array(where) + [lookup.merge(connector: "AND")]).update(updates)
+            ensure_numeric_affected_rows!(updated, "update")
+            updated.positive? ? apply_atomic_result(target, increments, assignments) : nil
+          end
+        end
+      end
+
       def transaction
-        connection.transaction { yield self }
+        return yield active_transaction_adapter if active_transaction_adapter
+
+        connection.transaction { with_transaction_context(self) { yield self } }
       end
 
       private
@@ -330,6 +390,56 @@ module BetterAuth
         return {field: unique_field.first, value: record.fetch(unique_field.first)} if unique_field
 
         nil
+      end
+
+      def normalize_atomic_update(model, increment, set)
+        raise APIError.new("BAD_REQUEST", message: "increment must be a Hash") unless increment.is_a?(Hash)
+
+        fields = schema_for(model).fetch(:fields)
+        increments = increment.each_with_object({}) do |(field, delta), result|
+          logical_field = atomic_schema_field(fields, field)
+          attributes = fields[logical_field]
+          unless attributes && logical_field != "id" && attributes[:type] == "number" && attributes[:input] != false
+            raise APIError.new("BAD_REQUEST", message: "Invalid increment field #{field}; expected a mutable numeric field")
+          end
+          if !delta.is_a?(Numeric) || (delta.respond_to?(:finite?) && !delta.finite?)
+            raise APIError.new("BAD_REQUEST", message: "Increment delta for #{field} must be numeric")
+          end
+
+          result[logical_field] = delta
+        end
+        assignments = if set.nil? || set.empty?
+          {}
+        else
+          transform_input(model, set, "update", true)
+        end
+        increments.reject! { |field, _delta| assignments.key?(field) }
+        if increments.empty? && assignments.empty?
+          raise APIError.new("BAD_REQUEST", message: "increment_one requires a non-empty increment or set")
+        end
+
+        [increments, assignments]
+      end
+
+      def apply_atomic_result(target, increments, assignments)
+        result = target.dup
+        increments.each do |field, delta|
+          result[field] = (result[field].is_a?(Numeric) ? result[field] : 0) + delta
+        end
+        result.merge(assignments)
+      end
+
+      def atomic_schema_field(fields, field)
+        candidate = storage_key(field)
+        return candidate if fields.key?(candidate)
+
+        fields.find { |logical, attributes| storage_key(attributes[:field_name] || logical) == candidate }&.first
+      end
+
+      def ensure_numeric_affected_rows!(value, operation)
+        return if value.is_a?(Numeric)
+
+        raise BetterAuth::Error, "Sequel returned a non-numeric affected-row result from #{operation}"
       end
 
       def physical_attributes(model, logical)

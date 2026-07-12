@@ -37,6 +37,10 @@ class BetterAuthRailsFakeRelation
     self
   end
 
+  def lock(*)
+    self
+  end
+
   def offset(*)
     self
   end
@@ -58,13 +62,15 @@ class BetterAuthRailsFakeRelation
   end
 
   def update_all(*args)
-    update_all_calls << args.first
+    updates = args.first
+    update_all_calls << updates
+    records.each { |record| record.apply_updates(updates) }
     records.length
   end
 
   def delete_all
     @delete_all_calls += 1
-    records.length
+    records.length.tap { records.clear }
   end
 end
 
@@ -77,6 +83,18 @@ class BetterAuthRailsFakeRecord
 
   def update!(attributes)
     @attributes = @attributes.merge(attributes)
+  end
+
+  def apply_updates(updates)
+    updates.each do |field, value|
+      value = value.expr while value.is_a?(Arel::Nodes::Grouping)
+      @attributes[field.to_s] = if value.is_a?(Arel::Nodes::Addition)
+        delta = value.right.respond_to?(:value) ? value.right.value : value.right
+        @attributes[field.to_s].to_i + delta
+      else
+        value
+      end
+    end
   end
 
   def destroy!
@@ -355,5 +373,92 @@ RSpec.describe BetterAuth::Rails::ActiveRecordAdapter do
     result = adapter.transaction { :ok }
 
     expect(result).to eq(:ok)
+  end
+
+  it "implements atomic consume and increment primitives and reuses nested transactions" do
+    atomic_config = BetterAuth::Configuration.new(
+      secret: secret,
+      database: :memory,
+      user: {additional_fields: {credits: {type: "number", required: false}}}
+    )
+    atomic_adapter = described_class.new(atomic_config, connection: connection)
+    record = BetterAuthRailsFakeRecord.new(
+      "id" => "user-1",
+      "email" => "atomic@example.com",
+      "email_verified" => false,
+      "credits" => 0
+    )
+    relation = BetterAuthRailsFakeRelation.new([record])
+    atomic_adapter.send(:model_class, "user").relation = relation
+    allow(fake_connection).to receive(:transaction).and_yield
+
+    incremented = atomic_adapter.increment_one(
+      model: "user",
+      where: [{field: "id", value: "user-1"}],
+      increment: {credits: 1},
+      set: {image: "winner.png"}
+    )
+
+    expect(incremented).to include("credits" => 1, "image" => "winner.png")
+    expect(relation.update_all_calls.length).to eq(1)
+    expect(atomic_adapter.consume_one(model: "user", where: [{field: "id", value: "user-1"}])).to include("id" => "user-1")
+
+    atomic_adapter.transaction do |outer|
+      outer.transaction { |inner| expect(inner).to equal(outer) }
+    end
+
+    %i[id email emailVerified createdAt].each do |field|
+      expect {
+        atomic_adapter.increment_one(model: "user", where: [{field: "id", value: "user-1"}], increment: {field => 1})
+      }.to raise_error(BetterAuth::APIError, /mutable numeric field/)
+    end
+  end
+
+  it "has one consume winner and no lost increments under a thread barrier" do
+    atomic_config = BetterAuth::Configuration.new(
+      secret: secret,
+      database: :memory,
+      user: {additional_fields: {credits: {type: "number", required: false}}}
+    )
+    atomic_adapter = described_class.new(atomic_config, connection: connection)
+    transaction_lock = Monitor.new
+    allow(fake_connection).to receive(:transaction) { |&block| transaction_lock.synchronize(&block) }
+
+    counter_relation = BetterAuthRailsFakeRelation.new([
+      BetterAuthRailsFakeRecord.new("id" => "counter", "email" => "counter@example.com", "credits" => 0)
+    ])
+    atomic_adapter.send(:model_class, "user").relation = counter_relation
+    ready = Queue.new
+    start = Queue.new
+    increment_threads = 8.times.map do
+      Thread.new do
+        ready << true
+        start.pop
+        atomic_adapter.increment_one(model: "user", where: [{field: "id", value: "counter"}], increment: {credits: 1})
+      end
+    end
+    8.times { ready.pop }
+    8.times { start << true }
+
+    expect(increment_threads.map(&:value).compact.length).to eq(8)
+    expect(counter_relation.records.first.attributes.fetch("credits")).to eq(8)
+
+    consume_relation = BetterAuthRailsFakeRelation.new([
+      BetterAuthRailsFakeRecord.new("id" => "consume", "email" => "consume@example.com")
+    ])
+    atomic_adapter.send(:model_class, "user").relation = consume_relation
+    ready = Queue.new
+    start = Queue.new
+    consume_threads = 8.times.map do
+      Thread.new do
+        ready << true
+        start.pop
+        atomic_adapter.consume_one(model: "user", where: [{field: "id", value: "consume"}])
+      end
+    end
+    8.times { ready.pop }
+    8.times { start << true }
+
+    expect(consume_threads.map(&:value).compact.length).to eq(1)
   end
 end

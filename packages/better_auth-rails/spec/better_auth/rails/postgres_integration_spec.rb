@@ -60,6 +60,31 @@ RSpec.describe "BetterAuth::Rails PostgreSQL integration", :integration do
     expect(ActiveRecord::Base.connection.indexes("users").any? { |index| index.columns == ["email"] && index.unique }).to be(true)
   end
 
+  it "keeps both outer transactions usable after a reservation race" do
+    run_generated_migration
+    adapters = 2.times.map { BetterAuth::Rails::ActiveRecordAdapter.new(config, connection: ActiveRecord::Base) }
+    ready = Queue.new
+    start = Queue.new
+    threads = adapters.map do |adapter|
+      Thread.new do
+        internal = BetterAuth::Adapters::InternalAdapter.new(adapter, config)
+        adapter.transaction do
+          ready << true
+          start.pop
+          won = internal.reserve_verification_value(identifier: "rails-pg-reservation", value: "marker", expiresAt: Time.now + 120)
+          [won, ActiveRecord::Base.connection.select_value("SELECT 1")]
+        end
+      end
+    end
+    2.times { ready.pop }
+    2.times { start << true }
+
+    results = threads.map(&:value)
+    expect(results.map(&:first)).to contain_exactly(true, false)
+    expect(results.map(&:last)).to eq([1, 1])
+    expect(ActiveRecord::Base.connection.select_value("SELECT COUNT(*) FROM verifications")).to eq(1)
+  end
+
   it "creates plugin tables and supports ActiveRecord adapter queries for plugin models" do
     run_generated_migration(plugin_config)
     active_record_adapter = BetterAuth::Rails::ActiveRecordAdapter.new(plugin_config, connection: ActiveRecord::Base)

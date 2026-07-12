@@ -152,6 +152,21 @@ auth = BetterAuth.auth(
 )
 ```
 
+Custom adapters must implement
+`create_if_absent(model:, data:, conflict_field: "id", force_allow_id: true)`
+as a targeted first-writer-wins insert returning a boolean,
+`consume_one(model:, where:)` as an atomic
+delete-and-return of at most one row, and
+`increment_one(model:, where:, increment:, set: nil)` as an atomic guarded
+numeric update returning the resulting row or `nil`. Concurrent consumers of
+one row must have exactly one winner; increments must apply every signed delta
+without lost updates. `transaction` must open a real transaction and reuse its
+active adapter for nested calls. The base class's compatibility yield is
+explicitly non-atomic and must not back either primitive.
+Only mutable schema fields declared with `type: "number"` may be incremented;
+IDs and string, boolean, date, array, immutable, or unknown fields are rejected.
+The base adapter intentionally has no check-then-create fallback.
+
 ### Social Providers
 
 ```ruby

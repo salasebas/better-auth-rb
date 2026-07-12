@@ -39,6 +39,40 @@ RSpec.describe "BetterAuth::Hanami::SequelAdapter database integrations", :integ
     end
   end
 
+  it "keeps PostgreSQL outer transactions usable after a reservation race" do
+    setup = connect_database(:postgres)
+    reset_database(setup, :postgres)
+    apply_migration(setup, config)
+    connections = 2.times.map { connect_database(:postgres) }
+    ready = Queue.new
+    start = Queue.new
+    threads = connections.map do |db|
+      Thread.new do
+        adapter = BetterAuth::Hanami::SequelAdapter.new(config, connection: db)
+        internal = BetterAuth::Adapters::InternalAdapter.new(adapter, config)
+        adapter.transaction do
+          ready << true
+          start.pop
+          won = internal.reserve_verification_value(identifier: "sequel-pg-reservation", value: "marker", expiresAt: Time.now + 120)
+          [won, db.fetch("SELECT 1 AS value").get(:value)]
+        end
+      end
+    end
+    2.times { ready.pop }
+    2.times { start << true }
+
+    results = threads.map(&:value)
+    expect(results.map(&:first)).to contain_exactly(true, false)
+    expect(results.map(&:last)).to eq([1, 1])
+    expect(setup[:verifications].where(identifier: "sequel-pg-reservation").count).to eq(1)
+  ensure
+    connections&.each(&:disconnect)
+    if setup
+      reset_database(setup, :postgres)
+      setup.disconnect
+    end
+  end
+
   def exercise_adapter(db)
     adapter = BetterAuth::Hanami::SequelAdapter.new(config, connection: db)
     user = adapter.create(model: "user", data: {id: "user-1", name: "Ada", email: "ada@example.com"}, force_allow_id: true)

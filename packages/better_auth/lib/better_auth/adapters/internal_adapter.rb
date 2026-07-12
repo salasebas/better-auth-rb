@@ -3,6 +3,7 @@
 require "json"
 require "securerandom"
 require "time"
+require "monitor"
 
 module BetterAuth
   module Adapters
@@ -13,6 +14,8 @@ module BetterAuth
         @adapter = adapter
         @options = options
         @hooks = DatabaseHooks.new(adapter, options)
+        @verification_locks_guard = Mutex.new
+        @verification_locks = {}
       end
 
       def create_oauth_user(user, account, context: nil)
@@ -277,6 +280,56 @@ module BetterAuth
         values.first
       end
 
+      def consume_verification_value(identifier)
+        identifiers = verification_identifiers(identifier)
+        consumed = if secondary_storage && !verification_store_in_database?
+          consume_secondary_verification(identifiers)
+        else
+          consume_database_verification(identifiers)
+        end
+
+        invalidate_secondary_verification(identifiers, consumed) if consumed && secondary_storage && verification_store_in_database?
+        return nil unless consumed
+
+        expires_at = normalize_time(consumed["expiresAt"] || consumed[:expiresAt])
+        (expires_at > Time.now) ? normalize_verification_dates(consumed) : nil
+      rescue ArgumentError, TypeError
+        nil
+      end
+
+      def reserve_verification_value(data)
+        payload = stringify_keys(data)
+        identifier = payload.fetch("identifier")
+        stored_identifier = processed_verification_identifier(identifier)
+        reservation_id = Crypto.sha256("reserve:#{identifier}", encoding: :base64url)
+        verification = timestamps.merge(
+          "id" => reservation_id,
+          "identifier" => stored_identifier,
+          "value" => payload.fetch("value"),
+          "expiresAt" => normalize_time(payload.fetch("expiresAt"))
+        )
+
+        if secondary_storage && !verification_store_in_database?
+          return reserve_secondary_verification(verification)
+        end
+
+        adapter.consume_one(
+          model: "verification",
+          where: [
+            {field: "id", value: reservation_id},
+            {field: "expiresAt", value: Time.now, operator: "lt"}
+          ]
+        )
+        created = adapter.create_if_absent(
+          model: "verification",
+          data: verification,
+          conflict_field: "id",
+          force_allow_id: true
+        )
+        store_reserved_verification(verification) if created && secondary_storage
+        created
+      end
+
       def delete_verification_value(id)
         if secondary_storage
           stored_identifier = secondary_storage.get(verification_id_key(id))
@@ -324,6 +377,106 @@ module BetterAuth
       end
 
       private
+
+      def verification_identifiers(identifier)
+        stored_identifier = processed_verification_identifier(identifier)
+        storage_option = verification_storage_option(identifier)
+        if storage_option && storage_option.to_s != "plain" && stored_identifier != identifier.to_s
+          [stored_identifier, identifier.to_s]
+        else
+          [stored_identifier]
+        end
+      end
+
+      def consume_secondary_verification(identifiers)
+        identifiers.each do |stored_identifier|
+          key = verification_key(stored_identifier)
+          raw = if secondary_storage.respond_to?(:get_and_delete)
+            secondary_storage.get_and_delete(key)
+          elsif secondary_storage.respond_to?(:getAndDelete)
+            secondary_storage.getAndDelete(key)
+          else
+            raise Error, "Secondary storage must implement atomic `get_and_delete`/`getAndDelete`, or verification values must be database-backed"
+          end
+          consumed = begin
+            parsed = parse_storage(raw)
+            parsed ? normalize_verification_dates(parsed) : nil
+          rescue ArgumentError, TypeError
+            nil
+          end
+          next unless consumed
+
+          invalidate_secondary_verification(identifiers, consumed)
+          return consumed
+        end
+        nil
+      end
+
+      def reserve_secondary_verification(verification)
+        key = verification_key(verification.fetch("identifier"))
+        ttl_seconds = ttl(millis(verification.fetch("expiresAt")))
+        return false unless ttl_seconds.positive?
+
+        value = JSON.generate(normalize_verification_dates(verification))
+        created = if secondary_storage.respond_to?(:set_if_absent)
+          secondary_storage.set_if_absent(key, value, ttl_seconds)
+        elsif secondary_storage.respond_to?(:setIfAbsent)
+          secondary_storage.setIfAbsent(key, value, ttl_seconds)
+        else
+          raise Error, "Secondary storage must implement atomic `set_if_absent`/`setIfAbsent`, or verification values must be database-backed"
+        end
+        return false unless created
+        true
+      end
+
+      def consume_database_verification(identifiers)
+        identifiers.each do |stored_identifier|
+          consumed = with_verification_lock(verification_key(stored_identifier)) do
+            adapter.transaction do |transaction_adapter|
+              where = [{field: "identifier", value: stored_identifier}]
+              latest = transaction_adapter.find_many(
+                model: "verification",
+                where: where,
+                sort_by: {field: "createdAt", direction: "desc"},
+                limit: 1
+              ).first
+              next nil unless latest
+              next nil if verification_delete_vetoed?(latest)
+
+              row = transaction_adapter.consume_one(
+                model: "verification",
+                where: [{field: "id", value: latest.fetch("id")}]
+              )
+              next nil unless row
+
+              transaction_adapter.delete_many(model: "verification", where: where)
+              run_verification_delete_after(row)
+              row
+            end
+          end
+          return consumed if consumed
+        end
+        nil
+      end
+
+      def invalidate_secondary_verification(identifiers, consumed)
+        identifiers.each { |stored_identifier| secondary_storage.delete(verification_key(stored_identifier)) }
+        id = consumed && (consumed["id"] || consumed[:id])
+        secondary_storage.delete(verification_id_key(id)) if id
+      end
+
+      def verification_delete_vetoed?(entity)
+        hooks.send(:before_hooks, "verification", :delete).any? { |hook| hook.call(entity, nil) == false }
+      end
+
+      def run_verification_delete_after(entity)
+        hooks.send(:after_hooks, "verification", :delete).each { |hook| hook.call(entity, nil) }
+      end
+
+      def with_verification_lock(key)
+        lock = @verification_locks_guard.synchronize { @verification_locks[key] ||= Monitor.new }
+        lock.synchronize { yield }
+      end
 
       def secondary_storage
         options.secondary_storage
@@ -524,6 +677,15 @@ module BetterAuth
 
         secondary_storage.set(verification_key(normalized["identifier"]), JSON.generate(normalized), ttl_seconds)
         secondary_storage.set(verification_id_key(normalized["id"]), normalized["identifier"], ttl_seconds) if normalized["id"]
+        normalized
+      end
+
+      def store_reserved_verification(verification)
+        normalized = normalize_verification_dates(verification)
+        ttl_seconds = ttl(millis(normalized["expiresAt"]))
+        return normalized unless ttl_seconds.positive?
+
+        secondary_storage.set(verification_key(normalized["identifier"]), JSON.generate(normalized), ttl_seconds)
         normalized
       end
 

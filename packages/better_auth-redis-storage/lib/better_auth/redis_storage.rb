@@ -9,6 +9,20 @@ module BetterAuth
     DEFAULT_KEY_PREFIX = "better-auth:"
     SCAN_DEFAULT_COUNT = 100
     DELETE_CHUNK_SIZE = 500
+    GET_AND_DELETE_SCRIPT = <<~LUA
+      local value = redis.call("GET", KEYS[1])
+      if value ~= false then
+        redis.call("DEL", KEYS[1])
+      end
+      return value
+    LUA
+    INCREMENT_SCRIPT = <<~LUA
+      local value = redis.call("INCR", KEYS[1])
+      if value == 1 then
+        redis.call("EXPIRE", KEYS[1], ARGV[1])
+      end
+      return value
+    LUA
 
     attr_reader :client, :key_prefix, :scan_count, :atomic_clear
 
@@ -35,6 +49,7 @@ module BetterAuth
       end
       @scan_count = scan_count
       @atomic_clear = !!atomic_clear
+      @supports_getdel = true
     end
 
     def self.extract_key_prefix_camel!(options)
@@ -63,6 +78,31 @@ module BetterAuth
       client.get(prefix_key(key))
     end
 
+    def get_and_delete(key)
+      prefixed_key = prefix_key(key)
+      if @supports_getdel
+        begin
+          return client.getdel(prefixed_key) if client.respond_to?(:getdel)
+          return client.call("GETDEL", prefixed_key) if client.respond_to?(:call)
+
+          @supports_getdel = false
+        rescue => error
+          raise unless unknown_command_error?(error)
+
+          @supports_getdel = false
+        end
+      end
+
+      eval_script(GET_AND_DELETE_SCRIPT, keys: [prefixed_key])
+    end
+
+    def increment(key, ttl)
+      seconds = coerce_ttl(ttl)
+      raise ArgumentError, "ttl must be a positive number of seconds" unless seconds
+
+      Integer(eval_script(INCREMENT_SCRIPT, keys: [prefix_key(key)], argv: [seconds]))
+    end
+
     def set(key, value, ttl = nil)
       prefixed_key = prefix_key(key)
       coerced_ttl = coerce_ttl(ttl)
@@ -72,6 +112,14 @@ module BetterAuth
         client.set(prefixed_key, value)
       end
       nil
+    end
+
+    def set_if_absent(key, value, ttl = nil)
+      options = {nx: true}
+      coerced_ttl = coerce_ttl(ttl)
+      options[:ex] = coerced_ttl if coerced_ttl
+      result = client.set(prefix_key(key), value, **options)
+      result == true || result.to_s == "OK"
     end
 
     def delete(key)
@@ -94,6 +142,8 @@ module BetterAuth
     end
 
     alias_method :listKeys, :list_keys
+    alias_method :getAndDelete, :get_and_delete
+    alias_method :setIfAbsent, :set_if_absent
 
     private
 
@@ -207,6 +257,16 @@ module BetterAuth
 
       seconds = numeric.is_a?(Integer) ? numeric : numeric.to_i
       seconds.positive? ? seconds : nil
+    end
+
+    def eval_script(script, keys:, argv: [])
+      client.eval(script, keys: keys, argv: argv)
+    rescue ArgumentError
+      client.eval(script, keys.length, *keys, *argv)
+    end
+
+    def unknown_command_error?(error)
+      error.message.to_s.downcase.include?("unknown command")
     end
   end
 

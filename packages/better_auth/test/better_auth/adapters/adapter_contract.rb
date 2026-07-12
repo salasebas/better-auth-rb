@@ -1,6 +1,155 @@
 # frozen_string_literal: true
 
 module BetterAuthAdapterContract
+  ATOMIC_THREAD_COUNT = 8
+
+  def test_adapter_contract_create_if_absent_has_exactly_one_concurrent_winner
+    config = contract_config
+
+    with_contract_adapter(config) do |adapter|
+      data = {id: "create-if-absent", name: "Winner", email: "create-if-absent@example.com"}
+      ready = Queue.new
+      start = Queue.new
+      threads = ATOMIC_THREAD_COUNT.times.map do
+        Thread.new do
+          ready << true
+          start.pop
+          adapter.create_if_absent(model: "user", data: data, conflict_field: "id", force_allow_id: true)
+        end
+      end
+      ATOMIC_THREAD_COUNT.times { ready.pop }
+      ATOMIC_THREAD_COUNT.times { start << true }
+
+      assert_equal 1, threads.map(&:value).count(true)
+      assert_equal 1, adapter.count(model: "user", where: [{field: "id", value: data.fetch(:id)}])
+    end
+  end
+
+  def test_adapter_contract_increment_one_rejects_non_numeric_and_id_fields
+    config = contract_config(user: {additional_fields: {credits: {type: "number", required: false}}})
+
+    with_contract_adapter(config) do |adapter|
+      user = adapter.create(model: "user", data: {name: "Increment", email: "invalid-increment@example.com", credits: 1})
+
+      %i[email id emailVerified createdAt missing].each do |field|
+        assert_raises(BetterAuth::APIError) do
+          adapter.increment_one(model: "user", where: [{field: "id", value: user.fetch("id")}], increment: {field => 1})
+        end
+      end
+
+      result = adapter.increment_one(model: "user", where: [{field: "id", value: user.fetch("id")}], increment: {credits: 2})
+      assert_equal 3, result.fetch("credits")
+    end
+  end
+
+  def test_adapter_contract_consume_one_deletes_and_returns_at_most_one_row
+    config = contract_config
+
+    with_contract_adapter(config) do |adapter|
+      first = adapter.create(model: "user", data: {name: "First", email: "first-consume@example.com"})
+      second = adapter.create(model: "user", data: {name: "Second", email: "second-consume@example.com"})
+
+      consumed = adapter.consume_one(model: "user", where: [{field: "emailVerified", value: false}])
+
+      assert_includes [first.fetch("id"), second.fetch("id")], consumed.fetch("id")
+      assert_equal 1, adapter.count(model: "user")
+      assert_nil adapter.consume_one(model: "user", where: [{field: "id", value: "missing"}])
+    end
+  end
+
+  def test_adapter_contract_consume_one_has_exactly_one_concurrent_winner
+    config = contract_config
+
+    with_contract_adapter(config) do |adapter|
+      user = adapter.create(model: "user", data: {name: "Consume", email: "consume-race@example.com"})
+      ready = Queue.new
+      start = Queue.new
+      threads = ATOMIC_THREAD_COUNT.times.map do
+        Thread.new do
+          ready << true
+          start.pop
+          adapter.consume_one(model: "user", where: [{field: "id", value: user.fetch("id")}])
+        end
+      end
+      ATOMIC_THREAD_COUNT.times { ready.pop }
+      ATOMIC_THREAD_COUNT.times { start << true }
+      results = threads.map(&:value)
+
+      assert_equal 1, results.compact.length
+      assert_equal user.fetch("id"), results.compact.first.fetch("id")
+      assert_nil adapter.find_one(model: "user", where: [{field: "id", value: user.fetch("id")}])
+    end
+  end
+
+  def test_adapter_contract_increment_one_applies_guarded_deltas_atomically
+    config = contract_config(user: {additional_fields: {credits: {type: "number", required: false}}})
+
+    with_contract_adapter(config) do |adapter|
+      user = adapter.create(model: "user", data: {name: "Increment", email: "increment-race@example.com", credits: 0})
+      ready = Queue.new
+      start = Queue.new
+      threads = ATOMIC_THREAD_COUNT.times.map do
+        Thread.new do
+          ready << true
+          start.pop
+          adapter.increment_one(
+            model: "user",
+            where: [{field: "id", value: user.fetch("id")}],
+            increment: {credits: 1}
+          )
+        end
+      end
+      ATOMIC_THREAD_COUNT.times { ready.pop }
+      ATOMIC_THREAD_COUNT.times { start << true }
+      results = threads.map(&:value)
+
+      assert_equal ATOMIC_THREAD_COUNT, results.compact.length
+      assert_equal ATOMIC_THREAD_COUNT, adapter.find_one(model: "user", where: [{field: "id", value: user.fetch("id")}]).fetch("credits")
+
+      winner = adapter.increment_one(
+        model: "user",
+        where: [{field: "id", value: user.fetch("id")}, {field: "credits", value: ATOMIC_THREAD_COUNT + 1, operator: "lt"}],
+        increment: {credits: 1},
+        set: {image: "winner.png"}
+      )
+      loser = adapter.increment_one(
+        model: "user",
+        where: [{field: "id", value: user.fetch("id")}, {field: "credits", value: ATOMIC_THREAD_COUNT + 1, operator: "lt"}],
+        increment: {credits: 1}
+      )
+
+      assert_equal ATOMIC_THREAD_COUNT + 1, winner.fetch("credits")
+      assert_equal "winner.png", winner.fetch("image")
+      assert_nil loser
+    end
+  end
+
+  def test_adapter_contract_nested_transactions_reuse_the_active_transaction
+    config = contract_config
+
+    with_contract_adapter(config) do |adapter|
+      adapter.transaction do |outer|
+        outer.transaction do |inner|
+          assert_same outer, inner
+          inner.create(model: "user", data: {name: "Nested", email: "nested-transaction@example.com"})
+        end
+      end
+
+      assert adapter.find_one(model: "user", where: [{field: "email", value: "nested-transaction@example.com"}])
+
+      assert_raises(RuntimeError) do
+        adapter.transaction do |outer|
+          outer.transaction do |inner|
+            inner.create(model: "user", data: {name: "Rollback", email: "nested-rollback@example.com"})
+            raise "rollback"
+          end
+        end
+      end
+
+      assert_nil adapter.find_one(model: "user", where: [{field: "email", value: "nested-rollback@example.com"}])
+    end
+  end
+
   def test_adapter_contract_singular_update_fails_closed
     config = contract_config
 

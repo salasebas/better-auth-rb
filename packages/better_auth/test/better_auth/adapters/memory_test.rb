@@ -247,6 +247,38 @@ class BetterAuthMemoryAdapterTest < Minitest::Test
     assert_equal profile, found["profile"]
   end
 
+  def test_failed_transaction_does_not_erase_an_unrelated_concurrent_write
+    adapter = BetterAuth::Adapters::Memory.new(BetterAuth::Configuration.new(secret: SECRET, database: :memory))
+    original = adapter.create(model: "user", data: {name: "Original", email: "original-transaction@example.com"})
+    transaction_entered = Queue.new
+    release_transaction = Queue.new
+    writer_started = Queue.new
+
+    transaction_thread = Thread.new do
+      assert_raises(RuntimeError) do
+        adapter.transaction do |transaction_adapter|
+          transaction_adapter.update(model: "user", where: [{field: "id", value: original.fetch("id")}], update: {name: "Rolled Back"})
+          transaction_entered << true
+          release_transaction.pop
+          raise "rollback"
+        end
+      end
+    end
+    writer_thread = Thread.new do
+      transaction_entered.pop
+      writer_started << true
+      adapter.create(model: "user", data: {name: "Concurrent", email: "concurrent-transaction@example.com"})
+    end
+
+    writer_started.pop
+    release_transaction << true
+    transaction_thread.value
+    writer_thread.value
+
+    assert_equal "Original", adapter.find_one(model: "user", where: [{field: "id", value: original.fetch("id")}]).fetch("name")
+    assert adapter.find_one(model: "user", where: [{field: "email", value: "concurrent-transaction@example.com"}])
+  end
+
   private
 
   def with_contract_adapter(config)

@@ -466,6 +466,35 @@ end
 
 ### `options` (optional)
 
+### Atomic single-row methods
+
+RubyAuth custom adapters must also implement these concurrency primitives:
+
+* `consume_one(model:, where:)` atomically deletes and returns at most one
+  matching row. A miss returns `nil`; concurrent callers consuming the same row
+  produce exactly one winner.
+* `increment_one(model:, where:, increment:, set: nil)` atomically applies
+  signed numeric deltas while treating `where` as both selector and guard. It
+  returns the resulting row, or `nil` when the guard misses.
+* `create_if_absent(model:, data:, conflict_field: "id", force_allow_id: true)`
+  atomically inserts unless the targeted conflict field already exists. It
+  returns `true` only for the inserting caller and `false` only for that
+  targeted conflict; unrelated constraint errors must raise. A losing call
+  must not poison an open outer transaction.
+* `transaction` must be a real transaction and nested calls must reuse the
+  active transaction adapter. The base class's compatibility yield is
+  non-atomic and cannot make check-then-act operations safe.
+
+When a database lacks `DELETE ... RETURNING` or `UPDATE ... RETURNING`, use a
+row lock plus an affected-row compare-and-swap inside a real transaction.
+Affected-row results must be numeric; never silently downgrade these methods to
+an unlocked read followed by a write.
+
+Every `increment_one` field must be a mutable schema field with
+`type: "number"`. IDs, immutable fields, and string, boolean, date, array, or
+unknown fields must be rejected with a controlled API error. The base adapter
+raises for `create_if_absent`; a generic check-then-create fallback is unsafe.
+
 The `options` object is for any potential config that you got from your custom adapter options.
 
 ```ruby title="Example"

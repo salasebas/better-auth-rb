@@ -5,7 +5,7 @@ description: Configure the better_auth-redis-storage package for RubyAuth second
 
 <RubyAuthDisclaimer />
 
-`better_auth-redis-storage` provides an official Redis-backed secondary storage implementation for RubyAuth. It tracks the server-side behavior of upstream `@better-auth/redis-storage` pinned at Better Auth `v1.6.9`, while using Ruby naming and the Ruby `redis` client.
+`better_auth-redis-storage` provides an official Redis-backed secondary storage implementation for RubyAuth. It tracks the server-side behavior of upstream `@better-auth/redis-storage` pinned at Better Auth `v1.6.23`, while using Ruby naming and the Ruby `redis` client.
 
 ## Installation
 
@@ -60,7 +60,15 @@ storage = BetterAuth::RedisStorage.new(
 
 ### `client`
 
-The Redis client must respond to `get`, `set`, `setex`, `del`, and `scan`. It should also respond to `keys` only when `scan_count: nil` is configured, and to `incr` when `atomic_clear: true` is enabled.
+The Redis client must respond to `get`, `set` (including `nx:` and optional `ex:` keyword options), `setex`, `del`, `eval`, and `scan`. It should also respond to `keys` only when `scan_count: nil` is configured, and to `incr` when `atomic_clear: true` is enabled.
+
+The storage exposes `get_and_delete` (`getAndDelete`) for atomic single-use
+consumption. It prefers Redis `GETDEL` and falls back to Lua for Redis versions
+before 6.2. `increment(key, ttl)` atomically returns the post-increment value
+and sets expiry only when it creates the counter, so later increments do not
+extend the fixed window. `set_if_absent(key, value, ttl)` (`setIfAbsent`) uses
+Redis `SET NX` with optional expiry and returns `true` only to the caller that
+created the key, providing a cross-process first-writer-wins reservation gate.
 
 ### `key_prefix`
 

@@ -17,9 +17,10 @@ module BetterAuth
       end
 
       def transaction
+        return yield active_transaction_adapter if active_transaction_adapter
         return super unless connection.respond_to?(:transaction)
 
-        connection.transaction { yield self }
+        connection.transaction { with_transaction_context(self) { yield self } }
       end
 
       private

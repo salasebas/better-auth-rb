@@ -20,10 +20,10 @@ module BetterAuth
 
       attr_reader :database, :client, :use_plural
 
-      def initialize(options = nil, database:, client: nil, transaction: nil, use_plural: false, session: nil)
+      def initialize(options = nil, database:, client: nil, transaction: nil, use_plural: false, session: nil, transaction_context_key: nil)
         require "mongo" unless database
 
-        super(options || Configuration.new(secret: Configuration::DEFAULT_SECRET, database: :memory))
+        super(options || Configuration.new(secret: Configuration::DEFAULT_SECRET, database: :memory), transaction_context_key: transaction_context_key)
         @database = database
         @client = client
         @transaction_enabled = transaction.nil? ? !client.nil? : !!transaction
@@ -37,6 +37,30 @@ module BetterAuth
         document = to_document(model, record)
         collection_for(model).insert_one(document, session_options)
         from_document(model, document)
+      end
+
+      def create_if_absent(model:, data:, conflict_field: "id", force_allow_id: true)
+        model = model.to_s
+        field = resolve_atomic_field(model, conflict_field)
+        unless field == "id"
+          raise APIError.new("BAD_REQUEST", message: "MongoDB create_if_absent requires conflict_field id")
+        end
+
+        record = transform_input(model, data, "create", force_allow_id)
+        raise APIError.new("BAD_REQUEST", message: "Missing conflict field #{conflict_field}") unless record.key?(field)
+
+        document = to_document(model, record)
+        id = document.fetch("_id")
+        result = collection_for(model).update_one(
+          {"_id" => id},
+          {"$setOnInsert" => document},
+          session_options.merge(upsert: true)
+        )
+        unless result.respond_to?(:upserted_id)
+          raise BetterAuth::Error, "MongoDB returned no unambiguous upsert winner status"
+        end
+
+        !result.upserted_id.nil?
       end
 
       def find_one(model:, where: [], select: nil, join: nil)
@@ -102,6 +126,54 @@ module BetterAuth
         result.respond_to?(:deleted_count) ? result.deleted_count : result.to_i
       end
 
+      def consume_one(model:, where:)
+        model = model.to_s
+        result = collection_for(model).find_one_and_delete(
+          mongo_filter(model, where || []),
+          session_options
+        )
+        result = unwrap_update_result(result)
+        result ? from_document(model, stringify_document(result)) : nil
+      end
+
+      def increment_one(model:, where:, increment:, set: nil)
+        model = model.to_s
+        raise APIError.new("BAD_REQUEST", message: "increment must be a Hash") unless increment.is_a?(Hash)
+
+        increments = increment.each_with_object({}) do |(field, delta), result|
+          logical_field = resolve_atomic_field(model, field)
+          attributes = fields_for(model)[logical_field]
+          unless attributes && logical_field != "id" && attributes[:type] == "number" && attributes[:input] != false
+            raise APIError.new("BAD_REQUEST", message: "Invalid increment field #{field}; expected a mutable numeric field")
+          end
+          if !delta.is_a?(Numeric) || (delta.respond_to?(:finite?) && !delta.finite?)
+            raise APIError.new("BAD_REQUEST", message: "Increment delta for #{field} must be numeric")
+          end
+
+          key = (logical_field == "id") ? "_id" : storage_field(model, logical_field)
+          result[key] = delta
+        end
+        assignments = if set.nil? || set.empty?
+          {}
+        else
+          ensure_update_input_has_fields!(model, set)
+          to_document(model, transform_input(model, set, "update", true)).tap { |document| document.delete("_id") }
+        end
+        increments.reject! { |field, _delta| assignments.key?(field) }
+        update = {}
+        update["$inc"] = increments unless increments.empty?
+        update["$set"] = assignments unless assignments.empty?
+        raise APIError.new("BAD_REQUEST", message: "increment_one requires a non-empty increment or set") if update.empty?
+
+        result = collection_for(model).find_one_and_update(
+          mongo_filter(model, where || []),
+          update,
+          session_options.merge(return_document: :after)
+        )
+        result = unwrap_update_result(result)
+        result ? from_document(model, stringify_document(result)) : nil
+      end
+
       def count(model:, where: nil)
         pipeline = [
           {"$match" => mongo_filter(model.to_s, where || [])},
@@ -149,13 +221,22 @@ module BetterAuth
       end
 
       def transaction
+        return yield active_transaction_adapter if active_transaction_adapter
         return yield self unless client && @transaction_enabled && client.respond_to?(:start_session)
 
         session = client.start_session
         begin
           session.start_transaction
-          adapter = self.class.new(options, database: database, client: client, transaction: @transaction_enabled, use_plural: use_plural, session: session)
-          result = yield adapter
+          adapter = self.class.new(
+            options,
+            database: database,
+            client: client,
+            transaction: @transaction_enabled,
+            use_plural: use_plural,
+            session: session,
+            transaction_context_key: transaction_context_key
+          )
+          result = with_transaction_context(adapter) { yield adapter }
           session.commit_transaction
           result
         rescue
@@ -776,6 +857,12 @@ module BetterAuth
         return matched.first if matched
 
         raise Error, "Field #{field} not found in model #{model}"
+      end
+
+      def resolve_atomic_field(model, field)
+        resolve_field(model, field)
+      rescue BetterAuth::Error
+        raise APIError.new("BAD_REQUEST", message: "Invalid atomic field #{field}")
       end
 
       def storage_field(model, field)

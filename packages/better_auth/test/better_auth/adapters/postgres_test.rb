@@ -82,6 +82,44 @@ class BetterAuthPostgresAdapterTest < Minitest::Test
     connection&.close
   end
 
+  def test_postgres_reservation_loser_keeps_outer_transaction_usable
+    require "pg"
+
+    config = BetterAuth::Configuration.new(secret: SECRET, database: :memory)
+    setup = PG.connect(ENV.fetch("BETTER_AUTH_POSTGRES_URL", "postgres://user:password@localhost:5432/better_auth"))
+    reset_schema(setup)
+    create_schema(setup, config)
+    connections = 2.times.map { PG.connect(ENV.fetch("BETTER_AUTH_POSTGRES_URL", "postgres://user:password@localhost:5432/better_auth")) }
+    ready = Queue.new
+    start = Queue.new
+    threads = connections.map do |connection|
+      Thread.new do
+        adapter = BetterAuth::Adapters::Postgres.new(config, connection: connection)
+        internal = BetterAuth::Adapters::InternalAdapter.new(adapter, config)
+        adapter.transaction do
+          ready << true
+          start.pop
+          won = internal.reserve_verification_value(identifier: "pg-reservation", value: "marker", expiresAt: Time.now + 120)
+          [won, connection.exec("SELECT 1").first.fetch("?column?")]
+        end
+      end
+    end
+    2.times { ready.pop }
+    2.times { start << true }
+
+    results = threads.map(&:value)
+    assert_equal [false, true], results.map(&:first).sort_by(&:to_s)
+    assert_equal ["1", "1"], results.map(&:last)
+    assert_equal 1, setup.exec(%(SELECT COUNT(*) FROM "verifications" WHERE identifier = 'pg-reservation')).first.fetch("count").to_i
+  rescue LoadError
+    skip "pg gem is not installed"
+  rescue PG::ConnectionBad
+    skip "PostgreSQL test service is not available"
+  ensure
+    connections&.each(&:close)
+    setup&.close
+  end
+
   private
 
   def with_contract_adapter(config)

@@ -208,6 +208,71 @@ RSpec.describe BetterAuth::Hanami::SequelAdapter do
     expect(updated).to include("key" => "ip:127.0.0.1", "count" => 2)
   end
 
+  it "atomically consumes and increments with nested transaction reuse" do
+    atomic_config = BetterAuth::Configuration.new(
+      secret: secret,
+      database: :memory,
+      user: {additional_fields: {credits: {type: "number", required: false}}}
+    )
+    db = Sequel.sqlite(max_connections: 1)
+    apply_migration(db, atomic_config)
+    adapter = described_class.new(atomic_config, connection: db)
+    consumed_user = adapter.create(model: "user", data: {id: "consume-user", name: "Consume", email: "consume@example.com", credits: 0}, force_allow_id: true)
+
+    ready = Queue.new
+    start = Queue.new
+    consumers = 8.times.map do
+      Thread.new do
+        ready << true
+        start.pop
+        adapter.consume_one(model: "user", where: [{field: "id", value: consumed_user.fetch("id")}])
+      end
+    end
+    8.times { ready.pop }
+    8.times { start << true }
+    expect(consumers.map(&:value).compact.length).to eq(1)
+
+    counter = adapter.create(model: "user", data: {id: "counter-user", name: "Counter", email: "counter@example.com", credits: 0}, force_allow_id: true)
+    ready = Queue.new
+    start = Queue.new
+    increments = 8.times.map do
+      Thread.new do
+        ready << true
+        start.pop
+        adapter.increment_one(model: "user", where: [{field: "id", value: counter.fetch("id")}], increment: {credits: 1})
+      end
+    end
+    8.times { ready.pop }
+    8.times { start << true }
+    expect(increments.map(&:value).compact.length).to eq(8)
+    expect(adapter.find_one(model: "user", where: [{field: "id", value: counter.fetch("id")}]).fetch("credits")).to eq(8)
+
+    adapter.transaction do |outer|
+      outer.transaction { |inner| expect(inner).to equal(outer) }
+    end
+  end
+
+  it "atomically creates only one targeted conflict row and validates increment fields" do
+    atomic_config = BetterAuth::Configuration.new(
+      secret: secret,
+      database: :memory,
+      user: {additional_fields: {credits: {type: "number", required: false}}}
+    )
+    db = Sequel.sqlite
+    apply_migration(db, atomic_config)
+    atomic_adapter = described_class.new(atomic_config, connection: db)
+    data = {id: "reservation", name: "Winner", email: "reservation@example.com", credits: 1}
+
+    expect(atomic_adapter.create_if_absent(model: "user", data: data, conflict_field: "id", force_allow_id: true)).to be(true)
+    expect(atomic_adapter.create_if_absent(model: "user", data: data.merge(name: "Loser"), conflict_field: "id", force_allow_id: true)).to be(false)
+    %i[id email emailVerified createdAt].each do |field|
+      expect {
+        atomic_adapter.increment_one(model: "user", where: [{field: "id", value: "reservation"}], increment: {field => 1})
+      }.to raise_error(BetterAuth::APIError, /mutable numeric field/)
+    end
+    expect(atomic_adapter.increment_one(model: "user", where: [{field: "id", value: "reservation"}], increment: {credits: 1})).to include("credits" => 2)
+  end
+
   it "raises controlled API errors for invalid query fields and pagination" do
     db = Sequel.sqlite
     apply_migration(db, config)

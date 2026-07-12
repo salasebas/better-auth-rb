@@ -44,6 +44,34 @@ class RedisStorageIntegrationTest < Minitest::Test
     assert_nil @storage.get("a")
   end
 
+  def test_real_redis_get_and_delete_and_fixed_window_increment
+    @storage.set("consume", "value")
+
+    assert_equal "value", @storage.get_and_delete("consume")
+    assert_nil @storage.get_and_delete("consume")
+
+    assert_equal 1, @storage.increment("counter", 60)
+    first_ttl = @client.ttl("#{@prefix_root}:counter")
+    assert_equal 2, @storage.increment("counter", 10)
+    second_ttl = @client.ttl("#{@prefix_root}:counter")
+
+    assert_operator first_ttl, :>, 0
+    assert_operator second_ttl, :>, 0
+    assert_operator second_ttl, :>=, first_ttl - 1
+  end
+
+  def test_real_redis_set_if_absent_has_one_winner_and_preserves_first_value
+    first = isolated_storage("reservation")
+    second = BetterAuth::RedisStorage.new(client: @client, key_prefix: first.key_prefix)
+
+    assert first.set_if_absent("key", "first", 60)
+    refute second.set_if_absent("key", "second", 60)
+    assert_equal "first", second.get("key")
+    assert_operator @client.ttl("#{first.key_prefix}key"), :>, 0
+  ensure
+    first&.clear
+  end
+
   def test_real_redis_expires_direct_ttl_values
     @storage.set("short", "one", 1)
 

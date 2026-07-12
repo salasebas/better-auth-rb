@@ -2,23 +2,52 @@
 
 require "securerandom"
 require "time"
+require "monitor"
 
 module BetterAuth
   module Adapters
     class Memory < Base
       include JoinSupport
 
+      LOCK_REGISTRY_GUARD = Mutex.new
+      LOCKS_BY_DATABASE = {}
+
+      class << self
+        def lock_for(database)
+          LOCK_REGISTRY_GUARD.synchronize do
+            LOCKS_BY_DATABASE[database.object_id] ||= Monitor.new
+          end
+        end
+      end
+
       attr_reader :db
 
       def initialize(options, db = nil)
         super(options)
         @db = db || build_db
+        @lock = self.class.lock_for(@db)
       end
 
       def create(model:, data:, force_allow_id: false)
-        model = model.to_s
-        table_for(model) << transform_input(model, data, "create", force_allow_id)
-        table_for(model).last
+        @lock.synchronize do
+          model = model.to_s
+          table_for(model) << transform_input(model, data, "create", force_allow_id)
+          table_for(model).last
+        end
+      end
+
+      def create_if_absent(model:, data:, conflict_field: "id", force_allow_id: true)
+        @lock.synchronize do
+          model = model.to_s
+          fields = Schema.auth_tables(options).fetch(model).fetch(:fields)
+          field = atomic_schema_field(fields, conflict_field)
+          input = transform_input(model, data, "create", force_allow_id)
+          raise APIError.new("BAD_REQUEST", message: "Missing conflict field #{conflict_field}") unless input.key?(field)
+          next false if table_for(model).any? { |record| record[field] == input[field] }
+
+          table_for(model) << input
+          true
+        end
       end
 
       def find_one(model:, where: [], select: nil, join: nil)
@@ -26,36 +55,42 @@ module BetterAuth
       end
 
       def find_many(model:, where: [], sort_by: nil, limit: nil, offset: nil, select: nil, join: nil)
-        model = model.to_s
-        records = table_for(model).select { |record| matches_where?(record, where || []) }.map(&:dup)
-        records = records.map { |record| apply_join(model, record, join) } if join
-        records = sort_records(model, records, sort_by) if sort_by
-        records = records.drop(offset.to_i) if offset
-        records = records.first(limit.to_i) if limit
-        records = records.map { |record| select_fields(model, record, select, join: join) } if select && !select.empty?
-        records
+        @lock.synchronize do
+          model = model.to_s
+          records = table_for(model).select { |record| matches_where?(record, where || []) }.map(&:dup)
+          records = records.map { |record| apply_join(model, record, join) } if join
+          records = sort_records(model, records, sort_by) if sort_by
+          records = records.drop(offset.to_i) if offset
+          records = records.first(limit.to_i) if limit
+          records = records.map { |record| select_fields(model, record, select, join: join) } if select && !select.empty?
+          records
+        end
       end
 
       def update(model:, where:, update:)
-        model = model.to_s
-        return nil if Array(where).empty?
+        @lock.synchronize do
+          model = model.to_s
+          next nil if Array(where).empty?
 
-        ensure_update_input_has_fields!(model, update)
-        records = table_for(model).select { |record| matches_where?(record, where) }
-        data = transform_input(model, update, "update", true)
-        ensure_update_data!(data)
-        records.each { |record| record.merge!(data) }
-        records.first
+          ensure_update_input_has_fields!(model, update)
+          records = table_for(model).select { |record| matches_where?(record, where) }
+          data = transform_input(model, update, "update", true)
+          ensure_update_data!(data)
+          records.each { |record| record.merge!(data) }
+          records.first
+        end
       end
 
       def update_many(model:, where:, update:)
-        model = model.to_s
-        ensure_update_input_has_fields!(model, update)
-        records = table_for(model).select { |record| matches_where?(record, where || []) }
-        data = transform_input(model, update, "update", true)
-        ensure_update_data!(data)
-        records.each { |record| record.merge!(data) }
-        records.length
+        @lock.synchronize do
+          model = model.to_s
+          ensure_update_input_has_fields!(model, update)
+          records = table_for(model).select { |record| matches_where?(record, where || []) }
+          data = transform_input(model, update, "update", true)
+          ensure_update_data!(data)
+          records.each { |record| record.merge!(data) }
+          records.length
+        end
       end
 
       def delete(model:, where:)
@@ -64,22 +99,55 @@ module BetterAuth
       end
 
       def delete_many(model:, where:)
-        table = table_for(model)
-        matches = table.select { |record| matches_where?(record, where || []) }
-        @db[model.to_s] = table.reject { |record| matches.include?(record) }
-        matches.length
+        @lock.synchronize do
+          table = table_for(model)
+          matches = table.select { |record| matches_where?(record, where || []) }
+          @db[model.to_s] = table.reject { |record| matches.include?(record) }
+          matches.length
+        end
       end
 
       def count(model:, where: nil)
         find_many(model: model, where: where || []).length
       end
 
+      def consume_one(model:, where:)
+        @lock.synchronize do
+          table = table_for(model)
+          index = table.index { |record| matches_where?(record, where || []) }
+          index ? table.delete_at(index) : nil
+        end
+      end
+
+      def increment_one(model:, where:, increment:, set: nil)
+        @lock.synchronize do
+          model = model.to_s
+          increments = normalized_increments(model, increment)
+          assignments = normalized_increment_set(model, set)
+          raise APIError.new("BAD_REQUEST", message: "increment_one requires a non-empty increment or set") if increments.empty? && assignments.empty?
+
+          target = table_for(model).find { |record| matches_where?(record, where || []) }
+          next nil unless target
+
+          increments.each do |field, delta|
+            current = target[field]
+            target[field] = (current.is_a?(Numeric) ? current : 0) + delta
+          end
+          target.merge!(assignments)
+          target
+        end
+      end
+
       def transaction
-        snapshot = Marshal.load(Marshal.dump(db))
-        yield self
-      rescue
-        @db = snapshot
-        raise
+        return yield active_transaction_adapter if active_transaction_adapter
+
+        @lock.synchronize do
+          snapshot = Marshal.load(Marshal.dump(db))
+          with_transaction_context(self) { yield self }
+        rescue
+          db.replace(snapshot)
+          raise
+        end
       end
 
       private
@@ -141,6 +209,38 @@ module BetterAuth
           fields.key?(field) || fields.any? { |logical_field, attributes| Schema.storage_key(attributes[:field_name] || logical_field) == field }
         end
         raise APIError.new("BAD_REQUEST", message: "No fields to update") unless has_updatable_field
+      end
+
+      def normalized_increments(model, increment)
+        raise APIError.new("BAD_REQUEST", message: "increment must be a Hash") unless increment.is_a?(Hash)
+
+        fields = Schema.auth_tables(options).fetch(model).fetch(:fields)
+        increment.each_with_object({}) do |(field, delta), result|
+          logical_field = atomic_schema_field(fields, field)
+          attributes = fields[logical_field]
+          unless attributes && logical_field != "id" && attributes[:type] == "number" && attributes[:input] != false
+            raise APIError.new("BAD_REQUEST", message: "Invalid increment field #{field}; expected a mutable numeric field")
+          end
+          if !delta.is_a?(Numeric) || (delta.respond_to?(:finite?) && !delta.finite?)
+            raise APIError.new("BAD_REQUEST", message: "Increment delta for #{field} must be numeric")
+          end
+
+          result[logical_field] = delta
+        end
+      end
+
+      def normalized_increment_set(model, set)
+        return {} if set.nil? || set.empty?
+
+        ensure_update_input_has_fields!(model, set)
+        transform_input(model, set, "update", true)
+      end
+
+      def atomic_schema_field(fields, field)
+        candidate = Schema.storage_key(field)
+        return candidate if fields.key?(candidate)
+
+        fields.find { |logical, attributes| Schema.storage_key(attributes[:field_name] || logical) == candidate }&.first
       end
 
       def generated_id(model)

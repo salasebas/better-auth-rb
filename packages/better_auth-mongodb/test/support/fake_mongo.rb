@@ -20,13 +20,15 @@ module BetterAuthMongoAdapterTestSupport
     attr_reader :insert_options
     attr_reader :aggregate_pipelines
     attr_reader :find_one_and_update_calls
+    attr_reader :find_one_and_delete_calls
     attr_reader :update_many_calls
+    attr_reader :update_one_calls
     attr_reader :delete_one_calls
     attr_reader :delete_many_calls
     attr_reader :indexes
 
     InsertResult = Struct.new(:inserted_id)
-    UpdateResult = Struct.new(:modified_count)
+    UpdateResult = Struct.new(:modified_count, :upserted_id)
     DeleteResult = Struct.new(:deleted_count)
 
     def initialize(database)
@@ -35,7 +37,9 @@ module BetterAuthMongoAdapterTestSupport
       @insert_options = []
       @aggregate_pipelines = []
       @find_one_and_update_calls = []
+      @find_one_and_delete_calls = []
       @update_many_calls = []
+      @update_one_calls = []
       @delete_one_calls = []
       @delete_many_calls = []
       @indexes = FakeMongoIndexes.new
@@ -43,6 +47,9 @@ module BetterAuthMongoAdapterTestSupport
 
     def insert_one(document, options = {})
       @insert_options << options
+      documents = writable_documents(options)
+      raise "E11000 duplicate key error" if documents.any? { |entry| entry["_id"] == document["_id"] }
+
       if transaction_session(options)
         transaction_session(options).insert(self, document)
         return InsertResult.new(document.fetch("_id"))
@@ -62,8 +69,18 @@ module BetterAuthMongoAdapterTestSupport
       document = writable_documents(options).find { |entry| matches_filter?(entry, filter) }
       return nil unless document
 
-      document.merge!(deep_dup(update.fetch("$set")))
+      deep_dup(update.fetch("$inc", {})).each do |field, delta|
+        document[field] = (document[field].is_a?(Numeric) ? document[field] : 0) + delta
+      end
+      document.merge!(deep_dup(update.fetch("$set", {})))
       deep_dup(document)
+    end
+
+    def find_one_and_delete(filter, options = {})
+      @find_one_and_delete_calls << [deep_dup(filter), options]
+      documents = writable_documents(options)
+      index = documents.index { |entry| matches_filter?(entry, filter) }
+      index ? deep_dup(documents.delete_at(index)) : nil
     end
 
     def update_many(filter, update, options = {})
@@ -75,7 +92,20 @@ module BetterAuthMongoAdapterTestSupport
         document.merge!(deep_dup(update.fetch("$set")))
         count += 1
       end
-      UpdateResult.new(count)
+      UpdateResult.new(count, nil)
+    end
+
+    def update_one(filter, update, options = {})
+      @update_one_calls << [deep_dup(filter), deep_dup(update), options]
+      documents = writable_documents(options)
+      existing = documents.find { |entry| matches_filter?(entry, filter) }
+      return UpdateResult.new(0, nil) if existing
+
+      raise "upsert required" unless options[:upsert]
+
+      document = deep_dup(update.fetch("$setOnInsert"))
+      documents << document
+      UpdateResult.new(0, document.fetch("_id"))
     end
 
     def delete_one(filter, options = {})

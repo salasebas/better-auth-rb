@@ -79,12 +79,26 @@ Secondary storage in RubyAuth allows you to use key-value stores for managing se
 
 ### Implementation
 
-To use secondary storage, provide an object that responds to `get`, `set`, and `delete`:
+To use secondary storage, provide an object that responds to `get`, `set`, and `delete`. Security-sensitive and counter-backed flows also use the atomic methods shown below:
 
 ```ruby
 class SecondaryStorage
   def get(key)
     # Return a string value or nil.
+  end
+
+  def get_and_delete(key)
+    # Atomically return and remove the value, or return nil.
+  end
+
+  def increment(key, ttl)
+    # Atomically increment and return the new value. Apply ttl only when the
+    # key is created; later increments must not extend the window.
+  end
+
+  def set_if_absent(key, value, ttl = nil)
+    # Atomically set value only when key does not exist. Return true only for
+    # the caller that created it. ttl is in seconds when present.
   end
 
   def set(key, value, ttl = nil)
@@ -96,6 +110,15 @@ class SecondaryStorage
   end
 end
 ```
+
+`get_and_delete` prevents two processes from consuming the same verification
+value, while `set_if_absent` provides first-writer-wins verification
+reservations. RubyAuth fails closed when either atomic method is missing for
+these helpers; configure database-backed verification storage instead if the
+secondary backend cannot provide them. Reservation markers intentionally omit
+a non-atomic reverse index and are consumed or deleted by identifier.
+`increment` prevents lost counter updates and keeps rate-limit windows fixed
+from their first request. This strict behavior is a Ruby safety adaptation.
 
 Then, provide your implementation to the `BetterAuth.auth` function:
 

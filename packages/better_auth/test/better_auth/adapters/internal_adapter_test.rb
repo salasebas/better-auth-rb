@@ -7,6 +7,54 @@ class BetterAuthInternalAdapterTest < Minitest::Test
   SECRET = "test-secret-that-is-long-enough-for-validation"
 
   MemoryStorage = Struct.new(:store, :ttls) do
+    class << self
+      def lock_for(store)
+        @lock_registry_guard ||= Mutex.new
+        @lock_registry_guard.synchronize { (@locks_by_store ||= {})[store.object_id] ||= Mutex.new }
+      end
+    end
+
+    def initialize(store = {}, ttls = {})
+      super
+    end
+
+    def set(key, value, ttl = nil)
+      store[key] = value
+      ttls[key] = ttl if ttl
+    end
+
+    def get(key)
+      store[key]
+    end
+
+    def delete(key)
+      store.delete(key)
+      ttls.delete(key)
+    end
+
+    def get_and_delete(key)
+      value = store.delete(key)
+      ttls.delete(key)
+      value
+    end
+
+    def set_if_absent(key, value, ttl = nil)
+      lock.synchronize do
+        next false if store.key?(key)
+
+        set(key, value, ttl)
+        true
+      end
+    end
+
+    private
+
+    def lock
+      self.class.lock_for(store)
+    end
+  end
+
+  LegacyMemoryStorage = Struct.new(:store, :ttls) do
     def initialize
       super({}, {})
     end
@@ -417,6 +465,159 @@ class BetterAuthInternalAdapterTest < Minitest::Test
     assert storage.get("verification:plain:token")
     assert_equal "secret", internal.find_verification_value("custom:token")["value"]
     assert_equal "visible", internal.find_verification_value("plain:token")["value"]
+  end
+
+  def test_consume_verification_value_has_one_winner_and_rejects_expired_rows
+    internal = internal_adapter
+    internal.create_verification_value(identifier: "consume-race", value: "winner", expiresAt: Time.now + 120)
+    ready = Queue.new
+    start = Queue.new
+    threads = 8.times.map do
+      Thread.new do
+        ready << true
+        start.pop
+        internal.consume_verification_value("consume-race")
+      end
+    end
+    8.times { ready.pop }
+    8.times { start << true }
+
+    assert_equal ["winner"], threads.map(&:value).compact.map { |row| row.fetch("value") }
+    assert_nil internal.find_verification_value("consume-race")
+
+    internal.create_verification_value(identifier: "consume-expired", value: "expired", expiresAt: Time.now - 1)
+    assert_nil internal.consume_verification_value("consume-expired")
+    assert_nil internal.find_verification_value("consume-expired")
+  end
+
+  def test_consume_verification_value_supports_hashed_secondary_and_database_modes
+    storage = MemoryStorage.new
+    secondary = internal_adapter(secondary_storage: storage, verification: {store_identifier: "hashed"})
+    secondary.create_verification_value(identifier: "consume-hashed", value: "secondary", expiresAt: Time.now + 120)
+
+    assert_equal "secondary", secondary.consume_verification_value("consume-hashed").fetch("value")
+    assert_nil secondary.consume_verification_value("consume-hashed")
+    assert_empty storage.store
+
+    dual_storage = MemoryStorage.new
+    dual = internal_adapter(secondary_storage: dual_storage, verification: {store_in_database: true})
+    verification = dual.create_verification_value(identifier: "consume-dual", value: "database", expiresAt: Time.now + 120)
+
+    assert_equal "database", dual.consume_verification_value("consume-dual").fetch("value")
+    assert_nil dual.adapter.find_one(model: "verification", where: [{field: "id", value: verification.fetch("id")}])
+    assert_nil dual_storage.get("verification:consume-dual")
+    assert_nil dual_storage.get("verification-id:#{verification.fetch("id")}")
+  end
+
+  def test_reserve_verification_value_has_one_winner_and_hashes_identifiers
+    internal = internal_adapter(verification: {store_identifier: "hashed"})
+    data = {identifier: "reserve-race", value: "marker", expiresAt: Time.now + 120}
+    ready = Queue.new
+    start = Queue.new
+    threads = 8.times.map do
+      Thread.new do
+        ready << true
+        start.pop
+        internal.reserve_verification_value(data)
+      end
+    end
+    8.times { ready.pop }
+    8.times { start << true }
+    results = threads.map(&:value)
+
+    assert_equal 1, results.count(true)
+    assert_equal 7, results.count(false)
+    stored = internal.find_verification_value("reserve-race")
+    assert_equal BetterAuth::Crypto.sha256("reserve-race", encoding: :base64url), stored.fetch("identifier")
+    assert_equal "marker", stored.fetch("value")
+  end
+
+  def test_reserve_verification_value_coordinates_independent_internal_adapters_sharing_a_memory_database
+    config = BetterAuth::Configuration.new(secret: SECRET, database: :memory)
+    first_database_adapter = BetterAuth::Adapters::Memory.new(config)
+    second_database_adapter = BetterAuth::Adapters::Memory.new(config, first_database_adapter.db)
+    internals = [
+      BetterAuth::Adapters::InternalAdapter.new(first_database_adapter, config),
+      BetterAuth::Adapters::InternalAdapter.new(second_database_adapter, config)
+    ]
+    data = {identifier: "shared-db-reservation", value: "marker", expiresAt: Time.now + 120}
+    ready = Queue.new
+    start = Queue.new
+    threads = internals.map do |internal|
+      Thread.new do
+        ready << true
+        start.pop
+        internal.reserve_verification_value(data)
+      end
+    end
+    2.times { ready.pop }
+    2.times { start << true }
+
+    assert_equal [false, true], threads.map(&:value).sort_by(&:to_s)
+    assert_equal 1, first_database_adapter.find_many(model: "verification").length
+  end
+
+  def test_expired_reservation_can_be_won_again
+    internal = internal_adapter
+    expired = {identifier: "expired-reservation", value: "old", expiresAt: Time.now - 1}
+    fresh = {identifier: "expired-reservation", value: "new", expiresAt: Time.now + 120}
+
+    assert internal.reserve_verification_value(expired)
+    assert internal.reserve_verification_value(fresh)
+    assert_equal "new", internal.find_verification_value("expired-reservation").fetch("value")
+  end
+
+  def test_database_backed_reservation_omits_non_atomic_reverse_index
+    storage = MemoryStorage.new
+    internal = internal_adapter(secondary_storage: storage, verification: {store_in_database: true})
+    identifier = "reservation-with-cache"
+    reservation_id = BetterAuth::Crypto.sha256("reserve:#{identifier}", encoding: :base64url)
+
+    assert internal.reserve_verification_value(identifier: identifier, value: "marker", expiresAt: Time.now + 120)
+    assert storage.get("verification:#{identifier}")
+    assert_nil storage.get("verification-id:#{reservation_id}")
+
+    assert_equal "marker", internal.consume_verification_value(identifier).fetch("value")
+    assert_nil storage.get("verification:#{identifier}")
+    assert_nil storage.get("verification-id:#{reservation_id}")
+  end
+
+  def test_reserve_verification_value_uses_atomic_conditional_set_across_storage_wrappers
+    shared_store = {}
+    shared_ttls = {}
+    storages = [MemoryStorage.new(shared_store, shared_ttls), MemoryStorage.new(shared_store, shared_ttls)]
+    internals = storages.map { |storage| internal_adapter(secondary_storage: storage) }
+    data = {identifier: "shared-storage-reservation", value: "marker", expiresAt: Time.now + 120}
+    ready = Queue.new
+    start = Queue.new
+    threads = internals.map do |internal|
+      Thread.new do
+        ready << true
+        start.pop
+        internal.reserve_verification_value(data)
+      end
+    end
+    2.times { ready.pop }
+    2.times { start << true }
+
+    assert_equal [false, true], threads.map(&:value).sort_by(&:to_s)
+    assert shared_store.key?("verification:shared-storage-reservation")
+  end
+
+  def test_legacy_secondary_verification_helpers_fail_closed
+    storage = LegacyMemoryStorage.new
+    internal = internal_adapter(secondary_storage: storage)
+
+    internal.create_verification_value(identifier: "legacy-consume", value: "value", expiresAt: Time.now + 120)
+    consume_error = assert_raises(BetterAuth::Error) do
+      internal.consume_verification_value("legacy-consume")
+    end
+    reserve_error = assert_raises(BetterAuth::Error) do
+      internal.reserve_verification_value(identifier: "legacy-reserve", value: "value", expiresAt: Time.now + 120)
+    end
+
+    assert_includes consume_error.message, "get_and_delete"
+    assert_includes reserve_error.message, "set_if_absent"
   end
 
   def test_user_and_account_helpers

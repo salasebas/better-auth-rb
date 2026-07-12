@@ -36,6 +36,34 @@ module BetterAuth
         lookup ? find_one(model: model, where: [lookup]) : input
       end
 
+      def create_if_absent(model:, data:, conflict_field: "id", force_allow_id: true)
+        model = model.to_s
+        field = atomic_schema_field(schema_for(model).fetch(:fields), conflict_field)
+        input = transform_input(model, data, "create", force_allow_id)
+        raise APIError.new("BAD_REQUEST", message: "Missing conflict field #{conflict_field}") unless input.key?(field)
+
+        columns = input.keys.map { |key| storage_field(model, key) }
+        params = input.values
+        values = params.each_index.map { |index| placeholder(index + 1) }.join(", ")
+        table = quote(table_for(model))
+        conflict_column = quote(storage_field(model, field))
+        quoted_columns = columns.map { |column| quote(column) }.join(", ")
+
+        case dialect
+        when :postgres, :sqlite
+          sql = "INSERT INTO #{table} (#{quoted_columns}) VALUES (#{values}) ON CONFLICT (#{conflict_column}) DO NOTHING RETURNING #{conflict_column}"
+          !execute(sql, params).empty?
+        when :mysql
+          transaction { create_if_absent_mysql(model, field, input, table, quoted_columns, values, params) }
+        when :mssql
+          sql = "INSERT INTO #{table} (#{quoted_columns}) OUTPUT inserted.#{conflict_column} " \
+            "SELECT #{values} WHERE NOT EXISTS (SELECT 1 FROM #{table} WITH (UPDLOCK, HOLDLOCK) WHERE #{conflict_column} = #{placeholder(params.length + 1)})"
+          !execute(sql, params + [input.fetch(field)]).empty?
+        else
+          raise NotImplementedError, "create_if_absent is unsupported for #{dialect}"
+        end
+      end
+
       def find_one(model:, where: [], select: nil, join: nil)
         if collection_join?(model.to_s, join)
           find_many(model: model, where: where, select: select, join: join).first
@@ -110,13 +138,14 @@ module BetterAuth
         nil
       end
 
-      def delete_many(model:, where:)
+      def delete_many(model:, where:, limit: nil)
         model = model.to_s
         params = []
         where_sql = build_where(model, where || [], params)
         sql = +"DELETE FROM "
         sql << quote(table_for(model))
         sql << " WHERE #{where_sql}" unless where_sql.empty?
+        sql << " LIMIT #{Integer(limit)}" if limit && dialect == :mysql
         result = execute(sql, params, affected_rows_result: true)
         affected_rows(result)
       end
@@ -132,10 +161,37 @@ module BetterAuth
         (row["count"] || row[:count] || 0).to_i
       end
 
+      def consume_one(model:, where:)
+        model = model.to_s
+        case dialect
+        when :postgres, :sqlite
+          consume_one_with_returning(model, where)
+        when :mssql
+          consume_one_with_output(model, where)
+        else
+          transaction { consume_one_with_lock(model, where) }
+        end
+      end
+
+      def increment_one(model:, where:, increment:, set: nil)
+        model = model.to_s
+        increments, assignments = normalize_atomic_update(model, increment, set)
+        case dialect
+        when :postgres, :sqlite
+          increment_one_with_returning(model, where, increments, assignments)
+        when :mssql
+          increment_one_with_output(model, where, increments, assignments)
+        else
+          transaction { increment_one_with_lock(model, where, increments, assignments) }
+        end
+      end
+
       def transaction
+        return yield active_transaction_adapter if active_transaction_adapter
+
         @connection_lock.synchronize do
           execute("BEGIN", [])
-          result = yield self
+          result = with_transaction_context(self) { yield self }
           execute("COMMIT", [])
           result
         rescue
@@ -145,6 +201,174 @@ module BetterAuth
       end
 
       private
+
+      def consume_one_with_returning(model, where)
+        params = []
+        where_sql = build_where(model, where || [], params)
+        lookup = quote(storage_field(model, atomic_lookup_field(model)))
+        lock = (dialect == :postgres) ? " FOR UPDATE" : ""
+        table = quote(table_for(model))
+        sql = "DELETE FROM #{table} WHERE #{lookup} IN (SELECT #{lookup} FROM #{table}"
+        sql << " WHERE #{where_sql}" unless where_sql.empty?
+        sql << " LIMIT 1#{lock}) RETURNING *"
+        normalize_record(model, execute(sql, params).first)
+      end
+
+      def consume_one_with_output(model, where)
+        params = []
+        where_sql = build_where(model, where || [], params)
+        sql = "DELETE TOP (1) FROM #{quote(table_for(model))} OUTPUT deleted.*"
+        sql << " WHERE #{where_sql}" unless where_sql.empty?
+        normalize_record(model, execute(sql, params).first)
+      end
+
+      def consume_one_with_lock(model, where)
+        target = select_atomic_target(model, where)
+        return nil unless target
+
+        lookup = record_lookup(model, target)
+        raise Error, "#{self.class} cannot atomically identify a #{model} row" unless lookup
+
+        deleted = delete_many(model: model, where: [lookup], limit: 1)
+        ensure_numeric_affected_rows!(deleted, "delete_many")
+        deleted.positive? ? target : nil
+      end
+
+      def increment_one_with_returning(model, where, increments, assignments)
+        params = []
+        assignment_sql = atomic_assignments_sql(model, increments, assignments, params)
+        where_sql = build_where(model, where || [], params)
+        lookup = quote(storage_field(model, atomic_lookup_field(model)))
+        lock = (dialect == :postgres) ? " FOR UPDATE" : ""
+        table = quote(table_for(model))
+        sql = "UPDATE #{table} SET #{assignment_sql} WHERE #{lookup} IN (SELECT #{lookup} FROM #{table}"
+        sql << " WHERE #{where_sql}" unless where_sql.empty?
+        sql << " LIMIT 1#{lock}) RETURNING *"
+        normalize_record(model, execute(sql, params).first)
+      end
+
+      def increment_one_with_output(model, where, increments, assignments)
+        params = []
+        assignment_sql = atomic_assignments_sql(model, increments, assignments, params)
+        where_sql = build_where(model, where || [], params)
+        sql = "UPDATE TOP (1) #{quote(table_for(model))} SET #{assignment_sql} OUTPUT inserted.*"
+        sql << " WHERE #{where_sql}" unless where_sql.empty?
+        normalize_record(model, execute(sql, params).first)
+      end
+
+      def increment_one_with_lock(model, where, increments, assignments)
+        target = select_atomic_target(model, where)
+        return nil unless target
+
+        lookup = record_lookup(model, target)
+        raise Error, "#{self.class} cannot atomically identify a #{model} row" unless lookup
+
+        params = []
+        assignment_sql = atomic_assignments_sql(model, increments, assignments, params)
+        guarded_where = Array(where) + [lookup.merge(connector: "AND")]
+        where_sql = build_where(model, guarded_where, params)
+        sql = "UPDATE #{quote(table_for(model))} SET #{assignment_sql} WHERE #{where_sql} LIMIT 1"
+        affected = affected_rows(execute(sql, params, affected_rows_result: true))
+        ensure_numeric_affected_rows!(affected, "update")
+        find_one(model: model, where: [lookup])
+      end
+
+      def select_atomic_target(model, where)
+        params = []
+        where_sql = build_where(model, where || [], params)
+        sql = "SELECT #{select_sql(model, nil, nil)} FROM #{quote(table_for(model))}"
+        sql << " WHERE #{where_sql}" unless where_sql.empty?
+        sql << " LIMIT 1 FOR UPDATE"
+        normalize_record(model, execute(sql, params).first)
+      end
+
+      def normalize_atomic_update(model, increment, set)
+        raise APIError.new("BAD_REQUEST", message: "increment must be a Hash") unless increment.is_a?(Hash)
+
+        fields = schema_for(model).fetch(:fields)
+        increments = increment.each_with_object({}) do |(field, delta), result|
+          logical_field = atomic_schema_field(fields, field)
+          attributes = fields[logical_field]
+          unless attributes && logical_field != "id" && attributes[:type] == "number" && attributes[:input] != false
+            raise APIError.new("BAD_REQUEST", message: "Invalid increment field #{field}; expected a mutable numeric field")
+          end
+          if !delta.is_a?(Numeric) || (delta.respond_to?(:finite?) && !delta.finite?)
+            raise APIError.new("BAD_REQUEST", message: "Increment delta for #{field} must be numeric")
+          end
+
+          result[logical_field] = delta
+        end
+        assignments = if set.nil? || set.empty?
+          {}
+        else
+          ensure_update_input_has_fields!(model, set)
+          transform_input(model, set, "update", true)
+        end
+        increments.reject! { |field, _delta| assignments.key?(field) }
+        if increments.empty? && assignments.empty?
+          raise APIError.new("BAD_REQUEST", message: "increment_one requires a non-empty increment or set")
+        end
+
+        [increments, assignments]
+      end
+
+      def atomic_assignments_sql(model, increments, assignments, params)
+        increment_sql = increments.map do |field, delta|
+          column = quote(storage_field(model, field))
+          params << delta
+          "#{column} = COALESCE(#{column}, 0) + #{placeholder(params.length)}"
+        end
+        set_sql = assignments.map do |field, value|
+          params << value
+          "#{quote(storage_field(model, field))} = #{placeholder(params.length)}"
+        end
+        (increment_sql + set_sql).join(", ")
+      end
+
+      def atomic_schema_field(fields, field)
+        candidate = storage_key(field)
+        return candidate if fields.key?(candidate)
+
+        fields.find { |logical, attributes| storage_key(attributes[:field_name] || logical) == candidate }&.first
+      end
+
+      def create_if_absent_mysql(model, field, input, table, columns, values, params)
+        savepoint = "better_auth_create_if_absent"
+        execute("SAVEPOINT #{savepoint}", [])
+        begin
+          execute("INSERT INTO #{table} (#{columns}) VALUES (#{values})", params)
+          execute("RELEASE SAVEPOINT #{savepoint}", [])
+          true
+        rescue => error
+          execute("ROLLBACK TO SAVEPOINT #{savepoint}", [])
+          execute("RELEASE SAVEPOINT #{savepoint}", [])
+          existing = find_one(model: model, where: [{field: field, value: input.fetch(field)}])
+          return false if mysql_duplicate_error?(error) && existing
+
+          raise error
+        end
+      end
+
+      def mysql_duplicate_error?(error)
+        (error.respond_to?(:error_number) && error.error_number == 1062) ||
+          (error.respond_to?(:errno) && error.errno == 1062)
+      end
+
+      def atomic_lookup_field(model)
+        fields = schema_for(model).fetch(:fields)
+        return "id" if fields.key?("id")
+
+        unique = fields.find { |_field, attributes| attributes[:unique] }
+        return unique.first if unique
+
+        raise Error, "#{self.class} cannot atomically identify a #{model} row without an id or unique field"
+      end
+
+      def ensure_numeric_affected_rows!(value, operation)
+        return value if value.is_a?(Numeric)
+
+        raise Error, "#{self.class} returned a non-numeric affected-row result from #{operation}"
+      end
 
       def transform_input(model, data, action, force_allow_id)
         fields = Schema.auth_tables(options).fetch(model).fetch(:fields)
@@ -396,13 +620,18 @@ module BetterAuth
       end
 
       def affected_rows(result)
-        return result.cmd_tuples if result.respond_to?(:cmd_tuples)
-        return result.affected_rows if result.respond_to?(:affected_rows)
-        return result.to_i if result.respond_to?(:to_i)
-        return connection.affected_rows if connection.respond_to?(:affected_rows)
-        return connection.changes if connection.respond_to?(:changes)
-
-        0
+        value = if result.respond_to?(:cmd_tuples)
+          result.cmd_tuples
+        elsif result.respond_to?(:affected_rows)
+          result.affected_rows
+        elsif result.is_a?(Numeric)
+          result
+        elsif connection.respond_to?(:affected_rows)
+          connection.affected_rows
+        elsif connection.respond_to?(:changes)
+          connection.changes
+        end
+        ensure_numeric_affected_rows!(value, "SQL mutation")
       end
 
       def normalize_record(model, row, join: nil)
