@@ -118,7 +118,7 @@ module BetterAuth
     end
 
     def create_verification_otp_endpoint(config)
-      Endpoint.new(method: "POST") do |ctx|
+      Endpoint.new(method: "POST", metadata: {server_only: true}) do |ctx|
         body = normalize_hash(ctx.body)
         email = body[:email].to_s.downcase
         type = body[:type].to_s
@@ -132,9 +132,9 @@ module BetterAuth
 
     def get_verification_otp_endpoint(config)
       Endpoint.new(
-        path: "/email-otp/get-verification-otp",
         method: "GET",
         metadata: {
+          server_only: true,
           openapi: {
             operationId: "getVerificationOTP",
             description: "Get a stored verification OTP when storage allows plaintext access",

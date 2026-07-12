@@ -1,6 +1,6 @@
 {
   "generated_at": "2026-06-17T06:02:29Z",
-  "route_count": 220,
+  "route_count": 219,
   "routes": [
     {
       "path": "/.well-known/oauth-authorization-server",
@@ -1531,39 +1531,6 @@
       "upstream_client_call": "emailOtp.CheckVerificationOtp",
       "plugin_id": "email-otp",
       "operation_id": "checkVerificationOTP"
-    },
-    {
-      "path": "/email-otp/get-verification-otp",
-      "methods": [
-        "GET"
-      ],
-      "file": "packages/better_auth/lib/better_auth/plugins/email_otp.rb",
-      "line": 134,
-      "endpoint_key": "get_verification_otp",
-      "plugin_hint": "email_otp",
-      "body_fields": [],
-      "query_params": [
-        {
-          "name": "email",
-          "required": true,
-          "type": "string"
-        },
-        {
-          "name": "type",
-          "required": true,
-          "type": "string"
-        }
-      ],
-      "path_params": [],
-      "header_params": [],
-      "disable_body": false,
-      "server_only": false,
-      "source": "static+runtime",
-      "method": "GET",
-      "ruby_api_method": "get_verification_otp",
-      "ruby_api_call": "auth.api.get_verification_otp",
-      "plugin_id": "email-otp",
-      "operation_id": "getVerificationOTP"
     },
     {
       "path": "/email-otp/request-email-change",
