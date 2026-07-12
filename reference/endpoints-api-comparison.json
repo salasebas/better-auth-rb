@@ -1,12 +1,12 @@
 {
   "generated_at": "2026-07-12T02:30:09Z",
   "upstream_route_count": 131,
-  "ruby_route_count": 220,
+  "ruby_route_count": 219,
   "aligned_count": 128,
   "registry_key_mismatch_count": 0,
   "api_name_mismatch_count": 0,
   "missing_ruby_count": 0,
-  "missing_upstream_count": 98,
+  "missing_upstream_count": 97,
   "deprecated_pair_count": 0,
   "aligned": [
     {
@@ -2546,39 +2546,6 @@
       "ruby_api_call": "auth.api.dub_link",
       "plugin_id": "dub",
       "operation_id": "dubLink"
-    },
-    {
-      "path": "/email-otp/get-verification-otp",
-      "methods": [
-        "GET"
-      ],
-      "file": "packages/better_auth/lib/better_auth/plugins/email_otp.rb",
-      "line": 134,
-      "endpoint_key": "get_verification_otp",
-      "plugin_hint": "email_otp",
-      "body_fields": [],
-      "query_params": [
-        {
-          "name": "email",
-          "required": true,
-          "type": "string"
-        },
-        {
-          "name": "type",
-          "required": true,
-          "type": "string"
-        }
-      ],
-      "path_params": [],
-      "header_params": [],
-      "disable_body": false,
-      "server_only": false,
-      "source": "static+runtime",
-      "method": "GET",
-      "ruby_api_method": "get_verification_otp",
-      "ruby_api_call": "auth.api.get_verification_otp",
-      "plugin_id": "email-otp",
-      "operation_id": "getVerificationOTP"
     },
     {
       "path": "/email-otp/send-verification-otp",

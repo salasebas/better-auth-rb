@@ -105,6 +105,23 @@ class BetterAuthPluginsOpenAPITest < Minitest::Test
     )
   end
 
+  def test_open_api_excludes_server_only_email_otp_helpers
+    auth = build_auth(
+      plugins: [
+        BetterAuth::Plugins.email_otp(send_verification_otp: ->(*) {}),
+        BetterAuth::Plugins.open_api
+      ]
+    )
+
+    schema = auth.api.generate_openapi_schema
+
+    refute_includes schema[:paths].keys, "/email-otp/get-verification-otp"
+    exposes_operation = schema[:paths].values.any? do |methods|
+      methods.values.any? { |operation| operation[:operationId] == "getVerificationOTP" }
+    end
+    refute exposes_operation
+  end
+
   def test_open_api_base_routes_have_upstream_rich_schemas
     auth = build_auth(plugins: [BetterAuth::Plugins.open_api])
 

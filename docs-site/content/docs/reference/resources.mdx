@@ -10,7 +10,7 @@ Do not edit the generated endpoint reference by hand; update the Ruby source of 
 
 Generated configuration: supported Ruby plugin set, email/password auth, database-backed rate limiting, and optional schema-bearing supported plugin features. Actual app schemas and endpoints may differ when plugins are disabled or names and fields are customized.
 
-Generated count: 181 operations across 176 paths.
+Generated count: 180 operations across 175 paths.
 
 ## Official
 
@@ -108,7 +108,6 @@ Endpoint metadata is generated from the auth API OpenAPI schema method using a d
 | --- | --- | --- | --- | --- | --- | --- |
 | `POST` | `/api/auth/email-otp/change-email` | `changeEmailWithEmailOTP` | Change the current user's email with an OTP | bearerAuth | application/json: object: newEmail, otp; required: newEmail, otp | 200 - Email changed - object: success; required: success |
 | `POST` | `/api/auth/email-otp/check-verification-otp` | `checkVerificationOTP` | Check an email verification OTP without consuming it | bearerAuth | application/json: object: email, otp, type; required: email, otp, type | 200 - OTP is valid - object: success; required: success |
-| `GET` | `/api/auth/email-otp/get-verification-otp` | `getVerificationOTP` | Get a stored verification OTP when storage allows plaintext access | bearerAuth | none | 200 - Stored OTP - object: otp |
 | `POST` | `/api/auth/email-otp/request-email-change` | `requestEmailChangeOTP` | Request an OTP to change the current user's email | bearerAuth | application/json: object: newEmail, otp; required: newEmail | 200 - Change email OTP sent - object: success; required: success |
 | `POST` | `/api/auth/email-otp/request-password-reset` | `requestPasswordResetEmailOTP` | Request a password reset OTP by email | bearerAuth | application/json: object: email; required: email | 200 - Password reset OTP requested - object: status; required: status |
 | `POST` | `/api/auth/email-otp/reset-password` | `resetPasswordEmailOTP` | Reset a password with an email OTP | bearerAuth | application/json: object: email, otp, password; required: email, otp, password | 200 - Password reset - object: status; required: status |

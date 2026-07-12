@@ -302,6 +302,32 @@ class BetterAuthPluginsEmailOTPTest < Minitest::Test
     assert_match(/\A[0-9a-f]{32}\z/, encrypted.api.sign_in_email_otp(body: {email: "encrypted@example.com", otp: "654321"})[:token])
   end
 
+  def test_server_otp_helpers_are_pathless_and_not_routable_over_http
+    plugin = BetterAuth::Plugins.email_otp(
+      generate_otp: ->(_data, _ctx = nil) { "123456" },
+      send_verification_otp: ->(_data, _ctx = nil) {}
+    )
+    create_endpoint = plugin.endpoints.fetch(:create_verification_otp)
+    get_endpoint = plugin.endpoints.fetch(:get_verification_otp)
+
+    assert_nil create_endpoint.path
+    assert_equal true, create_endpoint.metadata[:server_only]
+    assert_nil get_endpoint.path
+    assert_equal true, get_endpoint.metadata[:server_only]
+
+    auth = build_auth(plugins: [plugin])
+    otp = auth.api.create_verification_otp(body: {email: "server-only@example.com", type: "sign-in"})
+
+    assert_equal "123456", otp
+    assert_equal({otp: "123456"}, auth.api.get_verification_otp(query: {email: "server-only@example.com", type: "sign-in"}))
+
+    env = Rack::MockRequest.env_for(
+      "http://localhost:3000/api/auth/email-otp/get-verification-otp?email=server-only%40example.com&type=sign-in",
+      method: "GET"
+    )
+    assert_equal 404, auth.call(env).first
+  end
+
   def test_server_otp_helpers_support_custom_encryptor_and_hasher_storage
     encrypted = build_auth(
       plugins: [
