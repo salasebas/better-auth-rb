@@ -328,6 +328,7 @@ module BetterAuth
         if can_send_confirmation
           callback_url = body["callbackURL"] || body["callbackUrl"] || body["callback_url"]
           token = create_email_verification_token(ctx, session[:user]["email"], update_to: new_email, extra: {"requestType" => "change-email-confirmation"})
+          register_change_email_token!(ctx, token)
           url = email_verification_url(ctx, token, callback_url)
           confirmation_sender.call({user: session[:user], new_email: new_email, url: url, token: token}, ctx.request)
           next ctx.json({status: true})
@@ -340,6 +341,7 @@ module BetterAuth
 
     def self.send_change_email_verification(ctx, sender, user, current_email, new_email, callback_url)
       token = create_email_verification_token(ctx, current_email, update_to: new_email, extra: {"requestType" => "change-email-verification"})
+      register_change_email_token!(ctx, token)
       sender.call({user: user.merge("email" => new_email), url: email_verification_url(ctx, token, callback_url), token: token}, ctx.request)
     end
 

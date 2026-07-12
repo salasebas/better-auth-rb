@@ -84,6 +84,7 @@ class BetterAuthRoutesEmailVerificationTest < Minitest::Test
     assert_equal ["before:verified@example.com", "on:verified@example.com", "after:verified@example.com"], verified
     user = auth.context.internal_adapter.find_user_by_email("verified@example.com")[:user]
     assert_equal true, user["emailVerified"]
+    assert_nil auth.context.internal_adapter.find_verification_value("change-email:#{BetterAuth::Crypto.sha256(token, encoding: :base64url)}")
   end
 
   def test_verify_email_auto_sign_in_exposes_bearer_set_auth_token_header
@@ -176,8 +177,13 @@ class BetterAuthRoutesEmailVerificationTest < Minitest::Test
     assert_equal({status: true}, auth.api.change_email(headers: {"cookie" => cookie}, body: {newEmail: "new-verified@example.com"}))
     first_token = sent.first.fetch(:token)
 
-    auth.api.verify_email(query: {token: first_token})
+    status, headers, _body = auth.api.verify_email(query: {token: first_token}, as_response: true)
+    redeemed_cookie = cookie_header(headers.fetch("set-cookie"))
+    redeemed_session = auth.api.get_session(headers: {"cookie" => redeemed_cookie})
 
+    assert_equal 200, status
+    assert_equal "new-verified@example.com", redeemed_session[:user]["email"]
+    assert_equal true, redeemed_session[:user]["emailVerified"]
     old_user = auth.context.internal_adapter.find_user_by_email("old-verified@example.com")
     new_user = auth.context.internal_adapter.find_user_by_email("new-verified@example.com")[:user]
     assert_nil old_user
@@ -343,6 +349,206 @@ class BetterAuthRoutesEmailVerificationTest < Minitest::Test
     assert_equal true, session[:user]["emailVerified"]
     assert_nil auth.context.internal_adapter.find_user_by_email("confirmed-old@example.com")
     assert_equal ["confirmed-new@example.com"], after_calls
+  end
+
+  def test_change_email_verification_rejects_a_different_users_session_without_mutation
+    sent = []
+    auth = build_auth(
+      user: {change_email: {enabled: true}},
+      email_verification: {send_verification_email: ->(data, _request = nil) { sent << data }}
+    )
+    owner_cookie = sign_up_cookie(auth, email: "change-owner@example.com")
+    other_cookie = sign_up_cookie(auth, email: "signed-in-other@example.com")
+    auth.context.internal_adapter.update_user_by_email("change-owner@example.com", emailVerified: true)
+    auth.api.change_email(headers: {"cookie" => owner_cookie}, body: {newEmail: "change-target@example.com"})
+
+    error = assert_raises(BetterAuth::APIError) do
+      auth.api.verify_email(headers: {"cookie" => other_cookie}, query: {token: sent.fetch(0).fetch(:token)})
+    end
+
+    assert_equal 401, error.status_code
+    assert_equal "invalid_user", error.message
+    assert auth.context.internal_adapter.find_user_by_email("change-owner@example.com")
+    assert_nil auth.context.internal_adapter.find_user_by_email("change-target@example.com")
+
+    status, headers, _body = auth.api.verify_email(query: {token: sent.fetch(0).fetch(:token)}, as_response: true)
+    session = auth.api.get_session(headers: {"cookie" => cookie_header(headers.fetch("set-cookie"))})
+
+    assert_equal 200, status
+    assert_equal "change-target@example.com", session[:user]["email"]
+  end
+
+  def test_change_email_verification_creates_session_before_mutating_email
+    sent = []
+    auth = build_auth(
+      user: {change_email: {enabled: true}},
+      email_verification: {send_verification_email: ->(data, _request = nil) { sent << data }}
+    )
+    cookie = sign_up_cookie(auth, email: "session-failure-old@example.com")
+    auth.context.internal_adapter.update_user_by_email("session-failure-old@example.com", emailVerified: true)
+    auth.api.change_email(headers: {"cookie" => cookie}, body: {newEmail: "session-failure-new@example.com"})
+    auth.context.internal_adapter.define_singleton_method(:create_session) { |*_args| nil }
+
+    error = assert_raises(BetterAuth::APIError) do
+      auth.api.verify_email(query: {token: sent.fetch(0).fetch(:token)})
+    end
+
+    assert_equal 500, error.status_code
+    assert_equal BetterAuth::BASE_ERROR_CODES["FAILED_TO_CREATE_SESSION"], error.message
+    assert auth.context.internal_adapter.find_user_by_email("session-failure-old@example.com")
+    assert_nil auth.context.internal_adapter.find_user_by_email("session-failure-new@example.com")
+  end
+
+  def test_legacy_update_to_token_remains_storeless_and_creates_session_before_mutation
+    auth = build_auth
+    auth.api.sign_up_email(body: {email: "legacy-old@example.com", password: "password123", name: "Legacy"})
+    token = BetterAuth::Crypto.sign_jwt(
+      {"email" => "legacy-old@example.com", "updateTo" => "legacy-new@example.com"},
+      SECRET,
+      expires_in: 3600
+    )
+
+    status, headers, _body = auth.api.verify_email(query: {token: token}, as_response: true)
+    session = auth.api.get_session(headers: {"cookie" => cookie_header(headers.fetch("set-cookie"))})
+
+    assert_equal 200, status
+    assert_equal "legacy-new@example.com", session[:user]["email"]
+    assert_equal false, session[:user]["emailVerified"]
+    assert_nil auth.context.internal_adapter.find_verification_value("change-email:#{BetterAuth::Crypto.sha256(token, encoding: :base64url)}")
+  end
+
+  def test_legacy_update_to_session_creation_failure_leaves_email_unchanged
+    auth = build_auth
+    auth.api.sign_up_email(body: {email: "legacy-failure-old@example.com", password: "password123", name: "Legacy"})
+    token = BetterAuth::Crypto.sign_jwt(
+      {"email" => "legacy-failure-old@example.com", "updateTo" => "legacy-failure-new@example.com"},
+      SECRET,
+      expires_in: 3600
+    )
+    auth.context.internal_adapter.define_singleton_method(:create_session) { |*_args| nil }
+
+    error = assert_raises(BetterAuth::APIError) { auth.api.verify_email(query: {token: token}) }
+
+    assert_equal 500, error.status_code
+    assert auth.context.internal_adapter.find_user_by_email("legacy-failure-old@example.com")
+    assert_nil auth.context.internal_adapter.find_user_by_email("legacy-failure-new@example.com")
+  end
+
+  def test_change_email_verification_rejects_tampered_update_to_without_mutation
+    sent = []
+    auth = build_auth(
+      user: {change_email: {enabled: true}},
+      email_verification: {send_verification_email: ->(data, _request = nil) { sent << data }}
+    )
+    cookie = sign_up_cookie(auth, email: "tamper-old@example.com")
+    auth.api.change_email(headers: {"cookie" => cookie}, body: {newEmail: "tamper-new@example.com"})
+    token = sent.fetch(0).fetch(:token)
+    header, _payload, signature = token.split(".")
+    decoded, = JWT.decode(token, nil, false)
+    decoded["updateTo"] = "attacker@example.com"
+    tampered_payload = Base64.urlsafe_encode64(JSON.generate(decoded), padding: false)
+
+    error = assert_raises(BetterAuth::APIError) do
+      auth.api.verify_email(query: {token: [header, tampered_payload, signature].join(".")})
+    end
+
+    assert_equal BetterAuth::BASE_ERROR_CODES["INVALID_TOKEN"], error.message
+    assert auth.context.internal_adapter.find_user_by_email("tamper-old@example.com")
+    assert_nil auth.context.internal_adapter.find_user_by_email("tamper-new@example.com")
+    assert_nil auth.context.internal_adapter.find_user_by_email("attacker@example.com")
+  end
+
+  def test_change_email_confirmation_is_single_use_and_replay_has_no_email_side_effect
+    confirmations = []
+    verifications = []
+    auth = build_auth(
+      user: {
+        change_email: {
+          enabled: true,
+          send_change_email_confirmation: ->(data, _request = nil) { confirmations << data }
+        }
+      },
+      email_verification: {send_verification_email: ->(data, _request = nil) { verifications << data }}
+    )
+    cookie = sign_up_cookie(auth, email: "single-confirm-old@example.com")
+    auth.context.internal_adapter.update_user_by_email("single-confirm-old@example.com", emailVerified: true)
+    auth.api.change_email(headers: {"cookie" => cookie}, body: {newEmail: "single-confirm-new@example.com"})
+    token = confirmations.fetch(0).fetch(:token)
+
+    auth.api.verify_email(query: {token: token})
+    error = assert_raises(BetterAuth::APIError) { auth.api.verify_email(query: {token: token}) }
+
+    assert_equal BetterAuth::BASE_ERROR_CODES["TOKEN_ALREADY_USED"], error.message
+    assert_equal "TOKEN_ALREADY_USED", error.code
+    assert_equal 1, verifications.length
+    assert auth.context.internal_adapter.find_user_by_email("single-confirm-old@example.com")
+  end
+
+  def test_change_email_verification_is_single_use_and_replay_has_no_hooks_or_sessions
+    sent = []
+    hooks = []
+    auth = build_auth(
+      user: {change_email: {enabled: true}},
+      email_verification: {
+        send_verification_email: ->(data, _request = nil) { sent << data },
+        after_email_verification: ->(user, _request = nil) { hooks << user["email"] }
+      }
+    )
+    cookie = sign_up_cookie(auth, email: "single-verify-old@example.com")
+    auth.api.change_email(headers: {"cookie" => cookie}, body: {newEmail: "single-verify-new@example.com"})
+    token = sent.fetch(0).fetch(:token)
+
+    auth.api.verify_email(query: {token: token})
+    sessions_after_first_use = auth.context.adapter.find_many(model: "session").length
+    error = assert_raises(BetterAuth::APIError) { auth.api.verify_email(query: {token: token}) }
+
+    assert_equal BetterAuth::BASE_ERROR_CODES["TOKEN_ALREADY_USED"], error.message
+    assert_equal ["single-verify-new@example.com"], hooks
+    assert_equal sessions_after_first_use, auth.context.adapter.find_many(model: "session").length
+  end
+
+  def test_change_email_token_is_registered_under_a_hash_not_the_raw_jwt
+    sent = []
+    auth = build_auth(
+      user: {change_email: {enabled: true}},
+      email_verification: {send_verification_email: ->(data, _request = nil) { sent << data }}
+    )
+    cookie = sign_up_cookie(auth, email: "stored-token-old@example.com")
+    auth.api.change_email(headers: {"cookie" => cookie}, body: {newEmail: "stored-token-new@example.com"})
+    token = sent.fetch(0).fetch(:token)
+    identifier = "change-email:#{BetterAuth::Crypto.sha256(token, encoding: :base64url)}"
+    stored = auth.context.internal_adapter.find_verification_value(identifier)
+
+    assert stored
+    assert_equal identifier, stored["identifier"]
+    refute_includes stored["identifier"], token
+    refute_equal token, stored["value"]
+  end
+
+  def test_change_email_consumption_deletes_duplicate_identifier_records
+    sent = []
+    auth = build_auth(
+      user: {change_email: {enabled: true}},
+      email_verification: {send_verification_email: ->(data, _request = nil) { sent << data }}
+    )
+    cookie = sign_up_cookie(auth, email: "duplicate-token-old@example.com")
+    auth.api.change_email(headers: {"cookie" => cookie}, body: {newEmail: "duplicate-token-new@example.com"})
+    token = sent.fetch(0).fetch(:token)
+    identifier = "change-email:#{BetterAuth::Crypto.sha256(token, encoding: :base64url)}"
+    auth.context.internal_adapter.create_verification_value(
+      identifier: identifier,
+      value: "duplicate",
+      expiresAt: Time.now + 3600
+    )
+
+    assert_equal 2, auth.context.adapter.find_many(model: "verification", where: [{field: "identifier", value: identifier}]).length
+
+    auth.api.verify_email(query: {token: token})
+    error = assert_raises(BetterAuth::APIError) { auth.api.verify_email(query: {token: token}) }
+
+    assert_equal BetterAuth::BASE_ERROR_CODES["TOKEN_ALREADY_USED"], error.message
+    assert_nil auth.context.internal_adapter.find_verification_value(identifier)
+    assert_empty auth.context.adapter.find_many(model: "verification", where: [{field: "identifier", value: identifier}])
   end
 
   private

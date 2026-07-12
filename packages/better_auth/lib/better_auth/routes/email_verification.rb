@@ -94,6 +94,7 @@ module BetterAuth
         callback_url = fetch_value(ctx.query, "callbackURL")
         validate_callback_url!(ctx.context, callback_url)
         payload = verify_email_token(ctx, token, callback_url)
+        change_email_token_identifier = validate_change_email_token!(ctx, token, payload, callback_url)
         email = payload["email"].to_s.downcase
         update_to = payload["updateTo"] || payload["update_to"]
         preflight_follow_up_verification_token_link!(ctx, payload, update_to)
@@ -105,22 +106,25 @@ module BetterAuth
           session = current_session(ctx, allow_nil: true)
           return redirect_or_error(ctx, callback_url, "invalid_user") if session && session[:user]["email"] != email
 
+          consume_change_email_token!(ctx, change_email_token_identifier)
           request_type = payload["requestType"] || payload["request_type"]
           case request_type
           when "change-email-confirmation"
             send_change_email_verification_payload(ctx, user, update_to, callback_url)
             next redirect_or_json(ctx, callback_url, {status: true})
           when "change-email-verification"
+            session_data = email_change_session_data(ctx, session, user)
             updated = ctx.context.internal_adapter.update_user_by_email(email, email: update_to, emailVerified: true)
             updated_user = updated || user.merge("email" => update_to, "emailVerified" => true)
             call_option(ctx.context.options.email_verification[:after_email_verification], updated_user, ctx.request)
-            set_verified_session_cookie(ctx, updated_user)
+            Cookies.set_session_cookie(ctx, {session: session_data, user: updated_user})
             next redirect_or_json(ctx, callback_url, {status: true, user: Schema.parse_output(ctx.context.options, "user", updated_user)})
           else
+            session_data = email_change_session_data(ctx, session, user)
             updated = ctx.context.internal_adapter.update_user_by_email(email, email: update_to, emailVerified: false)
             updated_user = updated || user.merge("email" => update_to, "emailVerified" => false)
             send_verification_email_payload(ctx, updated_user, callback_url) if ctx.context.options.email_verification[:send_verification_email].respond_to?(:call)
-            set_verified_session_cookie(ctx, updated_user)
+            Cookies.set_session_cookie(ctx, {session: session_data, user: updated_user})
             next redirect_or_json(ctx, callback_url, {status: true, user: Schema.parse_output(ctx.context.options, "user", updated)})
           end
         end
@@ -150,6 +154,7 @@ module BetterAuth
       return unless sender.respond_to?(:call)
 
       token = create_email_verification_token(ctx, user["email"], update_to: update_to, extra: {"requestType" => "change-email-verification"})
+      register_change_email_token!(ctx, token)
       callback = URI.encode_www_form_component(callback_url || "/")
       url = "#{ctx.context.token_link_base_url}/verify-email?token=#{URI.encode_www_form_component(token)}&callbackURL=#{callback}"
       sender.call({user: user.merge("email" => update_to), url: url, token: token}, ctx.request)
@@ -178,6 +183,40 @@ module BetterAuth
       redirect_or_error(ctx, callback_url, BASE_ERROR_CODES["INVALID_TOKEN"], code: "INVALID_TOKEN")
     end
 
+    # Ruby hardening adaptation of upstream PR #9519. This is intentionally
+    # stricter than the pinned Better Auth v1.6.23 behavior, and hashes the JWT
+    # before storage so the verification table never contains the bearer token.
+    def self.register_change_email_token!(ctx, token)
+      ctx.context.internal_adapter.create_verification_value(
+        identifier: change_email_token_identifier(token),
+        value: "issued",
+        expiresAt: Time.now + (ctx.context.options.email_verification[:expires_in] || 3600)
+      )
+    end
+
+    def self.validate_change_email_token!(ctx, token, payload, callback_url)
+      update_to = payload["updateTo"] || payload["update_to"]
+      request_type = payload["requestType"] || payload["request_type"]
+      return unless update_to && ["change-email-confirmation", "change-email-verification"].include?(request_type)
+
+      identifier = change_email_token_identifier(token)
+      verification = ctx.context.internal_adapter.find_verification_value(identifier)
+      unless verification && !expired_time?(verification["expiresAt"])
+        redirect_or_error(ctx, callback_url, BASE_ERROR_CODES["TOKEN_ALREADY_USED"], code: "TOKEN_ALREADY_USED")
+      end
+      identifier
+    end
+
+    def self.consume_change_email_token!(ctx, identifier)
+      return unless identifier
+
+      ctx.context.internal_adapter.delete_verification_by_identifier(identifier)
+    end
+
+    def self.change_email_token_identifier(token)
+      "change-email:#{Crypto.sha256(token, encoding: :base64url)}"
+    end
+
     def self.redirect_or_error(ctx, callback_url, error, code: nil)
       if callback_url
         separator = callback_url.include?("?") ? "&" : "?"
@@ -200,6 +239,16 @@ module BetterAuth
         ctx.context.internal_adapter.create_session(user["id"])
       end
       Cookies.set_session_cookie(ctx, {session: session_data, user: user})
+    end
+
+    def self.email_change_session_data(ctx, session, user)
+      return session[:session] if session && session[:user]["id"] == user["id"]
+
+      session_data = ctx.context.internal_adapter.create_session(user["id"])
+      unless session_data
+        raise APIError.new("INTERNAL_SERVER_ERROR", message: BASE_ERROR_CODES["FAILED_TO_CREATE_SESSION"])
+      end
+      session_data
     end
 
     def self.call_option(callback, user, request)
