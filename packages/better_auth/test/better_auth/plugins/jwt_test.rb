@@ -3,6 +3,7 @@
 require "jwt"
 require "tempfile"
 require_relative "../../test_helper"
+require "better_auth/plugins/jwt"
 
 class BetterAuthPluginsJWTTest < Minitest::Test
   SECRET = "phase-seven-secret-with-enough-entropy-123"
