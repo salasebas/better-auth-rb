@@ -48,6 +48,10 @@ module BetterAuth
       runtime_fetch(:base_url, @base_url)
     end
 
+    def token_link_base_url
+      base_url
+    end
+
     attr_reader :canonical_base_url
 
     def trusted_origins

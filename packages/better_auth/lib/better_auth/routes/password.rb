@@ -43,6 +43,7 @@ module BetterAuth
         unless sender.respond_to?(:call)
           raise APIError.new("BAD_REQUEST", code: "RESET_PASSWORD_DISABLED", message: BASE_ERROR_CODES["RESET_PASSWORD_DISABLED"])
         end
+        token_link_base_url = ctx.context.token_link_base_url
 
         body = normalize_hash(ctx.body)
         email = body["email"].to_s.downcase
@@ -64,7 +65,7 @@ module BetterAuth
         )
 
         callback = redirect_to ? URI.encode_www_form_component(redirect_to) : ""
-        url = "#{ctx.context.base_url}/reset-password/#{token}?callbackURL=#{callback}"
+        url = "#{token_link_base_url}/reset-password/#{token}?callbackURL=#{callback}"
         begin
           sender.call({user: found[:user], url: url, token: token}, ctx.request)
         rescue => error

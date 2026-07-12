@@ -50,6 +50,7 @@ module BetterAuth
         remember_me = body.key?("rememberMe") ? body["rememberMe"] : body["remember_me"]
 
         validate_auth_callback_url!(ctx.context, callback_url, "callbackURL")
+        preflight_sign_in_token_link!(ctx)
 
         unless EMAIL_PATTERN.match?(email)
           raise APIError.new("BAD_REQUEST", message: BASE_ERROR_CODES["INVALID_EMAIL"])
@@ -107,8 +108,16 @@ module BetterAuth
         expires_in: verification[:expires_in] || 3600
       )
       callback = URI.encode_www_form_component(callback_url || "/")
-      url = "#{ctx.context.base_url}/verify-email?token=#{URI.encode_www_form_component(token)}&callbackURL=#{callback}"
+      url = "#{ctx.context.token_link_base_url}/verify-email?token=#{URI.encode_www_form_component(token)}&callbackURL=#{callback}"
       sender.call({user: user, url: url, token: token}, ctx.request)
+    end
+
+    def self.preflight_sign_in_token_link!(ctx)
+      verification = ctx.context.options.email_verification
+      password_config = ctx.context.options.email_and_password
+      if password_config[:require_email_verification] && verification[:send_on_sign_in] && verification[:send_verification_email].respond_to?(:call)
+        ctx.context.token_link_base_url
+      end
     end
   end
 end

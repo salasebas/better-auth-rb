@@ -88,6 +88,7 @@ module BetterAuth
         password = body[:password].to_s
         callback_url = body[:callback_url] || body[:callbackURL]
         remember_me = body.key?(:remember_me) ? body[:remember_me] : body[:rememberMe]
+        Routes.preflight_sign_in_token_link!(ctx)
 
         if raw_username.empty? || password.empty?
           raise APIError.new("UNAUTHORIZED", message: USERNAME_ERROR_CODES["INVALID_USERNAME_OR_PASSWORD"])

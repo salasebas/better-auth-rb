@@ -176,6 +176,7 @@ module BetterAuth
         session = current_session(ctx, sensitive: true)
         body = normalize_hash(ctx.body)
         sender = ctx.context.options.user.dig(:delete_user, :send_delete_account_verification)
+        token_link_base_url = ctx.context.token_link_base_url if !body["token"] && sender.respond_to?(:call)
         if body["password"]
           account = credential_account(ctx, session[:user]["id"])
           raise APIError.new("BAD_REQUEST", message: BASE_ERROR_CODES["CREDENTIAL_ACCOUNT_NOT_FOUND"]) unless account && account["password"]
@@ -191,7 +192,7 @@ module BetterAuth
           token = SecureRandom.hex(16)
           expires_in = ctx.context.options.user.dig(:delete_user, :delete_token_expires_in) || 3600
           callback_url = body["callbackURL"] || body["callbackUrl"] || body["callback_url"] || "/"
-          url = "#{ctx.context.base_url}/delete-user/callback?token=#{URI.encode_www_form_component(token)}&callbackURL=#{URI.encode_www_form_component(callback_url)}"
+          url = "#{token_link_base_url}/delete-user/callback?token=#{URI.encode_www_form_component(token)}&callbackURL=#{URI.encode_www_form_component(callback_url)}"
           ctx.context.internal_adapter.create_verification_value(
             identifier: "delete-account-#{token}",
             value: session[:user]["id"],
@@ -312,6 +313,7 @@ module BetterAuth
         unless can_update_without_verification || can_send_confirmation || can_send_verification
           raise APIError.new("BAD_REQUEST", message: BASE_ERROR_CODES["VERIFICATION_EMAIL_NOT_ENABLED"])
         end
+        ctx.context.token_link_base_url if can_send_confirmation || can_send_verification
 
         existing_target = ctx.context.internal_adapter.find_user_by_email(new_email)
         next ctx.json({status: true}) if existing_target
@@ -343,7 +345,7 @@ module BetterAuth
 
     def self.email_verification_url(ctx, token, callback_url)
       callback = URI.encode_www_form_component(callback_url || "/")
-      "#{ctx.context.base_url}/verify-email?token=#{URI.encode_www_form_component(token)}&callbackURL=#{callback}"
+      "#{ctx.context.token_link_base_url}/verify-email?token=#{URI.encode_www_form_component(token)}&callbackURL=#{callback}"
     end
 
     def self.delete_user_by_token!(ctx, session, token)

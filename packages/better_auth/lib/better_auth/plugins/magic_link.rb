@@ -54,6 +54,9 @@ module BetterAuth
           }
         }
       ) do |ctx|
+        sender = config[:send_magic_link]
+        link_base_url = ctx.context.base_url
+        link_base_url = ctx.context.token_link_base_url if sender.respond_to?(:call)
         body = normalize_hash(ctx.body)
         email = body[:email].to_s.downcase
         raise APIError.new("BAD_REQUEST", message: BASE_ERROR_CODES["INVALID_EMAIL"]) unless Routes::EMAIL_PATTERN.match?(email)
@@ -66,8 +69,7 @@ module BetterAuth
           expiresAt: Time.now + (config[:expires_in] || 60 * 5).to_i
         )
 
-        link = magic_link_url(ctx, token, body)
-        sender = config[:send_magic_link]
+        link = magic_link_url(link_base_url, token, body)
         data = {email: email, url: link, token: token}
         data[:metadata] = body[:metadata] if body.key?(:metadata)
         sender.call(data, ctx) if sender.respond_to?(:call)
@@ -214,14 +216,14 @@ module BetterAuth
       token
     end
 
-    def magic_link_url(ctx, token, body)
+    def magic_link_url(base_url, token, body)
       params = {
         token: token,
         callbackURL: body[:callback_url] || "/"
       }
       params[:newUserCallbackURL] = body[:new_user_callback_url] if body[:new_user_callback_url]
       params[:errorCallbackURL] = body[:error_callback_url] if body[:error_callback_url]
-      "#{ctx.context.base_url}/magic-link/verify?#{URI.encode_www_form(params)}"
+      "#{base_url}/magic-link/verify?#{URI.encode_www_form(params)}"
     end
 
     def validate_magic_link_callback!(ctx, value, label)

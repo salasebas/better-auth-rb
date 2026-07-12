@@ -78,4 +78,8 @@ serving_origins: ["https://app.example.com", "https://*.vercel.app"]
 
 There is no request-inferred fallback and no first-request caching. Each request gets isolated serving state, and state is cleared after both Rack and direct `auth.api` calls.
 
+## Token links
+
+Password-reset, email-verification, account-deletion, and magic-link URLs use only the canonical URL or a request origin explicitly matched by `serving_origins`. An unrecognized request host falls back to the canonical URL and can never control a token-bearing link.
+
 Cross-subdomain cookie domains remain explicit under `advanced.cross_subdomain_cookies.domain`; they are not derived from the request host.
