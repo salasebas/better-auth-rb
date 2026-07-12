@@ -476,6 +476,42 @@ class BetterAuthSSOOIDCMirrorTest < Minitest::Test
     assert_equal :non_public_address, error.reason
   end
 
+  def test_token_userinfo_and_jwks_fetches_do_not_follow_redirects
+    response = Net::HTTPFound.new("1.1", "302", "Found")
+    response["location"] = "https://redirect.example.net/internal"
+    requests = []
+    connection = Object.new
+    connection.define_singleton_method(:request) do |request|
+      requests << request.uri.to_s
+      response
+    end
+    connection.define_singleton_method(:get) do |path|
+      requests << path
+      response
+    end
+    http = Object.new
+    http.define_singleton_method(:start) { |&block| block.call(connection) }
+    trusted = ->(_url) { true }
+
+    BetterAuth::SSO::OIDC::EndpointPolicy.stub(:build_http, ->(*_args, **_options) { http }) do
+      assert_nil BetterAuth::Plugins.sso_exchange_oidc_code(
+        token_endpoint: "https://idp.example.com/token",
+        code: "code",
+        code_verifier: nil,
+        redirect_uri: "https://app.example.com/callback",
+        client_id: "client",
+        client_secret: "secret",
+        authentication: "client_secret_basic",
+        trusted_origin: trusted
+      )
+      assert_equal({}, BetterAuth::Plugins.sso_fetch_oidc_user_info("https://idp.example.com/userinfo", "token", trusted_origin: trusted))
+      assert_equal({}, BetterAuth::Plugins.sso_fetch_oidc_jwks("https://idp.example.com/jwks", trusted_origin: trusted))
+    end
+
+    assert_equal ["https://idp.example.com/token", "https://idp.example.com/userinfo", "/jwks"], requests
+    refute_includes requests, response["location"]
+  end
+
   def test_custom_jwks_fetch_is_not_invoked_for_unsafe_endpoint
     calls = []
 

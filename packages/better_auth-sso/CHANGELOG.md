@@ -3,6 +3,7 @@
 ## Unreleased
 
 - **Breaking:** SAML is no longer a transitive dependency. Add `gem "better_auth-saml"` when using SAML providers.
+- **Breaking:** Validate OIDC provider endpoints during registration, updates, and runtime use, including previously stored providers.
 - Split protocol code into `better_auth-oidc` and `better_auth-saml`; this gem is now the convenience facade.
 
 ## 0.10.0 - 2026-05-21
