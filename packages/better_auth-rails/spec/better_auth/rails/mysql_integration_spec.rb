@@ -133,7 +133,7 @@ RSpec.describe "BetterAuth::Rails MySQL integration", :integration do
     or_users = active_record_adapter.find_many(
       model: "user",
       where: [
-        {field: "email", value: "ada@example.com"},
+        {field: "email", value: "ada@example.com", connector: "OR"},
         {field: "email", value: "grace@example.com", connector: "OR"}
       ],
       sort_by: {field: "email", direction: "asc"}

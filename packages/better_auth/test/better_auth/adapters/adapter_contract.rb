@@ -1,6 +1,61 @@
 # frozen_string_literal: true
 
 module BetterAuthAdapterContract
+  def test_adapter_contract_singular_update_fails_closed
+    config = contract_config
+
+    with_contract_adapter(config) do |adapter|
+      first = adapter.create(model: "user", data: {name: "Ada", email: "ada-update-safety@example.com"})
+      second = adapter.create(model: "user", data: {name: "Grace", email: "grace-update-safety@example.com"})
+
+      assert_nil adapter.update(model: "user", where: [], update: {name: "Unsafe"})
+      assert_nil adapter.update(model: "user", where: nil, update: {name: "Unsafe"})
+      assert_nil adapter.update(model: "user", where: [{field: "id", value: "missing"}], update: {name: "Missing"})
+      assert_equal ["Ada", "Grace"], adapter.find_many(model: "user", sort_by: {field: "email", direction: "asc"}).map { |user| user.fetch("name") }
+
+      assert_equal 2, adapter.update_many(model: "user", where: [], update: {image: "bulk.png"})
+      assert_equal ["bulk.png", "bulk.png"], adapter.find_many(model: "user", sort_by: {field: "email", direction: "asc"}).map { |user| user.fetch("image") }
+      assert adapter.find_one(model: "user", where: [{field: "id", value: first.fetch("id")}])
+      assert adapter.find_one(model: "user", where: [{field: "id", value: second.fetch("id")}])
+    end
+  end
+
+  def test_adapter_contract_groups_and_or_predicates
+    config = contract_config(
+      user: {
+        additional_fields: {
+          cohort: {type: "string", required: false}
+        }
+      }
+    )
+
+    with_contract_adapter(config) do |adapter|
+      first = adapter.create(model: "user", data: {name: "First", email: "first-group@example.com", cohort: "target"})
+      second = adapter.create(model: "user", data: {name: "Second", email: "second-group@example.com", cohort: "other"})
+      third = adapter.create(model: "user", data: {name: "Third", email: "third-group@example.com", cohort: "target"})
+      adapter.create(model: "session", data: {token: "third-group-session", userId: third.fetch("id"), expiresAt: Time.now + 60}, force_allow_id: true)
+
+      where = [
+        {field: "cohort", value: "target"},
+        {field: "id", value: second.fetch("id"), connector: "OR"},
+        {field: "id", value: third.fetch("id"), connector: "OR"}
+      ]
+
+      assert_equal [third.fetch("id")], adapter.find_many(model: "user", where: where).map { |user| user.fetch("id") }
+      assert_equal 1, adapter.count(model: "user", where: where)
+      joined = adapter.find_many(model: "user", where: where, join: {session: true})
+      assert_equal ["third-group-session"], joined.fetch(0).fetch("session").map { |session| session.fetch("token") }
+
+      assert_equal 1, adapter.update_many(model: "user", where: where, update: {image: "grouped.png"})
+      assert_nil adapter.find_one(model: "user", where: [{field: "id", value: first.fetch("id")}, {field: "image", value: "grouped.png"}])
+      assert_nil adapter.find_one(model: "user", where: [{field: "id", value: second.fetch("id")}, {field: "image", value: "grouped.png"}])
+      assert_equal "grouped.png", adapter.find_one(model: "user", where: [{field: "id", value: third.fetch("id")}]).fetch("image")
+
+      assert_equal 1, adapter.delete_many(model: "user", where: where)
+      assert_equal [first.fetch("id"), second.fetch("id")].sort, adapter.find_many(model: "user").map { |user| user.fetch("id") }.sort
+    end
+  end
+
   def test_adapter_contract_crud_where_update_delete_and_counts
     config = contract_config(
       user: {

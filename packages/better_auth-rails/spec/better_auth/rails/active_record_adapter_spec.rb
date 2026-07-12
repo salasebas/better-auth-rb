@@ -171,7 +171,7 @@ RSpec.describe BetterAuth::Rails::ActiveRecordAdapter do
     adapter.find_many(
       model: "user",
       where: [
-        {field: "email", value: "ada@example.com"},
+        {field: "email", value: "ada@example.com", connector: "OR"},
         {field: "email", value: "grace@example.com", connector: "OR"}
       ]
     )
@@ -227,6 +227,19 @@ RSpec.describe BetterAuth::Rails::ActiveRecordAdapter do
 
     expect(updated).to include("id" => "user-1")
     expect(relation.update_all_calls).to include(a_hash_including("name" => "Ada"))
+  end
+
+  it "fails closed for empty singular updates and zero affected rows" do
+    relation = BetterAuthRailsFakeRelation.new(
+      [BetterAuthRailsFakeRecord.new("id" => "user-1", "email" => "ada@example.com", "email_verified" => false)]
+    )
+    adapter.send(:model_class, "user").relation = relation
+
+    expect(adapter.update(model: "user", where: [], update: {name: "Unsafe"})).to be_nil
+    expect(relation.update_all_calls).to be_empty
+
+    allow(relation).to receive(:update_all).and_return(0)
+    expect(adapter.update(model: "user", where: [{field: "id", value: "user-1"}], update: {name: "Grace"})).to be_nil
   end
 
   it "returns update_many count and rejects empty updates" do

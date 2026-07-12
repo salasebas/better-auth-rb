@@ -64,6 +64,8 @@ module BetterAuth
 
       def update(model:, where:, update:)
         model = model.to_s
+        return nil if Array(where).empty?
+
         ensure_update_input_has_fields!(model, update)
         if dialect == :postgres
           records = update_many(model: model, where: where, update: update, returning: true)
@@ -73,7 +75,9 @@ module BetterAuth
         existing = find_one(model: model, where: where)
         return nil unless existing
 
-        update_many(model: model, where: where, update: update)
+        updated_count = update_many(model: model, where: where, update: update)
+        return nil unless updated_count.to_i.positive?
+
         lookup = record_lookup(model, existing)
         lookup ? find_one(model: model, where: [lookup]) : find_one(model: model, where: where)
       end
@@ -266,46 +270,51 @@ module BetterAuth
       end
 
       def build_where(model, where, params)
-        Array(where).each_with_index.map do |clause, index|
-          field = storage_key(fetch_key(clause, :field))
-          column = "#{quote(table_for(model))}.#{quote(storage_field(model, field))}"
-          operator = (fetch_key(clause, :operator) || "eq").to_s
-          value = fetch_key(clause, :value)
-          attributes = schema_for(model).fetch(:fields).fetch(field)
-          insensitive = insensitive_string_predicate?(clause, attributes)
-          predicate_column = insensitive ? "LOWER(#{column})" : column
+        and_clauses, or_clauses = grouped_where_clauses(where)
+        and_sql = and_clauses.map { |clause| build_where_clause(model, clause, params) }
+        or_sql = or_clauses.map { |clause| build_where_clause(model, clause, params) }
+        return and_sql.join(" AND ") if or_sql.empty?
+        return or_sql.join(" OR ") if and_sql.empty?
 
-          expression = if value.nil? && %w[eq ne].include?(operator)
-            null_operator = (operator == "ne") ? "IS NOT NULL" : "IS NULL"
-            "#{column} #{null_operator}"
-          else
-            case operator
-            when "in", "not_in"
-              values = Array(value).map { |entry| insensitive ? entry.to_s.downcase : coerce_where_value(entry, attributes) }
-              placeholders = values.map do |entry|
-                params << entry
-                placeholder(params.length)
-              end.join(", ")
-              sql_operator = (operator == "not_in") ? "NOT IN" : "IN"
-              "#{predicate_column} #{sql_operator} (#{placeholders})"
-            when "contains", "starts_with", "ends_with"
-              escaped = escape_like(insensitive ? value.to_s.downcase : value)
-              pattern = case operator
-              when "starts_with" then "#{escaped}%"
-              when "ends_with" then "%#{escaped}"
-              else "%#{escaped}%"
-              end
-              params << pattern
-              "#{predicate_column} LIKE #{placeholder(params.length)} ESCAPE #{escape_literal}"
-            else
-              params << (insensitive ? value.to_s.downcase : coerce_where_value(value, attributes))
-              "#{predicate_column} #{sql_operator(operator)} #{placeholder(params.length)}"
+        "(#{and_sql.join(" AND ")}) AND (#{or_sql.join(" OR ")})"
+      end
+
+      def build_where_clause(model, clause, params)
+        field = storage_key(fetch_key(clause, :field))
+        column = "#{quote(table_for(model))}.#{quote(storage_field(model, field))}"
+        operator = (fetch_key(clause, :operator) || "eq").to_s
+        value = fetch_key(clause, :value)
+        attributes = schema_for(model).fetch(:fields).fetch(field)
+        insensitive = insensitive_string_predicate?(clause, attributes)
+        predicate_column = insensitive ? "LOWER(#{column})" : column
+
+        if value.nil? && %w[eq ne].include?(operator)
+          null_operator = (operator == "ne") ? "IS NOT NULL" : "IS NULL"
+          "#{column} #{null_operator}"
+        else
+          case operator
+          when "in", "not_in"
+            values = Array(value).map { |entry| insensitive ? entry.to_s.downcase : coerce_where_value(entry, attributes) }
+            placeholders = values.map do |entry|
+              params << entry
+              placeholder(params.length)
+            end.join(", ")
+            sql_operator = (operator == "not_in") ? "NOT IN" : "IN"
+            "#{predicate_column} #{sql_operator} (#{placeholders})"
+          when "contains", "starts_with", "ends_with"
+            escaped = escape_like(insensitive ? value.to_s.downcase : value)
+            pattern = case operator
+            when "starts_with" then "#{escaped}%"
+            when "ends_with" then "%#{escaped}"
+            else "%#{escaped}%"
             end
+            params << pattern
+            "#{predicate_column} LIKE #{placeholder(params.length)} ESCAPE #{escape_literal}"
+          else
+            params << (insensitive ? value.to_s.downcase : coerce_where_value(value, attributes))
+            "#{predicate_column} #{sql_operator(operator)} #{placeholder(params.length)}"
           end
-
-          connector = (index.positive? && fetch_key(clause, :connector).to_s.upcase == "OR") ? "OR" : "AND"
-          index.zero? ? expression : "#{connector} #{expression}"
-        end.join(" ")
+        end
       end
 
       def order_sql(model, sort_by)

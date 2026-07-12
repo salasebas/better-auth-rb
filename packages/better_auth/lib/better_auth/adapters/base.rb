@@ -44,6 +44,18 @@ module BetterAuth
       def transaction
         yield self
       end
+
+      private
+
+      def grouped_where_clauses(where)
+        Array(where).partition { |clause| fetch_key(clause, :connector).to_s.upcase != "OR" }
+      end
+
+      def fetch_key(hash, key)
+        return hash[key] if hash.key?(key)
+
+        hash[key.to_s]
+      end
     end
   end
 end

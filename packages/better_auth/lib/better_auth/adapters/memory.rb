@@ -38,8 +38,10 @@ module BetterAuth
 
       def update(model:, where:, update:)
         model = model.to_s
+        return nil if Array(where).empty?
+
         ensure_update_input_has_fields!(model, update)
-        records = table_for(model).select { |record| matches_where?(record, where || []) }
+        records = table_for(model).select { |record| matches_where?(record, where) }
         data = transform_input(model, update, "update", true)
         ensure_update_data!(data)
         records.each { |record| record.merge!(data) }
@@ -166,16 +168,9 @@ module BetterAuth
         clauses = Array(where)
         return true if clauses.empty?
 
-        result = evaluate_clause(record, clauses.first)
-        clauses.each do |clause|
-          clause_result = evaluate_clause(record, clause)
-          if fetch_key(clause, :connector).to_s.upcase == "OR"
-            result ||= clause_result
-          else
-            result &&= clause_result
-          end
-        end
-        result
+        and_clauses, or_clauses = grouped_where_clauses(clauses)
+        and_clauses.all? { |clause| evaluate_clause(record, clause) } &&
+          (or_clauses.empty? || or_clauses.any? { |clause| evaluate_clause(record, clause) })
       end
 
       def evaluate_clause(record, clause)

@@ -155,6 +155,31 @@ RSpec.describe BetterAuth::Hanami::SequelAdapter do
     expect(adapter.delete_many(model: "user", where: [{field: "name", operator: "in", value: ["updated"], mode: "insensitive"}])).to eq(1)
   end
 
+  it "fails closed for singular updates and groups AND clauses with OR clauses" do
+    grouped_config = BetterAuth::Configuration.new(
+      secret: secret,
+      database: :memory,
+      user: {additional_fields: {cohort: {type: "string", required: false}}}
+    )
+    db = Sequel.sqlite
+    apply_migration(db, grouped_config)
+    adapter = described_class.new(grouped_config, connection: db)
+    adapter.create(model: "user", data: {id: "user-1", name: "First", email: "first-group@example.com", cohort: "target"}, force_allow_id: true)
+    adapter.create(model: "user", data: {id: "user-2", name: "Second", email: "second-group@example.com", cohort: "other"}, force_allow_id: true)
+    adapter.create(model: "user", data: {id: "user-3", name: "Third", email: "third-group@example.com", cohort: "target"}, force_allow_id: true)
+    where = [
+      {field: "cohort", value: "target"},
+      {field: "id", value: "user-2", connector: "OR"},
+      {field: "id", value: "user-3", connector: "OR"}
+    ]
+
+    expect(adapter.update(model: "user", where: [], update: {name: "Unsafe"})).to be_nil
+    expect(adapter.find_many(model: "user", where: where).map { |user| user.fetch("id") }).to eq(["user-3"])
+    expect(adapter.count(model: "user", where: where)).to eq(1)
+    expect(adapter.update_many(model: "user", where: where, update: {image: "grouped.png"})).to eq(1)
+    expect(adapter.delete_many(model: "user", where: where)).to eq(1)
+  end
+
   it "applies defaults when required fields are explicitly nil on create" do
     db = Sequel.sqlite
     apply_migration(db, config)

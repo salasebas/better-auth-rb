@@ -61,6 +61,8 @@ module BetterAuth
 
       def update(model:, where:, update:)
         model = model.to_s
+        return nil if Array(where).empty?
+
         ensure_update_input_has_fields!(model, update)
         data = transform_input(model, update, "update", true)
         document = to_document(model, data)
@@ -227,19 +229,12 @@ module BetterAuth
         clauses = validate_where!(where)
         return {} if clauses.empty?
 
-        conditions = clauses.map do |clause|
-          connector = if fetch_key(clause, :connector).to_s.upcase == "OR"
-            "OR"
-          else
-            "AND"
-          end
-          {condition: condition_for(model, clause), connector: connector}
-        end
-        return conditions.first.fetch(:condition) if conditions.one?
+        and_clauses, or_clauses = grouped_where_clauses(clauses)
+        and_conditions = and_clauses.map { |clause| condition_for(model, clause) }
+        or_conditions = or_clauses.map { |clause| condition_for(model, clause) }
+        return (and_conditions + or_conditions).first if clauses.one?
 
         result = {}
-        and_conditions = conditions.select { |entry| entry.fetch(:connector) == "AND" }.map { |entry| entry.fetch(:condition) }
-        or_conditions = conditions.select { |entry| entry.fetch(:connector) == "OR" }.map { |entry| entry.fetch(:condition) }
         result["$and"] = and_conditions if and_conditions.any?
         result["$or"] = or_conditions if or_conditions.any?
         result

@@ -251,7 +251,7 @@ class BetterAuthSQLAdapterTest < Minitest::Test
     adapter.find_many(
       model: "user",
       where: [
-        {field: "email", value: "ada@example.com"},
+        {field: "email", value: "ada@example.com", connector: "OR"},
         {field: "name", connector: "OR", value: "Ada"}
       ]
     )
@@ -346,6 +346,28 @@ class BetterAuthSQLAdapterTest < Minitest::Test
     assert_empty connection.params.first
   end
 
+  def test_sql_adapter_groups_and_or_predicates_with_parentheses
+    config = BetterAuth::Configuration.new(
+      secret: SECRET,
+      database: :memory,
+      user: {additional_fields: {cohort: {type: "string", required: false}}}
+    )
+    connection = RecordingConnection.new([])
+    adapter = BetterAuth::Adapters::SQL.new(config, connection: connection, dialect: :postgres)
+
+    adapter.find_many(
+      model: "user",
+      where: [
+        {field: "cohort", value: "target"},
+        {field: "id", value: "user-2", connector: "OR"},
+        {field: "id", value: "user-3", connector: "OR"}
+      ]
+    )
+
+    assert_includes connection.sql.first, 'WHERE ("users"."cohort" = $1) AND ("users"."id" = $2 OR "users"."id" = $3)'
+    assert_equal [["target", "user-2", "user-3"]], connection.params
+  end
+
   def test_sql_adapter_rejects_input_false_fields_without_force_allow_id
     config = BetterAuth::Configuration.new(secret: SECRET, database: :memory)
     connection = RecordingConnection.new([])
@@ -365,7 +387,7 @@ class BetterAuthSQLAdapterTest < Minitest::Test
     config = BetterAuth::Configuration.new(secret: SECRET, database: :memory)
     connection = RecordingConnection.new(
       [{"id" => "user-1"}],
-      [],
+      1,
       [{"id" => "user-1", "name" => "Grace", "email" => "ada@example.com", "email_verified" => false, "created_at" => Time.at(1), "updated_at" => Time.at(2)}]
     )
     adapter = BetterAuth::Adapters::SQL.new(config, connection: connection, dialect: :sqlite)
@@ -377,6 +399,22 @@ class BetterAuthSQLAdapterTest < Minitest::Test
     assert_includes connection.sql[0], 'SELECT "users"."id" AS "id"'
     assert_includes connection.sql[1], 'UPDATE "users" SET "name" = ?'
     assert_includes connection.sql[2], 'WHERE "users"."id" = ?'
+  end
+
+  def test_sql_adapter_singular_update_fails_closed_and_requires_an_affected_row
+    config = BetterAuth::Configuration.new(secret: SECRET, database: :memory)
+    connection = RecordingConnection.new(
+      [{"id" => "user-1", "name" => "Ada", "email" => "ada@example.com"}],
+      0
+    )
+    adapter = BetterAuth::Adapters::SQL.new(config, connection: connection, dialect: :sqlite)
+
+    assert_nil adapter.update(model: "user", where: [], update: {name: "Unsafe"})
+    assert_empty connection.sql
+
+    assert_nil adapter.update(model: "user", where: [{field: "id", value: "user-1"}], update: {name: "Grace"})
+    assert_equal 2, connection.sql.length
+    assert_match(/UPDATE .* WHERE /, connection.sql.last)
   end
 
   def test_sql_adapter_update_many_returns_count_for_non_returning_dialects_and_rejects_empty_updates

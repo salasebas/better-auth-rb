@@ -121,6 +121,31 @@ class BetterAuthMongoDBAdapterTest < Minitest::Test
     assert_equal "ada@example.com", @adapter.find_one(model: "user", where: [{field: "id", value: "user-1"}])["email"]
   end
 
+  def test_mongodb_adapter_singular_update_fails_closed_and_groups_predicates
+    config = BetterAuth::Configuration.new(
+      secret: SECRET,
+      database: :memory,
+      user: {additional_fields: {cohort: {type: "string", required: false}}}
+    )
+    adapter = BetterAuth::Adapters::MongoDB.new(config, database: @database)
+    first = adapter.create(model: "user", data: {id: "user-1", name: "First", email: "first-group@example.com", cohort: "target"}, force_allow_id: true)
+    adapter.create(model: "user", data: {id: "user-2", name: "Second", email: "second-group@example.com", cohort: "other"}, force_allow_id: true)
+    third = adapter.create(model: "user", data: {id: "user-3", name: "Third", email: "third-group@example.com", cohort: "target"}, force_allow_id: true)
+    where = [
+      {field: "cohort", value: "target"},
+      {field: "id", value: "user-2", connector: "OR"},
+      {field: "id", value: "user-3", connector: "OR"}
+    ]
+
+    assert_nil adapter.update(model: "user", where: [], update: {name: "Unsafe"})
+    assert_equal "First", adapter.find_one(model: "user", where: [{field: "id", value: first.fetch("id")}]).fetch("name")
+    assert_equal [third.fetch("id")], adapter.find_many(model: "user", where: where).map { |user| user.fetch("id") }
+    assert_equal 1, adapter.count(model: "user", where: where)
+    assert_equal 1, adapter.update_many(model: "user", where: where, update: {image: "grouped.png"})
+    assert_equal "grouped.png", adapter.find_one(model: "user", where: [{field: "id", value: third.fetch("id")}]).fetch("image")
+    assert_equal 1, adapter.delete_many(model: "user", where: where)
+  end
+
   def test_mongodb_adapter_generates_object_id_documents_by_default
     user = @adapter.create(model: "user", data: {name: "Ada", email: "ada@example.com"})
     stored = @database.collection("user").documents.first

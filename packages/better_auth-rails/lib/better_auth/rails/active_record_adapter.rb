@@ -56,11 +56,15 @@ module BetterAuth
 
       def update(model:, where:, update:)
         model = model.to_s
+        return nil if Array(where).empty?
+
         ensure_update_input_has_fields!(model, update)
         existing = find_one(model: model, where: where)
         return nil unless existing
 
-        update_many(model: model, where: where, update: update)
+        updated_count = update_many(model: model, where: where, update: update)
+        return nil unless updated_count.to_i.positive?
+
         lookup = record_lookup(model, existing)
         lookup ? find_one(model: model, where: [lookup]) : find_one(model: model, where: where)
       end
@@ -130,15 +134,23 @@ module BetterAuth
         return relation if clauses.empty?
 
         if model_class(model).respond_to?(:arel_table)
-          expression = clauses.each_with_index.reduce(nil) do |combined, (clause, index)|
-            current = where_expression(model, clause)
-            next current if index.zero?
-
-            (fetch_key(clause, :connector).to_s.upcase == "OR") ? combined.or(current) : combined.and(current)
+          and_clauses, or_clauses = grouped_where_clauses(clauses)
+          and_expression = combine_where_expressions(model, and_clauses, :and)
+          or_expression = combine_where_expressions(model, or_clauses, :or)
+          expression = if and_expression && or_expression
+            and_expression.and(or_expression)
+          else
+            and_expression || or_expression
           end
           relation.where(expression)
         else
           apply_where_with_relation_or(model, relation, clauses)
+        end
+      end
+
+      def combine_where_expressions(model, clauses, connector)
+        clauses.map { |clause| where_expression(model, clause) }.reduce do |combined, current|
+          combined.public_send(connector, current)
         end
       end
 
@@ -159,16 +171,22 @@ module BetterAuth
       end
 
       def apply_where_with_relation_or(model, relation, clauses)
-        clauses.each_with_index.reduce(nil) do |combined, (clause, index)|
+        and_clauses, or_clauses = grouped_where_clauses(clauses)
+        and_relation = and_clauses.reduce(relation) do |combined, clause|
           field = storage_key(fetch_key(clause, :field))
           column = storage_field(model, field)
           operator = (fetch_key(clause, :operator) || "eq").to_s
           value = fetch_key(clause, :value)
-          current = apply_operator(relation, column, operator, value)
-          next current if index.zero?
-
-          (fetch_key(clause, :connector).to_s.upcase == "OR") ? combined.or(current) : apply_operator(combined, column, operator, value)
+          apply_operator(combined, column, operator, value)
         end
+        or_relation = or_clauses.map do |clause|
+          field = storage_key(fetch_key(clause, :field))
+          apply_operator(relation, storage_field(model, field), (fetch_key(clause, :operator) || "eq").to_s, fetch_key(clause, :value))
+        end.reduce { |combined, current| combined.or(current) }
+        return and_relation unless or_relation
+        return or_relation if and_clauses.empty?
+
+        and_relation.and(or_relation)
       end
 
       def where_expression(model, clause)

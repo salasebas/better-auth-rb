@@ -90,10 +90,14 @@ module BetterAuth
 
       def update(model:, where:, update:)
         model = model.to_s
+        return nil if Array(where).empty?
+
         existing = find_one(model: model, where: where)
         return nil unless existing
 
-        update_many(model: model, where: where, update: update)
+        updated_count = update_many(model: model, where: where, update: update)
+        return nil unless updated_count.to_i.positive?
+
         lookup = record_lookup(model, existing)
         lookup ? find_one(model: model, where: [lookup]) : find_one(model: model, where: where)
       end
@@ -102,8 +106,8 @@ module BetterAuth
         model = model.to_s
         existing = returning ? find_many(model: model, where: where) : []
         attributes = physical_attributes(model, transform_input(model, update, "update", true))
-        apply_where(model, table_dataset(model), where || []).update(attributes)
-        return unless returning
+        updated_count = apply_where(model, table_dataset(model), where || []).update(attributes)
+        return updated_count unless returning
 
         existing.map do |record|
           lookup = record_lookup(model, record)
@@ -137,14 +141,21 @@ module BetterAuth
       end
 
       def apply_where(model, dataset, where)
-        expression = Array(where).each_with_index.reduce(nil) do |combined, (clause, index)|
-          current = where_expression(model, clause)
-          next current if index.zero?
-
-          connector = fetch_key(clause, :connector).to_s.upcase
-          (connector == "OR") ? Sequel.|(combined, current) : Sequel.&(combined, current)
+        and_clauses, or_clauses = grouped_where_clauses(where)
+        and_expression = combine_where_expressions(model, and_clauses, :and)
+        or_expression = combine_where_expressions(model, or_clauses, :or)
+        expression = if and_expression && or_expression
+          Sequel.&(and_expression, or_expression)
+        else
+          and_expression || or_expression
         end
         expression ? dataset.where(expression) : dataset
+      end
+
+      def combine_where_expressions(model, clauses, connector)
+        clauses.map { |clause| where_expression(model, clause) }.reduce do |combined, current|
+          (connector == :or) ? Sequel.|(combined, current) : Sequel.&(combined, current)
+        end
       end
 
       def where_expression(model, clause)
