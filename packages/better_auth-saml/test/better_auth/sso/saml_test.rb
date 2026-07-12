@@ -1710,6 +1710,150 @@ class BetterAuthSSOSAMLMirrorTest < Minitest::Test
     assert_equal "Invalid LogoutRequest", error.message
   end
 
+  def test_slo_rejects_marker_only_logout_request_and_keeps_session
+    idp_key = OpenSSL::PKey::RSA.new(2048)
+    idp_cert = saml_test_certificate(idp_key)
+    auth = build_auth_with_json_saml_parser(
+      saml_options: {enableSingleLogout: true, wantLogoutRequestSigned: true},
+      saml_user_info: {
+        id: "assertion-marker-only-request",
+        email: "marker-only-request@example.com",
+        name: "Marker Only Request",
+        name_id: "marker-only-name-id",
+        session_index: "marker-only-session"
+      }
+    )
+    cookie = sign_up_cookie(auth)
+    register_saml_provider(
+      auth,
+      cookie,
+      provider_id: "marker-only-request",
+      saml_config: {singleLogoutService: "https://idp.example.com/slo", cert: idp_cert.to_pem}
+    )
+    _login_status, login_headers, _login_body = auth.api.acs_endpoint(
+      params: {providerId: "marker-only-request"},
+      body: {SAMLResponse: saml_xml_response(assertion_id: "assertion-marker-only-request")},
+      as_response: true
+    )
+    session_token = login_headers.fetch("set-cookie")[/better-auth\.session_token=([^.;]+)/, 1]
+    request = saml_message_with_signature_marker(
+      saml_logout_request(name_id: "marker-only-name-id", session_index: "marker-only-session", id: "_marker-only-request")
+    )
+
+    error = assert_raises(BetterAuth::APIError) do
+      auth.api.slo_endpoint(
+        params: {providerId: "marker-only-request"},
+        body: {SAMLRequest: request}
+      )
+    end
+
+    assert_equal 400, error.status_code
+    assert_equal "Invalid LogoutRequest", error.message
+    assert auth.context.internal_adapter.find_session(session_token)
+  end
+
+  def test_slo_accepts_valid_signed_logout_request
+    idp_key = OpenSSL::PKey::RSA.new(2048)
+    idp_cert = saml_test_certificate(idp_key)
+    auth = build_auth_with_json_saml_parser(
+      saml_options: {enableSingleLogout: true, wantLogoutRequestSigned: true},
+      saml_user_info: {
+        id: "assertion-signed-request",
+        email: "signed-request@example.com",
+        name: "Signed Request",
+        name_id: "signed-request-name-id",
+        session_index: "signed-request-session"
+      }
+    )
+    cookie = sign_up_cookie(auth)
+    register_saml_provider(
+      auth,
+      cookie,
+      provider_id: "valid-signed-request",
+      saml_config: {singleLogoutService: "https://idp.example.com/slo", cert: idp_cert.to_pem}
+    )
+    _login_status, login_headers, _login_body = auth.api.acs_endpoint(
+      params: {providerId: "valid-signed-request"},
+      body: {SAMLResponse: saml_xml_response(assertion_id: "assertion-signed-request")},
+      as_response: true
+    )
+    session_token = login_headers.fetch("set-cookie")[/better-auth\.session_token=([^.;]+)/, 1]
+    request = saml_signed_message(
+      saml_logout_request(name_id: "signed-request-name-id", session_index: "signed-request-session", id: "_valid-signed-request"),
+      idp_key,
+      idp_cert
+    )
+
+    status, _headers, _body = auth.api.slo_endpoint(
+      params: {providerId: "valid-signed-request"},
+      body: {SAMLRequest: request},
+      as_response: true
+    )
+
+    assert_equal 200, status
+    assert_nil auth.context.internal_adapter.find_session(session_token)
+  end
+
+  def test_slo_rejects_signature_over_nested_logout_request
+    idp_key = OpenSSL::PKey::RSA.new(2048)
+    idp_cert = saml_test_certificate(idp_key)
+    auth = build_auth_with_json_saml_parser(saml_options: {enableSingleLogout: true, wantLogoutRequestSigned: true})
+    cookie = sign_up_cookie(auth)
+    register_saml_provider(
+      auth,
+      cookie,
+      provider_id: "nested-signed-request",
+      saml_config: {singleLogoutService: "https://idp.example.com/slo", cert: idp_cert.to_pem}
+    )
+    signed_child = Base64.decode64(
+      saml_signed_message(
+        saml_logout_request(name_id: "signed-child", session_index: "signed-child-session", id: "_signed-child"),
+        idp_key,
+        idp_cert
+      )
+    )
+    wrapped_request = Base64.strict_encode64(
+      "<samlp:LogoutRequest xmlns:samlp=\"urn:oasis:names:tc:SAML:2.0:protocol\" ID=\"_unsigned-root\">#{signed_child}</samlp:LogoutRequest>"
+    )
+
+    error = assert_raises(BetterAuth::APIError) do
+      auth.api.slo_endpoint(
+        params: {providerId: "nested-signed-request"},
+        body: {SAMLRequest: wrapped_request}
+      )
+    end
+
+    assert_equal 400, error.status_code
+    assert_equal "Invalid LogoutRequest", error.message
+  end
+
+  def test_slo_accepts_valid_redirect_signed_logout_request
+    idp_key = OpenSSL::PKey::RSA.new(2048)
+    idp_cert = saml_test_certificate(idp_key)
+    auth = build_auth_with_json_saml_parser(saml_options: {enableSingleLogout: true, wantLogoutRequestSigned: true})
+    cookie = sign_up_cookie(auth)
+    register_saml_provider(
+      auth,
+      cookie,
+      provider_id: "valid-redirect-signed-request",
+      saml_config: {singleLogoutService: "https://idp.example.com/slo", cert: idp_cert.to_pem}
+    )
+    request = saml_logout_request(name_id: "redirect-name-id", session_index: "redirect-session", id: "_redirect-request")
+    relay_state = "/signed-out"
+    sig_alg = XMLSecurity::Document::RSA_SHA256
+    signed_params = [["SAMLRequest", request], ["RelayState", relay_state], ["SigAlg", sig_alg]]
+    signed_payload = URI.encode_www_form(signed_params)
+    signature = Base64.strict_encode64(idp_key.sign(OpenSSL::Digest.new("SHA256"), signed_payload))
+
+    status, _headers, _body = auth.api.slo_endpoint(
+      params: {providerId: "valid-redirect-signed-request"},
+      query: {SAMLRequest: request, RelayState: relay_state, SigAlg: sig_alg, Signature: signature},
+      as_response: true
+    )
+
+    assert_equal 302, status
+  end
+
   def test_slo_rejects_unsigned_logout_response_when_signature_required
     auth = build_auth_with_json_saml_parser(saml_options: {enableSingleLogout: true, wantLogoutResponseSigned: true})
     cookie = sign_up_cookie(auth)
@@ -1731,6 +1875,73 @@ class BetterAuthSSOSAMLMirrorTest < Minitest::Test
 
     assert_equal 400, error.status_code
     assert_equal "Invalid LogoutResponse", error.message
+  end
+
+  def test_slo_rejects_marker_only_logout_response_and_keeps_pending_request
+    idp_key = OpenSSL::PKey::RSA.new(2048)
+    idp_cert = saml_test_certificate(idp_key)
+    auth = build_auth_with_json_saml_parser(saml_options: {enableSingleLogout: true, wantLogoutResponseSigned: true})
+    cookie = sign_up_cookie(auth)
+    register_saml_provider(
+      auth,
+      cookie,
+      provider_id: "marker-only-response",
+      saml_config: {singleLogoutService: "https://idp.example.com/slo", cert: idp_cert.to_pem}
+    )
+    _init_status, init_headers, _init_body = auth.api.initiate_slo(
+      headers: {"cookie" => cookie},
+      params: {providerId: "marker-only-response"},
+      body: {callbackURL: "/after-logout"},
+      as_response: true
+    )
+    request_id = saml_logout_request_id_from_url(init_headers.fetch("location"))
+    response = saml_message_with_signature_marker(saml_logout_response(in_response_to: request_id, id: "_marker-only-response"))
+
+    error = assert_raises(BetterAuth::APIError) do
+      auth.api.slo_endpoint(
+        params: {providerId: "marker-only-response"},
+        body: {SAMLResponse: response, RelayState: "/after-logout"}
+      )
+    end
+
+    assert_equal 400, error.status_code
+    assert_equal "Invalid LogoutResponse", error.message
+    assert auth.context.internal_adapter.find_verification_value("#{BetterAuth::Plugins::SSO_SAML_LOGOUT_REQUEST_KEY_PREFIX}#{request_id}")
+  end
+
+  def test_slo_accepts_valid_signed_logout_response
+    idp_key = OpenSSL::PKey::RSA.new(2048)
+    idp_cert = saml_test_certificate(idp_key)
+    auth = build_auth_with_json_saml_parser(saml_options: {enableSingleLogout: true, wantLogoutResponseSigned: true})
+    cookie = sign_up_cookie(auth)
+    register_saml_provider(
+      auth,
+      cookie,
+      provider_id: "valid-signed-response",
+      saml_config: {singleLogoutService: "https://idp.example.com/slo", cert: idp_cert.to_pem}
+    )
+    _init_status, init_headers, _init_body = auth.api.initiate_slo(
+      headers: {"cookie" => cookie},
+      params: {providerId: "valid-signed-response"},
+      body: {callbackURL: "/after-logout"},
+      as_response: true
+    )
+    request_id = saml_logout_request_id_from_url(init_headers.fetch("location"))
+    response = saml_signed_message(
+      saml_logout_response(in_response_to: request_id, id: "_valid-signed-response"),
+      idp_key,
+      idp_cert
+    )
+
+    status, headers, _body = auth.api.slo_endpoint(
+      params: {providerId: "valid-signed-response"},
+      body: {SAMLResponse: response, RelayState: "/after-logout"},
+      as_response: true
+    )
+
+    assert_equal 302, status
+    assert_equal "/after-logout", headers.fetch("location")
+    assert_nil auth.context.internal_adapter.find_verification_value("#{BetterAuth::Plugins::SSO_SAML_LOGOUT_REQUEST_KEY_PREFIX}#{request_id}")
   end
 
   def test_logout_response_consumes_pending_request_and_redirects_safely
@@ -1916,8 +2127,33 @@ class BetterAuthSSOSAMLMirrorTest < Minitest::Test
     Base64.strict_encode64("<samlp:LogoutRequest xmlns:samlp=\"urn:oasis:names:tc:SAML:2.0:protocol\" xmlns:saml=\"urn:oasis:names:tc:SAML:2.0:assertion\"#{id_attribute}><saml:NameID>#{name_id}</saml:NameID><samlp:SessionIndex>#{session_index}</samlp:SessionIndex></samlp:LogoutRequest>")
   end
 
-  def saml_logout_response(in_response_to:, status_code: "urn:oasis:names:tc:SAML:2.0:status:Success")
-    Base64.strict_encode64("<samlp:LogoutResponse xmlns:samlp=\"urn:oasis:names:tc:SAML:2.0:protocol\" InResponseTo=\"#{in_response_to}\"><samlp:Status><samlp:StatusCode Value=\"#{status_code}\"/></samlp:Status></samlp:LogoutResponse>")
+  def saml_logout_response(in_response_to:, status_code: "urn:oasis:names:tc:SAML:2.0:status:Success", id: nil)
+    id_attribute = id ? " ID=\"#{id}\"" : ""
+    Base64.strict_encode64("<samlp:LogoutResponse xmlns:samlp=\"urn:oasis:names:tc:SAML:2.0:protocol\"#{id_attribute} InResponseTo=\"#{in_response_to}\"><samlp:Status><samlp:StatusCode Value=\"#{status_code}\"/></samlp:Status></samlp:LogoutResponse>")
+  end
+
+  def saml_message_with_signature_marker(encoded_message)
+    xml = Base64.decode64(encoded_message)
+    Base64.strict_encode64(xml.sub(">", "><ds:Signature xmlns:ds=\"#{XMLSecurity::BaseDocument::DSIG}\"/>"))
+  end
+
+  def saml_signed_message(encoded_message, key, certificate)
+    document = XMLSecurity::Document.new(Base64.decode64(encoded_message))
+    document.sign_document(key, certificate, XMLSecurity::Document::RSA_SHA256, XMLSecurity::Document::SHA256)
+    Base64.strict_encode64(document.to_s)
+  end
+
+  def saml_test_certificate(key)
+    certificate = OpenSSL::X509::Certificate.new
+    certificate.version = 2
+    certificate.serial = 1
+    certificate.subject = OpenSSL::X509::Name.parse("/CN=slo-idp.example.com")
+    certificate.issuer = certificate.subject
+    certificate.public_key = key.public_key
+    certificate.not_before = Time.now.utc - 60
+    certificate.not_after = Time.now.utc + 3600
+    certificate.sign(key, OpenSSL::Digest.new("SHA256"))
+    certificate
   end
 
   def saml_logout_request_id_from_url(url)

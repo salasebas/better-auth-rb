@@ -31,6 +31,7 @@ permissions:
   contents: read
 
 env:
+  BETTER_AUTH_URL: http://localhost:3000
   BETTER_AUTH_ADAPTER_INTEGRATION: "1"
   BETTER_AUTH_POSTGRES_URL: postgres://user:password@localhost:5432/better_auth
   BETTER_AUTH_MYSQL_HOST: 127.0.0.1

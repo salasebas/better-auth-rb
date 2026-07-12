@@ -254,7 +254,7 @@ module BetterAuth
       {}
     end
 
-    def sso_validate_saml_slo_signature!(ctx, raw_message, error_message)
+    def sso_validate_saml_slo_signature!(ctx, raw_message, expected_root, error_message)
       signature = sso_fetch(ctx.body, :signature) || sso_fetch(ctx.query, :signature)
       sig_alg = sso_fetch(ctx.body, :sig_alg) || sso_fetch(ctx.query, :sig_alg)
       if !signature.to_s.empty? && !sig_alg.to_s.empty?
@@ -263,14 +263,35 @@ module BetterAuth
         raise APIError.new("BAD_REQUEST", message: error_message)
       end
 
-      xml = Base64.decode64(raw_message.to_s.gsub(/\s+/, ""))
-      return true if xml.include?("<Signature") || xml.include?(":Signature")
+      return true if sso_validate_saml_xml_signature(ctx, raw_message, expected_root)
 
       raise APIError.new("BAD_REQUEST", message: error_message)
     rescue APIError
       raise
     rescue
       raise APIError.new("BAD_REQUEST", message: error_message)
+    end
+
+    def sso_validate_saml_xml_signature(ctx, raw_message, expected_root)
+      provider = sso_find_provider!(ctx, sso_fetch(ctx.params, :provider_id))
+      certificate = OpenSSL::X509::Certificate.new(sso_saml_idp_metadata(provider)[:cert].to_s)
+      xml = Base64.decode64(raw_message.to_s.gsub(/\s+/, ""))
+      document = XMLSecurity::SignedDocument.new(xml)
+      parsed = XMLSecurity::BaseDocument.safe_load_xml(document)
+      root = parsed.root
+      root_id = root&.attribute("ID")&.value.to_s
+      signatures = parsed.xpath("//ds:Signature", "ds" => XMLSecurity::BaseDocument::DSIG)
+      referenced_elements = parsed.xpath("//*[@ID=$id]", nil, {"id" => root_id})
+
+      return false unless root&.name == expected_root && root.namespace&.href == "urn:oasis:names:tc:SAML:2.0:protocol"
+      return false if root_id.empty?
+      return false unless signatures.one? && signatures.first.parent == root
+      return false unless referenced_elements.one? && referenced_elements.first == root
+      return false unless document.signed_element_id == root_id
+
+      document.validate_document_with_cert(certificate, true)
+    rescue
+      false
     end
 
     def sso_validate_saml_redirect_signature(ctx, raw_message, signature, sig_alg)

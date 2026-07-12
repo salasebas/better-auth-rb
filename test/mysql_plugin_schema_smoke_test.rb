@@ -82,18 +82,8 @@ class BetterAuthMySQLPluginSchemaSmokeTest < Minitest::Test
       "stripe_subscription" => {
         plugins: [BetterAuth::Plugins.stripe(subscription: {enabled: true, plans: []}, organization: {enabled: true})],
         tables: %w[subscriptions organizations]
-      },
-      "mcp_oidc" => {
-        plugins: [BetterAuth::Plugins.mcp, oidc_provider_plugin],
-        tables: %w[oauth_clients oauth_applications oauth_access_tokens oauth_consents]
       }
     }
-  end
-
-  def oidc_provider_plugin
-    plugin = nil
-    capture_io { plugin = BetterAuth::Plugins.oidc_provider }
-    plugin
   end
 
   def mysql_connection

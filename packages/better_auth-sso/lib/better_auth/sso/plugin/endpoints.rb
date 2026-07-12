@@ -37,7 +37,7 @@ module BetterAuth
         relay_state = sso_fetch(ctx.body, :relay_state) || sso_fetch(ctx.query, :relay_state)
         if sso_fetch(ctx.body, :saml_response) || sso_fetch(ctx.query, :saml_response)
           raw_response = sso_fetch(ctx.body, :saml_response) || sso_fetch(ctx.query, :saml_response)
-          sso_validate_saml_slo_signature!(ctx, raw_response, "Invalid LogoutResponse") if config.dig(:saml, :want_logout_response_signed)
+          sso_validate_saml_slo_signature!(ctx, raw_response, "LogoutResponse", "Invalid LogoutResponse") if config.dig(:saml, :want_logout_response_signed)
           sso_process_saml_logout_response(ctx, raw_response)
           Cookies.delete_session_cookie(ctx)
           next sso_redirect(ctx, sso_safe_slo_redirect_url(ctx, relay_state, provider.fetch("providerId")))
@@ -46,7 +46,7 @@ module BetterAuth
         raw_request = sso_fetch(ctx.body, :saml_request) || sso_fetch(ctx.query, :saml_request)
         raise APIError.new("BAD_REQUEST", message: "Invalid LogoutRequest") if raw_request.to_s.empty?
 
-        sso_validate_saml_slo_signature!(ctx, raw_request, "Invalid LogoutRequest") if config.dig(:saml, :want_logout_request_signed)
+        sso_validate_saml_slo_signature!(ctx, raw_request, "LogoutRequest", "Invalid LogoutRequest") if config.dig(:saml, :want_logout_request_signed)
         logout_request_data = sso_process_saml_logout_request(ctx, provider, raw_request)
         in_response_to = logout_request_data[:id].to_s.empty? ? "" : " InResponseTo=\"#{CGI.escapeHTML(logout_request_data[:id].to_s)}\""
         response = Base64.strict_encode64("<samlp:LogoutResponse xmlns:samlp=\"urn:oasis:names:tc:SAML:2.0:protocol\" ID=\"_#{BetterAuth::Crypto.random_string(32)}\"#{in_response_to} Version=\"2.0\" IssueInstant=\"#{Time.now.utc.iso8601}\" Destination=\"#{sso_saml_logout_destination(provider)}\"><samlp:Status><samlp:StatusCode Value=\"urn:oasis:names:tc:SAML:2.0:status:Success\"/></samlp:Status></samlp:LogoutResponse>")
