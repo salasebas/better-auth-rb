@@ -378,6 +378,161 @@ class BetterAuthPluginsOrganizationMembersTest < Minitest::Test
     ], calls
   end
 
+  def test_update_member_role_prevents_admin_from_assigning_or_modifying_owner_role
+    auth = build_organization_auth
+    owner_cookie = sign_up_cookie(auth, email: "role-guard-owner@example.com")
+    admin_cookie = sign_up_cookie(auth, email: "role-guard-admin@example.com")
+    member_cookie = sign_up_cookie(auth, email: "role-guard-member@example.com")
+    admin_user = auth.api.get_session(headers: {"cookie" => admin_cookie}).fetch(:user)
+    member_user = auth.api.get_session(headers: {"cookie" => member_cookie}).fetch(:user)
+    organization = auth.api.create_organization(headers: {"cookie" => owner_cookie}, body: {name: "Role Guards", slug: "role-guards"})
+    owner_member = auth.api.get_active_member(headers: {"cookie" => owner_cookie}, query: {organizationId: organization.fetch("id")})
+    admin_member = auth.api.add_member(headers: {"cookie" => owner_cookie}, body: {organizationId: organization.fetch("id"), userId: admin_user.fetch("id"), role: "admin"})
+    member = auth.api.add_member(headers: {"cookie" => owner_cookie}, body: {organizationId: organization.fetch("id"), userId: member_user.fetch("id"), role: "member"})
+
+    [
+      {memberId: admin_member.fetch("id"), role: "owner"},
+      {memberId: member.fetch("id"), role: "owner"},
+      {memberId: member.fetch("id"), role: "admin, owner"},
+      {memberId: owner_member.fetch("id"), role: "member"}
+    ].each do |update|
+      error = assert_raises(BetterAuth::APIError) do
+        auth.api.update_member_role(
+          headers: {"cookie" => admin_cookie},
+          body: {organizationId: organization.fetch("id")}.merge(update)
+        )
+      end
+      assert_equal 403, error.status_code
+      assert_equal BetterAuth::Plugins::ORGANIZATION_ERROR_CODES.fetch("YOU_ARE_NOT_ALLOWED_TO_UPDATE_THIS_MEMBER"), error.message
+    end
+
+    assert_equal "admin", auth.context.adapter.find_one(model: "member", where: [{field: "id", value: admin_member.fetch("id")}]).fetch("role")
+    assert_equal "member", auth.context.adapter.find_one(model: "member", where: [{field: "id", value: member.fetch("id")}]).fetch("role")
+    assert_equal "owner", auth.context.adapter.find_one(model: "member", where: [{field: "id", value: owner_member.fetch("id")}]).fetch("role")
+  end
+
+  def test_update_member_role_preserves_at_least_one_creator
+    auth = build_organization_auth
+    owner_cookie = sign_up_cookie(auth, email: "creator-count-owner@example.com")
+    second_cookie = sign_up_cookie(auth, email: "creator-count-second@example.com")
+    second_user = auth.api.get_session(headers: {"cookie" => second_cookie}).fetch(:user)
+    organization = auth.api.create_organization(headers: {"cookie" => owner_cookie}, body: {name: "Creator Count", slug: "creator-count"})
+    owner_member = auth.api.get_active_member(headers: {"cookie" => owner_cookie}, query: {organizationId: organization.fetch("id")})
+    second_member = auth.api.add_member(headers: {"cookie" => owner_cookie}, body: {organizationId: organization.fetch("id"), userId: second_user.fetch("id"), role: "member"})
+
+    blocked = assert_raises(BetterAuth::APIError) do
+      auth.api.update_member_role(
+        headers: {"cookie" => owner_cookie},
+        body: {organizationId: organization.fetch("id"), memberId: owner_member.fetch("id"), role: "admin"}
+      )
+    end
+    assert_equal 400, blocked.status_code
+    assert_equal BetterAuth::Plugins::ORGANIZATION_ERROR_CODES.fetch("YOU_CANNOT_LEAVE_THE_ORGANIZATION_WITHOUT_AN_OWNER"), blocked.message
+
+    auth.api.update_member_role(
+      headers: {"cookie" => owner_cookie},
+      body: {organizationId: organization.fetch("id"), memberId: second_member.fetch("id"), role: ["member", "owner"]}
+    )
+    updated = auth.api.update_member_role(
+      headers: {"cookie" => owner_cookie},
+      body: {organizationId: organization.fetch("id"), memberId: owner_member.fetch("id"), role: "admin"}
+    )
+
+    assert_equal "admin", updated.fetch("role")
+    assert_equal "member,owner", auth.context.adapter.find_one(model: "member", where: [{field: "id", value: second_member.fetch("id")}]).fetch("role")
+  end
+
+  def test_update_member_role_honors_custom_creator_role
+    ac = BetterAuth::Plugins.create_access_control(BetterAuth::Plugins::ORGANIZATION_DEFAULT_STATEMENTS)
+    auth = build_organization_auth(
+      plugins: [
+        BetterAuth::Plugins.organization(
+          creator_role: "founder",
+          ac: ac,
+          roles: {
+            founder: ac.new_role(member: ["create"]),
+            admin: ac.new_role(member: ["create", "update", "delete"]),
+            member: ac.new_role(ac: ["read"])
+          }
+        )
+      ]
+    )
+    founder_cookie = sign_up_cookie(auth, email: "custom-creator-founder@example.com")
+    admin_cookie = sign_up_cookie(auth, email: "custom-creator-admin@example.com")
+    admin_user = auth.api.get_session(headers: {"cookie" => admin_cookie}).fetch(:user)
+    organization = auth.api.create_organization(headers: {"cookie" => founder_cookie}, body: {name: "Custom Creator", slug: "custom-creator"})
+    founder_member = auth.api.get_active_member(headers: {"cookie" => founder_cookie}, query: {organizationId: organization.fetch("id")})
+    admin_member = auth.api.add_member(headers: {"cookie" => founder_cookie}, body: {organizationId: organization.fetch("id"), userId: admin_user.fetch("id"), role: "admin"})
+
+    assigning = assert_raises(BetterAuth::APIError) do
+      auth.api.update_member_role(headers: {"cookie" => admin_cookie}, body: {organizationId: organization.fetch("id"), memberId: admin_member.fetch("id"), role: "admin, founder"})
+    end
+    modifying = assert_raises(BetterAuth::APIError) do
+      auth.api.update_member_role(headers: {"cookie" => admin_cookie}, body: {organizationId: organization.fetch("id"), memberId: founder_member.fetch("id"), role: "member"})
+    end
+    demoting = assert_raises(BetterAuth::APIError) do
+      auth.api.update_member_role(headers: {"cookie" => founder_cookie}, body: {organizationId: organization.fetch("id"), memberId: founder_member.fetch("id"), role: "member"})
+    end
+
+    assert_equal [403, 403, 400], [assigning.status_code, modifying.status_code, demoting.status_code]
+
+    updated = auth.api.update_member_role(
+      headers: {"cookie" => founder_cookie},
+      body: {organizationId: organization.fetch("id"), memberId: admin_member.fetch("id"), role: "member"}
+    )
+    assert_equal "member", updated.fetch("role")
+  end
+
+  def test_update_member_role_validates_roles_and_accepts_dynamic_roles
+    auth = build_organization_auth(plugins: [BetterAuth::Plugins.organization(dynamic_access_control: {enabled: true})])
+    owner_cookie = sign_up_cookie(auth, email: "role-validation-owner@example.com")
+    member_cookie = sign_up_cookie(auth, email: "role-validation-member@example.com")
+    member_user = auth.api.get_session(headers: {"cookie" => member_cookie}).fetch(:user)
+    organization = auth.api.create_organization(headers: {"cookie" => owner_cookie}, body: {name: "Role Validation", slug: "role-validation"})
+    member = auth.api.add_member(headers: {"cookie" => owner_cookie}, body: {organizationId: organization.fetch("id"), userId: member_user.fetch("id"), role: "member"})
+
+    unknown = assert_raises(BetterAuth::APIError) do
+      auth.api.update_member_role(headers: {"cookie" => owner_cookie}, body: {organizationId: organization.fetch("id"), memberId: member.fetch("id"), role: "missing-role"})
+    end
+    empty = assert_raises(BetterAuth::APIError) do
+      auth.api.update_member_role(headers: {"cookie" => owner_cookie}, body: {organizationId: organization.fetch("id"), memberId: member.fetch("id"), role: [" ", ","]})
+    end
+    assert_equal 400, unknown.status_code
+    assert_equal BetterAuth::Plugins::ORGANIZATION_ERROR_CODES.fetch("ROLE_NOT_FOUND"), unknown.message
+    assert_equal 400, empty.status_code
+
+    auth.api.create_org_role(
+      headers: {"cookie" => owner_cookie},
+      body: {organizationId: organization.fetch("id"), role: "auditor", permission: {ac: ["read"]}}
+    )
+    updated = auth.api.update_member_role(
+      headers: {"cookie" => owner_cookie},
+      body: {organizationId: organization.fetch("id"), memberId: member.fetch("id"), role: " member, auditor "}
+    )
+    assert_equal "member,auditor", updated.fetch("role")
+  end
+
+  def test_update_member_role_rejects_target_from_another_organization
+    auth = build_organization_auth
+    owner_cookie = sign_up_cookie(auth, email: "organization-binding-owner@example.com")
+    member_cookie = sign_up_cookie(auth, email: "organization-binding-member@example.com")
+    member_user = auth.api.get_session(headers: {"cookie" => member_cookie}).fetch(:user)
+    first = auth.api.create_organization(headers: {"cookie" => owner_cookie}, body: {name: "First Binding", slug: "first-binding"})
+    second = auth.api.create_organization(headers: {"cookie" => owner_cookie}, body: {name: "Second Binding", slug: "second-binding"})
+    second_member = auth.api.add_member(headers: {"cookie" => owner_cookie}, body: {organizationId: second.fetch("id"), userId: member_user.fetch("id"), role: "member"})
+
+    blocked = assert_raises(BetterAuth::APIError) do
+      auth.api.update_member_role(
+        headers: {"cookie" => owner_cookie},
+        body: {organizationId: first.fetch("id"), memberId: second_member.fetch("id"), role: "admin"}
+      )
+    end
+
+    assert_equal 403, blocked.status_code
+    assert_equal BetterAuth::Plugins::ORGANIZATION_ERROR_CODES.fetch("YOU_ARE_NOT_ALLOWED_TO_UPDATE_THIS_MEMBER"), blocked.message
+    assert_equal "member", auth.context.adapter.find_one(model: "member", where: [{field: "id", value: second_member.fetch("id")}]).fetch("role")
+  end
+
   def test_leave_and_remove_member_reject_last_owner
     auth = build_organization_auth
     owner_cookie = sign_up_cookie(auth, email: "last-owner@example.com")
