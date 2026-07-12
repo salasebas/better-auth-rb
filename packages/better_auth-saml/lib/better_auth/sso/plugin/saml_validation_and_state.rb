@@ -6,13 +6,11 @@ module BetterAuth
 
     def sso_parse_saml_response(value, config = {}, provider = nil, ctx = nil)
       parser = config.dig(:saml, :parse_response)
-      if parser.respond_to?(:call)
-        sso_validate_single_saml_assertion!(value) if sso_base64_xml?(value)
-        parsed = parser.call(raw_response: value.to_s, provider: provider, context: ctx)
-        return normalize_hash(parsed)
-      end
+      raise APIError.new("BAD_REQUEST", message: "Invalid SAML response") unless parser.respond_to?(:call)
 
-      JSON.parse(Base64.decode64(value.to_s), symbolize_names: true)
+      sso_validate_single_saml_assertion!(value) if sso_base64_xml?(value)
+      parsed = parser.call(raw_response: value.to_s, provider: provider, context: ctx)
+      normalize_hash(parsed)
     rescue APIError
       raise APIError.new("BAD_REQUEST", message: "Invalid SAML response")
     rescue

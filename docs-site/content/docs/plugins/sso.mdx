@@ -21,6 +21,9 @@ Single Sign-On (SSO) allows users to authenticate with multiple applications usi
 
     ```ruby title="Gemfile"
     gem "better_auth-sso"
+
+    # Required to register and authenticate SAML providers.
+    gem "better_auth-saml"
     ```
 
 ```ruby title="config/auth.rb"
@@ -77,6 +80,14 @@ auth = BetterAuth.auth(
   </Step>
 
 </Steps>
+
+<Callout type="info">
+  For SAML providers, install `better_auth-saml` alongside `better_auth-sso`. When
+  the gem is available, `BetterAuth::Plugins.sso` automatically configures
+  `ruby-saml` to create AuthnRequests and verify SAML responses. No manual parser
+  merge is required, and the SSO flow does not accept JSON/base64 assertions as a
+  fallback.
+</Callout>
 
 ## Usage
 
@@ -339,6 +350,11 @@ If the Identity Provider is misconfigured or unreachable, registration will fail
 ### Register a SAML Provider
 
 To register a SAML provider, use the `registerSSOProvider` endpoint with SAML configuration details. The provider will act as a Service Provider (SP) and integrate with your Identity Provider (IdP).
+
+SAML response verification is performed by `ruby-saml` through `better_auth-saml`
+before an assertion can create or link a user. Applications that configure a custom
+parser are responsible for validating the original SAML response before returning
+its attributes.
 
 <Tabs items={["client", "server"]}>
   <Tab value="client">
