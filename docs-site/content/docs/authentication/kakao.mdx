@@ -23,19 +23,19 @@ description: Kakao provider setup and usage in Better Auth Ruby.
     </Callout>
 
     ```ruby title="config/auth.rb"
-require "better_auth"
+    require "better_auth"
 
-auth = BetterAuth.auth(
-  secret: ENV.fetch("BETTER_AUTH_SECRET"),
-  base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
-  social_providers: {
-    kakao: BetterAuth::SocialProviders.kakao(
-      client_id: ENV.fetch("KAKAO_CLIENT_ID"),
-      client_secret: ENV.fetch("KAKAO_CLIENT_SECRET")
+    auth = BetterAuth.auth(
+      secret: ENV.fetch("BETTER_AUTH_SECRET"),
+      base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
+      social_providers: {
+        kakao: BetterAuth::SocialProviders.kakao(
+          client_id: ENV.fetch("KAKAO_CLIENT_ID"),
+          client_secret: ENV.fetch("KAKAO_CLIENT_SECRET")
+        )
+      }
     )
-  }
-)
-```
+    ```
   </Step>
 
   <Step>
@@ -46,16 +46,16 @@ auth = BetterAuth.auth(
     * `provider`: The provider to use. It should be set to `kakao`.
 
     ```ruby title="server.rb"
-response = auth.api.sign_in_social(
-  body: {
-    provider: "kakao",
-    callback_url: "/dashboard",
-    error_callback_url: "/login",
-    disable_redirect: true
-  }
-)
+    response = auth.api.sign_in_social(
+      body: {
+        provider: "kakao",
+        callback_url: "/dashboard",
+        error_callback_url: "/login",
+        disable_redirect: true
+      }
+    )
 
-redirect_url = response.fetch(:url)
-```
+    redirect_url = response.fetch(:url)
+    ```
   </Step>
 </Steps>

@@ -129,6 +129,38 @@ class BetterAuthPluginsOrganizationOrgCrudTest < Minitest::Test
     refute_equal second.fetch("id"), updated.fetch("id")
   end
 
+  def test_update_organization_hooks_can_mutate_data_and_receive_member
+    calls = []
+    auth = build_organization_auth(
+      plugins: [
+        BetterAuth::Plugins.organization(
+          organization_hooks: {
+            before_update_organization: lambda { |data, _ctx|
+              calls << [:before, data[:organization][:name], data[:member].fetch("role")]
+              {data: {name: "Hook Renamed"}}
+            },
+            after_update_organization: lambda { |data, _ctx|
+              calls << [:after, data[:organization].fetch("name"), data[:member].fetch("role"), data[:user].fetch("email")]
+            }
+          }
+        )
+      ]
+    )
+    cookie = sign_up_cookie(auth, email: "update-hooks@example.com")
+    organization = auth.api.create_organization(headers: {"cookie" => cookie}, body: {name: "Update Hooks", slug: "update-hooks"})
+
+    updated = auth.api.update_organization(
+      headers: {"cookie" => cookie},
+      body: {organizationId: organization.fetch("id"), data: {name: "Requested Name"}}
+    )
+
+    assert_equal "Hook Renamed", updated.fetch("name")
+    assert_equal [
+      [:before, "Requested Name", "owner"],
+      [:after, "Hook Renamed", "owner", "update-hooks@example.com"]
+    ], calls
+  end
+
   def test_set_active_organization_by_slug
     auth = build_organization_auth
     cookie = sign_up_cookie(auth, email: "active-slug@example.com")
@@ -195,6 +227,71 @@ class BetterAuthPluginsOrganizationOrgCrudTest < Minitest::Test
     assert_empty auth.context.adapter.find_many(model: "organizationRole", where: [{field: "organizationId", value: organization_id}])
     assert_empty auth.context.adapter.find_many(model: "teamMember", where: [{field: "teamId", value: team.fetch("id")}])
     assert_empty auth.api.list_organizations(headers: {"cookie" => active_cookie})
+  end
+
+  def test_delete_organization_can_be_disabled_and_leaves_records_intact
+    auth = build_organization_auth(plugins: [BetterAuth::Plugins.organization(disable_organization_deletion: true)])
+    cookie = sign_up_cookie(auth, email: "delete-disabled@example.com")
+    organization = auth.api.create_organization(headers: {"cookie" => cookie}, body: {name: "Delete Disabled", slug: "delete-disabled"})
+
+    blocked = assert_raises(BetterAuth::APIError) do
+      auth.api.delete_organization(headers: {"cookie" => cookie}, body: {organizationId: organization.fetch("id")})
+    end
+
+    assert_equal 404, blocked.status_code
+    assert_equal "Organization deletion is disabled", blocked.message
+    assert_equal "ORGANIZATION_DELETION_DISABLED", blocked.code
+    assert auth.context.adapter.find_one(model: "organization", where: [{field: "id", value: organization.fetch("id")}])
+    assert auth.context.adapter.find_one(model: "member", where: [{field: "organizationId", value: organization.fetch("id")}])
+  end
+
+  def test_delete_active_organization_clears_active_org_and_team
+    auth = build_organization_auth(plugins: [BetterAuth::Plugins.organization(teams: {enabled: true})])
+    cookie = sign_up_cookie(auth, email: "delete-active@example.com")
+    created = auth.api.create_organization(
+      headers: {"cookie" => cookie},
+      body: {name: "Delete Active", slug: "delete-active"},
+      return_headers: true
+    )
+    active_cookie = [cookie, cookie_header(created.fetch(:headers).fetch("set-cookie"))].join("; ")
+    session = auth.api.get_session(headers: {"cookie" => active_cookie})
+    assert_equal created.fetch(:response).fetch("id"), session.fetch(:session).fetch("activeOrganizationId")
+    refute_nil session.fetch(:session).fetch("activeTeamId")
+
+    deleted = auth.api.delete_organization(
+      headers: {"cookie" => active_cookie},
+      body: {organizationId: created.fetch(:response).fetch("id")},
+      return_headers: true
+    )
+    cleared_cookie = [active_cookie, cookie_header(deleted.fetch(:headers).fetch("set-cookie"))].join("; ")
+    cleared = auth.api.get_session(headers: {"cookie" => cleared_cookie})
+
+    assert_equal({status: true}, deleted.fetch(:response))
+    assert_nil cleared.fetch(:session)["activeOrganizationId"]
+    assert_nil cleared.fetch(:session)["activeTeamId"]
+  end
+
+  def test_delete_organization_hooks_fire_in_order
+    calls = []
+    auth = build_organization_auth(
+      plugins: [
+        BetterAuth::Plugins.organization(
+          organization_hooks: {
+            before_delete_organization: ->(data, _ctx) { calls << [:before, data[:organization].fetch("slug"), data[:user].fetch("email")] },
+            after_delete_organization: ->(data, _ctx) { calls << [:after, data[:organization].fetch("slug"), data[:user].fetch("email")] }
+          }
+        )
+      ]
+    )
+    cookie = sign_up_cookie(auth, email: "delete-hooks@example.com")
+    organization = auth.api.create_organization(headers: {"cookie" => cookie}, body: {name: "Delete Hooks", slug: "delete-hooks"})
+
+    auth.api.delete_organization(headers: {"cookie" => cookie}, body: {organizationId: organization.fetch("id")})
+
+    assert_equal [
+      [:before, "delete-hooks", "delete-hooks@example.com"],
+      [:after, "delete-hooks", "delete-hooks@example.com"]
+    ], calls
   end
 
   def test_create_organization_creates_default_team_when_enabled

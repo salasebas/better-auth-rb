@@ -157,7 +157,7 @@ class BetterAuthPluginsOrganizationTest < Minitest::Test
     organization = auth.api.create_organization(headers: {"cookie" => cookie}, body: {name: "Full Org", slug: "full-org"})
 
     auth.api.add_member(headers: {"cookie" => cookie}, body: {organizationId: organization.fetch("id"), userId: first_member.fetch("id"), role: "member"})
-    auth.api.add_member(headers: {"cookie" => cookie}, body: {organizationId: organization.fetch("id"), userId: second_member.fetch("id"), role: "member"})
+    auth.context.adapter.create(model: "member", data: {organizationId: organization.fetch("id"), userId: second_member.fetch("id"), role: "member", createdAt: Time.now})
 
     missing = assert_raises(BetterAuth::APIError) do
       auth.api.get_full_organization(headers: {"cookie" => cookie}, query: {organizationId: "missing-org-id"})
@@ -325,19 +325,29 @@ class BetterAuthPluginsOrganizationTest < Minitest::Test
     assert_equal member.fetch("id"), role.fetch(:member).fetch("id")
   end
 
-  def test_list_members_defaults_limit_and_bulk_loads_users
+  def test_membership_limit_blocks_add_member_and_list_members_defaults_limit
     auth = build_auth(plugins: [BetterAuth::Plugins.organization(membership_limit: 2)])
     owner_cookie = sign_up_cookie(auth, email: "limited-members-owner@example.com")
     organization = auth.api.create_organization(headers: {"cookie" => owner_cookie}, body: {name: "Limited Members", slug: "limited-members"})
 
-    3.times do |index|
-      member_cookie = sign_up_cookie(auth, email: "limited-member-#{index}@example.com")
-      member_user = auth.api.get_session(headers: {"cookie" => member_cookie}).fetch(:user)
+    first_member_cookie = sign_up_cookie(auth, email: "limited-member-one@example.com")
+    second_member_cookie = sign_up_cookie(auth, email: "limited-member-two@example.com")
+    first_member = auth.api.get_session(headers: {"cookie" => first_member_cookie}).fetch(:user)
+    second_member = auth.api.get_session(headers: {"cookie" => second_member_cookie}).fetch(:user)
+
+    auth.api.add_member(
+      headers: {"cookie" => owner_cookie},
+      body: {organizationId: organization.fetch("id"), userId: first_member.fetch("id"), role: "member"}
+    )
+
+    blocked = assert_raises(BetterAuth::APIError) do
       auth.api.add_member(
         headers: {"cookie" => owner_cookie},
-        body: {organizationId: organization.fetch("id"), userId: member_user.fetch("id"), role: "member"}
+        body: {organizationId: organization.fetch("id"), userId: second_member.fetch("id"), role: "member"}
       )
     end
+    assert_equal 403, blocked.status_code
+    assert_equal BetterAuth::Plugins::ORGANIZATION_ERROR_CODES.fetch("ORGANIZATION_MEMBERSHIP_LIMIT_REACHED"), blocked.message
 
     auth.context.internal_adapter.define_singleton_method(:find_user_by_id) do |_user_id|
       raise "unexpected per-member user lookup"
@@ -345,9 +355,68 @@ class BetterAuthPluginsOrganizationTest < Minitest::Test
 
     members = auth.api.list_members(headers: {"cookie" => owner_cookie}, query: {organizationId: organization.fetch("id")})
 
-    assert_equal 4, members.fetch(:total)
+    assert_equal 2, members.fetch(:total)
     assert_equal 2, members.fetch(:members).length
     assert members.fetch(:members).all? { |entry| entry.fetch("user").fetch("email").include?("@example.com") }
+
+    limited = auth.api.list_members(headers: {"cookie" => owner_cookie}, query: {organizationId: organization.fetch("id"), limit: 1})
+    assert_equal 1, limited.fetch(:members).length
+  end
+
+  def test_accept_invitation_enforces_membership_limit_without_mutation
+    auth = build_auth(plugins: [BetterAuth::Plugins.organization(membership_limit: 1)])
+    owner_cookie = sign_up_cookie(auth, email: "limited-invite-owner@example.com")
+    invitee_cookie = sign_up_cookie(auth, email: "limited-invitee@example.com")
+    invitee = auth.api.get_session(headers: {"cookie" => invitee_cookie}).fetch(:user)
+    organization = auth.api.create_organization(headers: {"cookie" => owner_cookie}, body: {name: "Limited Invite", slug: "limited-invite"})
+    invitation = auth.api.create_invitation(headers: {"cookie" => owner_cookie}, body: {organizationId: organization.fetch("id"), email: "limited-invitee@example.com", role: "member"})
+
+    blocked = assert_raises(BetterAuth::APIError) do
+      auth.api.accept_invitation(headers: {"cookie" => invitee_cookie}, body: {invitationId: invitation.fetch("id")})
+    end
+    assert_equal 403, blocked.status_code
+    assert_equal BetterAuth::Plugins::ORGANIZATION_ERROR_CODES.fetch("ORGANIZATION_MEMBERSHIP_LIMIT_REACHED"), blocked.message
+    assert_equal "pending", auth.api.get_invitation(query: {invitationId: invitation.fetch("id")}).fetch("status")
+
+    members = auth.api.list_members(headers: {"cookie" => owner_cookie}, query: {organizationId: organization.fetch("id")})
+    assert_equal 1, members.fetch(:total)
+    assert_nil auth.context.adapter.find_one(model: "member", where: [{field: "organizationId", value: organization.fetch("id")}, {field: "userId", value: invitee.fetch("id")}])
+  end
+
+  def test_add_member_enforces_callable_membership_limit
+    calls = []
+    auth = build_auth(
+      plugins: [
+        BetterAuth::Plugins.organization(
+          membership_limit: lambda { |user, organization|
+            calls << [user.fetch("email"), organization.fetch("name")]
+            organization.fetch("name").include?("Callable Limit") ? 2 : 100
+          }
+        )
+      ]
+    )
+    owner_cookie = sign_up_cookie(auth, email: "callable-limit-owner@example.com")
+    first_member_cookie = sign_up_cookie(auth, email: "callable-limit-one@example.com")
+    second_member_cookie = sign_up_cookie(auth, email: "callable-limit-two@example.com")
+    first_member = auth.api.get_session(headers: {"cookie" => first_member_cookie}).fetch(:user)
+    second_member = auth.api.get_session(headers: {"cookie" => second_member_cookie}).fetch(:user)
+    organization = auth.api.create_organization(headers: {"cookie" => owner_cookie}, body: {name: "Callable Limit Org", slug: "callable-limit-org"})
+
+    auth.api.add_member(
+      headers: {"cookie" => owner_cookie},
+      body: {organizationId: organization.fetch("id"), userId: first_member.fetch("id"), role: "member"}
+    )
+
+    blocked = assert_raises(BetterAuth::APIError) do
+      auth.api.add_member(
+        headers: {"cookie" => owner_cookie},
+        body: {organizationId: organization.fetch("id"), userId: second_member.fetch("id"), role: "member"}
+      )
+    end
+    assert_equal 403, blocked.status_code
+    assert_equal BetterAuth::Plugins::ORGANIZATION_ERROR_CODES.fetch("ORGANIZATION_MEMBERSHIP_LIMIT_REACHED"), blocked.message
+    assert_includes calls, ["callable-limit-one@example.com", "Callable Limit Org"]
+    assert_includes calls, ["callable-limit-two@example.com", "Callable Limit Org"]
   end
 
   def test_list_members_does_not_call_dynamic_membership_limit
@@ -381,6 +450,61 @@ class BetterAuthPluginsOrganizationTest < Minitest::Test
     cleared = auth.api.set_active_team(headers: {"cookie" => owner_cookie}, body: {teamId: nil}, return_headers: true)
     cleared_cookie = [owner_cookie, cookie_header(cleared.fetch(:headers).fetch("set-cookie"))].join("; ")
     assert_nil auth.api.get_session(headers: {"cookie" => cleared_cookie}).fetch(:session)["activeTeamId"]
+  end
+
+  def test_team_update_delete_and_membership_hooks_fire
+    calls = []
+    auth = build_auth(
+      plugins: [
+        BetterAuth::Plugins.organization(
+          teams: {enabled: true, default_team: {enabled: false}, allow_removing_all_teams: true},
+          organization_hooks: {
+            before_update_team: lambda { |data, _ctx|
+              calls << [:before_update_team, data[:team].fetch("name"), data[:updates][:name]]
+              {data: {name: "Hooked Team"}}
+            },
+            after_update_team: ->(data, _ctx) { calls << [:after_update_team, data[:team].fetch("name"), data[:organization].fetch("slug")] },
+            before_add_team_member: lambda { |data, _ctx|
+              calls << [:before_add_team_member, data[:team].fetch("name"), data[:user].fetch("email")]
+              {data: {teamId: "ignored-team", userId: "ignored-user", createdAt: Time.now}}
+            },
+            after_add_team_member: ->(data, _ctx) { calls << [:after_add_team_member, data[:team_member].fetch("userId"), data[:team].fetch("name")] },
+            before_remove_team_member: ->(data, _ctx) { calls << [:before_remove_team_member, data[:team_member].fetch("userId"), data[:team].fetch("name")] },
+            after_remove_team_member: ->(data, _ctx) { calls << [:after_remove_team_member, data[:team_member].fetch("userId"), data[:team].fetch("name")] },
+            before_delete_team: ->(data, _ctx) { calls << [:before_delete_team, data[:team].fetch("name"), data[:user].fetch("email")] },
+            after_delete_team: ->(data, _ctx) { calls << [:after_delete_team, data[:team].fetch("name"), data[:organization].fetch("slug")] }
+          }
+        )
+      ]
+    )
+    owner_cookie = sign_up_cookie(auth, email: "team-hooks-owner@example.com")
+    member_cookie = sign_up_cookie(auth, email: "team-hooks-member@example.com")
+    member_user = auth.api.get_session(headers: {"cookie" => member_cookie}).fetch(:user)
+    organization = auth.api.create_organization(headers: {"cookie" => owner_cookie}, body: {name: "Team Hooks", slug: "team-hooks"})
+    team = auth.api.create_team(headers: {"cookie" => owner_cookie}, body: {organizationId: organization.fetch("id"), name: "Original Team"})
+    auth.api.add_member(headers: {"cookie" => owner_cookie}, body: {organizationId: organization.fetch("id"), userId: member_user.fetch("id"), role: "member"})
+
+    updated = auth.api.update_team(headers: {"cookie" => owner_cookie}, body: {teamId: team.fetch("id"), name: "Requested Team"})
+    added = auth.api.add_team_member(headers: {"cookie" => owner_cookie}, body: {teamId: team.fetch("id"), userId: member_user.fetch("id")})
+    existing = auth.api.add_team_member(headers: {"cookie" => owner_cookie}, body: {teamId: team.fetch("id"), userId: member_user.fetch("id")})
+    auth.api.remove_team_member(headers: {"cookie" => owner_cookie}, body: {teamId: team.fetch("id"), userId: member_user.fetch("id")})
+    auth.api.remove_team(headers: {"cookie" => owner_cookie}, body: {teamId: team.fetch("id")})
+
+    assert_equal "Hooked Team", updated.fetch("name")
+    assert_equal member_user.fetch("id"), added.fetch("userId")
+    assert_equal added.fetch("id"), existing.fetch("id")
+    assert_equal [
+      [:before_update_team, "Original Team", "Requested Team"],
+      [:after_update_team, "Hooked Team", "team-hooks"],
+      [:before_add_team_member, "Hooked Team", "team-hooks-member@example.com"],
+      [:after_add_team_member, member_user.fetch("id"), "Hooked Team"],
+      [:before_add_team_member, "Hooked Team", "team-hooks-member@example.com"],
+      [:after_add_team_member, member_user.fetch("id"), "Hooked Team"],
+      [:before_remove_team_member, member_user.fetch("id"), "Hooked Team"],
+      [:after_remove_team_member, member_user.fetch("id"), "Hooked Team"],
+      [:before_delete_team, "Hooked Team", "team-hooks-owner@example.com"],
+      [:after_delete_team, "Hooked Team", "team-hooks"]
+    ], calls
   end
 
   def test_dynamic_access_control_rejects_invalid_and_assigned_roles

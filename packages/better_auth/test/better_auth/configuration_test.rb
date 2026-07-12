@@ -20,6 +20,41 @@ class BetterAuthConfigurationTest < Minitest::Test
     assert_equal({enabled: true, strategy: "jwe", refresh_cache: true, max_age: 60 * 60 * 24 * 7}, config.session[:cookie_cache])
   end
 
+  def test_base_url_is_required_and_dynamic_hashes_are_rejected
+    with_env("BETTER_AUTH_URL" => nil, "OPEN_AUTH_URL" => nil, "BASE_URL" => nil) do
+      error = assert_raises(BetterAuth::Error) { BetterAuth::Configuration.new(secret: SECRET) }
+      assert_includes error.message, "base_url is required"
+    end
+
+    error = assert_raises(BetterAuth::Error) do
+      BetterAuth::Configuration.new(secret: SECRET, base_url: {allowed_hosts: ["example.com"]})
+    end
+    assert_includes error.message, "serving_origins"
+  end
+
+  def test_serving_origins_are_trusted_without_promoting_other_trusted_origins
+    config = BetterAuth::Configuration.new(
+      secret: SECRET,
+      base_url: "https://auth.example.com",
+      serving_origins: ["https://*.tenant.example.com"],
+      trusted_origins: ["https://frontend.example.com"]
+    )
+
+    assert_equal ["https://auth.example.com", "https://*.tenant.example.com"], config.serving_origins
+    assert_includes config.trusted_origins, "https://*.tenant.example.com"
+    assert_includes config.trusted_origins, "https://frontend.example.com"
+    refute_includes config.serving_origins, "https://frontend.example.com"
+  end
+
+  def test_serving_origins_require_full_origins_without_paths
+    ["tenant.example.com", "https://tenant.example.com/path"].each do |origin|
+      error = assert_raises(BetterAuth::Error) do
+        BetterAuth::Configuration.new(secret: SECRET, base_url: "https://auth.example.com", serving_origins: [origin])
+      end
+      assert_includes error.message, "full http(s) origins"
+    end
+  end
+
   def test_secondary_storage_selects_secondary_rate_limit_storage_by_default
     storage = Object.new
     config = BetterAuth::Configuration.new(secret: SECRET, secondary_storage: storage)
@@ -66,6 +101,7 @@ class BetterAuthConfigurationTest < Minitest::Test
     assert_equal "http://localhost:3000/custom-path", config.context_base_url
     assert_equal "/custom-path", config.base_path
     assert_equal ["http://localhost:3000", "http://example.com"], config.trusted_origins
+    assert_equal ["http://example.com"], config.explicit_trusted_origins
     assert_equal 1000, config.session[:update_age]
     assert_equal 2000, config.session[:expires_in]
     assert_equal 0, config.session[:fresh_age]
@@ -173,10 +209,8 @@ class BetterAuthConfigurationTest < Minitest::Test
       "NUXT_PUBLIC_AUTH_URL" => "http://nuxt-public-auth.example",
       "BASE_URL" => nil
     ) do
-      config = BetterAuth::Configuration.new
-
-      assert_equal "", config.base_url
-      assert_equal "", config.context_base_url
+      error = assert_raises(BetterAuth::Error) { BetterAuth::Configuration.new }
+      assert_includes error.message, "base_url is required"
     end
   end
 

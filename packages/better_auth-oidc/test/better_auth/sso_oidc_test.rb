@@ -82,7 +82,7 @@ class BetterAuthPluginsSSOOIDCTest < Minitest::Test
     assert_equal "https://idp.example.com/base/oauth2/jwks", discovery.fetch(:jwks_endpoint)
   end
 
-  def test_oidc_discovery_rejects_untrusted_discovered_urls
+  def test_oidc_discovery_rejects_non_public_discovered_urls
     error = assert_raises(BetterAuth::APIError) do
       BetterAuth::Plugins.sso_discover_oidc_config(
         issuer: "https://idp.example.com",
@@ -90,7 +90,7 @@ class BetterAuthPluginsSSOOIDCTest < Minitest::Test
         fetch: ->(_url) {
           {
             issuer: "https://idp.example.com",
-            authorization_endpoint: "https://evil.example.com/authorize",
+            authorization_endpoint: "https://127.0.0.1/authorize",
             token_endpoint: "https://idp.example.com/token",
             jwks_uri: "https://idp.example.com/jwks"
           }
@@ -99,7 +99,7 @@ class BetterAuthPluginsSSOOIDCTest < Minitest::Test
     end
 
     assert_equal 400, error.status_code
-    assert_equal "The authorization_endpoint \"https://evil.example.com/authorize\" is not trusted by your trusted origins configuration.", error.message
+    assert_match(/publicly routable/, error.message)
   end
 
   def test_oidc_sign_in_hydrates_partial_config_with_runtime_discovery

@@ -1,15 +1,219 @@
 ---
 title: Email OTP
-description: Email one-time passcodes for verification, sign-in, and password reset.
+description: Email OTP plugin for RubyAuth.
 ---
 
-Email one-time passcodes for verification, sign-in, and password reset.
+<RubyAuthDisclaimer />
 
-<Callout type="info">
-This page documents the current Ruby port behavior. Ruby uses snake_case option names and `auth.api` method names; HTTP paths and JSON keys keep the upstream wire shape where implemented.
+The Email OTP plugin allows user to sign in, verify their email, or reset their password using a one-time password (OTP) sent to their email address.
+
+## Installation
+
+<Steps>
+  <Step>
+    ### Add the plugin to your auth config
+
+    Add the `emailOTP` plugin to your auth config and implement the `sendVerificationOTP()` method.
+
+    ```ruby title="config/auth.rb"
+    require "better_auth"
+
+    auth = BetterAuth.auth(
+      secret: ENV.fetch("BETTER_AUTH_SECRET"),
+      base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
+      plugins: [
+        BetterAuth::Plugins.email_otp(send_verification_otp: ->(data, _ctx) { OtpMailer.deliver(data[:email], data[:otp]) })
+      ]
+    )
+    ```
+  </Step>
+
+</Steps>
+
+## Usage
+
+### Send an OTP
+
+Use the `sendVerificationOtp()` method to send an OTP to the user's email address.
+
+<APIMethod path="/email-otp/send-verification-otp" method="POST">
+  ```
+  type sendVerificationOTP = {
+      /**
+       * The email address.
+       */
+      email: string = "ada@example.com"
+      /**
+       * The OTP type.
+       */
+      type: string = "sign-in"
+  }
+  ```
+</APIMethod>
+
+### Check an OTP (optional)
+
+Use the `checkVerificationOtp()` method to check if an OTP is valid.
+
+<APIMethod path="/email-otp/check-verification-otp" method="POST">
+  ```
+  type checkVerificationOTP = {
+      /**
+       * The email address.
+       */
+      email: string = "ada@example.com"
+      /**
+       * The OTP type.
+       */
+      type: string = "sign-in"
+      /**
+       * The OTP code.
+       */
+      otp: string = "123456"
+  }
+  ```
+</APIMethod>
+
+### Sign In with OTP
+
+To sign in with OTP, use the `sendVerificationOtp()` method to send a "sign-in" OTP to the user's email address.
+
+<APIMethod path="/email-otp/send-verification-otp" method="POST">
+  ```
+  type sendVerificationOTP = {
+      /**
+       * The email address.
+       */
+      email: string = "ada@example.com"
+      /**
+       * The OTP type.
+       */
+      type: string = "sign-in"
+  }
+  ```
+</APIMethod>
+
+Once the user provides the OTP, you can sign in the user using the `signIn.emailOtp()` method.
+
+<APIMethod path="/sign-in/email-otp" method="POST">
+  ```
+  type signInEmailOTP = {
+      /**
+       * The email address.
+       */
+      email: string = "ada@example.com"
+      /**
+       * The OTP code.
+       */
+      otp: string = "123456"
+  }
+  ```
+</APIMethod>
+
+<Callout>
+  If the user is not registered, they'll be automatically registered. Configured [additional fields](/docs/concepts/typescript#additional-fields) are also accepted for new users. To prevent automatic sign-up, pass `disableSignUp` as `true` in the [options](#options).
 </Callout>
 
-## Configure
+### Verify Email with OTP
+
+To verify the user's email address with OTP, use the `sendVerificationOtp()` method to send an "email-verification" OTP to the user's email address.
+
+<APIMethod path="/email-otp/send-verification-otp" method="POST">
+  ```
+  type sendVerificationOTP = {
+      /**
+       * The email address.
+       */
+      email: string = "ada@example.com"
+      /**
+       * The OTP type.
+       */
+      type: string = "sign-in"
+  }
+  ```
+</APIMethod>
+
+Once the user provides the OTP, use the `verifyEmail()` method to complete email verification.
+
+<APIMethod path="/email-otp/verify-email" method="POST">
+  ```
+  type verifyEmailOTP = {
+      /**
+       * The email address.
+       */
+      email: string = "ada@example.com"
+      /**
+       * The OTP code.
+       */
+      otp: string = "123456"
+  }
+  ```
+</APIMethod>
+
+### Reset Password with OTP
+
+To reset the user's password with OTP, use the `emailOtp.requestPasswordReset()` method to send a "forget-password" OTP to the user's email address.
+
+<APIMethod path="/email-otp/request-password-reset" method="POST">
+  ```
+  type requestPasswordResetEmailOTP = {
+      /**
+       * The email address.
+       */
+      email: string = "ada@example.com"
+  }
+  ```
+</APIMethod>
+
+<Callout type="warn">
+  The `/forget-password/email-otp` endpoint is deprecated. Please use `/email-otp/request-password-reset` instead.
+</Callout>
+
+Once the user provides the OTP, use the `checkVerificationOtp()` method to check if it's valid (optional).
+
+<APIMethod path="/email-otp/check-verification-otp" method="POST">
+  ```
+  type checkVerificationOTP = {
+      /**
+       * The email address.
+       */
+      email: string = "ada@example.com"
+      /**
+       * The OTP type.
+       */
+      type: string = "sign-in"
+      /**
+       * The OTP code.
+       */
+      otp: string = "123456"
+  }
+  ```
+</APIMethod>
+
+Then, use the `resetPassword()` method to reset the user's password.
+
+<APIMethod path="/email-otp/reset-password" method="POST">
+  ```
+  type resetPasswordEmailOTP = {
+      /**
+       * The email address.
+       */
+      email: string = "ada@example.com"
+      /**
+       * The OTP code.
+       */
+      otp: string = "123456"
+      /**
+       * The new password.
+       */
+      password: string = "newpassword123"
+  }
+  ```
+</APIMethod>
+
+### Change Email with OTP
+
+To allow users to change their email with OTP, first enable the `changeEmail` feature, which is disabled by default. Set `changeEmail.enabled` to `true`:
 
 ```ruby title="config/auth.rb"
 require "better_auth"
@@ -18,45 +222,196 @@ auth = BetterAuth.auth(
   secret: ENV.fetch("BETTER_AUTH_SECRET"),
   base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
   plugins: [
-    BetterAuth::Plugins.email_otp(send_verification_otp: ->(data, _ctx = nil) { Mailer.otp(data[:email], data[:otp]).deliver_now })
+    BetterAuth::Plugins.email_otp(send_verification_otp: ->(data, _ctx) { OtpMailer.deliver(data[:email], data[:otp]) })
   ]
 )
 ```
 
-## Usage
+By default, when a user requests to change their email, an OTP is sent to the **new** email address.
+The email is only updated after the user verifies the new email.
 
-```ruby title="server.rb"
-auth.api.send_verification_otp(body: { email: "ada@example.com", type: "sign-in" })
-result = auth.api.sign_in_email_otp(body: { email: "ada@example.com", otp: params[:otp] })
+#### Usage
+
+To change the user's email address with OTP, use the `emailOtp.requestEmailChange()` method to send a "change-email" OTP to the user's new email address.
+
+<APIMethod path="/email-otp/request-email-change" method="POST" requireSession>
+  ```
+  type requestEmailChangeEmailOTP = {
+      /**
+       * The new email address.
+       */
+      newEmail: string = "new@example.com"
+  }
+  ```
+</APIMethod>
+
+Once the user provides the OTP, use the `changeEmail()` method to change the user's email address.
+
+<APIMethod path="/email-otp/change-email" method="POST" requireSession>
+  ```
+  type changeEmailEmailOTP = {
+      /**
+       * The new email address.
+       */
+      newEmail: string = "new@example.com"
+      /**
+       * The OTP code.
+       */
+      otp: string = "123456"
+  }
+  ```
+</APIMethod>
+
+#### Confirming with Current Email
+
+For added security, you can require users to confirm the change with an OTP sent to their **current** email before
+sending an OTP to the new email address. To enable this, set `changeEmail.verifyCurrentEmail` to `true` in the plugin options.
+
+```ruby title="config/auth.rb"
+require "better_auth"
+
+auth = BetterAuth.auth(
+  secret: ENV.fetch("BETTER_AUTH_SECRET"),
+  base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
+  plugins: [
+    BetterAuth::Plugins.email_otp(send_verification_otp: ->(data, _ctx) { OtpMailer.deliver(data[:email], data[:otp]) })
+  ]
+)
 ```
 
-## Routes
+Before requesting the email change, use the `sendVerificationOtp()` method with type `email-verification` to send an OTP to the user's email address.
 
-| Method | Path | Ruby API method |
-| --- | --- | --- |
-| `POST` | `/email-otp/send-verification-otp` | `auth.api.send_verification_otp` |
-| `POST` | `/email-otp/verify-email` | `auth.api.verify_email_otp` |
-| `POST` | `/sign-in/email-otp` | `auth.api.sign_in_email_otp` |
-| `POST` | `/email-otp/request-password-reset` | `auth.api.request_password_reset_email_otp` |
-| `POST` | `/email-otp/reset-password` | `auth.api.reset_password_email_otp` |
+<APIMethod path="/email-otp/send-verification-otp" method="POST">
+  ```
+  type sendVerificationOTP = {
+      /**
+       * The email address.
+       */
+      email: string = "ada@example.com"
+      /**
+       * The OTP type.
+       */
+      type: string = "sign-in"
+  }
+  ```
+</APIMethod>
+
+Then, the user can provide the OTP when calling `requestEmailChange()`. The system will first verify the OTP sent to the current email before sending an OTP to the new email.
+
+### Override Default Email Verification
+
+To override the default email verification, pass `overrideDefaultEmailVerification: true` in the options. This will make the system use an email OTP instead of the default verification link whenever email verification is triggered. In other words, the user will verify their email using an OTP rather than clicking a link.
+
+```ruby title="config/auth.rb"
+require "better_auth"
+
+auth = BetterAuth.auth(
+  secret: ENV.fetch("BETTER_AUTH_SECRET"),
+  base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
+  plugins: [
+    BetterAuth::Plugins.email_otp(send_verification_otp: ->(data, _ctx) { OtpMailer.deliver(data[:email], data[:otp]) })
+  ]
+)
+```
 
 ## Options
 
-Current Ruby options accepted by `BetterAuth::Plugins.email_otp`:
+* `sendVerificationOTP`: A function that sends the OTP to the user's email address. The function receives an object with the following properties:
 
-- `send_verification_on_sign_up`
-- `override_default_email_verification`
-- `send_verification_otp`
-- `store_otp`
-- `disable_sign_up`
-- `expires_in`
-- `allowed_attempts`
-- `generate_otp`
-- `otp_length`
+  * `email`: The user's email address.
+  * `otp`: The OTP to send.
+  * `type`: The type of OTP to send. Can be "sign-in", "email-verification", or "forget-password".
 
-## Support Notes
+  <Callout type="warn">
+    It is recommended to not await the email sending to avoid timing attacks. On serverless platforms, use `waitUntil` or similar to ensure the email is sent.
+  </Callout>
 
-- The examples above are based on Ruby plugin source and tests in `packages/better_auth`.
-- If an upstream section is not represented here, treat it as not yet documented or not yet supported by the Ruby port until the matching Ruby implementation exists.
+* `otpLength`: The length of the OTP. Defaults to `6`.
 
-{/* Upstream guide is preserved in reference/upstream-src/1.6.9/repository/docs/content/docs/plugins/email-otp.mdx. */}
+* `expiresIn`: The expiry time of the OTP in seconds. Defaults to `300` seconds.
+
+```ruby title="config/auth.rb"
+require "better_auth"
+
+auth = BetterAuth.auth(
+  secret: ENV.fetch("BETTER_AUTH_SECRET"),
+  base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
+  plugins: [
+    BetterAuth::Plugins.email_otp(send_verification_otp: ->(data, _ctx) { OtpMailer.deliver(data[:email], data[:otp]) })
+  ]
+)
+```
+
+* `sendVerificationOnSignUp`: A boolean value that determines whether to send the OTP when a user signs up. Defaults to `false`.
+
+* `disableSignUp`: A boolean value that determines whether to prevent automatic sign-up when the user is not registered. Defaults to `false`.
+
+* `generateOTP`: A function that generates the OTP. Defaults to a random 6-digit number.
+
+* `allowedAttempts`: The maximum number of attempts allowed for verifying an OTP. Defaults to `3`. After exceeding this limit, the OTP becomes invalid and the user needs to request a new one.
+
+```ruby title="config/auth.rb"
+require "better_auth"
+
+auth = BetterAuth.auth(
+  secret: ENV.fetch("BETTER_AUTH_SECRET"),
+  base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
+  plugins: [
+    BetterAuth::Plugins.email_otp(send_verification_otp: ->(data, _ctx) { OtpMailer.deliver(data[:email], data[:otp]) })
+  ]
+)
+```
+
+When the maximum attempts are exceeded, the `verifyOTP`, `signIn.emailOtp`, `verifyEmail`, and `resetPassword` methods will return an error with code `TOO_MANY_ATTEMPTS`.
+
+* `resendStrategy`: Controls what happens when a user requests a new OTP while an existing one is still valid. Defaults to `"rotate"`.
+  * `"rotate"`: Always generates a new OTP (default behavior).
+  * `"reuse"`: Resends the same OTP and extends its expiry. This prevents multiple valid codes from existing simultaneously when emails are delayed. Only works when the OTP is recoverable (`plain`, `encrypted`, or custom encrypt/decrypt). Falls back to `"rotate"` when the OTP is hashed. If the allowed attempts have been exhausted, a fresh OTP is generated instead of reusing the exhausted one.
+
+```ruby title="config/auth.rb"
+require "better_auth"
+
+auth = BetterAuth.auth(
+  secret: ENV.fetch("BETTER_AUTH_SECRET"),
+  base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
+  plugins: [
+    BetterAuth::Plugins.email_otp(send_verification_otp: ->(data, _ctx) { OtpMailer.deliver(data[:email], data[:otp]) })
+  ]
+)
+```
+
+* `storeOTP`: The method used to transform the OTP before it is stored by RubyAuth's verification layer, whether `encrypted`, `hashed` or `plain` text. Default is `plain` text.
+
+<Callout>
+  Note: This will not affect the OTP sent to the user. It only affects the stored OTP value. The storage backend itself is controlled by the global [`verification`](/docs/reference/options#verification) config, so if you configure `secondaryStorage`, these verification records can live there instead of the database.
+</Callout>
+
+Alternatively, you can pass a custom encryptor or hasher to control how the stored OTP value is persisted.
+
+**Custom encryptor**
+
+```ruby title="config/auth.rb"
+require "better_auth"
+
+auth = BetterAuth.auth(
+  secret: ENV.fetch("BETTER_AUTH_SECRET"),
+  base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
+  plugins: [
+    BetterAuth::Plugins.email_otp(send_verification_otp: ->(data, _ctx) { OtpMailer.deliver(data[:email], data[:otp]) })
+  ]
+)
+```
+
+**Custom hasher**
+
+```ruby title="config/auth.rb"
+require "better_auth"
+
+auth = BetterAuth.auth(
+  secret: ENV.fetch("BETTER_AUTH_SECRET"),
+  base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
+  plugins: [
+    BetterAuth::Plugins.email_otp(send_verification_otp: ->(data, _ctx) { OtpMailer.deliver(data[:email], data[:otp]) })
+  ]
+)
+```

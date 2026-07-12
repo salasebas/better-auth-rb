@@ -1,182 +1,348 @@
 ---
 title: Basic Usage
-description: Getting started with Better Auth Ruby.
+description: Getting started with RubyAuth
 ---
 
-Better Auth Ruby provides the same core server routes as upstream Better Auth:
+<RubyAuthDisclaimer />
 
-- Email and password sign-up/sign-in
-- Social OAuth sign-in and callbacks
-- Session lookup, revocation, and sign-out
-- Password reset and email verification
-- User/account management routes
-- Optional plugins for username, magic link, passkeys, organizations, admin, and more
+RubyAuth provides built-in authentication support for:
 
-## Create The Auth Object
+* **Email and password**
+* **Social provider (Google, GitHub, Apple, and more)**
 
-```ruby title="config/auth.rb"
+But also can easily be extended using plugins, such as: [username](/docs/plugins/username), [magic link](/docs/plugins/magic-link), [passkey](/docs/plugins/passkey), [email-otp](/docs/plugins/email-otp), and more.
+
+<Callout type="info">
+  RubyAuth does not ship an official browser client gem. Use the HTTP routes
+  shown below from fetch, HTMX, Turbo, mobile clients, or server-rendered forms,
+  and use `auth.api.*` from Ruby server code.
+</Callout>
+
+## Email & Password
+
+To enable email and password authentication:
+
+```ruby title="config/better_auth.rb"
 require "better_auth"
 
 auth = BetterAuth.auth(
-  secret: ENV.fetch("BETTER_AUTH_SECRET"),
-  base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
   email_and_password: {
     enabled: true
-  },
-  database: BetterAuth::Adapters::Memory.new
-)
-```
-
-## Email And Password
-
-Enable email and password auth with `email_and_password`.
-
-```ruby title="config/auth.rb"
-auth = BetterAuth.auth(
-  secret: ENV.fetch("BETTER_AUTH_SECRET"),
-  base_url: ENV.fetch("BETTER_AUTH_URL"),
-  email_and_password: {
-    enabled: true,
-    auto_sign_in: true
-  },
-  database: BetterAuth::Adapters::Postgres.new(
-    url: ENV.fetch("DATABASE_URL")
-  )
-)
-```
-
-Server-side calls use `auth.api`. Method names are Ruby snake_case versions of
-the upstream endpoint keys.
-
-```ruby title="server.rb"
-result = auth.api.sign_up_email(
-  body: {
-    email: "ada@example.com",
-    password: "password123",
-    name: "Ada Lovelace"
   }
 )
-
-token = result.fetch(:token)
-user = result.fetch(:user)
 ```
 
-Sign in:
+### Sign Up
+
+To sign up a user you need to call the `/api/auth/sign-up/email` endpoint with the user's information.
+
+```http
+POST /api/auth/sign-up/email
+Content-Type: application/json
+
+{
+  "email": "user@example.com",
+  "password": "password123",
+  "name": "User Name",
+  "image": "https://example.com/avatar.png",
+  "callbackURL": "/dashboard"
+}
+```
+
+From Ruby server code, call the direct API method:
+
+```ruby
+result = auth.api.sign_up_email(
+  body: {
+    email: "user@example.com",
+    password: "password123",
+    name: "User Name",
+    image: "https://example.com/avatar.png",
+    callbackURL: "/dashboard"
+  }
+)
+```
+
+By default, the users are automatically signed in after they successfully sign up. To disable this behavior you can set `auto_sign_in` to `false`.
+
+```ruby title="config/better_auth.rb"
+require "better_auth"
+
+auth = BetterAuth.auth(
+  email_and_password: {
+    enabled: true,
+    auto_sign_in: false # defaults to true
+  }
+)
+```
+
+### Sign In
+
+To sign a user in, call `/api/auth/sign-in/email`.
+
+```http
+POST /api/auth/sign-in/email
+Content-Type: application/json
+
+{
+  "email": "user@example.com",
+  "password": "password123",
+  "callbackURL": "/dashboard",
+  "rememberMe": false
+}
+```
+
+The route returns the token, user, and a `Set-Cookie` header containing `better-auth.session_token`.
+
+<Callout type="warn">
+  Browser and mobile clients should call the HTTP endpoint. Ruby server code can
+  use `auth.api.sign_in_email` directly.
+</Callout>
+
+### Server-Side Authentication
+
+To authenticate a user on the server, you can use the `auth.api` methods.
 
 ```ruby title="server.rb"
 status, headers, body = auth.api.sign_in_email(
-  {
-    body: {
-      email: "ada@example.com",
-      password: "password123",
-      rememberMe: true
-    },
-    as_response: true
-  }
-)
-```
-
-`as_response: true` returns a Rack-style response tuple so callers can forward
-`Set-Cookie` headers.
-
-## Sessions
-
-Get the current session from cookies:
-
-```ruby title="server.rb"
-session = auth.api.get_session(
+  body: {
+    email: email,
+    password: password
+  },
   headers: {
-    "cookie" => request.env["HTTP_COOKIE"]
-  }
+    "x-forwarded-for" => request.ip,
+    "user-agent" => request.user_agent
+  },
+  as_response: true
 )
 
-if session
-  current_user = session[:user]
-end
+cookie_header = headers.fetch("set-cookie")
 ```
 
-Sign out:
-
-```ruby title="server.rb"
-status, headers, body = auth.api.sign_out(
-  {
-    headers: {
-      "cookie" => request.env["HTTP_COOKIE"]
-    },
-    as_response: true
-  }
-)
-```
+<Callout>
+  When you use `as_response: true`, RubyAuth returns a Rack-compatible response
+  tuple so your framework can forward the status, headers, body, and cookies.
+</Callout>
 
 ## Social Sign-On
 
-Configure providers under `social_providers`.
+RubyAuth supports multiple social providers, including Google, GitHub, Apple, Discord, and more. To use a social provider, you need to configure the ones you need in the `social_providers` option on your `auth` object.
 
-```ruby title="config/auth.rb"
+```ruby title="config/better_auth.rb"
+require "better_auth"
+
 auth = BetterAuth.auth(
-  secret: ENV.fetch("BETTER_AUTH_SECRET"),
-  base_url: ENV.fetch("BETTER_AUTH_URL"),
   social_providers: {
     github: BetterAuth::SocialProviders.github(
       client_id: ENV.fetch("GITHUB_CLIENT_ID"),
       client_secret: ENV.fetch("GITHUB_CLIENT_SECRET")
-    ),
-    google: BetterAuth::SocialProviders.google(
-      client_id: ENV.fetch("GOOGLE_CLIENT_ID"),
-      client_secret: ENV.fetch("GOOGLE_CLIENT_SECRET")
     )
   }
 )
 ```
 
-Start a social sign-in:
+### Sign in with social providers
 
-```ruby title="server.rb"
+To sign in using a social provider you need to call `/api/auth/sign-in/social`. It takes an object with the following properties:
+
+```http
+POST /api/auth/sign-in/social
+Content-Type: application/json
+
+{
+  "provider": "github",
+  "callbackURL": "/dashboard",
+  "errorCallbackURL": "/error",
+  "newUserCallbackURL": "/welcome",
+  "disableRedirect": true
+}
+```
+
+From Ruby:
+
+```ruby
 response = auth.api.sign_in_social(
   body: {
     provider: "github",
-    callbackURL: "/dashboard",
-    errorCallbackURL: "/login",
-    newUserCallbackURL: "/welcome",
-    disableRedirect: true
+    callback_url: "/dashboard",
+    error_callback_url: "/error",
+    new_user_callback_url: "/welcome",
+    disable_redirect: true
   }
 )
 
 redirect_url = response.fetch(:url)
 ```
 
-## Plugins
+You can also authenticate using `idToken` or `accessToken` from the social provider instead of redirecting the user to the provider's site. See social providers documentation for more details.
 
-Plugins are passed as Ruby plugin objects.
+## Signout
 
-```ruby title="config/auth.rb"
-auth = BetterAuth.auth(
-  secret: ENV.fetch("BETTER_AUTH_SECRET"),
-  base_url: ENV.fetch("BETTER_AUTH_URL"),
-  plugins: [
-    BetterAuth::Plugins.username,
-    BetterAuth::Plugins.magic_link(
-      send_magic_link: ->(email:, url:, token:, **) {
-        Mailer.magic_link(email, url).deliver_now
-      }
-    ),
-    BetterAuth::Plugins.two_factor
-  ]
+To signout a user, call `/api/auth/sign-out` with the user's session cookie.
+
+```http
+POST /api/auth/sign-out
+Cookie: better-auth.session_token=...
+```
+
+From Ruby:
+
+```ruby
+status, headers, body = auth.api.sign_out(
+  headers: {"cookie" => cookie_header},
+  as_response: true
 )
 ```
 
-Plugin route paths match upstream Better Auth. Ruby method names on `auth.api`
-are snake_case.
+You can redirect to your login page after the response succeeds.
 
-## Rack Request Handling
+## Session
 
-`auth` is Rack-callable:
+Once a user is signed in, you'll want to access the user session. RubyAuth exposes the same session data through HTTP routes and Ruby server APIs.
 
-```ruby title="config.ru"
-run auth
+### HTTP Clients
+
+#### Use Session
+
+RubyAuth does not provide a framework-specific `useSession` hook. Use `/api/auth/get-session` and store the returned session in your frontend state.
+
+```http
+GET /api/auth/get-session
+Cookie: better-auth.session_token=...
 ```
 
-When mounted at `/api/auth`, requests such as `POST /api/auth/sign-in/email`
-are handled by the Better Auth router.
+#### Get Session
 
-{/* Upstream basic usage guide is preserved in reference/upstream-src/1.6.9/repository/docs/content/docs/basic-usage.mdx. */}
+If you prefer not to maintain local state, call the same `get-session` endpoint whenever you need the current session.
+
+```http
+GET /api/auth/get-session?disableCookieCache=true
+Cookie: better-auth.session_token=...
+```
+
+You can also use it with your app's data-fetching layer. The route returns `null` when the session cookie is missing, expired, or invalid.
+
+### Server Side
+
+The server provides a session object that you can use to access the current user and session data. Pass request headers to `auth.api.get_session`.
+
+**Example: Using Ruby frameworks**
+
+<Tabs items={["Rails", "Rack"]}>
+  <Tab value="Rails">
+    ```ruby title="app/controllers/application_controller.rb"
+    class ApplicationController < ActionController::Base
+      private
+
+      def current_auth_session
+        auth.api.get_session(
+          headers: {"cookie" => request.headers["Cookie"].to_s}
+        )
+      end
+    end
+    ```
+  </Tab>
+
+  <Tab value="Rack">
+    ```ruby title="app.rb"
+    request = Rack::Request.new(env)
+
+    session = auth.api.get_session(
+      headers: {"cookie" => request.get_header("HTTP_COOKIE").to_s}
+    )
+    ```
+  </Tab>
+</Tabs>
+
+You can update session fields declared in your schema with `update_session`, list active sessions, or revoke sessions:
+
+```ruby title="server.rb"
+auth.api.update_session(
+  headers: {"cookie" => cookie_header},
+  body: {activeOrganizationId: organization_id}
+)
+
+sessions = auth.api.list_sessions(headers: {"cookie" => cookie_header})
+
+auth.api.revoke_other_sessions(headers: {"cookie" => cookie_header})
+```
+
+<Callout>
+  For more details check [session-management](/docs/concepts/session-management) documentation.
+</Callout>
+
+## Using Plugins
+
+One of the unique features of RubyAuth is a plugins ecosystem. It allows you to add complex auth related functionality with small lines of code.
+
+Below is an example of how to add two factor authentication using two factor plugin.
+
+<Steps>
+  <Step>
+    ### Server Configuration
+
+    To add a plugin, you need to import the plugin and pass it to the `plugins` option of the auth instance. For example, to add two factor authentication, you can use the following code:
+
+    ```ruby title="config/better_auth.rb"
+    require "better_auth"
+
+    auth = BetterAuth.auth(
+      # ... rest of the options
+      plugins: [
+        BetterAuth::Plugins.two_factor
+      ]
+    )
+    ```
+
+    now two factor related routes and method will be available on the server.
+  </Step>
+
+  <Step>
+    ### Migrate Database
+
+    After adding the plugin, you'll need to add the required tables to your database. You can do this by running the `migrate` command, or by using the `generate` command to create the schema and handle the migration manually.
+
+    generating the schema:
+
+    ```bash title="terminal"
+    bundle exec better-auth generate --cwd . --dialect postgres --output db/better_auth/schema.sql --config config/better_auth.rb
+    ```
+
+    using the `migrate` command:
+
+    ```bash title="terminal"
+    bundle exec better-auth migrate --cwd . --config config/better_auth.rb --yes
+    ```
+
+    <Callout>
+      If you prefer adding the schema manually, you can check the schema required on the [two factor plugin](/docs/plugins/2fa#schema) documentation.
+    </Callout>
+  </Step>
+
+  <Step>
+    ### Client Configuration
+
+    Once we're done with the server, browser and app clients can call the plugin's HTTP endpoints. RubyAuth does not ship a JavaScript two-factor client plugin.
+
+    ```http
+    POST /api/auth/two-factor/enable
+    Content-Type: application/json
+    Cookie: better-auth.session_token=...
+
+    {"password":"password123"}
+    ```
+
+    Server-side Ruby code can call the plugin API methods directly when they are enabled by the plugin:
+
+    ```ruby
+    auth.api.enable_two_factor(
+      body: {password: "password123"},
+      headers: {"cookie" => cookie_header}
+    )
+    ```
+  </Step>
+
+  <Step>
+    Next step: See the <Link href="/docs/plugins/2fa">two factor plugin documentation</Link>.
+  </Step>
+</Steps>

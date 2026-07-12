@@ -15,6 +15,8 @@ module BetterAuth
         user_info_endpoint: "https://api.figma.com/v1/me",
         scopes: scopes,
         pkce: true,
+        require_code_verifier: true,
+        token_authentication: :basic,
         profile_map: ->(profile) {
           {
             id: profile["id"],

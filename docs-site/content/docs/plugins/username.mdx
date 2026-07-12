@@ -1,192 +1,141 @@
 ---
 title: Username
-description: Add username sign-up and sign-in to Better Auth Ruby.
+description: Username plugin
 ---
 
-The username plugin adds username support to the email/password authenticator.
-Users can sign up with a username, sign in with that username instead of their
-email, update it later, and check availability.
+<RubyAuthDisclaimer />
 
-<Callout type="info">
-This plugin is implemented in the Ruby port. Ruby uses snake_case option names
-and `auth.api` method names, while HTTP route paths and JSON keys preserve the
-upstream wire contract.
-</Callout>
+The username plugin is a lightweight plugin that adds username support to the email and password authenticator. This allows users to sign in with their username instead of their email.
 
 ## Installation
 
-Add the plugin on the server:
+<Steps>
+  <Step>
+    ### Add Plugin to the server
 
-```ruby title="config/auth.rb"
-require "better_auth"
+    ```ruby title="config/auth.rb"
+    require "better_auth"
 
-auth = BetterAuth.auth(
-  secret: ENV.fetch("BETTER_AUTH_SECRET"),
-  base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
-  email_and_password: {
-    enabled: true
-  },
-  plugins: [
-    BetterAuth::Plugins.username
-  ]
-)
-```
+    auth = BetterAuth.auth(
+      secret: ENV.fetch("BETTER_AUTH_SECRET"),
+      base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
+      plugins: [
+        BetterAuth::Plugins.username
+      ]
+    )
+    ```
+  </Step>
 
-## Migrate The Database
+  <Step>
+    ### Migrate the database
 
-The plugin adds `username` and `displayUsername` fields to the user schema.
+    Run the migration or generate the schema to add the necessary fields and tables to the database.
 
-For Rails, configure the plugin before generating the migration:
+    <Tabs items={["migrate", "generate"]}>
+  <Tab value="migrate">
+    ```bash
+    bundle exec better-auth migrate --cwd . --config config/better_auth.rb --yes
+    ```
+  </Tab>
 
-```ruby title="config/initializers/better_auth.rb"
-BetterAuth::Rails.configure do |config|
-  config.plugins = [
-    BetterAuth::Plugins.username
-  ]
-end
-```
+  <Tab value="generate">
+    ```bash
+    bundle exec better-auth generate --cwd . --dialect postgres --output db/better_auth/schema.sql --config config/better_auth.rb
+    ```
+  </Tab>
+</Tabs>
 
-```bash title="Terminal"
-bin/rails generate better_auth:migration
-bin/rails db:migrate
-```
+    See the [Schema](#schema) section to add the fields manually.
+  </Step>
 
-For direct SQL apps, generate or apply the SQL schema for your configured
-adapter after the plugin is present in `plugins`.
+</Steps>
 
 ## Usage
 
-### Sign Up
+### Sign up
 
-Use the existing email sign-up endpoint and include `username`. If
-`displayUsername` is omitted, it is set from the pre-normalized username.
+To sign up a user with username, you can use the existing `signUp.email` Ruby API method.
+The `signUp` function should take a new `username` property in the object.
 
-```ruby title="server.rb"
-result = auth.api.sign_up_email(
-  body: {
-    email: "email@domain.com",
-    name: "Test User",
-    password: "password1234",
-    username: "test",
-    displayUsername: "Test User123"
+<APIMethod path="/sign-up/email" method="POST">
+  ```
+  type signUpEmail = {
+      /**
+       * The email address.
+       */
+      email: string = "ada@example.com"
+      /**
+       * The password.
+       */
+      password: string = "password123"
+      /**
+       * The user name.
+       */
+      name?: string = "Ada"
+      /**
+       * The username.
+       */
+      username?: string = "ada"
   }
-)
-```
+  ```
+</APIMethod>
 
-HTTP route:
+<Callout type="info">
+  If only `username` is provided, the `displayUsername` will be set to the pre normalized version of the `username`. You can see the [Username Normalization](#username-normalization) and [Display Username Normalization](#display-username-normalization) sections for more details.
+</Callout>
 
-```http
-POST /api/auth/sign-up/email
-```
+### Sign in
 
-```json
-{
-  "email": "email@domain.com",
-  "name": "Test User",
-  "password": "password1234",
-  "username": "test",
-  "displayUsername": "Test User123"
-}
-```
+To sign in a user with username, you can use the `signIn.username` Ruby API method.
 
-### Sign In
-
-The plugin adds `/sign-in/username` and the matching Ruby API method
-`sign_in_username`.
-
-```ruby title="server.rb"
-result = auth.api.sign_in_username(
-  body: {
-    username: "test",
-    password: "password1234"
+<APIMethod path="/sign-in/username" method="POST">
+  ```
+  type signInUsername = {
+      /**
+       * The username.
+       */
+      username: string = "ada"
+      /**
+       * The password.
+       */
+      password: string = "password123"
   }
-)
+  ```
+</APIMethod>
 
-token = result[:token]
-user = result[:user]
-```
+### Update username
 
-HTTP route:
+To update the username of a user, you can use the `updateUser` Ruby API method.
 
-```http
-POST /api/auth/sign-in/username
-```
-
-```json
-{
-  "username": "test",
-  "password": "password1234"
-}
-```
-
-### Update Username
-
-Use the core update-user endpoint with an authenticated session cookie.
-
-```ruby title="server.rb"
-result = auth.api.update_user(
-  headers: {
-    "cookie" => request.env["HTTP_COOKIE"]
-  },
-  body: {
-    username: "new-username"
+<APIMethod path="/update-user" method="POST">
+  ```
+  type updateUser = {
+      /**
+       * The username.
+       */
+      username?: string = "ada_new"
+      /**
+       * The display username.
+       */
+      displayUsername?: string = "Ada"
   }
-)
-```
+  ```
+</APIMethod>
 
-HTTP route:
+### Check if username is available
 
-```http
-POST /api/auth/update-user
-```
+To check if a username is available, you can use the `isUsernameAvailable` Ruby API method.
 
-```json
-{
-  "username": "new-username"
-}
-```
-
-You can update the display value separately:
-
-```ruby title="server.rb"
-auth.api.update_user(
-  headers: {
-    "cookie" => request.env["HTTP_COOKIE"]
-  },
-  body: {
-    username: "new-username",
-    displayUsername: "New Username"
+<APIMethod path="/is-username-available" method="POST" resultVariable="response">
+  ```
+  type isUsernameAvailable = {
+      /**
+       * The username.
+       */
+      username: string = "ada"
   }
-)
-```
-
-### Check Availability
-
-```ruby title="server.rb"
-response = auth.api.is_username_available(
-  body: {
-    username: "new-username"
-  }
-)
-
-if response[:available]
-  # username is available
-else
-  # username is already taken
-end
-```
-
-HTTP route:
-
-```http
-POST /api/auth/is-username-available
-```
-
-```json
-{
-  "username": "new-username"
-}
-```
+  ```
+</APIMethod>
 
 ## Options
 
@@ -195,14 +144,13 @@ POST /api/auth/is-username-available
 The minimum length of the username. Default is `3`.
 
 ```ruby title="config/auth.rb"
+require "better_auth"
+
 auth = BetterAuth.auth(
-  email_and_password: {
-    enabled: true
-  },
+  secret: ENV.fetch("BETTER_AUTH_SECRET"),
+  base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
   plugins: [
-    BetterAuth::Plugins.username(
-      min_username_length: 5
-    )
+    BetterAuth::Plugins.username
   ]
 )
 ```
@@ -212,133 +160,111 @@ auth = BetterAuth.auth(
 The maximum length of the username. Default is `30`.
 
 ```ruby title="config/auth.rb"
+require "better_auth"
+
 auth = BetterAuth.auth(
-  email_and_password: {
-    enabled: true
-  },
+  secret: ENV.fetch("BETTER_AUTH_SECRET"),
+  base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
   plugins: [
-    BetterAuth::Plugins.username(
-      max_username_length: 100
-    )
+    BetterAuth::Plugins.username
   ]
 )
 ```
 
 ### Username Validator
 
-Provide a callable that returns `false` when a username should be rejected. By
-default, usernames may contain letters, numbers, underscores, and dots.
+A function that validates the username. The function should return false if the username is invalid. By default, the username should only contain alphanumeric characters, underscores, and dots.
 
 ```ruby title="config/auth.rb"
+require "better_auth"
+
 auth = BetterAuth.auth(
-  email_and_password: {
-    enabled: true
-  },
+  secret: ENV.fetch("BETTER_AUTH_SECRET"),
+  base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
   plugins: [
-    BetterAuth::Plugins.username(
-      username_validator: ->(username) {
-        username != "admin" && username.match?(/\A[a-zA-Z0-9_.]+\z/)
-      }
-    )
+    BetterAuth::Plugins.username
   ]
 )
 ```
 
 ### Display Username Validator
 
-Provide a callable to validate `displayUsername`. By default, display usernames
-do not get additional validation.
+A function that validates the display username. The function should return false if the display username is invalid. By default, no validation is applied to display username.
 
 ```ruby title="config/auth.rb"
+require "better_auth"
+
 auth = BetterAuth.auth(
-  email_and_password: {
-    enabled: true
-  },
+  secret: ENV.fetch("BETTER_AUTH_SECRET"),
+  base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
   plugins: [
-    BetterAuth::Plugins.username(
-      display_username_validator: ->(display_username) {
-        display_username.match?(/\A[a-zA-Z0-9_\-\s]+\z/)
-      }
-    )
+    BetterAuth::Plugins.username
   ]
 )
 ```
 
 ### Username Normalization
 
-By default, usernames are normalized to lowercase. Set
-`username_normalization: false` to disable normalization or provide a callable.
+A function that normalizes the username, or `false` if you want to disable normalization.
+
+By default, usernames are normalized to lowercase, so "TestUser" and "testuser", for example, are considered the same username. The `username` field will contain the normalized (lower case) username, while `displayUsername` will contain the original `username`.
 
 ```ruby title="config/auth.rb"
+require "better_auth"
+
 auth = BetterAuth.auth(
-  email_and_password: {
-    enabled: true
-  },
+  secret: ENV.fetch("BETTER_AUTH_SECRET"),
+  base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
   plugins: [
-    BetterAuth::Plugins.username(
-      username_normalization: ->(username) {
-        username
-          .downcase
-          .tr("034", "oea")
-      }
-    )
+    BetterAuth::Plugins.username
   ]
 )
 ```
 
 ### Display Username Normalization
 
-By default, display usernames are preserved as provided. You can provide a
-callable to normalize them.
+A function that normalizes the display username, or `false` to disable normalization.
+
+By default, display usernames are not normalized. When only `username` is provided during signup or update, the `displayUsername` will be set to match the original `username` value (before normalization). You can also explicitly set a `displayUsername` which will be preserved as-is. For custom normalization, provide a function that takes the display username as input and returns the normalized version.
 
 ```ruby title="config/auth.rb"
+require "better_auth"
+
 auth = BetterAuth.auth(
-  email_and_password: {
-    enabled: true
-  },
+  secret: ENV.fetch("BETTER_AUTH_SECRET"),
+  base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
   plugins: [
-    BetterAuth::Plugins.username(
-      display_username_normalization: ->(display_username) {
-        display_username.strip
-      }
-    )
+    BetterAuth::Plugins.username
   ]
 )
 ```
 
 ### Validation Order
 
-By default, username and display username validation happens before
-normalization. Set a field to `"post-normalization"` to validate the normalized
-value instead.
+By default, username and display username are validated before normalization. You can change this behavior by setting `validationOrder` to `post-normalization`.
 
 ```ruby title="config/auth.rb"
+require "better_auth"
+
 auth = BetterAuth.auth(
-  email_and_password: {
-    enabled: true
-  },
+  secret: ENV.fetch("BETTER_AUTH_SECRET"),
+  base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
   plugins: [
-    BetterAuth::Plugins.username(
-      validation_order: {
-        username: "post-normalization",
-        display_username: "post-normalization"
-      }
-    )
+    BetterAuth::Plugins.username
   ]
 )
 ```
 
-### Disable Availability Checks
+### Disable Is Username Available
 
-The plugin exposes `/is-username-available` by default. You can disable the route
-through the core `disabled_paths` option.
+By default, the plugin exposes an endpoint `/is-username-available` to check if a username is available. You can disable this endpoint by providing `disabledPaths` option to the better-auth configuration. This is useful if you want to protect usernames from being enumerated.
 
 ```ruby title="config/auth.rb"
+require "better_auth"
+
 auth = BetterAuth.auth(
-  email_and_password: {
-    enabled: true
-  },
-  disabled_paths: ["/is-username-available"],
+  secret: ENV.fetch("BETTER_AUTH_SECRET"),
+  base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
   plugins: [
     BetterAuth::Plugins.username
   ]
@@ -347,23 +273,22 @@ auth = BetterAuth.auth(
 
 ## Schema
 
-The plugin adds these fields to the `user` table:
+The plugin requires 2 fields to be added to the user table:
 
-| Field | Type | Required | Description |
-| --- | --- | --- | --- |
-| `username` | string | No | Normalized username. It is unique and returned in user output. |
-| `displayUsername` | string | No | Non-normalized username for display. |
+export const usernameUserTableFields = [
+	{
+		name: "username",
+		type: "string",
+		description: "The username of the user",
+		isUnique: true,
+		isOptional: true,
+	},
+	{
+		name: "displayUsername",
+		type: "string",
+		description: "Non normalized username of the user",
+		isOptional: true,
+	},
+];
 
-## Errors
-
-| Error | Meaning |
-| --- | --- |
-| `INVALID_USERNAME_OR_PASSWORD` | The username/password pair is invalid. |
-| `EMAIL_NOT_VERIFIED` | Email verification is required before sign-in. |
-| `USERNAME_IS_ALREADY_TAKEN` | Another user already owns the username. |
-| `USERNAME_TOO_SHORT` | The username is shorter than `min_username_length`. |
-| `USERNAME_TOO_LONG` | The username is longer than `max_username_length`. |
-| `INVALID_USERNAME` | The username validator rejected the value. |
-| `INVALID_DISPLAY_USERNAME` | The display username validator rejected the value. |
-
-{/* Upstream Username plugin guide is preserved in reference/upstream-src/1.6.9/repository/docs/content/docs/plugins/username.mdx. */}
+<DatabaseTable name="user" fields={usernameUserTableFields} />

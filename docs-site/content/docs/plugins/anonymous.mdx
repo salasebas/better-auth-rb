@@ -1,15 +1,62 @@
 ---
-title: Anonymous
-description: Create temporary anonymous sessions.
+title: Anonymous  
+description: Anonymous plugin for RubyAuth.
 ---
 
-Create temporary anonymous sessions.
+<RubyAuthDisclaimer />
 
-<Callout type="info">
-This page documents the current Ruby port behavior. Ruby uses snake_case option names and `auth.api` method names; HTTP paths and JSON keys keep the upstream wire shape where implemented.
-</Callout>
+The Anonymous plugin allows users to have an authenticated experience without requiring them to provide an email address, password, OAuth provider, or any other Personally Identifiable Information (PII). Users can later link an authentication method to their account when ready.
 
-## Configure
+## Installation
+
+<Steps>
+  <Step>
+    ### Add the plugin to your auth config
+
+    To enable anonymous authentication, add the anonymous plugin to your authentication configuration.
+
+    ```ruby title="config/auth.rb"
+    require "better_auth"
+
+    auth = BetterAuth.auth(
+      secret: ENV.fetch("BETTER_AUTH_SECRET"),
+      base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
+      plugins: [
+        BetterAuth::Plugins.anonymous
+      ]
+    )
+    ```
+  </Step>
+
+  <Step>
+    ### Migrate the database
+
+    Run the migration or generate the schema to add the necessary fields and tables to the database.
+
+    <Tabs items={["migrate", "generate"]}>
+  <Tab value="migrate">
+    ```bash
+    bundle exec better-auth migrate --cwd . --config config/better_auth.rb --yes
+    ```
+  </Tab>
+
+  <Tab value="generate">
+    ```bash
+    bundle exec better-auth generate --cwd . --dialect postgres --output db/better_auth/schema.sql --config config/better_auth.rb
+    ```
+  </Tab>
+</Tabs>
+
+    See the [Schema](#schema) section to add the fields manually.
+  </Step>
+
+</Steps>
+
+## Usage
+
+### Sign In
+
+To sign in a user anonymously, use the `signIn.anonymous()` method.
 
 ```ruby title="config/auth.rb"
 require "better_auth"
@@ -23,34 +70,124 @@ auth = BetterAuth.auth(
 )
 ```
 
-## Usage
+### Link Account
 
-```ruby title="server.rb"
-status, headers, body = auth.api.sign_in_anonymous(as_response: true)
-cookie = headers.fetch("set-cookie")
-session = auth.api.get_session(headers: { "cookie" => cookie })
+If a user is already signed in anonymously and tries to `signIn` or `signUp` with another method,
+their anonymous activities can be linked to the new account.
+
+To do that you first need to provide `onLinkAccount` callback to the plugin.
+
+```ruby title="config/auth.rb"
+require "better_auth"
+
+auth = BetterAuth.auth(
+  secret: ENV.fetch("BETTER_AUTH_SECRET"),
+  base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
+  plugins: [
+    BetterAuth::Plugins.anonymous
+  ]
+)
 ```
 
-## Routes
+Then when you call `signIn` or `signUp` with another method, the `onLinkAccount` callback will be called. And the `anonymousUser` will be deleted by default.
 
-| Method | Path | Ruby API method |
-| --- | --- | --- |
-| `POST` | `/sign-in/anonymous` | `auth.api.sign_in_anonymous` |
-| `POST` | `/delete-anonymous-user` | `auth.api.delete_anonymous_user` |
+```ruby title="config/auth.rb"
+require "better_auth"
+
+auth = BetterAuth.auth(
+  secret: ENV.fetch("BETTER_AUTH_SECRET"),
+  base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
+  plugins: [
+    BetterAuth::Plugins.anonymous
+  ]
+)
+```
+
+### Delete Anonymous User
+
+To delete an anonymous user, you can call the `/delete-anonymous-user` endpoint.
+
+<APIMethod path="/delete-anonymous-user" method="POST" noResult>
+  ```
+  type deleteAnonymousUser = {
+  }
+  ```
+</APIMethod>
+
+<Callout type="info">
+  **Notes:**
+
+  * The anonymous user is deleted by default when the account is linked to a new authentication method.
+  * Setting `disableDeleteAnonymousUser` to `true` will prevent the anonymous user from being able to call the `/delete-anonymous-user` endpoint.
+</Callout>
 
 ## Options
 
-Current Ruby options accepted by `BetterAuth::Plugins.anonymous`:
+### `emailDomainName`
 
-- `disable_delete_anonymous_user`
-- `generate_random_email`
-- `email_domain_name`
-- `generate_name`
-- `on_link_account`
+The domain name to use when generating an email address for anonymous users. If not provided, the default format `temp@{id}.com` is used.
 
-## Support Notes
+```ruby title="config/auth.rb"
+require "better_auth"
 
-- The examples above are based on Ruby plugin source and tests in `packages/better_auth`.
-- If an upstream section is not represented here, treat it as not yet documented or not yet supported by the Ruby port until the matching Ruby implementation exists.
+auth = BetterAuth.auth(
+  secret: ENV.fetch("BETTER_AUTH_SECRET"),
+  base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
+  plugins: [
+    BetterAuth::Plugins.anonymous
+  ]
+)
+```
 
-{/* Upstream guide is preserved in reference/upstream-src/1.6.9/repository/docs/content/docs/plugins/anonymous.mdx. */}
+### `generateRandomEmail`
+
+A custom function to generate email addresses for anonymous users. This allows you to define your own email format. The function can be synchronous or asynchronous.
+
+```ruby title="config/auth.rb"
+require "better_auth"
+
+auth = BetterAuth.auth(
+  secret: ENV.fetch("BETTER_AUTH_SECRET"),
+  base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
+  plugins: [
+    BetterAuth::Plugins.anonymous
+  ]
+)
+```
+
+<Callout type="info">
+  **Notes:**
+
+  * If `generateRandomEmail` is provided, `emailDomainName` is ignored.
+  * You are responsible for ensuring the email is unique to avoid conflicts. The returned email must be in a valid format.
+</Callout>
+
+### `onLinkAccount`
+
+A callback function that is called when an anonymous user links their account to a new authentication method. The callback receives an object with the `anonymousUser` and the `newUser`.
+
+### `disableDeleteAnonymousUser`
+
+By default, when an anonymous user links their account to a new authentication method,
+the anonymous user record is automatically deleted.
+If you set this option to `true`, this automatic deletion will be disabled,
+and the `/delete-anonymous-user` endpoint will no longer be accessible to anonymous users.
+
+### `generateName`
+
+A callback function that is called to generate a name for the anonymous user. Useful if you want to have random names for anonymous users, or if `name` is unique in your database.
+
+## Schema
+
+The anonymous plugin requires an additional field in the user table:
+
+export const anonymousUserTableFields = [
+	{
+		name: "isAnonymous",
+		type: "boolean",
+		description: "Indicates whether the user is anonymous.",
+		isOptional: true,
+	},
+];
+
+<DatabaseTable name="user" fields={anonymousUserTableFields} />

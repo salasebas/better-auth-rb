@@ -1,15 +1,625 @@
 ---
 title: Admin
-description: Manage users and sessions as an administrator.
+description: Admin plugin for RubyAuth
 ---
 
-Manage users and sessions as an administrator.
+<RubyAuthDisclaimer />
+
+The Admin plugin provides a set of administrative functions for user management in your application. It allows administrators to perform various operations such as creating users, managing user roles, banning/unbanning users, impersonating users, and more.
+
+## Installation
+
+<Steps>
+  <Step>
+    ### Add the plugin to your auth config
+
+    To use the Admin plugin, add it to your auth config.
+
+    ```ruby title="config/auth.rb"
+    require "better_auth"
+
+    auth = BetterAuth.auth(
+      secret: ENV.fetch("BETTER_AUTH_SECRET"),
+      base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
+      plugins: [
+        BetterAuth::Plugins.admin
+      ]
+    )
+    ```
+  </Step>
+
+  <Step>
+    ### Migrate the database
+
+    Run the migration or generate the schema to add the necessary fields and tables to the database.
+
+    <Tabs items={["migrate", "generate"]}>
+  <Tab value="migrate">
+    ```bash
+    bundle exec better-auth migrate --cwd . --config config/better_auth.rb --yes
+    ```
+  </Tab>
+
+  <Tab value="generate">
+    ```bash
+    bundle exec better-auth generate --cwd . --dialect postgres --output db/better_auth/schema.sql --config config/better_auth.rb
+    ```
+  </Tab>
+</Tabs>
+
+    See the [Schema](#schema) section to add the fields manually.
+  </Step>
+
+</Steps>
+
+## Usage
+
+Before performing any admin operations, the user must be authenticated with an admin account. An admin is any user assigned the `admin` role or any user whose ID is included in the `adminUserIds` option.
+
+### Create User
+
+Allows an admin to create a new user.
+
+<APIMethod path="/admin/create-user" method="POST" resultVariable="newUser">
+  ```
+  type createUser = {
+      /**
+       * The email of the user. 
+       */
+      email: string = "user@example.com"
+      /**
+       * The password of the user. 
+       */
+      password: string = "some-secure-password"
+      /**
+       * The name of the user. 
+       */
+      name: string = "James Smith"
+      /**
+       * A string or array of strings representing the roles to apply to the new user. 
+       */
+      role?: string | string[] = "user"
+      /**
+       * Extra fields for the user. Including custom additional fields. 
+       */
+      data?: Record<string, any> = { customField: "customValue" }
+  }
+  ```
+</APIMethod>
+
+### List Users
+
+Allows an admin to list all users in the database.
+
+<APIMethod path="/admin/list-users" method="GET" requireSession note={"All properties are optional to configure. By default, 100 rows are returned, you can configure this by the `limit` property."} resultVariable={"users"}>
+  ```
+  type listUsers = {
+    /**
+     * The value to search for. 
+     */
+    searchValue?: string = "some name"
+    /**
+     * The field to search in, defaults to email. Can be `email` or `name`. 
+     */
+    searchField?: "email" | "name" = "name"
+    /**
+     * The operator to use for the search. Can be `contains`, `starts_with` or `ends_with`. 
+     */
+    searchOperator?: "contains" | "starts_with" | "ends_with" = "contains"
+    /**
+     * The number of users to return. Defaults to 100.
+     */
+    limit?: string | number = 100
+    /**
+     * The offset to start from. 
+     */
+    offset?: string | number = 100
+    /**
+     * The field to sort by. 
+     */
+    sortBy?: string = "name"
+    /**
+     * The direction to sort by. 
+     */
+    sortDirection?: "asc" | "desc" = "desc"
+    /**
+     * The field to filter by. 
+     */
+    filterField?: string = "email"
+    /**
+     * The value to filter by. 
+     */
+    filterValue?: string | number | boolean | string[] | number[] = "hello@example.com"
+    /**
+     * The operator to use for the filter.
+     */
+    filterOperator?: "eq" | "ne" | "lt" | "lte" | "gt" | "gte" | "in" | "not_in" | "contains" | "starts_with" | "ends_with" = "eq"
+  }
+  ```
+</APIMethod>
+
+#### Query Filtering
+
+The `listUsers` function supports various filter operators including `eq`, `contains`, `starts_with`, and `ends_with`.
+
+#### Pagination
+
+The `listUsers` function supports pagination by returning metadata alongside the user list. The response includes the following fields:
+
+```ruby title="server.rb"
+page = auth.api.list_users(
+  headers: {"cookie" => admin_cookie},
+  query: {limit: 10, offset: 0}
+)
+
+page[:users]
+page[:total]
+```
+
+##### How to Implement Pagination
+
+To paginate results, use the `total`, `limit`, and `offset` values to calculate:
+
+* **Total pages:** `Math.ceil(total / limit)`
+* **Current page:** `(offset / limit) + 1`
+* **Next page offset:** `Math.min(offset + limit, (total - 1))` – The value to use as `offset` for the next page, ensuring it does not exceed the total number of pages.
+* **Previous page offset:** `Math.max(0, offset - limit)` – The value to use as `offset` for the previous page (ensuring it doesn’t go below zero).
+
+##### Example Usage
+
+Fetching the second page with 10 users per page:
+
+```ruby title="server.rb"
+second_page = auth.api.list_users(
+  headers: {"cookie" => admin_cookie},
+  query: {limit: 10, offset: 10}
+)
+```
+
+### Get User
+
+Fetches a user's information using an id.
+
+<APIMethod path="/admin/get-user" method="GET" requireSession>
+  ```
+  type getUser = {
+    /**
+    * The id of the user you want to fetch.
+    */
+    id: string = "user-id"
+  }
+  ```
+</APIMethod>
+
+#### Returns
+
+On success, `data` contains the user object. On failure, `error` is populated by `code`, `message`, `status`, and `statusText`.
+
+```ruby title="server.rb"
+begin
+  user = auth.api.get_user(
+    headers: {"cookie" => admin_cookie},
+    query: {email: "ada@example.com"}
+  )
+rescue BetterAuth::APIError => error
+  error.code
+end
+```
+
+### Set User Role
+
+Changes the role of a user.
+
+<APIMethod path="/admin/set-role" method="POST" requireSession>
+  ```
+  type setRole = {
+      /**
+       * The user id which you want to set the role for.
+       */
+      userId?: string = "user-id"
+      /**
+       * The role to set, this can be a string or an array of strings. 
+       */
+      role: string | string[] = "admin"
+  }
+  ```
+</APIMethod>
+
+### Set User Password
+
+Changes the password of a user.
+
+<APIMethod path="/admin/set-user-password" method="POST" requireSession>
+  ```
+  type setUserPassword = {
+      /**
+       * The new password. 
+       */
+      newPassword: string = 'new-password'
+      /**
+       * The user id which you want to set the password for.
+       */
+      userId: string = 'user-id'
+  }
+  ```
+</APIMethod>
+
+### Update user
+
+Update a user's details.
+
+<APIMethod path="/admin/update-user" method="POST" requireSession>
+  ```
+  type adminUpdateUser = {
+      /**
+       * The user id which you want to update.
+       */
+      userId: string = "user-id"
+      /**
+       * The data to update.
+       */
+      data: Record<string, any> = { name: "John Doe" }
+  }
+  ```
+</APIMethod>
+
+### Ban User
+
+Bans a user, preventing them from signing in and revokes all of their existing sessions.
+
+<APIMethod path="/admin/ban-user" method="POST" requireSession noResult>
+  ```
+  type banUser = {
+      /**
+       * The user id which you want to ban.
+       */
+      userId: string = "user-id"
+      /**
+       * The reason for the ban. 
+       */
+      banReason?: string = "Spamming"
+      /**
+       * The number of seconds until the ban expires. If not provided, the ban will never expire. 
+       */
+      banExpiresIn?: number = 60 * 60 * 24 * 7
+  }
+  ```
+</APIMethod>
+
+### Unban User
+
+Removes the ban from a user, allowing them to sign in again.
+
+<APIMethod path="/admin/unban-user" method="POST" requireSession noResult>
+  ```
+  type unbanUser = {
+      /**
+       * The user id which you want to unban.
+       */
+      userId: string = "user-id"
+  }
+  ```
+</APIMethod>
+
+### List User Sessions
+
+Lists all sessions for a user.
+
+<APIMethod path="/admin/list-user-sessions" method="POST" requireSession>
+  ```
+  type listUserSessions = {
+      /**
+       * The user id. 
+       */
+      userId: string = "user-id"
+  }
+  ```
+</APIMethod>
+
+### Revoke User Session
+
+Revokes a specific session for a user.
+
+<APIMethod path="/admin/revoke-user-session" method="POST" requireSession>
+  ```
+  type revokeUserSession = {
+      /**
+       * The session token which you want to revoke. 
+       */
+      sessionToken: string = "session_token_here"
+  }
+  ```
+</APIMethod>
+
+### Revoke All Sessions for a User
+
+Revokes all sessions for a user.
+
+<APIMethod path="/admin/revoke-user-sessions" method="POST" requireSession>
+  ```
+  type revokeUserSessions = {
+      /**
+       * The user id which you want to revoke all sessions for. 
+       */
+      userId: string = "user-id"
+  }
+  ```
+</APIMethod>
+
+### Impersonate User
+
+This feature allows an admin to create a session that mimics the specified user. The session will remain active until either the browser session ends or it reaches 1 hour. You can change this duration by setting the `impersonationSessionDuration` option.
+
+<APIMethod path="/admin/impersonate-user" method="POST" requireSession>
+  ```
+  type impersonateUser = {
+      /**
+       * The user id which you want to impersonate. 
+       */
+      userId: string = "user-id"
+  }
+  ```
+</APIMethod>
+
+By default, admins cannot impersonate other admin users. To allow this, grant the `impersonate-admins` permission to a role:
+
+```ruby title="permissions.rb"
+statement = {
+  organization: ["update", "delete"],
+  member: ["create", "update", "delete"],
+  invitation: ["create", "cancel"]
+}
+
+access_control = BetterAuth::Plugins.create_access_control(statement)
+owner = access_control.new_role(organization: ["update", "delete"], member: ["create", "update", "delete"], invitation: ["create", "cancel"])
+member = access_control.new_role(organization: [], member: [], invitation: [])
+```
 
 <Callout type="info">
-This page documents the current Ruby port behavior. Ruby uses snake_case option names and `auth.api` method names; HTTP paths and JSON keys keep the upstream wire shape where implemented.
+  The legacy `allowImpersonatingAdmins` option is still supported, but is deprecated and will be removed in a future version.
 </Callout>
 
-## Configure
+### Stop Impersonating User
+
+To stop impersonating a user and continue with the admin account, you can use `stopImpersonating`
+
+<APIMethod path="/admin/stop-impersonating" method="POST" noResult requireSession>
+  ```
+  type stopImpersonating = {
+  }
+  ```
+</APIMethod>
+
+### Remove User
+
+Hard deletes a user from the database.
+
+<APIMethod path="/admin/remove-user" method="POST" requireSession resultVariable="deletedUser">
+  ```
+  type removeUser = {
+      /**
+       * The user id which you want to remove. 
+       */
+      userId: string = "user-id"
+  }
+  ```
+</APIMethod>
+
+## Access Control
+
+The admin plugin offers a highly flexible access control system, allowing you to manage user permissions based on their role. You can define custom permission sets to fit your needs.
+
+### Roles
+
+By default, there are two roles:
+
+`admin`: Users with the admin role have full control over other users.
+
+`user`: Users with the user role have no control over other users.
+
+<Callout>
+  A user can have multiple roles. Multiple roles are stored as string separated by comma (",").
+</Callout>
+
+### Permissions
+
+By default, there are two resources with up to six permissions.
+
+**user**:
+`create` `list` `set-role` `ban` `impersonate` `impersonate-admins` `delete` `set-password`
+
+**session**:
+`list` `revoke` `delete`
+
+Users with the admin role have full control over all the resources and actions. Users with the user role have no control over any of those actions.
+
+### Custom Permissions
+
+The plugin provides an easy way to define your own set of permissions for each role.
+
+<Steps>
+  <Step>
+    #### Create Access Control
+
+    You first need to create an access controller by calling the `createAccessControl` function and passing the statement object. The statement object should have the resource name as the key and the array of actions as the value.
+
+    ```ruby title="permissions.rb"
+    statement = {
+      organization: ["update", "delete"],
+      member: ["create", "update", "delete"],
+      invitation: ["create", "cancel"]
+    }
+
+    access_control = BetterAuth::Plugins.create_access_control(statement)
+    owner = access_control.new_role(organization: ["update", "delete"], member: ["create", "update", "delete"], invitation: ["create", "cancel"])
+    member = access_control.new_role(organization: [], member: [], invitation: [])
+    ```
+
+    <Callout type="warning">
+      To keep bundle sizes small, make sure to import from `better-auth/plugins/access` instead of `better-auth/plugins`.
+    </Callout>
+  </Step>
+
+  <Step>
+    #### Create Roles
+
+    Once you have created the access controller you can create roles with the permissions you have defined.
+
+    ```ruby title="permissions.rb"
+    statement = {
+      organization: ["update", "delete"],
+      member: ["create", "update", "delete"],
+      invitation: ["create", "cancel"]
+    }
+
+    access_control = BetterAuth::Plugins.create_access_control(statement)
+    owner = access_control.new_role(organization: ["update", "delete"], member: ["create", "update", "delete"], invitation: ["create", "cancel"])
+    member = access_control.new_role(organization: [], member: [], invitation: [])
+    ```
+
+    When you create custom roles for existing roles, the predefined permissions for those roles will be overridden. To add the existing permissions to the custom role, you need to import `defaultStatements` and merge it with your new statement, plus merge the roles' permissions set with the default roles.
+
+    ```ruby title="permissions.rb"
+    statement = {
+      organization: ["update", "delete"],
+      member: ["create", "update", "delete"],
+      invitation: ["create", "cancel"]
+    }
+
+    access_control = BetterAuth::Plugins.create_access_control(statement)
+    owner = access_control.new_role(organization: ["update", "delete"], member: ["create", "update", "delete"], invitation: ["create", "cancel"])
+    member = access_control.new_role(organization: [], member: [], invitation: [])
+    ```
+  </Step>
+
+</Steps>
+
+### Access Control Usage
+
+**Has Permission**:
+
+To check a user's permissions, you can use the `hasPermission` function available through the Ruby API or HTTP endpoint.
+
+<APIMethod path="/admin/has-permission" method="POST">
+  ```
+  type userHasPermission = {
+      /**
+       * The user id which you want to check the permissions for. 
+       */
+      userId?: string = "user-id"
+      /**
+       * Check role permissions.
+       * @serverOnly
+       */
+      role?: string = "admin"
+      /**
+       * Optionally check if a single permission is granted. Must use this, or permissions. 
+       */
+      permission?: Record<string, string[]> = { "project": ["create", "update"] } /* Must use this, or permissions */,
+      /**
+       * Optionally check if multiple permissions are granted. Must use this, or permission. 
+       */
+      permissions?: Record<string, string[]>
+  }
+  ```
+</APIMethod>
+
+Example usage:
+
+```ruby title="permissions.rb"
+statement = {
+  organization: ["update", "delete"],
+  member: ["create", "update", "delete"],
+  invitation: ["create", "cancel"]
+}
+
+access_control = BetterAuth::Plugins.create_access_control(statement)
+owner = access_control.new_role(organization: ["update", "delete"], member: ["create", "update", "delete"], invitation: ["create", "cancel"])
+member = access_control.new_role(organization: [], member: [], invitation: [])
+```
+
+If you want to check a user's permissions server-side, you can use the `userHasPermission` action provided by the `api` to check the user's permissions.
+
+```ruby title="permissions.rb"
+statement = {
+  organization: ["update", "delete"],
+  member: ["create", "update", "delete"],
+  invitation: ["create", "cancel"]
+}
+
+access_control = BetterAuth::Plugins.create_access_control(statement)
+owner = access_control.new_role(organization: ["update", "delete"], member: ["create", "update", "delete"], invitation: ["create", "cancel"])
+member = access_control.new_role(organization: [], member: [], invitation: [])
+```
+
+**Check Role Permission**:
+
+Use the `checkRolePermission` function on the client side to verify whether a given **role** has a specific **permission**. This is helpful after defining roles and their permissions, as it allows you to perform permission checks without needing to contact the server.
+
+Note that this function does **not** check the permissions of the currently logged-in user directly. Instead, it checks what permissions are assigned to a specified role. The function is synchronous, so you don't need to use `await` when calling it.
+
+```ruby title="permissions.rb"
+statement = {
+  organization: ["update", "delete"],
+  member: ["create", "update", "delete"],
+  invitation: ["create", "cancel"]
+}
+
+access_control = BetterAuth::Plugins.create_access_control(statement)
+owner = access_control.new_role(organization: ["update", "delete"], member: ["create", "update", "delete"], invitation: ["create", "cancel"])
+member = access_control.new_role(organization: [], member: [], invitation: [])
+```
+
+## Schema
+
+This plugin adds the following fields to the `user` table:
+
+export const adminUserTableFields = [
+	{
+		name: "role",
+		type: "string",
+		description:
+			"The user's role. Defaults to `user`. Admins will have the `admin` role.",
+		isOptional: true,
+	},
+	{
+		name: "banned",
+		type: "boolean",
+		description: "Indicates whether the user is banned.",
+		isOptional: true,
+	},
+	{
+		name: "banReason",
+		type: "string",
+		description: "The reason for the user's ban.",
+		isOptional: true,
+	},
+	{
+		name: "banExpires",
+		type: "date",
+		description: "The date when the user's ban will expire.",
+		isOptional: true,
+	},
+];
+
+<DatabaseTable name="user" fields={adminUserTableFields} />
+
+And adds one field in the `session` table:
+
+export const adminSessionTableFields = [
+	{
+		name: "impersonatedBy",
+		type: "string",
+		description: "The ID of the admin that is impersonating this session.",
+		isOptional: true,
+	},
+];
+
+<DatabaseTable name="session" fields={adminSessionTableFields} />
+
+### Email Enumeration Protection
+
+If you use [email enumeration protection](/docs/authentication/email-password#email-enumeration-protection) (`requireEmailVerification` or `autoSignIn: false`), you need to configure `customSyntheticUser` to include the admin plugin fields in the fake sign-up response:
 
 ```ruby title="config/auth.rb"
 require "better_auth"
@@ -18,49 +628,129 @@ auth = BetterAuth.auth(
   secret: ENV.fetch("BETTER_AUTH_SECRET"),
   base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
   plugins: [
-    BetterAuth::Plugins.admin(admin_roles: ["admin"], default_role: "user")
+    BetterAuth::Plugins.admin
   ]
 )
 ```
 
-## Usage
-
-```ruby title="server.rb"
-users = auth.api.list_users(headers: { "cookie" => admin_cookie }, query: { searchValue: "ada", searchField: "email" })
-auth.api.set_role(headers: { "cookie" => admin_cookie }, body: { userId: users[:users].first["id"], role: "admin" })
-```
-
-## Routes
-
-| Method | Path | Ruby API method |
-| --- | --- | --- |
-| `GET` | `/admin/list-users` | `auth.api.list_users` |
-| `POST` | `/admin/create-user` | `auth.api.create_user` |
-| `POST` | `/admin/set-role` | `auth.api.set_role` |
-| `POST` | `/admin/ban-user` | `auth.api.ban_user` |
-| `POST` | `/admin/unban-user` | `auth.api.unban_user` |
-| `POST` | `/admin/impersonate-user` | `auth.api.impersonate_user` |
-| `POST` | `/admin/set-user-password` | `auth.api.set_user_password` |
-| `POST` | `/admin/has-permission` | `auth.api.user_has_permission` |
-
 ## Options
 
-Current Ruby options accepted by `BetterAuth::Plugins.admin`:
+### Default Role
 
-- `default_role`
-- `admin_roles`
-- `banned_user_message`
-- `impersonation_session_duration`
-- `ac`
-- `roles`
-- `default_ban_expires_in`
-- `default_ban_reason`
-- `allow_impersonating_admins`
-- `admin_user_ids`
+The default role for a user. Defaults to `user`.
 
-## Support Notes
+```ruby title="config/auth.rb"
+require "better_auth"
 
-- The examples above are based on Ruby plugin source and tests in `packages/better_auth`.
-- If an upstream section is not represented here, treat it as not yet documented or not yet supported by the Ruby port until the matching Ruby implementation exists.
+auth = BetterAuth.auth(
+  secret: ENV.fetch("BETTER_AUTH_SECRET"),
+  base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
+  plugins: [
+    BetterAuth::Plugins.admin
+  ]
+)
+```
 
-{/* Upstream guide is preserved in reference/upstream-src/1.6.9/repository/docs/content/docs/plugins/admin.mdx. */}
+### Admin Roles
+
+Specifies which roles are considered admin roles. Defaults to `["admin"]`. Custom roles (for example, `superadmin`) must be defined in custom access control.
+
+```ruby title="config/auth.rb"
+require "better_auth"
+
+auth = BetterAuth.auth(
+  secret: ENV.fetch("BETTER_AUTH_SECRET"),
+  base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
+  plugins: [
+    BetterAuth::Plugins.admin
+  ]
+)
+```
+
+<Callout type="warning">
+  **Note:** The `adminRoles` option is **not required** when using custom access control (via `ac` and `roles`). When you define custom roles with specific permissions, those roles will have exactly the permissions you grant them through the access control system.
+
+  **Warning:** When **not** using custom access control, only `admin` and `user` exist as valid roles. Any role that isn't in the `adminRoles` list will **not** be able to perform admin operations.
+</Callout>
+
+### Admin userIds
+
+You can pass an array of userIds that should be considered as admin. Default to `[]`
+
+```ruby title="config/auth.rb"
+require "better_auth"
+
+auth = BetterAuth.auth(
+  secret: ENV.fetch("BETTER_AUTH_SECRET"),
+  base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
+  plugins: [
+    BetterAuth::Plugins.admin
+  ]
+)
+```
+
+If a user is in the `adminUserIds` list, they will be able to perform any admin operation.
+
+### impersonationSessionDuration
+
+The duration of the impersonation session in seconds. Defaults to 1 hour.
+
+```ruby title="config/auth.rb"
+require "better_auth"
+
+auth = BetterAuth.auth(
+  secret: ENV.fetch("BETTER_AUTH_SECRET"),
+  base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
+  plugins: [
+    BetterAuth::Plugins.admin
+  ]
+)
+```
+
+### Default Ban Reason
+
+The default ban reason for a user created by the admin. Defaults to `No reason`.
+
+```ruby title="config/auth.rb"
+require "better_auth"
+
+auth = BetterAuth.auth(
+  secret: ENV.fetch("BETTER_AUTH_SECRET"),
+  base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
+  plugins: [
+    BetterAuth::Plugins.admin
+  ]
+)
+```
+
+### Default Ban Expires In
+
+The default ban expires in for a user created by the admin in seconds. Defaults to `undefined` (meaning the ban never expires).
+
+```ruby title="config/auth.rb"
+require "better_auth"
+
+auth = BetterAuth.auth(
+  secret: ENV.fetch("BETTER_AUTH_SECRET"),
+  base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
+  plugins: [
+    BetterAuth::Plugins.admin
+  ]
+)
+```
+
+### bannedUserMessage
+
+The message to show when a banned user tries to sign in. Defaults to "You have been banned from this application. Please contact support if you believe this is an error."
+
+```ruby title="config/auth.rb"
+require "better_auth"
+
+auth = BetterAuth.auth(
+  secret: ENV.fetch("BETTER_AUTH_SECRET"),
+  base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
+  plugins: [
+    BetterAuth::Plugins.admin
+  ]
+)
+```

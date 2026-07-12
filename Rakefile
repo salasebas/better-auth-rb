@@ -4,6 +4,16 @@
 # Runs tasks across all packages.
 
 require "rake"
+require "yaml"
+
+# standard:disable Style/YAMLFileRead
+RELEASE_MANIFEST = YAML.safe_load(File.read(File.join(__dir__, ".release.yml")))
+# standard:enable Style/YAMLFileRead
+RELEASE_PACKAGE_NAMES = RELEASE_MANIFEST.fetch("version_files").map { |path| path.split("/")[1] }.uniq.freeze
+RELEASE_GEMSPEC_PATHS = (
+  RELEASE_PACKAGE_NAMES.flat_map { |package| Dir[File.join("packages", package, "*.gemspec")] } +
+  RELEASE_MANIFEST.fetch("literal_gemspec_versions")
+).uniq.sort.freeze
 
 STANDARD_PATHS = [
   "Rakefile",
@@ -15,6 +25,9 @@ STANDARD_PATHS = [
   "packages/better_auth-cli/Rakefile",
   "packages/better_auth-cli/lib",
   "packages/better_auth-cli/test",
+  "packages/better_auth-grape/Rakefile",
+  "packages/better_auth-grape/lib",
+  "packages/better_auth-grape/spec",
   "packages/openauth-cli/Rakefile",
   "packages/openauth-cli/lib",
   "packages/openauth-cli/test",
@@ -45,6 +58,12 @@ STANDARD_PATHS = [
   "packages/better_auth-scim/Rakefile",
   "packages/better_auth-scim/lib",
   "packages/better_auth-scim/test",
+  "packages/better_auth-oidc/Rakefile",
+  "packages/better_auth-oidc/lib",
+  "packages/better_auth-oidc/test",
+  "packages/better_auth-saml/Rakefile",
+  "packages/better_auth-saml/lib",
+  "packages/better_auth-saml/test",
   "packages/better_auth-sso/Rakefile",
   "packages/better_auth-sso/lib",
   "packages/better_auth-sso/test",
@@ -65,6 +84,11 @@ STANDARD_PATHS = [
 # Default task: run CI across all packages.
 desc "Run CI in all packages"
 task :ci do
+  # Package test suites exercise auth construction through many adapters. Give
+  # every CI subprocess the canonical URL required by the core contract; tests
+  # for missing configuration explicitly clear this value.
+  ENV["BETTER_AUTH_URL"] ||= "http://localhost:3000"
+
   puts "🔧 Running CI in workspace..."
 
   # Global linting
@@ -75,7 +99,8 @@ task :ci do
   workspace_test_requires = [
     "./test/openauth_alias_packages_test",
     "./test/rubyauth_alias_package_test",
-    "./test/release_version_manifest_test"
+    "./test/release_version_manifest_test",
+    "./test/workspace_tooling_manifest_test"
   ].map { |path| %(require "#{path}") }.join("; ")
   sh %(bundle exec ruby -Itest -e '#{workspace_test_requires}')
 
@@ -91,6 +116,11 @@ task :ci do
   puts "\n🧪 Running tests in packages/better_auth-cli..."
   cd "packages/better_auth-cli" do
     sh "BUNDLE_GEMFILE=Gemfile bundle exec rake"
+  end
+
+  puts "\n🧪 Running tests in packages/better_auth-grape..."
+  cd "packages/better_auth-grape" do
+    sh "BUNDLE_GEMFILE=Gemfile bundle exec rake ci"
   end
 
   puts "\n🧪 Running tests in packages/openauth-cli..."
@@ -152,6 +182,16 @@ task :ci do
     sh "BUNDLE_GEMFILE=Gemfile bundle exec rake test"
   end
 
+  puts "\n🧪 Running tests in packages/better_auth-oidc..."
+  cd "packages/better_auth-oidc" do
+    sh "BUNDLE_GEMFILE=Gemfile bundle exec rake"
+  end
+
+  puts "\n🧪 Running tests in packages/better_auth-saml..."
+  cd "packages/better_auth-saml" do
+    sh "BUNDLE_GEMFILE=Gemfile bundle exec rake"
+  end
+
   puts "\n🧪 Running tests in packages/better_auth-sso..."
   cd "packages/better_auth-sso" do
     sh "BUNDLE_GEMFILE=Gemfile bundle exec rake test"
@@ -187,6 +227,16 @@ task :install do
 
   puts "\n📦 Installing packages/better_auth dependencies..."
   cd "packages/better_auth" do
+    sh "BUNDLE_GEMFILE=Gemfile bundle install"
+  end
+
+  puts "\n📦 Installing packages/better_auth-cli dependencies..."
+  cd "packages/better_auth-cli" do
+    sh "BUNDLE_GEMFILE=Gemfile bundle install"
+  end
+
+  puts "\n📦 Installing packages/better_auth-grape dependencies..."
+  cd "packages/better_auth-grape" do
     sh "BUNDLE_GEMFILE=Gemfile bundle install"
   end
 
@@ -240,6 +290,16 @@ task :install do
     sh "BUNDLE_GEMFILE=Gemfile bundle install"
   end
 
+  puts "\n📦 Installing packages/better_auth-oidc dependencies..."
+  cd "packages/better_auth-oidc" do
+    sh "BUNDLE_GEMFILE=Gemfile bundle install"
+  end
+
+  puts "\n📦 Installing packages/better_auth-saml dependencies..."
+  cd "packages/better_auth-saml" do
+    sh "BUNDLE_GEMFILE=Gemfile bundle install"
+  end
+
   puts "\n📦 Installing packages/better_auth-sso dependencies..."
   cd "packages/better_auth-sso" do
     sh "BUNDLE_GEMFILE=Gemfile bundle install"
@@ -274,6 +334,14 @@ task :lint do
     sh "BUNDLE_GEMFILE=Gemfile bundle exec standardrb"
   end
 
+  cd "packages/better_auth-cli" do
+    sh "BUNDLE_GEMFILE=Gemfile bundle exec standardrb"
+  end
+
+  cd "packages/better_auth-grape" do
+    sh "BUNDLE_GEMFILE=Gemfile bundle exec standardrb"
+  end
+
   cd "packages/better_auth-redis-storage" do
     sh "BUNDLE_GEMFILE=Gemfile bundle exec standardrb"
   end
@@ -311,6 +379,14 @@ task :lint do
   end
 
   cd "packages/better_auth-scim" do
+    sh "BUNDLE_GEMFILE=Gemfile bundle exec standardrb"
+  end
+
+  cd "packages/better_auth-oidc" do
+    sh "BUNDLE_GEMFILE=Gemfile bundle exec standardrb"
+  end
+
+  cd "packages/better_auth-saml" do
     sh "BUNDLE_GEMFILE=Gemfile bundle exec standardrb"
   end
 
@@ -343,6 +419,14 @@ task "lint:fix" do
     sh "BUNDLE_GEMFILE=Gemfile bundle exec standardrb --fix"
   end
 
+  cd "packages/better_auth-cli" do
+    sh "BUNDLE_GEMFILE=Gemfile bundle exec standardrb --fix"
+  end
+
+  cd "packages/better_auth-grape" do
+    sh "BUNDLE_GEMFILE=Gemfile bundle exec standardrb --fix"
+  end
+
   cd "packages/better_auth-redis-storage" do
     sh "BUNDLE_GEMFILE=Gemfile bundle exec standardrb --fix"
   end
@@ -380,6 +464,14 @@ task "lint:fix" do
   end
 
   cd "packages/better_auth-scim" do
+    sh "BUNDLE_GEMFILE=Gemfile bundle exec standardrb --fix"
+  end
+
+  cd "packages/better_auth-oidc" do
+    sh "BUNDLE_GEMFILE=Gemfile bundle exec standardrb --fix"
+  end
+
+  cd "packages/better_auth-saml" do
     sh "BUNDLE_GEMFILE=Gemfile bundle exec standardrb --fix"
   end
 
@@ -433,6 +525,14 @@ task :clean do
     sh "rm -rf Gemfile.lock *.gem coverage/"
   end
 
+  cd "packages/better_auth-cli" do
+    sh "rm -rf Gemfile.lock *.gem coverage/"
+  end
+
+  cd "packages/better_auth-grape" do
+    sh "rm -rf Gemfile.lock *.gem coverage/"
+  end
+
   cd "packages/better_auth-redis-storage" do
     sh "rm -rf Gemfile.lock *.gem coverage/"
   end
@@ -473,6 +573,14 @@ task :clean do
     sh "rm -rf Gemfile.lock *.gem coverage/"
   end
 
+  cd "packages/better_auth-oidc" do
+    sh "rm -rf Gemfile.lock *.gem coverage/"
+  end
+
+  cd "packages/better_auth-saml" do
+    sh "rm -rf Gemfile.lock *.gem coverage/"
+  end
+
   cd "packages/better_auth-sso" do
     sh "rm -rf Gemfile.lock *.gem coverage/"
   end
@@ -497,6 +605,21 @@ end
 desc "Sync package versions from .release.yml"
 task "release:sync_versions" do
   sh "ruby script/sync_versions.rb"
+end
+
+desc "Validate release gem builds without publishing"
+task "release:check" do
+  RELEASE_GEMSPEC_PATHS.each do |gemspec_path|
+    package_dir = File.dirname(gemspec_path)
+    gemspec = File.basename(gemspec_path)
+
+    puts "\n📦 Building #{gemspec}..."
+    cd package_dir do
+      sh "rm -f *.gem"
+      sh "BUNDLE_GEMFILE=Gemfile bundle install" if File.exist?("Gemfile")
+      sh "gem build #{gemspec}"
+    end
+  end
 end
 
 task default: :ci

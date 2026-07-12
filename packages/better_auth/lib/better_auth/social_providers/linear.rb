@@ -33,6 +33,7 @@ module BetterAuth
           "Authorization" => "Bearer #{Base.access_token(tokens)}"
         )
         return profile if Base.provider_user_info?(profile)
+        return nil unless profile
 
         mapped = provider[:options][:map_profile_to_user]&.call(profile) || {}
         viewer = profile.dig("data", "viewer") || {}

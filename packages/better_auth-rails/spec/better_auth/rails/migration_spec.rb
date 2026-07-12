@@ -1,7 +1,6 @@
 # frozen_string_literal: true
 
 require_relative "../../spec_helper"
-require "better_auth/passkey"
 
 RSpec.describe BetterAuth::Rails::Migration do
   let(:config) { BetterAuth::Configuration.new(secret: "test-secret-that-is-long-enough-for-validation", database: :memory) }
@@ -120,6 +119,41 @@ RSpec.describe BetterAuth::Rails::Migration do
     expect(migration).to include("add_foreign_key :oauth_tokens, :oauth_clients, column: :client_id, primary_key: :client_id, on_delete: :cascade")
   end
 
+  it "merges logical plugin models that share one physical table" do
+    plugin = BetterAuth::Plugin.new(
+      id: "profile-collision",
+      schema: {
+        auditProfile: {
+          model_name: "users",
+          fields: {
+            auditFlag: {type: "boolean", required: false, index: true}
+          }
+        },
+        billingProfile: {
+          model_name: "users",
+          fields: {
+            billingRef: {type: "string", required: false}
+          }
+        },
+        profileLink: {
+          model_name: "profile_links",
+          fields: {
+            auditFlag: {type: "boolean", required: false, references: {model: "auditProfile", field: "auditFlag"}}
+          }
+        }
+      }
+    )
+    plugin_config = BetterAuth::Configuration.new(secret: "test-secret-that-is-long-enough-for-validation", database: :memory, plugins: [plugin])
+
+    migration = described_class.render(plugin_config)
+
+    expect(migration.scan("create_table :users")).to eq(["create_table :users"])
+    expect(migration).to include("t.boolean :audit_flag")
+    expect(migration).to include("t.text :billing_ref")
+    expect(migration).to include("add_index :users, :audit_flag")
+    expect(migration).to include("add_foreign_key :profile_links, :users, column: :audit_flag, primary_key: :audit_flag, on_delete: :cascade")
+  end
+
   it "renders default plugin table names as plural snake case" do
     plugin = BetterAuth::Plugin.new(
       id: "table-normalization",
@@ -214,13 +248,13 @@ RSpec.describe BetterAuth::Rails::Migration do
     expect(migration).to include("t.jsonb :tags")
   end
 
-  it "renders organization and passkey plugin schema migrations" do
+  it "renders organization and external plugin schema migrations" do
     plugin_config = BetterAuth::Configuration.new(
       secret: "test-secret-that-is-long-enough-for-validation",
       database: :memory,
       plugins: [
         BetterAuth::Plugins.organization(teams: {enabled: true}, dynamic_access_control: {enabled: true}),
-        BetterAuth::Plugins.passkey
+        external_schema_plugin
       ]
     )
 
@@ -232,11 +266,39 @@ RSpec.describe BetterAuth::Rails::Migration do
     expect(migration).to include("create_table :teams, id: :string")
     expect(migration).to include("create_table :team_members, id: :string")
     expect(migration).to include("create_table :organization_roles, id: :string")
-    expect(migration).to include("create_table :passkeys, id: :string")
+    expect(migration).to include("create_table :external_credentials, id: :string")
     expect(migration).to include("t.string :active_organization_id, limit: 191")
     expect(migration).to include("t.string :active_team_id, limit: 191")
     expect(migration).to include("t.string :credential_id, limit: 191, null: false")
-    expect(migration).to include("add_index :passkeys, :user_id")
+    expect(migration).to include("add_index :external_credentials, :user_id")
+  end
+
+  it "renders MSSQL nullable unique fields as filtered unique indexes" do
+    plugin_config = BetterAuth::Configuration.new(
+      secret: "test-secret-that-is-long-enough-for-validation",
+      database: :memory,
+      plugins: [BetterAuth::Plugins.phone_number]
+    )
+
+    migration = described_class.render(plugin_config, dialect: :mssql)
+
+    expect(migration).to include('add_index :users, :phone_number, unique: true, where: "phone_number IS NOT NULL"')
+  end
+
+  it "renders official external plugin tables with core-table field plugins" do
+    plugin_config = BetterAuth::Configuration.new(
+      secret: "test-secret-that-is-long-enough-for-validation",
+      database: :memory,
+      plugins: [
+        external_schema_plugin,
+        BetterAuth::Plugins.username
+      ]
+    )
+
+    migration = described_class.render(plugin_config)
+
+    expect(migration).to include("create_table :external_credentials, id: :string")
+    expect(migration).to include("t.string :username, limit: 191")
   end
 
   it "renders pending Rails migrations from the shared migration plan" do
@@ -282,5 +344,50 @@ RSpec.describe BetterAuth::Rails::Migration do
     expect(migration).to include("add_column :users, :role, :string, limit: 191")
     expect(migration).to include("add_index :users, :role")
     expect(migration).not_to include("create_table :users")
+  end
+
+  it "renders pending MSSQL nullable unique indexes with filters" do
+    plugin_config = BetterAuth::Configuration.new(
+      secret: "test-secret-that-is-long-enough-for-validation",
+      database: :memory,
+      plugins: [BetterAuth::Plugins.phone_number]
+    )
+    existing = {
+      "users" => {
+        name: "users",
+        columns: {
+          "id" => "varchar",
+          "name" => "varchar",
+          "email" => "varchar",
+          "email_verified" => "smallint",
+          "image" => "varchar",
+          "created_at" => "datetime2",
+          "updated_at" => "datetime2",
+          "phone_number" => "varchar",
+          "phone_number_verified" => "smallint"
+        },
+        indexes: {names: Set.new, columns: Set.new, unique_columns: Set.new}
+      }
+    }
+    plan = BetterAuth::SQLMigration.plan_from_existing(plugin_config, existing: existing, dialect: :mssql)
+
+    migration = described_class.render_pending(plan, class_name: "UpdateBetterAuthTables")
+
+    expect(migration).to include('add_index :users, :phone_number, unique: true, where: "phone_number IS NOT NULL"')
+  end
+
+  def external_schema_plugin
+    BetterAuth::Plugin.new(
+      id: "external-schema",
+      schema: {
+        externalCredential: {
+          model_name: "external_credentials",
+          fields: {
+            credentialId: {type: "string", required: true, unique: true},
+            userId: {type: "string", required: true, references: {model: "user", field: "id"}, index: true}
+          }
+        }
+      }
+    )
   end
 end

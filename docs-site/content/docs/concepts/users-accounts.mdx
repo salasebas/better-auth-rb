@@ -3,9 +3,15 @@ title: Users And Accounts
 description: Learn how to update users, change email, manage passwords, delete users, list accounts, link accounts, unlink accounts, and handle OAuth tokens.
 ---
 
+Beyond authenticating users, RubyAuth provides server-side APIs for managing user profiles, credentials, linked provider accounts, and account deletion.
+
+The user table stores core authentication profile data. It can be extended with [additional fields](/docs/concepts/database#extending-core-schema) or by plugins. Accounts represent the user's authentication methods, such as credentials, Google, GitHub, or another OAuth provider, and store provider identifiers plus provider token metadata.
+
 ## Update User
 
 ### Update User Information
+
+Use `update_user` to update profile fields on the current signed-in user. The endpoint accepts declared user fields such as `name`, `image`, and configured additional fields. Email cannot be changed through this route because email changes have their own verification flow.
 
 ```ruby
 auth.api.update_user(
@@ -21,7 +27,7 @@ Email cannot be changed with `update_user`; use `change_email`.
 
 ### Change Email
 
-Enable email changes:
+Email changes are disabled by default. Enable `user.change_email.enabled` and configure `email_verification.send_verification_email` so RubyAuth can verify the new address before updating the user.
 
 ```ruby
 auth = BetterAuth.auth(
@@ -37,7 +43,7 @@ auth = BetterAuth.auth(
 )
 ```
 
-Request the change:
+Request the change from the current session:
 
 ```ruby
 auth.api.change_email(
@@ -49,11 +55,11 @@ auth.api.change_email(
 )
 ```
 
-The new email becomes active after the verification link is used.
+By default, RubyAuth sends a verification email to the new address. The user email is updated only after the verification link is used.
 
 #### Confirming With Current Email
 
-Require the current email to confirm first:
+For added security, require the current email to approve the change before RubyAuth sends verification to the new address. This helps protect accounts where the active session is present but the email change should still require control of the current inbox.
 
 ```ruby
 auth = BetterAuth.auth(
@@ -85,7 +91,7 @@ The flow is:
 
 #### Updating Without Verification
 
-Allow unverified users to update email immediately:
+Allow unverified users to update email immediately by enabling `update_email_without_verification`. This only applies when the current email is not verified.
 
 ```ruby
 user: {
@@ -96,9 +102,9 @@ user: {
 }
 ```
 
-If a verification sender is configured, Better Auth sends a normal verification link for the new email after the update.
+If a verification sender is configured, Better Auth sends a normal verification link for the new email after the update. When `update_email_without_verification` is false, the email is not updated until the new email is verified, even if the current email is unverified.
 
-#### Client Usage
+#### HTTP Usage
 
 HTTP clients call:
 
@@ -110,6 +116,8 @@ curl -i http://localhost:3000/api/auth/change-email \
 ```
 
 ### Change Password
+
+A user's password is stored on the credential account, not directly on the user row. Use `change_password` when the current user already has a credential password. Set `revokeOtherSessions` to invalidate other active sessions after the password changes.
 
 ```ruby
 auth.api.change_password(
@@ -124,7 +132,7 @@ auth.api.change_password(
 
 ### Set Password
 
-Use `set_password` for users who signed in with OAuth and do not have a credential password.
+Use `set_password` for users who signed in with OAuth and do not have a credential password. This is server-only and requires a sensitive current session. If the user already has a password, RubyAuth rejects the request.
 
 ```ruby
 auth.api.set_password(
@@ -137,6 +145,8 @@ auth.api.set_password(
 
 ### Verify Password
 
+Use `verify_password` when you need to confirm the user's current credential password before a sensitive server-side operation. OAuth-only users may not have a password; use email verification or fresh-session checks for those flows.
+
 ```ruby
 auth.api.verify_password(
   headers: {"cookie" => cookie},
@@ -148,7 +158,7 @@ auth.api.verify_password(
 
 ## Delete User
 
-Enable user deletion:
+RubyAuth can hard-delete the current user and their sessions. The route is disabled by default; enable it explicitly before exposing account deletion.
 
 ```ruby
 user: {
@@ -158,7 +168,7 @@ user: {
 }
 ```
 
-Delete with password:
+Delete with password when the user has a credential account:
 
 ```ruby
 auth.api.delete_user(
@@ -170,6 +180,8 @@ auth.api.delete_user(
 ```
 
 ### Adding Verification Before Deletion
+
+For added security, configure `send_delete_account_verification` to send a verification token or generated callback URL before deleting the account. This is especially useful for OAuth-only users who cannot confirm deletion with a password.
 
 ```ruby
 user: {
@@ -204,7 +216,11 @@ Deletion requires one of:
 - A valid delete-account verification token.
 - A fresh session when no password or token is supplied.
 
+When a password is provided, RubyAuth verifies the credential account before deleting. When a verification sender is configured, the delete route requires the token from that email before it deletes the user.
+
 ### Callbacks
+
+Use callbacks for cleanup and audit side effects around deletion. `before_delete` runs before the user is removed; `after_delete` runs after deletion succeeds. A `before_delete` callback can abort deletion by raising an error or by using database hooks that return `false`.
 
 ```ruby
 user: {
@@ -218,17 +234,19 @@ user: {
 
 ## Accounts
 
-Accounts represent credentials and linked OAuth providers.
+Accounts represent credentials and linked OAuth providers. When a user signs in with a provider, RubyAuth creates or updates an account record containing provider IDs, scopes, token expiry metadata, and provider token values.
 
 ### List User Accounts
 
 ```ruby
-auth.api.list_accounts(headers: {"cookie" => cookie})
+accounts = auth.api.list_accounts(headers: {"cookie" => cookie})
 ```
+
+The response omits sensitive token and password fields. OAuth accounts include provider identifiers, scopes, and expiry metadata that can be used to display connected accounts.
 
 ### Token Encryption
 
-Encrypt stored OAuth tokens:
+RubyAuth can encrypt stored OAuth access and refresh tokens before persisting them. Enable this when you store provider tokens and want database-at-rest protection controlled by your RubyAuth secret configuration.
 
 ```ruby
 account: {
@@ -238,9 +256,27 @@ account: {
 
 `get_access_token` returns decrypted access tokens when the current user has access.
 
+```ruby
+token = auth.api.get_access_token(
+  headers: {"cookie" => cookie},
+  body: {
+    providerId: "github",
+    accountId: "github-user-id"
+  }
+)
+
+refreshed = auth.api.refresh_token(
+  headers: {"cookie" => cookie},
+  body: {
+    providerId: "github",
+    accountId: "github-user-id"
+  }
+)
+```
+
 ### Account Linking
 
-Configure account linking rules:
+Account linking lets users associate multiple authentication methods with the same user. By default, linked accounts are accepted when the provider identity and email rules are satisfied. Configure account-linking rules when you need to trust specific providers, allow different emails, update user profile data after linking, or disable linking.
 
 ```ruby
 auth = BetterAuth.auth(
@@ -258,7 +294,7 @@ auth = BetterAuth.auth(
 
 #### Forced Linking
 
-Trusted providers can link accounts automatically when provider identity is verified and linking rules allow it.
+Trusted providers can link accounts automatically when provider identity is verified and linking rules allow it. Use this carefully: trusting a provider that does not verify ownership can increase account takeover risk.
 
 ```ruby
 account: {
@@ -268,10 +304,14 @@ account: {
 }
 ```
 
+Forced linking is only appropriate for providers whose email or subject claims your app trusts. If the provider does not verify ownership, leave automatic linking disabled and require an explicit user action.
+
 #### Manually Linking Accounts
 
+Users already signed in can manually link a social account by starting a provider OAuth flow from their current session.
+
 ```ruby
-auth.api.link_social(
+link = auth.api.link_social(
   headers: {"cookie" => cookie},
   body: {
     provider: "github",
@@ -280,9 +320,13 @@ auth.api.link_social(
 )
 ```
 
-Native ID-token linking is available for providers with ID token verification.
+Native ID-token linking is available for providers with ID token verification. This is useful for mobile or native apps that already obtained a provider token through an SDK.
+
+For redirect-based linking, send the user to the returned URL and let the provider callback complete the link. RubyAuth rejects unsafe callback URLs and accounts owned by another user.
 
 ### Account Unlinking
+
+Use `unlink_account` to remove a provider account from the current user. Pass `accountId` when the user may have more than one account for the same provider.
 
 ```ruby
 auth.api.unlink_account(
@@ -295,3 +339,5 @@ auth.api.unlink_account(
 ```
 
 By default, Better Auth prevents unlinking the user's last account. Set `account.account_linking.allow_unlinking_all` only when your app has another recovery path.
+
+Unlinking requires a fresh sensitive session and only removes the account owned by the current user.

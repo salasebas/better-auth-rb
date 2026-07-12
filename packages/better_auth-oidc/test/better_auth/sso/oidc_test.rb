@@ -307,29 +307,132 @@ class BetterAuthSSOOIDCMirrorTest < Minitest::Test
     assert_nil auth.context.internal_adapter.find_account_by_provider_id("foreign-subject", "sso:unsafe-link")
   end
 
-  def test_register_oidc_rejects_manual_endpoints_outside_trusted_origins
-    auth = build_auth(trusted_origins: ["https://idp.example.com"])
+  def test_register_oidc_accepts_public_https_endpoints_without_trusted_origin
+    auth = build_auth
+    cookie = sign_up_cookie(auth)
+
+    provider = register_oidc_provider(
+      auth,
+      cookie,
+      provider_id: "public-manual",
+      domain: "public-manual.com",
+      oidc_config: {
+        clientId: "test",
+        clientSecret: "test-secret",
+        skipDiscovery: true,
+        authorizationEndpoint: "https://authorize.example.com/authorize",
+        tokenEndpoint: "https://tokens.example.net/token",
+        jwksEndpoint: "https://keys.example.org/jwks"
+      }
+    )
+
+    assert_equal "public-manual", provider.fetch("providerId")
+  end
+
+  def test_register_oidc_does_not_treat_implicit_base_origin_as_private_idp_opt_in
+    auth = build_auth
     cookie = sign_up_cookie(auth)
 
     error = assert_raises(BetterAuth::APIError) do
-      register_oidc_provider(
-        auth,
-        cookie,
-        provider_id: "untrusted-manual",
-        domain: "untrusted-manual.com",
-        oidc_config: {
-          clientId: "test",
-          clientSecret: "test-secret",
-          skipDiscovery: true,
-          authorizationEndpoint: "https://idp.example.com/authorize",
-          tokenEndpoint: "https://untrusted.example.com/token",
-          jwksEndpoint: "https://idp.example.com/jwks"
-        }
+      register_oidc_provider(auth, cookie, provider_id: "loopback", oidc_config: manual_oidc_config(tokenEndpoint: "http://localhost:3000/internal/token"))
+    end
+
+    assert_equal 400, error.status_code
+    assert_match(/exact origin|publicly routable/i, error.message)
+  end
+
+  def test_update_oidc_rejects_loopback_endpoint
+    auth = build_auth
+    cookie = sign_up_cookie(auth)
+    register_oidc_provider(auth, cookie, provider_id: "update-loopback")
+
+    error = assert_raises(BetterAuth::APIError) do
+      auth.api.update_sso_provider(
+        headers: {"cookie" => cookie},
+        body: {providerId: "update-loopback", oidcConfig: {tokenEndpoint: "https://127.0.0.1/token"}}
       )
     end
 
     assert_equal 400, error.status_code
-    assert_match(/trusted/i, error.message)
+    assert_match(/publicly routable/i, error.message)
+  end
+
+  def test_register_oidc_allows_private_http_idp_with_exact_trusted_origin
+    origin = "http://10.0.0.8:8080"
+    auth = build_auth(trusted_origins: [origin])
+    cookie = sign_up_cookie(auth)
+
+    provider = register_oidc_provider(
+      auth,
+      cookie,
+      provider_id: "trusted-private",
+      issuer: origin,
+      oidc_config: manual_oidc_config(
+        authorizationEndpoint: "#{origin}/authorize",
+        tokenEndpoint: "#{origin}/token",
+        jwksEndpoint: "#{origin}/jwks",
+        userInfoEndpoint: "#{origin}/userinfo",
+        discoveryEndpoint: "#{origin}/.well-known/openid-configuration"
+      )
+    )
+
+    assert_equal "trusted-private", provider.fetch("providerId")
+  end
+
+  def test_register_oidc_allows_private_idp_from_dynamic_exact_trusted_origin
+    origin = "http://10.0.0.9:8080"
+    auth = build_auth(trusted_origins: ->(_request) { [origin] })
+    cookie = sign_up_cookie(auth)
+
+    provider = register_oidc_provider(
+      auth,
+      cookie,
+      provider_id: "dynamic-private",
+      issuer: origin,
+      oidc_config: manual_oidc_config(
+        authorizationEndpoint: "#{origin}/authorize",
+        tokenEndpoint: "#{origin}/token",
+        jwksEndpoint: "#{origin}/jwks"
+      )
+    )
+
+    assert_equal "dynamic-private", provider.fetch("providerId")
+  end
+
+  def test_discovery_enabled_overrides_are_validated_before_fetch
+    discovery_calls = []
+    auth = build_auth(oidc_discovery_fetch: ->(url) { discovery_calls << url })
+    cookie = sign_up_cookie(auth)
+
+    assert_raises(BetterAuth::APIError) do
+      register_oidc_provider(
+        auth,
+        cookie,
+        provider_id: "unsafe-override",
+        oidc_config: manual_oidc_config(skipDiscovery: false, tokenEndpoint: "https://169.254.169.254/token")
+      )
+    end
+
+    assert_empty discovery_calls
+  end
+
+  def test_runtime_revalidates_legacy_stored_endpoints
+    auth = build_auth
+    cookie = sign_up_cookie(auth)
+    register_oidc_provider(auth, cookie, provider_id: "legacy-unsafe")
+    provider = auth.context.adapter.find_one(model: "ssoProvider", where: [{field: "providerId", value: "legacy-unsafe"}])
+    config = BetterAuth::Plugins.sso_provider_config_hash(provider.fetch("oidcConfig"))
+    auth.context.adapter.update(
+      model: "ssoProvider",
+      where: [{field: "providerId", value: "legacy-unsafe"}],
+      update: {oidcConfig: config.merge(token_endpoint: "http://127.0.0.1:4567/token")}
+    )
+
+    error = assert_raises(BetterAuth::APIError) do
+      oidc_sign_in_params(auth, providerId: "legacy-unsafe", callbackURL: "/dashboard")
+    end
+
+    assert_equal 400, error.status_code
   end
 
   def test_plugin_oidc_discovery_passes_timeout_to_fetcher
@@ -354,6 +457,35 @@ class BetterAuthSSOOIDCMirrorTest < Minitest::Test
     )
 
     assert_equal [["https://idp.example.com/.well-known/openid-configuration", 123]], calls
+  end
+
+  def test_token_fetch_rejects_mixed_public_private_dns_before_connecting
+    error = assert_raises(BetterAuth::SSO::OIDC::EndpointPolicy::Error) do
+      BetterAuth::Plugins.sso_exchange_oidc_code(
+        token_endpoint: "https://tokens.example.com/token",
+        code: "code",
+        code_verifier: nil,
+        redirect_uri: "https://app.example.com/callback",
+        client_id: "client",
+        client_secret: "secret",
+        authentication: "client_secret_basic",
+        resolver: ->(_host) { ["93.184.216.34", "127.0.0.1"] }
+      )
+    end
+
+    assert_equal :non_public_address, error.reason
+  end
+
+  def test_custom_jwks_fetch_is_not_invoked_for_unsafe_endpoint
+    calls = []
+
+    result = BetterAuth::Plugins.sso_fetch_oidc_jwks(
+      "https://169.254.169.254/jwks",
+      fetch: ->(url) { calls << url }
+    )
+
+    assert_equal({}, result)
+    assert_empty calls
   end
 
   private
@@ -427,6 +559,17 @@ class BetterAuthSSOOIDCMirrorTest < Minitest::Test
       as_response: true
     )
     {status: status, location: headers.fetch("location"), headers: headers}
+  end
+
+  def manual_oidc_config(overrides = {})
+    {
+      clientId: "test",
+      clientSecret: "test-secret",
+      skipDiscovery: true,
+      authorizationEndpoint: "https://idp.example.com/authorize",
+      tokenEndpoint: "https://idp.example.com/token",
+      jwksEndpoint: "https://idp.example.com/jwks"
+    }.merge(overrides)
   end
 
   def stringify_keys(value)

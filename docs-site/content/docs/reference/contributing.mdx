@@ -1,51 +1,178 @@
 ---
-title: Contributing
-description: Contribute to the RubyAuth monorepo.
+title: Contributing to BetterAuth
+description: A concise guide to contributing to BetterAuth
 ---
 
-RubyAuth lives in the [better-auth Ruby monorepo](https://github.com/salasebas/better-auth-rb). Upstream TypeScript Better Auth is used as a behavioral reference, not as code to copy directly.
+<RubyAuthDisclaimer />
 
-## Development setup
+Thank you for your interest in contributing to RubyAuth! This guide is a concise guide to contributing to RubyAuth.
 
-```bash
-git clone https://github.com/salasebas/better-auth-rb.git
-cd better-auth-rb
+## Getting Started
+
+Before diving in, here are a few important resources:
+
+* Take a look at our existing <Link href="https://github.com/better-auth/better-auth/issues">issues</Link> and <Link href="https://github.com/better-auth/better-auth/pulls">pull requests</Link>
+* Join our community discussions in <Link href="https://discord.gg/better-auth">Discord</Link>
+
+## Development Setup
+
+To get started with development:
+
+<Callout type="warn">
+  Make sure you have <Link href="https://nodejs.org/en/download">Node.JS</Link>{" "}
+  installed, preferably on LTS.
+</Callout>
+
+<Steps>
+  <Step>
+    ### 1. Fork the repository
+
+    Visit [https://github.com/better-auth/better-auth](https://github.com/better-auth/better-auth)
+
+    Click the "Fork" button in the top right.
+  </Step>
+
+  <Step>
+    ### 2. Clone your fork
+
+    ```bash
+    # Replace YOUR-USERNAME with your GitHub username
+    git clone https://github.com/YOUR-USERNAME/better-auth.git
+    cd better-auth
+    ```
+  </Step>
+
+  <Step>
+    ### 3. Install dependencies
+
+    Make sure you have Ruby, Bundler, and the workspace gems installed.
+
+    ```bash
+    bundle install
+    ```
+  </Step>
+
+  <Step>
+    ### 4. Prepare ENV files
+
+    Copy the example env file to create your new `.env` file.
+
+    ```bash
+    cp -n ./docs/.env.example ./docs/.env
+    ```
+  </Step>
+</Steps>
+
+## Making changes
+
+Once you have an idea of what you want to contribute, you can start making changes. Here are some steps to get started:
+
+<Steps>
+  <Step>
+    ### 1. Create a new branch
+
+    ```bash
+    # Add upstream remote (if not already added)
+    git remote add upstream https://github.com/better-auth/better-auth.git
+
+    # Make sure you're on main
+    git checkout main
+
+    # Pull latest changes
+    git pull upstream main
+
+    # Create and switch to a new branch
+    git checkout -b feature/your-feature-name
+    ```
+  </Step>
+
+  <Step>
+    ### 2. Start development server
+
+    Start the development server:
+
+    ```bash
+    bundle exec rake test
+    ```
+
+    To start the docs server:
+
+    ```bash
+    cd docs-site && pnpm dev
+    ```
+  </Step>
+
+  <Step>
+    ### 3. Make Your Changes
+
+    * Make your changes to the codebase.
+
+    * Write tests if needed. (Read more about testing <Link href="/docs/reference/contributing#testing">here</Link>)
+
+    * Update documentation.  (Read more about documenting <Link href="/docs/reference/contributing#documentation">here</Link>)
+  </Step>
+</Steps>
+
+### Issues and Bug Fixes
+
+* Check our [GitHub issues](https://github.com/better-auth/better-auth/issues) for tasks labeled `good first issue`
+* When reporting bugs, include steps to reproduce and expected behavior
+* Comment on issues you'd like to work on to avoid duplicate efforts
+
+### Framework Integrations
+
+We welcome contributions to support more frameworks:
+
+* Focus on framework-agnostic solutions where possible
+* Keep integrations minimal and maintainable
+* All integrations currently live in the main package
+
+### Plugin Development
+
+* For core plugins: Open an issue first to discuss your idea
+* For community plugins: Feel free to develop independently
+* Follow our plugin architecture guidelines
+
+### Documentation
+
+* Fix typos and errors
+* Add examples and clarify existing content
+* Ensure documentation is up to date with code changes
+
+## Testing
+
+We use Vitest for testing. Place test files next to the source files they test:
+
+```ruby
 bundle install
-```
-
-## Tests
-
-Core gem (Minitest):
-
-```bash
 bundle exec rake test
-```
-
-Full workspace CI:
-
-```bash
-bundle exec rake ci
-```
-
-Adapter and plugin packages use RSpec in their directories.
-
-## Linting
-
-```bash
 bundle exec standardrb
 ```
 
-Core and docs follow Standard Ruby style with `# frozen_string_literal: true`.
+### Using the Test Instance Helper
 
-## Parity work
+The test instance helper now includes improved async context support for managing user sessions:
 
-Before changing auth behavior, read matching upstream tests at `reference/upstream-src/1.6.9/` (fetch with `./scripts/fetch-upstream-better-auth.sh`) and update `packages/better_auth/test/support/upstream_server_parity.rb`.
+```ruby
+bundle install
+bundle exec rake test
+bundle exec standardrb
+```
 
-## Docs
+### Testing Best Practices
 
-User-facing docs live in `docs-site/`. Update MDX when changing public Ruby APIs.
+* Write clear commit messages
+* Update documentation to reflect your changes
+* Add tests for new features
+* Follow our coding standards
+* Keep pull requests focused on a single change
 
-## Related
+## Need Help?
 
-- [AGENTS.md](https://github.com/salasebas/better-auth-rb/blob/main/AGENTS.md)
-- [Resources](/docs/reference/resources)
+Don't hesitate to ask for help! You can:
+
+* Open an <Link href="https://github.com/better-auth/better-auth/issues">issue</Link> with questions
+* Join our <Link href="https://discord.gg/better-auth">community discussions</Link>
+* Reach out to project maintainers
+
+Thank you for contributing to RubyAuth!

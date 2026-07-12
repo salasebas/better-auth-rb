@@ -1,400 +1,919 @@
 ---
 title: Database
-description: Learn how Better Auth Ruby stores auth data, generates schema, uses secondary storage, and runs database hooks.
+description: Learn about database adapters, migrations, secondary storage with Redis, core schema (user, session, account, verification), custom tables, extending schemas, ID generation, database hooks, and plugin schemas.
 ---
 
-Better Auth Ruby stores auth state through an adapter. The core gem is Rack-framework independent, and the Rails adapter can use Active Record.
+<RubyAuthDisclaimer />
 
 ## Adapters
 
-Built-in core adapters include:
+RubyAuth connects to a database to store data. The database will be used to store data such as users, sessions, and more. Plugins can also define their own database tables to store data.
 
-- `:memory` for tests and local examples.
-- SQLite.
-- PostgreSQL.
-- MySQL.
-- MSSQL.
-- MongoDB shim support.
-- Active Record through `better_auth-rails`.
+You can pass a database connection to RubyAuth by passing a supported database adapter or database URL in the database options. You can learn more about supported database adapters in the [Other relational databases](/docs/adapters/other-relational-databases) documentation.
 
-```ruby
-auth = BetterAuth.auth(
-  secret: ENV.fetch("BETTER_AUTH_SECRET"),
-  database: :memory
-)
-```
-
-```ruby title="Rails initializer"
-Rails.application.config.better_auth = BetterAuth.auth(
-  secret: Rails.application.credentials.fetch(:better_auth_secret),
-  database: :active_record
-)
-```
+<Callout type="info">
+  RubyAuth also works without any database. For more details, see [Stateless Session Management](/docs/concepts/session-management#stateless-session-management).
+</Callout>
 
 ## CLI
 
+RubyAuth comes with a CLI tool to manage database migrations and generate schema.
+
 ### Running Migrations
 
-Rails apps use Rails migrations:
+The cli checks your database and prompts you to add missing tables or update existing ones with new columns. This is supported by RubyAuth SQL adapters. If you manage schema through Rails migrations or another ORM, you can use the `generate` command to create SQL and handle the migration through your framework.
 
 ```bash
-bin/rails generate better_auth:migration
-bin/rails db:migrate
+bundle exec better-auth migrate --cwd . --config config/better_auth.rb --yes
 ```
 
-Non-Rails Rack apps can use the CLI:
-
-```bash
-better-auth migrate status --cwd .
-better-auth migrate --cwd . --yes
-```
+<Callout type="info">
+  For PostgreSQL users: The migrate command supports non-default schemas. It automatically detects your `search_path` configuration and creates tables in the correct schema. See [PostgreSQL adapter](/docs/adapters/postgresql#use-a-non-default-schema) for details.
+</Callout>
 
 ### Generating Schema
 
-Generate SQL with the CLI for Rack apps:
+RubyAuth also provides a `generate` command to generate the schema required by RubyAuth. The `generate` command creates the schema required by RubyAuth. If you're using Rails migrations, Active Record, or another ORM, generate SQL and translate it into the migration format your app owns. For ORM integration notes, see [Other relational databases](/docs/adapters/other-relational-databases#orm-integrations).
 
 ```bash
-better-auth generate --cwd . --dialect postgres --output db/better_auth/schema.sql
+bundle exec better-auth generate --cwd . --dialect postgres --output db/better_auth/schema.sql --config config/better_auth.rb
 ```
 
-Or generate SQL programmatically:
+See the [CLI](/docs/concepts/cli) documentation for more information on the CLI.
 
-```ruby
-sql = BetterAuth::Schema::SQL.generate(auth.options, adapter: :postgres)
-File.write("db/auth_schema.sql", sql)
-```
+<Callout>
+  If you prefer adding tables manually, you can do that as well. The core schema
+  required by RubyAuth is described below and you can find additional schema
+  required by plugins in the plugin documentation.
+</Callout>
 
 ### Programmatic Migrations
 
-`BetterAuth::Schema.auth_tables(auth.options)` returns the logical schema after custom table names, custom field names, additional fields, plugins, and rate-limit storage are merged.
+In environments where the CLI isn't available (e.g. serverless functions), upstream Better Auth can run migrations programmatically using `getMigrations` from `better-auth/db/migration`.
 
-```ruby
-tables = BetterAuth::Schema.auth_tables(auth.options)
-tables.fetch("user").fetch(:fields).keys
-```
+<UnderDevelopment>
+  RubyAuth does not currently expose a server-side `getMigrations` API. Use
+  `bundle exec better-auth migrate`, `bundle exec better-auth generate`, or your
+  framework's migration system.
+</UnderDevelopment>
 
-Use this when integrating with your own migration system.
+<Callout type="warn">
+  Programmatic migrations are not available in RubyAuth yet. RubyAuth SQL adapters support CLI-generated migrations; ORM-managed apps should keep using their framework's migration workflow.
+</Callout>
+
+<Accordions>
+  <Accordion id="cloudflare-d1-example" title="Example: Cloudflare D1">
+    [Cloudflare D1](https://developers.cloudflare.com/d1/) can only be queried through a Cloudflare Worker, so a local CLI may not be able to access it directly. Upstream handles this by running programmatic migrations through a protected endpoint.
+
+    <UnderDevelopment>
+      RubyAuth does not currently support Cloudflare D1 or programmatic
+      migrations. Use a supported RubyAuth database adapter and run the CLI or
+      framework migrations from an environment that can reach your database.
+    </UnderDevelopment>
+  </Accordion>
+</Accordions>
 
 ## Secondary Storage
 
-Secondary storage lets Better Auth keep sessions, verification tokens, or rate-limit counters outside the main database.
+Secondary storage in RubyAuth allows you to use key-value stores for managing session data, verification records, rate limiting counters, and other short-lived auth data. This can be useful when you want to offload the storage of intensive records to a high performance storage or even RAM.
 
 ### Implementation
 
-Provide an object with `get`, `set`, and `delete`.
+To use secondary storage, provide an object that responds to `get`, `set`, and `delete`:
 
 ```ruby
-class RedisStorage
+class SecondaryStorage
+  def get(key)
+    # Return a string value or nil.
+  end
+
+  def set(key, value, ttl = nil)
+    # Persist value. ttl is in seconds when present.
+  end
+
+  def delete(key)
+    # Remove key.
+  end
+end
+```
+
+Then, provide your implementation to the `BetterAuth.auth` function:
+
+```ruby title="config/better_auth.rb"
+require "better_auth"
+
+BetterAuth.auth(
+  # ... other options
+  secondary_storage: SecondaryStorage.new
+)
+```
+
+### Redis Storage
+
+RubyAuth provides an official Redis storage gem that uses the Ruby [`redis`](https://github.com/redis/redis-rb) client:
+
+For full package configuration, including `key_prefix`, `scan_count`, `atomic_clear`, and the empty-prefix warning, see [Redis Storage](/docs/reference/redis-storage).
+
+```bash
+gem "better_auth-redis-storage"
+gem "redis"
+
+bundle install
+```
+
+**Usage:**
+
+```ruby title="config/better_auth.rb"
+require "better_auth"
+require "better_auth/redis_storage"
+require "redis"
+
+redis = Redis.new(url: ENV.fetch("REDIS_URL", "redis://localhost:6379/0"))
+
+auth = BetterAuth.auth(
+  # ... other options
+  secondary_storage: BetterAuth.redis_storage(
+    client: redis,
+    key_prefix: "better-auth:" # optional
+  )
+)
+```
+
+The Redis storage supports the connection modes supported by the Ruby Redis client you provide.
+
+**Manual Implementation:**
+
+If you prefer to implement your own Redis secondary storage, here's a basic example:
+
+```ruby title="config/better_auth.rb"
+require "better_auth"
+require "redis"
+
+redis = Redis.new(url: ENV.fetch("REDIS_URL", "redis://localhost:6379/0"))
+
+class RedisSecondaryStorage
+  def initialize(redis, key_prefix: "better-auth:")
+    @redis = redis
+    @key_prefix = key_prefix
+  end
+
+  def get(key)
+    @redis.get(prefixed(key))
+  end
+
+  def set(key, value, ttl = nil)
+    ttl ? @redis.set(prefixed(key), value, ex: ttl) : @redis.set(prefixed(key), value)
+  end
+
+  def delete(key)
+    @redis.del(prefixed(key))
+  end
+
+  private
+
+  def prefixed(key)
+    "#{@key_prefix}#{key}"
+  end
+end
+
+auth = BetterAuth.auth(
+  # ... other options
+  secondary_storage: RedisSecondaryStorage.new(redis)
+)
+```
+
+This implementation allows RubyAuth to use Redis for storing session data and rate limiting counters. You can also add prefixes to the keys names.
+
+**Example: Upstash Redis Implementation**
+
+Here's an example using Upstash Redis. First, install the Redis client:
+
+```bash
+gem "redis"
+
+bundle install
+```
+
+Then, create a new Redis client using the Upstash Redis URL:
+
+```ruby title="config/redis.rb"
+require "redis"
+
+redis = Redis.new(url: ENV.fetch("UPSTASH_REDIS_URL"))
+```
+
+Don't forget to set the `UPSTASH_REDIS_URL` environment variable. Also, [see the Upstash documentation](https://upstash.com/docs/redis) for more information on how to use Upstash Redis.
+
+After that, we can create a secondary storage implementation:
+
+```ruby title="app/lib/redis_secondary_storage.rb"
+class RedisSecondaryStorage
   def initialize(redis)
     @redis = redis
   end
 
   def get(key)
-    @redis.get(key)
+    value = @redis.get(key)
+    value.nil? ? nil : value.to_s
   end
 
   def set(key, value, ttl = nil)
-    ttl ? @redis.set(key, value, ex: ttl) : @redis.set(key, value)
+    string_value = value.is_a?(String) ? value : JSON.generate(value)
+    ttl ? @redis.set(key, string_value, ex: ttl) : @redis.set(key, string_value)
   end
 
   def delete(key)
     @redis.del(key)
   end
 end
-
-auth = BetterAuth.auth(
-  secret: ENV.fetch("BETTER_AUTH_SECRET"),
-  secondary_storage: RedisStorage.new(redis)
-)
 ```
 
-### Redis Storage
+Finally, we can pass the implementation to the `BetterAuth.auth` function.
 
-Use a Redis-backed storage object when running multiple app processes or serverless instances.
+```ruby title="config/better_auth.rb"
+require "better_auth"
+require_relative "../app/lib/redis_secondary_storage"
 
-```ruby
 auth = BetterAuth.auth(
-  secret: ENV.fetch("BETTER_AUTH_SECRET"),
-  secondary_storage: RedisStorage.new(Redis.new(url: ENV.fetch("REDIS_URL"))),
-  rate_limit: {
-    enabled: true,
-    storage: "secondary-storage"
-  }
+  # ... other options
+  secondary_storage: RedisSecondaryStorage.new(redis)
 )
 ```
 
 ## Core Schema
 
+RubyAuth requires the following tables to be present in the database. The types are in `typescript` format. You can use corresponding types in your database.
+
 ### User
 
-The user table stores profile identity and verification state.
+Table Name: `user`
 
-| Field | Purpose |
-| --- | --- |
-| `id` | User ID. |
-| `name` | Display name. |
-| `email` | Normalized email. |
-| `emailVerified` | Whether the email has been verified. |
-| `image` | Optional profile image URL. |
-| `createdAt` | Creation timestamp. |
-| `updatedAt` | Update timestamp. |
+export const userTableFields = [
+	{
+		name: "id",
+		type: "string",
+		description: "Unique identifier for each user",
+		isPrimaryKey: true,
+	},
+	{
+		name: "name",
+		type: "string",
+		description: "User's chosen display name",
+	},
+	{
+		name: "email",
+		type: "string",
+		description: "User's email address for communication and login",
+		isUnique: true,
+	},
+	{
+		name: "emailVerified",
+		type: "boolean",
+		description: "Whether the user's email is verified",
+	},
+	{
+		name: "image",
+		type: "string",
+		description: "User's image url",
+		isOptional: true,
+	},
+	{
+		name: "createdAt",
+		type: "Date",
+		description: "Timestamp of when the user account was created",
+	},
+	{
+		name: "updatedAt",
+		type: "Date",
+		description: "Timestamp of the last update to the user's information",
+	},
+];
+
+<DatabaseTable name="user" fields={userTableFields} />
 
 ### Session
 
-The session table stores active session records when sessions are stored in the database.
+Table Name: `session`
 
-| Field | Purpose |
-| --- | --- |
-| `id` | Session ID. |
-| `expiresAt` | Expiration timestamp. |
-| `token` | Session token. |
-| `ipAddress` | Client IP address when available. |
-| `userAgent` | User agent when available. |
-| `userId` | Owning user ID. |
-| `createdAt` | Creation timestamp. |
-| `updatedAt` | Update timestamp. |
+export const sessionTableFields = [
+	{
+		name: "id",
+		type: "string",
+		description: "Unique identifier for each session",
+		isPrimaryKey: true,
+	},
+	{
+		name: "userId",
+		type: "string",
+		description: "The ID of the user",
+		isForeignKey: true,
+		references: { model: "user", field: "id", onDelete: "cascade" },
+	},
+	{
+		name: "token",
+		type: "string",
+		description: "The unique session token",
+		isUnique: true,
+	},
+	{
+		name: "expiresAt",
+		type: "Date",
+		description: "The time when the session expires",
+	},
+	{
+		name: "ipAddress",
+		type: "string",
+		description: "The IP address of the device",
+		isOptional: true,
+	},
+	{
+		name: "userAgent",
+		type: "string",
+		description: "The user agent information of the device",
+		isOptional: true,
+	},
+	{
+		name: "createdAt",
+		type: "Date",
+		description: "Timestamp of when the session was created",
+	},
+	{
+		name: "updatedAt",
+		type: "Date",
+		description: "Timestamp of when the session was updated",
+	},
+];
+
+<DatabaseTable name="session" fields={sessionTableFields} />
 
 ### Account
 
-The account table links users to credentials and OAuth providers.
+Table Name: `account`
 
-| Field | Purpose |
-| --- | --- |
-| `id` | Account ID. |
-| `accountId` | Provider account ID. |
-| `providerId` | Provider ID, such as `credential` or `github`. |
-| `userId` | Owning user ID. |
-| `accessToken` | OAuth access token, optionally encrypted. |
-| `refreshToken` | OAuth refresh token, optionally encrypted. |
-| `idToken` | OAuth ID token. |
-| `scope` | Stored provider scopes. |
-| `password` | Credential password hash. |
+export const accountTableFields = [
+	{
+		name: "id",
+		type: "string",
+		description: "Unique identifier for each account",
+		isPrimaryKey: true,
+	},
+	{
+		name: "userId",
+		type: "string",
+		description: "The ID of the user",
+		isForeignKey: true,
+		references: { model: "user", field: "id", onDelete: "cascade" },
+	},
+	{
+		name: "accountId",
+		type: "string",
+		description:
+			"The ID of the account as provided by the SSO or equal to userId for credential accounts",
+	},
+	{
+		name: "providerId",
+		type: "string",
+		description: "The ID of the provider",
+	},
+	{
+		name: "accessToken",
+		type: "string",
+		description: "The access token of the account. Returned by the provider",
+		isOptional: true,
+	},
+	{
+		name: "refreshToken",
+		type: "string",
+		description: "The refresh token of the account. Returned by the provider",
+		isOptional: true,
+	},
+	{
+		name: "accessTokenExpiresAt",
+		type: "Date",
+		description: "The time when the access token expires",
+		isOptional: true,
+	},
+	{
+		name: "refreshTokenExpiresAt",
+		type: "Date",
+		description: "The time when the refresh token expires",
+		isOptional: true,
+	},
+	{
+		name: "scope",
+		type: "string",
+		description: "The scope of the account. Returned by the provider",
+		isOptional: true,
+	},
+	{
+		name: "idToken",
+		type: "string",
+		description: "The ID token returned from the provider",
+		isOptional: true,
+	},
+	{
+		name: "password",
+		type: "string",
+		description:
+			"The password of the account. Mainly used for email and password authentication",
+		isOptional: true,
+	},
+	{
+		name: "createdAt",
+		type: "Date",
+		description: "Timestamp of when the account was created",
+	},
+	{
+		name: "updatedAt",
+		type: "Date",
+		description: "Timestamp of when the account was updated",
+	},
+];
+
+<DatabaseTable name="account" fields={accountTableFields} />
 
 ### Verification
 
-The verification table stores temporary tokens for email verification, password reset, account deletion, and plugin flows.
+Table Name: `verification`
 
-| Field | Purpose |
-| --- | --- |
-| `id` | Verification ID. |
-| `identifier` | Lookup identifier. |
-| `value` | Token value or payload. |
-| `expiresAt` | Expiration timestamp. |
-| `createdAt` | Creation timestamp. |
-| `updatedAt` | Update timestamp. |
+export const verificationTableFields = [
+	{
+		name: "id",
+		type: "string",
+		description: "Unique identifier for each verification",
+		isPrimaryKey: true,
+	},
+	{
+		name: "identifier",
+		type: "string",
+		description: "The identifier for the verification request",
+	},
+	{
+		name: "value",
+		type: "string",
+		description: "The value to be verified",
+	},
+	{
+		name: "expiresAt",
+		type: "Date",
+		description: "The time when the verification request expires",
+	},
+	{
+		name: "createdAt",
+		type: "Date",
+		description: "Timestamp of when the verification request was created",
+	},
+	{
+		name: "updatedAt",
+		type: "Date",
+		description: "Timestamp of when the verification request was updated",
+	},
+];
+
+<DatabaseTable name="verification" fields={verificationTableFields} />
 
 ## Custom Tables
 
+RubyAuth allows you to customize the table names and column names for the core schema. You can also extend the core schema by adding additional fields to the user and session tables.
+
 ### Custom Table Names
 
-Override physical table names with `model_name`.
+You can customize the table names and column names for the core schema by using the `modelName` and `fields` properties in your auth config:
 
-```ruby
+```ruby title="config/better_auth.rb"
 auth = BetterAuth.auth(
-  secret: ENV.fetch("BETTER_AUTH_SECRET"),
   user: {
-    model_name: "users"
+    model_name: "users",
+    fields: {
+      name: "full_name",
+      email: "email_address",
+    },
   },
   session: {
-    model_name: "auth_sessions"
-  }
+    model_name: "user_sessions",
+    fields: {
+      userId: "user_id",
+    },
+  },
+)
+```
+
+<Callout>
+  Type inference in your code will still use the original field names (e.g.,
+  `user.name`, not `user.full_name`).
+</Callout>
+
+To customize table names and column name for plugins, you can use the `schema` property in the plugin config:
+
+```ruby title="config/better_auth.rb"
+require "better_auth"
+
+auth = BetterAuth.auth(
+  plugins: [
+    BetterAuth::Plugins.two_factor(
+      schema: {
+        user: {
+          fields: {
+            twoFactorEnabled: "two_factor_enabled",
+            secret: "two_factor_secret",
+          },
+        },
+      },
+    ),
+  ],
 )
 ```
 
 ### Extending Core Schema
 
-Use `additional_fields` to add fields to core models.
+RubyAuth provides a type-safe way to extend the `user` and `session` schemas. You can add custom fields to your auth config, and the CLI will automatically update the database schema. These additional fields will be properly inferred in functions like `useSession`, `signUp.email`, and other endpoints that work with user or session objects.
 
-```ruby
+To add custom fields, use the `additionalFields` property in the `user` or `session` object of your auth config. The `additionalFields` object uses field names as keys, with each value being a `FieldAttributes` object containing:
+
+* `type`: The data type of the field (e.g., "string", "number", "boolean").
+* `required`: A boolean indicating if the field is mandatory.
+* `defaultValue`: The default value for the field (note: this only applies in the JavaScript layer; in the database, the field will be optional).
+* `input`: This determines whether a value can be provided when creating a new record (default: `true`). If there are additional fields, like `role`, that should not be provided by the user during signup, you can set this to `false`.
+
+Here's an example of how to extend the user schema with additional fields:
+
+```ruby title="config/better_auth.rb"
+require "better_auth"
+
 auth = BetterAuth.auth(
-  secret: ENV.fetch("BETTER_AUTH_SECRET"),
   user: {
     additional_fields: {
       role: {
+        type: ["user", "admin"],
+        required: false,
+        default_value: "user",
+        input: false # don't allow user to set role
+      },
+      lang: {
         type: "string",
         required: false,
-        input: false
-      }
-    }
+        default_value: "en",
+      },
+    },
   },
-  session: {
-    additional_fields: {
-      activeOrganizationId: {
-        type: "string",
-        required: false
-      }
-    }
-  }
 )
 ```
 
-Fields with `input: false` are not accepted from public endpoint bodies.
+Now you can access the additional fields in your application logic.
+
+```ruby
+# On signup
+result = auth.api.sign_up_email(
+  body: {
+    email: "test@example.com",
+    password: "password",
+    name: "John Doe",
+    lang: "fr"
+  }
+)
+
+# User object
+result[:user]["role"] # => "user"
+result[:user]["lang"] # => "fr"
+```
+
+<Callout>
+  RubyAuth returns additional fields in API responses and direct server-side API
+  calls when those fields are present in the schema.
+</Callout>
+
+If you're using social / OAuth providers, you may want to provide `map_profile_to_user` to map the profile data to the user object. So, you can populate additional fields from the provider's profile.
+
+**Example: Mapping Profile to User For `firstName` and `lastName`**
+
+```ruby title="config/better_auth.rb"
+require "better_auth"
+
+auth = BetterAuth.auth(
+  social_providers: {
+    github: {
+      client_id: "YOUR_GITHUB_CLIENT_ID",
+      client_secret: "YOUR_GITHUB_CLIENT_SECRET",
+      map_profile_to_user: ->(profile) {
+        name = profile.fetch("name", "").split(" ")
+        {first_name: name[0], last_name: name[1]}
+      },
+    },
+    google: {
+      client_id: "YOUR_GOOGLE_CLIENT_ID",
+      client_secret: "YOUR_GOOGLE_CLIENT_SECRET",
+      map_profile_to_user: ->(profile) {
+        {first_name: profile["given_name"], last_name: profile["family_name"]}
+      },
+    },
+  },
+)
+```
 
 ### ID Generation
 
-Better Auth Ruby generates string IDs by default.
+RubyAuth by default will generate unique IDs for users, sessions, and other entities.
+You can customize ID generation behavior using the `advanced.database.generate_id` option.
 
 #### Option 1: Let Database Generate IDs
 
-For adapters or migrations where the database owns IDs, configure the schema and adapter accordingly in your app.
+Setting `generate_id` to `false` allows your database handle all ID generation: (outside of `generate_id` being `serial` and some cases of `generate_id` being `uuid`)
 
-#### Option 2: Custom ID Generation Function
+```ruby title="config/better_auth.rb"
+require "better_auth"
 
-```ruby
 auth = BetterAuth.auth(
-  secret: ENV.fetch("BETTER_AUTH_SECRET"),
+  database: :postgres,
   advanced: {
     database: {
-      generate_id: -> { SecureRandom.uuid }
-    }
-  }
+      generate_id: false # "serial" for auto-incrementing numeric IDs
+    },
+  },
 )
 ```
 
-#### Option 3: Consistent Custom ID Generator
+#### Option 2: Custom ID Generation Function
 
-Share the same generator across the app when multiple models need consistent ID shape.
+Use a function to generate IDs. You can return `false` or `undefined` from the function to let the database generate the ID for specific models:
 
-```ruby
-id_generator = -> { "auth_#{SecureRandom.hex(12)}" }
+```ruby title="config/better_auth.rb"
+require "better_auth"
 
 auth = BetterAuth.auth(
-  secret: ENV.fetch("BETTER_AUTH_SECRET"),
+  database: :postgres,
   advanced: {
     database: {
-      generate_id: id_generator
-    }
-  }
+      generate_id: lambda do |options|
+        # Let database auto-generate for specific models
+        return false if ["user", "users"].include?(options[:model])
+
+        # Generate UUIDs for other tables
+        SecureRandom.uuid
+      end
+    },
+  },
+)
+```
+
+<Callout type="info">
+  **Important**: Returning `false` or `nil` from the `generate_id` function lets the database handle ID generation for that specific model. Setting `generate_id: false` (without a function) disables ID generation for **all** tables.
+</Callout>
+
+#### Option 3: Consistent Custom ID Generator
+
+Generate the same type of ID for all tables:
+
+```ruby title="config/better_auth.rb"
+require "better_auth"
+
+auth = BetterAuth.auth(
+  database: :postgres,
+  advanced: {
+    database: {
+      generate_id: -> { SecureRandom.uuid }
+    },
+  },
 )
 ```
 
 ### Numeric IDs
 
-String IDs are the default. UUIDs are available with:
+If you prefer auto-incrementing numeric IDs, you can set the `advanced.database.generate_id` option to `"serial"`.
+Doing this will disable RubyAuth from generating IDs for any table, and will assume your
+database will generate the numeric ID automatically.
 
-If your app uses numeric IDs, keep the auth schema and adapter expectations aligned before migrating existing data.
+RubyAuth currently preserves the default text `id` SQL column type for CLI-generated schema even when `generate_id` is `"serial"` or `"uuid"`. Use your own framework migration if you need database-native numeric IDs.
 
-### UUIDs
+```ruby title="config/better_auth.rb"
+require "better_auth"
 
-UUIDs are available with:
-
-```ruby
-advanced: {
-  database: {
-    generate_id: "uuid"
-  }
-}
-```
-
-### Mixed ID Types
-
-Avoid mixing ID types inside the same auth schema. If an existing application already has mixed IDs, keep conversions at the adapter boundary and cover them with adapter tests.
-
-### Database Hooks
-
-Database hooks run around adapter create, update, and delete operations.
-
-```ruby
 auth = BetterAuth.auth(
-  secret: ENV.fetch("BETTER_AUTH_SECRET"),
-  database_hooks: {
-    user: {
-      create: {
-        before: lambda do |user, ctx|
-          {data: user.merge("name" => user["name"].to_s.strip)}
-        end,
-        after: lambda do |user, ctx|
-          Rails.logger.info("Created auth user #{user["id"]}")
-        end
-      }
-    }
-  }
+  database: :postgres,
+  advanced: {
+    database: {
+      generate_id: "serial"
+    },
+  },
 )
 ```
 
+<Callout type="info">
+  RubyAuth API payloads continue to expose IDs as strings. If your database
+  stores numeric IDs, pass IDs to auth endpoints as strings unless a specific
+  adapter documents otherwise.
+</Callout>
+
+### UUIDs
+
+If you prefer UUIDs for the `id` field, you can set the `advanced.database.generate_id` option to `"uuid"`.
+By default, RubyAuth generates string IDs for the `id` field for all tables.
+
+By enabling this option, RubyAuth uses UUID values when it generates IDs. The CLI currently keeps the SQL column type as text; use your own migrations if you require database-native UUID columns.
+
+### Mixed ID Types
+
+If you need different ID types across tables (e.g., integer IDs for users, UUID strings for sessions/accounts/verification), use a `generate_id` callback function.
+
+```ruby title="config/better_auth.rb"
+require "better_auth"
+
+auth = BetterAuth.auth(
+  database: :postgres,
+  user: {
+    model_name: "users", # PostgreSQL: id serial primary key
+  },
+  session: {
+    model_name: "sessions", # PostgreSQL: id text primary key
+  },
+  advanced: {
+    database: {
+      # Generate IDs per model.
+      generate_id: lambda do |options|
+        return false if ["user", "users"].include?(options[:model])
+
+        SecureRandom.uuid
+      end
+    },
+  },
+)
+```
+
+This configuration allows you to:
+
+* Use database auto-increment (serial, auto\_increment, etc.) for the users table
+* Generate UUIDs for all other tables (session, account, verification)
+* Maintain compatibility with existing schemas that use different ID types
+
+<Callout type="info">
+  **Use Case**: This is particularly useful when migrating from other authentication providers (like Clerk) where you have existing users with integer IDs but want UUID strings for new tables.
+</Callout>
+
+### Database Hooks
+
+Database hooks allow you to define custom logic that can be executed during the lifecycle of core database operations in RubyAuth. You can create hooks for the following models: **user**, **session**, and **account**.
+
+<Callout type="warn">
+  Additional fields are supported, however full type inference for these fields isn't yet supported.
+  Improved type support is planned.
+</Callout>
+
+There are two types of hooks you can define:
+
 #### 1. Before Hook
 
-Return `{data: hash}` to merge data into the operation.
-
-```ruby
-before: ->(user, _ctx) { {data: user.merge("image" => nil)} }
-```
-
-Return `false` to abort create, update, or delete.
-
-```ruby
-before: ->(_user, _ctx) { false }
-```
+* **Purpose**: This hook is called before the respective entity (user, session, or account) is created, updated, or deleted.
+* **Behavior**: If the hook returns `false`, the operation will be aborted. And If it returns a data object, it'll replace the original payload.
 
 #### 2. After Hook
 
-After hooks receive the stored record.
+* **Purpose**: This hook is called after the respective entity is created or updated.
+* **Behavior**: You can perform additional actions or modifications after the entity has been successfully created or updated.
 
-```ruby
-after: ->(user, _ctx) { AuditLog.create!(subject_id: user["id"]) }
+**Example Usage**
+
+```ruby title="config/better_auth.rb"
+require "better_auth"
+
+auth = BetterAuth.auth(
+  database_hooks: {
+    user: {
+      create: {
+        before: ->(user, _ctx) {
+          # Ensure to return RubyAuth named fields, not the original field names in your database.
+          name = user["name"].to_s.split(" ")
+          {
+            data: user.merge(
+              "firstName" => name[0],
+              "lastName" => name[1]
+            )
+          }
+        },
+        after: ->(_user, _ctx) {
+          # Perform additional actions, like creating a billing customer.
+        }
+      },
+      delete: {
+        before: ->(user, _ctx) {
+          Rails.logger.info("User #{user["email"]} is being deleted")
+          return false if user["email"].include?("admin")
+
+          true
+        },
+        after: ->(user, _ctx) {
+          Rails.logger.info("User #{user["email"]} has been deleted")
+        }
+      },
+    },
+    session: {
+      delete: {
+        before: ->(session, _ctx) {
+          return false if session["userId"] == "admin-user-id"
+
+          true
+        },
+        after: ->(session, _ctx) {
+          Rails.logger.info("Session #{session["token"]} has been deleted")
+        }
+      },
+    },
+  },
+)
 ```
 
 #### Throwing Errors
 
-Raise `BetterAuth::APIError` or another exception from a hook when the request should fail.
+If you want to stop the database hook from proceeding, you can raise `BetterAuth::APIError`.
 
-```ruby
-before: lambda do |user, _ctx|
-  raise BetterAuth::APIError.new("BAD_REQUEST", message: "domain blocked") if user["email"].end_with?("@blocked.test")
-  {data: user}
-end
+```ruby title="config/better_auth.rb"
+require "better_auth"
+
+auth = BetterAuth.auth(
+  database_hooks: {
+    user: {
+      create: {
+        before: ->(user, _ctx) {
+          if user["isAgreedToTerms"] == false
+            raise BetterAuth::APIError.new(
+              "BAD_REQUEST",
+              message: "User must agree to the TOS before signing up."
+            )
+          end
+
+          {data: user}
+        }
+      },
+    },
+  },
+)
 ```
 
-#### Using The Context Object
+#### Using the Context Object
 
-Routes that pass endpoint context into adapter calls make it available as the second hook argument.
+The context object (`ctx`), passed as the second argument to the hook, contains useful information. For `update` hooks, this includes the current `session`, which you can use to access the logged-in user's details.
 
-```ruby
-before: lambda do |user, ctx|
-  request_ip = ctx&.request&.ip
-  {data: user.merge("signupIp" => request_ip)}
-end
+```ruby title="config/better_auth.rb"
+require "better_auth"
+
+auth = BetterAuth.auth(
+  database_hooks: {
+    user: {
+      update: {
+        before: ->(data, ctx) {
+          # You can access the session from the context object when present.
+          if ctx.respond_to?(:context) && ctx.context.respond_to?(:session)
+            Rails.logger.info("User update initiated by: #{ctx.context.session[:user_id]}")
+          end
+
+          {data: data}
+        }
+      },
+    },
+  },
+)
 ```
+
+Much like standard hooks, database hooks also provide a `ctx` object that offers a variety of useful properties. Learn more in the [Hooks Documentation](/docs/concepts/hooks#ctx).
 
 ## Plugins Schema
 
-Plugins can add fields to core tables or add new tables.
+Plugins can define their own tables in the database to store additional data. They can also add columns to the core tables to store additional data. For example, the two factor authentication plugin adds the following columns to the `user` table:
 
-```ruby
-audit_plugin = BetterAuth::Plugin.new(
-  id: "audit",
-  schema: {
-    auditEvent: {
-      fields: {
-        userId: {type: "string", required: true},
-        action: {type: "string", required: true}
-      }
-    },
-    session: {
-      fields: {
-        activePluginId: {type: "string", required: false}
-      }
-    }
-  }
-)
+* `twoFactorEnabled`: Whether two factor authentication is enabled for the user.
+* `twoFactorSecret`: The secret key used to generate TOTP codes.
+* `twoFactorBackupCodes`: Encrypted backup codes for account recovery.
 
-auth = BetterAuth.auth(
-  secret: ENV.fetch("BETTER_AUTH_SECRET"),
-  plugins: [audit_plugin]
-)
-```
+To add new tables and columns to your database, you have two options:
+
+`CLI`: Use the migrate or generate command. These commands will scan your database and guide you through adding any missing tables or columns.
+`Manual Method`: Follow the instructions in the plugin documentation to manually add tables and columns.
+
+Both methods ensure your database schema stays up to date with your plugins' requirements.
 
 ## Experimental Joins
 
-Set `experimental: {joins: true}` when using an adapter that can return joined user data for session and account lookups.
+Since Better-Auth version `1.4` we've introduced experimental database joins support.
+This allows Better-Auth to perform multiple database queries in a single request, reducing the number of database roundtrips.
+Over 50 endpoints support joins, and we're constantly adding more.
 
-```ruby
+Under the hood, our adapter system supports joins natively, meaning even if you don't enable experimental joins,
+it will still fallback to making multiple database queries and combining the results.
+
+To enable joins, update your auth config with the following:
+
+```ruby title="config/better_auth.rb"
+require "better_auth"
+
 auth = BetterAuth.auth(
-  secret: ENV.fetch("BETTER_AUTH_SECRET"),
-  experimental: {
-    joins: true
-  }
+  experimental: {joins: true}
 )
 ```
 
-Use this only after verifying your adapter's join behavior in your environment.
+RubyAuth SQL adapters do not use DrizzleORM or PrismaORM. If you use Active Record or another ORM, see [Other relational databases](/docs/adapters/other-relational-databases#orm-integrations) for integration notes and keep your schema up to date with the generated SQL or your framework migrations.
+
+It's very important to read the documentation regarding experimental joins for your given adapter:
+
+* [SQLite](/docs/adapters/sqlite#joins-experimental)
+* [MySQL](/docs/adapters/mysql#joins-experimental)
+* [PostgreSQL](/docs/adapters/postgresql#joins-experimental)
+* [MSSQL](/docs/adapters/mssql#joins-experimental)
+* [MongoDB](/docs/adapters/mongo#joins-experimental)

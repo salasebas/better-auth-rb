@@ -1,49 +1,89 @@
 ---
 title: Telemetry
-description: Opt-in telemetry with the better_auth-telemetry gem.
+description: RubyAuth now collects anonymous telemetry data about general usage.
 ---
 
-Telemetry is **disabled by default** in RubyAuth. It is not a plugin — install the optional gem:
+<RubyAuthDisclaimer />
 
-```ruby
-gem "better_auth-telemetry"
-```
+RubyAuth collects anonymous usage data to help us improve the project. This is optional, transparent, and disabled by default.
 
-When bundled, core soft-loads a publisher on `auth.telemetry`. Without the gem, `#publish` is a safe no-op.
+## Why is telemetry collected?
 
-## Opt in
+Since v1.3.5, RubyAuth collects anonymous telemetry data about general usage if enabled.
 
-```ruby
-BetterAuth.auth(
-  telemetry: { enabled: true }
+Telemetry data helps us understand how RubyAuth is being used across different environments so we can improve performance, prioritize features, and fix issues more effectively. It guides our decisions on performance optimizations, feature development, and bug fixes. All data is collected completely anonymously and with privacy in mind, and users can opt out at any time. We strive to keep what we collect as transparent as possible.
+
+## What is being collected?
+
+The following data points may be reported. Everything is anonymous and intended for aggregate insights only.
+
+* **Anonymous identifier**: A non-reversible hash derived from your Ruby project metadata and optionally `base_url`. This lets us de-duplicate events per project without knowing who you are.
+* **Runtime**: Ruby engine and version.
+* **Environment**: one of `development`, `production`, `test`, or `ci`.
+* **Framework (if detected)**: Rails, Sinatra, Hanami, Roda, Grape, Rack, or another Ruby framework marker when detectable.
+* **Database (if detected)**: PostgreSQL, MySQL, SQLite, MSSQL, MongoDB, memory, or a generic adapter marker.
+* **System info**: platform, OS release, architecture, CPU count/model, total memory, and environment flags.
+* **Package manager**: Bundler when detectable.
+* **Redacted auth config snapshot**: A minimized, privacy-preserving view of your RubyAuth options.
+
+We also collect anonymous telemetry from the CLI:
+
+* **CLI generate (`cli_generate`)**: outcome `generated | overwritten | appended | no_changes | aborted` plus redacted config.
+* **CLI migrate (`cli_migrate`)**: outcome `migrated | no_changes | aborted | unsupported_adapter` plus adapter id (when relevant) and redacted config.
+
+<Callout type="info">
+  You can audit telemetry locally by setting the `BETTER_AUTH_TELEMETRY_DEBUG=1` environment variable when running your project or by setting debug mode in your auth config. In this debug mode, telemetry events are logged only to the console.
+</Callout>
+
+```ruby title="config/initializers/better_auth.rb"
+require "better_auth"
+
+auth = BetterAuth.auth(
+  secret: ENV.fetch("BETTER_AUTH_SECRET"),
+  base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
+  database: :postgres,
+  telemetry: { enabled: true, debug: true }
 )
 ```
 
-Or via environment:
+## How is my data protected?
 
-```bash
-export BETTER_AUTH_TELEMETRY=1
-export BETTER_AUTH_TELEMETRY_ENDPOINT=https://telemetry.example.com/ingest
+All collected data is fully anonymous and only useful in aggregate. It cannot be traced back to any individual source and is accessible only to a small group of core RubyAuth maintainers to guide roadmap decisions.
+
+* **No PII or secrets**: We do not collect emails, usernames, tokens, secrets, client IDs, client secrets, or database URLs.
+* **No full config**: We never send your full `betterAuth` configuration. Instead we send a reduced, redacted snapshot of non‑sensitive toggles and counts.
+* **Redaction by design**: See `packages/better_auth-telemetry/lib/better_auth/telemetry/detectors/auth_config.rb` for the exact shape of what is included. It purposely converts sensitive values to booleans, counts, or generic identifiers.
+
+## How can I enable it?
+
+You can enable telemetry collection in your auth config or by setting an environment variable.
+
+Via your auth config:
+
+```ruby title="config/initializers/better_auth.rb"
+require "better_auth"
+
+auth = BetterAuth.auth(
+  secret: ENV.fetch("BETTER_AUTH_SECRET"),
+  base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
+  database: :postgres,
+  telemetry: { enabled: true, debug: true }
+)
 ```
 
-Explicit `telemetry: { enabled: false }` overrides env vars.
+Via an environment variable:
 
-## Debug mode
+```txt title=".env"
+# Enable telemetry
+BETTER_AUTH_TELEMETRY=1
 
-```ruby
-telemetry: { enabled: true, debug: true }
+# Disable telemetry
+BETTER_AUTH_TELEMETRY=0
 ```
 
-Logs JSON events locally — no HTTP requests.
+### When is telemetry sent?
 
-## Ruby-specific behavior
+* On `BetterAuth.auth` initialization (`type: "init"`).
+* On CLI actions: `generate` and `migrate` as described above.
 
-- Detects Ruby frameworks (Rails, Sinatra, Hanami, Roda, Grape) via `Gem.loaded_specs`
-- Reports Bundler as package manager, not npm
-- Skipped automatically in test environments (`RACK_ENV=test`, etc.)
-
-See `packages/better_auth-telemetry/README.md` for full env var table and redaction rules.
-
-## Related
-
-- [Options — telemetry](/docs/reference/options#telemetry)
+Telemetry is disabled automatically in tests (`RACK_ENV=test`, `RAILS_ENV=test`, or `APP_ENV=test`) unless explicitly overridden by internal tooling.

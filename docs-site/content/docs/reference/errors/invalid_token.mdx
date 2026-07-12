@@ -1,0 +1,38 @@
+---
+title: INVALID_TOKEN
+description: A token supplied to a RubyAuth route is missing, expired, malformed, or not found.
+---
+
+RubyAuth uses short-lived tokens for email verification, password reset, OAuth
+state, and other verification flows. `INVALID_TOKEN` means the route received a
+token value but could not validate it against the expected verification record
+or token signature.
+
+## When it occurs
+
+This can happen when users open an old email link, paste a truncated token,
+reuse a one-time verification URL, or hit a route after verification cleanup has
+removed the backing record.
+
+For OAuth and SSO flows, check the more specific state errors first. For email
+and password flows, check the verification table and token expiry settings.
+
+## HTTP status
+
+RubyAuth usually returns `400 Bad Request` or redirects to the configured
+callback URL with `error=INVALID_TOKEN`.
+
+## Example response
+
+```json
+{
+  "code": "INVALID_TOKEN",
+  "message": "Invalid token"
+}
+```
+
+## How to fix
+
+Ask the user to restart the flow and issue a fresh token. In production, confirm
+that `BETTER_AUTH_SECRET` is stable across all instances, the verification table
+exists, and background cleanup is not deleting records earlier than configured.

@@ -40,8 +40,6 @@ module BetterAuth
           uri.host unless uri.host.to_s.empty?
         end
       end
-      raise Error, "base_url is required when cross_subdomain_cookies are enabled" if cross_subdomain && domain.to_s.empty? && !options.dynamic_base_url?
-
       custom = advanced.dig(:cookies, cookie_name.to_sym) || {}
       prefix = advanced[:cookie_prefix] || "better-auth"
       name = custom[:name] || "#{prefix}.#{cookie_name}"

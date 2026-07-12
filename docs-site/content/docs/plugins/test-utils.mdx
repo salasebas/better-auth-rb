@@ -1,114 +1,65 @@
 ---
 title: Test Utils
-description: Ruby testing notes for Better Auth.
+description: Testing utilities for integration and E2E testing
 ---
 
-<Callout type="warn">
-Better Auth Ruby does not expose a public `test_utils` plugin yet. The upstream
-`@better-auth/test-utils` package is a TypeScript package, and there is no
-matching Ruby package in `packages/`.
-</Callout>
+<RubyAuthDisclaimer />
 
-Ruby tests should use the auth object, direct `auth.api` calls, and the internal
-adapter in test setup. That covers the same practical needs without documenting a
-plugin API that does not exist yet.
+<UnderDevelopment />
 
-## Integration Test Pattern
+RubyAuth does not yet expose `BetterAuth::Plugins.test_utils` or a public test helper module. This page is visible as future work only; do not add it to production or test auth configs as if it were implemented.
 
-```ruby title="test/auth_flow_test.rb"
-require "test_helper"
+Upstream Better Auth ships a Test Utils plugin for integration and E2E tests. RubyAuth has repeated internal helper patterns in its test suite, including cookie helpers, authenticated sign-up helpers, verification value setup, and test database setup. Those patterns are not currently packaged as a supported public API.
 
-class AuthFlowTest < Minitest::Test
-  def setup
-    @auth = BetterAuth.auth(
-      secret: "test-secret",
-      base_url: "http://localhost:3000",
-      database: BetterAuth::Adapters::Memory.new,
-      email_and_password: { enabled: true }
-    )
-  end
+## Current Status
 
-  def test_signed_in_user_can_fetch_session
-    result = @auth.api.sign_up_email(
-      body: {
-        email: "user@example.com",
-        password: "password123",
-        name: "Test User"
-      }
-    )
+There is no Ruby plugin file at `packages/better_auth/lib/better_auth/plugins/test_utils.rb`, no `BetterAuth::Plugins.test_utils` factory, and no documented runtime route for test utilities.
 
-    cookie = result.fetch(:headers).fetch("set-cookie")
-    session = @auth.api.get_session(headers: { "cookie" => cookie })
+Existing tests use local support helpers such as:
 
-    assert_equal "user@example.com", session.fetch(:user).fetch("email")
-  end
-end
-```
+* `sign_up_cookie` helpers for creating an authenticated session cookie.
+* `cookie_header` helpers for turning `set-cookie` responses into request cookies.
+* Direct adapter calls for creating verification values.
+* Package-specific factories or fixture helpers for users, organizations, sessions, and plugin records.
 
-## Creating Records Directly
+These helpers are useful evidence for future design, but they remain internal to tests.
 
-Use the internal adapter when the test needs setup data without walking through a
-public auth route.
+## Future Goals
 
-```ruby title="test/admin_test.rb"
-user = auth.context.internal_adapter.create_user(
-  email: "admin@example.com",
-  name: "Admin",
-  emailVerified: true
-)
+A future RubyAuth test-utils package could provide:
 
-session = BetterAuth::Session.create(auth.context, user)
-cookie = session.fetch(:headers).fetch("set-cookie")
-```
+* Factories for users, sessions, accounts, organizations, and plugin records.
+* Database helpers that save and delete common auth records safely.
+* Auth helpers that return Rack headers, cookies, session tokens, and users.
+* Cookie helpers for Rack, Rails integration tests, and browser E2E tests.
+* OTP or verification capture helpers for email, phone, and one-time-token flows.
+* Reset helpers that clear generated auth records between tests.
 
-## Testing Protected Routes
+## Proposed Future Shape
 
-For Rack apps, pass the session cookie into the request environment.
+The following is pseudocode for a possible Ruby API. It is not implemented.
 
-```ruby title="test/protected_route_test.rb"
-request = Rack::MockRequest.new(app)
-response = request.get(
-  "/dashboard",
-  "HTTP_COOKIE" => cookie
-)
-
-assert_equal 200, response.status
-```
-
-## OTP And Email Flows
-
-Do not mock Better Auth internals unless the real dependency is impractical.
-Prefer configuring the plugin callback to capture values in the test.
-
-```ruby title="test/email_otp_test.rb"
-sent_codes = {}
-
+```ruby
+# Not implemented.
 auth = BetterAuth.auth(
-  secret: "test-secret",
-  base_url: "http://localhost:3000",
-  database: BetterAuth::Adapters::Memory.new,
+  secret: "test-secret-with-enough-entropy",
+  database: :memory,
   plugins: [
-    BetterAuth::Plugins.email_otp(
-      send_verification_otp: ->(data, _request) {
-        sent_codes[data.fetch(:email)] = data.fetch(:otp)
-      }
+    # Future API only.
+    BetterAuth::Plugins.test_utils(
+      capture_otp: true
     )
   ]
 )
 
-auth.api.send_verification_otp(
-  body: { email: "user@example.com", type: "sign-in" }
-)
-
-otp = sent_codes.fetch("user@example.com")
+# Future API only.
+test = auth.context.test
+user = test.create_user(email: "user@example.com")
+session = test.login(user_id: user.fetch("id"))
+headers = test.auth_headers(user_id: user.fetch("id"))
+cookies = test.browser_cookies(user_id: user.fetch("id"), domain: "localhost")
 ```
 
-## What Is Not Available Yet
+## Future Implementation
 
-- No public `BetterAuth::Plugins.test_utils` plugin.
-- No `ctx.test` helper surface.
-- No browser cookie helper for Playwright or Puppeteer.
-- No Ruby package equivalent to upstream `@better-auth/test-utils`.
-
-If a Ruby test-utils package is added later, this page should be rewritten around
-that public API.
+Runtime implementation is tracked by [Plan 025: test-utils future runtime and underdevelopment docs](/plans/025-test-utils-future-runtime-and-underdevelopment-docs.md). Until that runtime work exists, this page is intentionally an under-development placeholder and not supported API documentation.

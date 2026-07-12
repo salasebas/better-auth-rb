@@ -26,19 +26,19 @@ description: Linkedin provider setup and usage in Better Auth Ruby.
     To configure the provider, you need to import the provider and pass it to the `social_providers` option of the auth instance.
 
     ```ruby title="config/auth.rb"
-require "better_auth"
+    require "better_auth"
 
-auth = BetterAuth.auth(
-  secret: ENV.fetch("BETTER_AUTH_SECRET"),
-  base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
-  social_providers: {
-    linkedin: BetterAuth::SocialProviders.linkedin(
-      client_id: ENV.fetch("LINKEDIN_CLIENT_ID"),
-      client_secret: ENV.fetch("LINKEDIN_CLIENT_SECRET")
+    auth = BetterAuth.auth(
+      secret: ENV.fetch("BETTER_AUTH_SECRET"),
+      base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
+      social_providers: {
+        linkedin: BetterAuth::SocialProviders.linkedin(
+          client_id: ENV.fetch("LINKEDIN_CLIENT_ID"),
+          client_secret: ENV.fetch("LINKEDIN_CLIENT_SECRET")
+        )
+      }
     )
-  }
-)
-```
+    ```
 
     <Callout>
       LinkedIn's `email` and `email_verified` claims are [documented as optional](https://learn.microsoft.com/en-us/linkedin/consumer/integrations/self-serve/sign-in-with-linkedin-v2) and may be absent when no confirmed email is associated with the member. See [Handling Providers Without Email](/docs/concepts/oauth#handling-providers-without-email) for the recommended `map_profile_to_user` fallback.
@@ -53,16 +53,16 @@ auth = BetterAuth.auth(
     * `provider`: The provider to use. It should be set to `linkedin`.
 
     ```ruby title="server.rb"
-response = auth.api.sign_in_social(
-  body: {
-    provider: "linkedin",
-    callback_url: "/dashboard",
-    error_callback_url: "/login",
-    disable_redirect: true
-  }
-)
+    response = auth.api.sign_in_social(
+      body: {
+        provider: "linkedin",
+        callback_url: "/dashboard",
+        error_callback_url: "/login",
+        disable_redirect: true
+      }
+    )
 
-redirect_url = response.fetch(:url)
-```
+    redirect_url = response.fetch(:url)
+    ```
   </Step>
 </Steps>

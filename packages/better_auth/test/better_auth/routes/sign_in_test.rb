@@ -7,7 +7,7 @@ require_relative "../../test_helper"
 class BetterAuthRoutesSignInTest < Minitest::Test
   SECRET = "phase-five-secret-with-enough-entropy-123"
 
-  def test_sign_in_email_returns_token_user_and_cookie
+  def test_sign_in_email_returns_token_user_and_cookie_without_trusting_raw_forwarded_header
     auth = build_auth
     auth.api.sign_up_email(body: {email: "ada@example.com", password: "password123", name: "Ada"})
 
@@ -25,7 +25,7 @@ class BetterAuthRoutesSignInTest < Minitest::Test
     assert_includes headers.fetch("set-cookie"), "better-auth.session_token="
 
     session = auth.context.internal_adapter.find_session(data.fetch("token"))
-    assert_equal "127.0.0.1", session[:session]["ipAddress"]
+    assert_equal "", session[:session]["ipAddress"]
     assert_equal "Minitest", session[:session]["userAgent"]
   end
 

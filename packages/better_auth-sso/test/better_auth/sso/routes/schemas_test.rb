@@ -132,4 +132,16 @@ class BetterAuthSSORoutesSchemasTest < Minitest::Test
     assert_equal "sso_providers", schema.fetch(:ssoProvider).fetch(:model_name)
     assert_equal({type: "boolean", required: false, default_value: false}, fields.fetch(:domainVerified))
   end
+
+  def test_domain_verification_field_reaches_migration_projection
+    config = BetterAuth::Configuration.new(
+      secret: "sso-schema-secret-with-enough-entropy",
+      database: :memory,
+      plugins: [BetterAuth::Plugins.sso(domain_verification: {enabled: true})]
+    )
+
+    fields = BetterAuth::Schema.migration_tables(config).fetch("sso_providers").fetch(:fields)
+
+    assert_includes fields, "domain_verified"
+  end
 end

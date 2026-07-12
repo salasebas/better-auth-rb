@@ -63,4 +63,17 @@ class BetterAuthAPIKeySchemaTest < Minitest::Test
     assert_equal true, schema.fetch(:apikey).fetch(:fields).fetch(:name).fetch(:required)
     assert_equal "string", schema.fetch(:apikey).fetch(:fields).fetch(:name).fetch(:type)
   end
+
+  def test_api_key_fields_reach_migration_projection
+    config = BetterAuth::Configuration.new(
+      secret: "api-key-schema-secret-with-enough-entropy",
+      database: :memory,
+      plugins: [BetterAuth::Plugins.api_key]
+    )
+    fields = BetterAuth::Schema.migration_tables(config).fetch("api_keys").fetch(:fields)
+
+    assert_includes fields, "config_id"
+    assert_includes fields, "reference_id"
+    assert_equal true, fields.fetch("key").fetch(:index)
+  end
 end

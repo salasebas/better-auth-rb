@@ -22,6 +22,7 @@ module BetterAuth
         user_info_endpoint: "#{host}/services/oauth2/userinfo",
         scopes: scopes,
         pkce: true,
+        require_code_verifier: true,
         profile_map: ->(profile) {
           {
             id: profile["user_id"],

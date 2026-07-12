@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+ENV["BETTER_AUTH_URL"] ||= "http://localhost:3000"
+
 $LOAD_PATH.unshift File.expand_path("../../lib", __dir__)
 $LOAD_PATH.unshift File.expand_path("../../../better_auth/lib", __dir__)
 

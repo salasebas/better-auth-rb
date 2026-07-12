@@ -1,0 +1,35 @@
+---
+title: EMAIL_NOT_VERIFIED
+description: A user attempted a protected email/password flow before verifying their email.
+---
+
+When `email_and_password.require_email_verification` or a plugin-specific policy
+requires verified emails, RubyAuth blocks sign-in until the user completes the
+verification flow.
+
+## When it occurs
+
+This error appears during email/password sign-in when the user record exists but
+the `email_verified` field is false. It can also appear after importing users
+from another provider if the migration did not preserve verified-email status.
+
+## HTTP status
+
+RubyAuth returns `403 Forbidden` when a known user is not allowed to continue
+because their email is not verified.
+
+## Example response
+
+```json
+{
+  "code": "EMAIL_NOT_VERIFIED",
+  "message": "Email not verified"
+}
+```
+
+## How to fix
+
+Send the user a fresh verification email and confirm your
+`email_verification.send_verification_email` callback is configured. For
+migrations, map trusted source-provider verification flags to
+`email_verified: true` only when the source data is trustworthy.

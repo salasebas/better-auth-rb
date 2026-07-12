@@ -1,15 +1,19 @@
 ---
-title: Bearer
-description: Read sessions from Authorization bearer tokens.
+title: Bearer Token Authentication
+description: Authenticate API requests using Bearer tokens instead of browser cookies
 ---
 
-Read sessions from Authorization bearer tokens.
+<RubyAuthDisclaimer />
 
-<Callout type="info">
-This page documents the current Ruby port behavior. Ruby uses snake_case option names and `auth.api` method names; HTTP paths and JSON keys keep the upstream wire shape where implemented.
+The Bearer plugin enables authentication using Bearer tokens as an alternative to browser cookies. It intercepts requests, adding the Bearer token to the Authorization header before forwarding them to your API.
+
+<Callout type="warn">
+  Use this cautiously; it is intended only for APIs that don't support cookies or require Bearer tokens for authentication. Improper implementation could easily lead to security vulnerabilities.
 </Callout>
 
-## Configure
+## Installing the Bearer Plugin
+
+Add the Bearer plugin to your authentication setup:
 
 ```ruby title="config/auth.rb"
 require "better_auth"
@@ -23,26 +27,84 @@ auth = BetterAuth.auth(
 )
 ```
 
-## Usage
+## How to Use Bearer Tokens
+
+### 1. Obtain the Bearer Token
+
+After a successful sign-in, the plugin exposes the session token in the `set-auth-token` response header. Store this token only in storage appropriate for your server or API client:
 
 ```ruby title="server.rb"
-sign_in = auth.api.sign_in_email(body: { email: "ada@example.com", password: "password123" })
-session = auth.api.get_session(headers: { "authorization" => "Bearer #{sign_in[:token]}" })
+_status, headers, _body = auth.api.sign_in_email(
+  body: {email: "ada@example.com", password: "password123"},
+  as_response: true
+)
+
+token = headers.fetch("set-auth-token")
 ```
 
-## Routes
+You can pass the bearer token through the standard `Authorization` header when calling session-aware endpoints.
 
-This plugin does not add public routes.
+```ruby title="server.rb"
+session = auth.api.get_session(headers: {"authorization" => "Bearer #{token}"})
+```
+
+
+Keep bearer tokens in server-side storage appropriate to your application, and pass them in the `Authorization` header when calling authenticated routes.
+
+### 3. Make Authenticated Requests
+
+Now you can make authenticated API calls:
+
+```ruby title="server.rb"
+sessions = auth.api.list_sessions(
+  headers: {"authorization" => "Bearer #{token}"}
+)
+```
+
+### 4. Per-Request Token (Optional)
+
+You can also provide the token for individual requests:
+
+```ruby title="server.rb"
+headers = {"authorization" => "Bearer #{token}"}
+
+session = auth.api.get_session(headers: headers)
+accounts = auth.api.list_user_accounts(headers: headers)
+```
+
+### 5. Using Bearer Tokens Outside the Auth Client
+
+The Bearer token can be used to authenticate any request to your API, even when not using the Ruby auth object:
+
+```ruby title="server.rb"
+require "net/http"
+require "uri"
+
+request = Net::HTTP::Get.new(URI("https://api.example.com/profile"))
+request["authorization"] = "Bearer #{token}"
+```
+
+On the server, you can authenticate requests using the `auth.api.get_session` function,
+as long as the Authorization Bearer token header is present in the request:
+
+```ruby title="server.rb"
+class ProfileEndpoint
+  def initialize(auth)
+    @auth = auth
+  end
+
+  def call(env)
+    session = @auth.api.get_session(
+      headers: {"authorization" => env["HTTP_AUTHORIZATION"].to_s}
+    )
+
+    return [401, {"content-type" => "text/plain"}, ["Unauthorized"]] unless session
+
+    [200, {"content-type" => "text/plain"}, [session[:user]["email"]]]
+  end
+end
+```
 
 ## Options
 
-Current Ruby options accepted by `BetterAuth::Plugins.bearer`:
-
-- `require_signature`
-
-## Support Notes
-
-- The examples above are based on Ruby plugin source and tests in `packages/better_auth`.
-- If an upstream section is not represented here, treat it as not yet documented or not yet supported by the Ruby port until the matching Ruby implementation exists.
-
-{/* Upstream guide is preserved in reference/upstream-src/1.6.9/repository/docs/content/docs/plugins/bearer.mdx. */}
+**require_signature** (`Boolean`): Require the token to be signed. Default: `false`.

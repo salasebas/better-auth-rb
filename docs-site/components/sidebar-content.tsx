@@ -206,6 +206,11 @@ export const contents: Content[] = [
 				),
 			},
 			{
+				title: "Supported Features",
+				href: "/docs/supported-features",
+				icon: () => <FileBoxIcon className="w-4 h-4 text-current" />,
+			},
+			{
 				title: "LLMs.txt",
 				href: "/llms.txt",
 				external: true,
@@ -433,23 +438,6 @@ export const contents: Content[] = [
 							fillRule="evenodd"
 							d="M3 10.417c0-3.198 0-4.797.378-5.335c.377-.537 1.88-1.052 4.887-2.081l.573-.196C10.405 2.268 11.188 2 12 2s1.595.268 3.162.805l.573.196c3.007 1.029 4.51 1.544 4.887 2.081C21 5.62 21 7.22 21 10.417v1.574c0 5.638-4.239 8.375-6.899 9.536C13.38 21.842 13.02 22 12 22s-1.38-.158-2.101-.473C7.239 20.365 3 17.63 3 11.991zM14 9a2 2 0 1 1-4 0a2 2 0 0 1 4 0m-2 8c4 0 4-.895 4-2s-1.79-2-4-2s-4 .895-4 2s0 2 4 2"
 							clipRule="evenodd"
-						></path>
-					</svg>
-				),
-			},
-			{
-				title: "Ruby Port",
-				href: "/docs/introduction",
-				icon: () => (
-					<svg
-						xmlns="http://www.w3.org/2000/svg"
-						width="1em"
-						height="1em"
-						viewBox="0 0 128 128"
-					>
-						<path
-							className="fill-current"
-							d="M2 63.91v62.5h125v-125H2zm100.73-5a15.56 15.56 0 0 1 7.82 4.5a20.6 20.6 0 0 1 3 4c0 .16-5.4 3.81-8.69 5.85c-.12.08-.6-.44-1.13-1.23a7.09 7.09 0 0 0-5.87-3.53c-3.79-.26-6.23 1.73-6.21 5a4.6 4.6 0 0 0 .54 2.34c.83 1.73 2.38 2.76 7.24 4.86c8.95 3.85 12.78 6.39 15.16 10c2.66 4 3.25 10.46 1.45 15.24c-2 5.2-6.9 8.73-13.83 9.9a38.3 38.3 0 0 1-9.52-.1A23 23 0 0 1 80 109.19c-1.15-1.27-3.39-4.58-3.25-4.82a9 9 0 0 1 1.15-.73l4.6-2.64l3.59-2.08l.75 1.11a16.8 16.8 0 0 0 4.74 4.54c4 2.1 9.46 1.81 12.16-.62a5.43 5.43 0 0 0 .69-6.92c-1-1.39-3-2.56-8.59-5c-6.45-2.78-9.23-4.5-11.77-7.24a16.5 16.5 0 0 1-3.43-6.25a25 25 0 0 1-.22-8c1.33-6.23 6-10.58 12.82-11.87a31.7 31.7 0 0 1 9.49.26zm-29.34 5.24v5.12H57.16v46.23H45.65V69.26H29.38v-5a49 49 0 0 1 .14-5.16c.06-.08 10-.12 22-.1h21.81z"
 						></path>
 					</svg>
 				),
@@ -1981,6 +1969,16 @@ C0.7,239.6,62.1,0.5,62.2,0.4c0,0,54,13.8,119.9,30.8S302.1,62,302.2,62c0.2,0,0.2,
 				href: "/docs/reference/resources",
 				icon: () => <Book className="w-4 h-4 text-current" />,
 			},
+			{
+				title: "Redis Storage",
+				href: "/docs/reference/redis-storage",
+				icon: () => <Database className="w-4 h-4 text-current" />,
+			},
+			{
+				title: "Database Schemas",
+				href: "/docs/reference/database-schemas",
+				icon: () => <Database className="w-4 h-4 text-current" />,
+			},
 
 			{
 				title: "Security",
@@ -2038,6 +2036,16 @@ C0.7,239.6,62.1,0.5,62.2,0.4c0,0,54,13.8,119.9,30.8S302.1,62,302.2,62c0.2,0,0.2,
 						/>
 					</svg>
 				),
+			},
+			{
+				title: "Your First Plugin",
+				href: "/docs/guides/your-first-plugin",
+				icon: () => <Zap className="w-4 h-4" />,
+			},
+			{
+				title: "Create a DB Adapter",
+				href: "/docs/guides/create-a-db-adapter",
+				icon: () => <Database className="w-4 h-4" />,
 			},
 			{
 				title: "SAML SSO with Okta",

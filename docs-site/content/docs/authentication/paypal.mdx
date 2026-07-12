@@ -47,20 +47,20 @@ description: PayPal provider setup and usage in Better Auth Ruby.
     To configure the provider, you need to import the provider and pass it to the `social_providers` option of the auth instance.
 
     ```ruby title="config/auth.rb"
-require "better_auth"
+    require "better_auth"
 
-auth = BetterAuth.auth(
-  secret: ENV.fetch("BETTER_AUTH_SECRET"),
-  base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
-  social_providers: {
-    paypal: BetterAuth::SocialProviders.paypal(
-      client_id: ENV.fetch("PAYPAL_CLIENT_ID"),
-      client_secret: ENV.fetch("PAYPAL_CLIENT_SECRET"),
-      environment: "sandbox"
+    auth = BetterAuth.auth(
+      secret: ENV.fetch("BETTER_AUTH_SECRET"),
+      base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
+      social_providers: {
+        paypal: BetterAuth::SocialProviders.paypal(
+          client_id: ENV.fetch("PAYPAL_CLIENT_ID"),
+          client_secret: ENV.fetch("PAYPAL_CLIENT_SECRET"),
+          environment: "sandbox"
+        )
+      }
     )
-  }
-)
-```
+    ```
 
     #### Options
 
@@ -70,21 +70,21 @@ auth = BetterAuth.auth(
     * `request_shipping_address`: `boolean` - Whether to request shipping address information (default: `false`)
 
     ```ruby title="config/auth.rb"
-require "better_auth"
+    require "better_auth"
 
-auth = BetterAuth.auth(
-  secret: ENV.fetch("BETTER_AUTH_SECRET"),
-  base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
-  social_providers: {
-    paypal: BetterAuth::SocialProviders.paypal(
-      client_id: ENV.fetch("PAYPAL_CLIENT_ID"),
-      client_secret: ENV.fetch("PAYPAL_CLIENT_SECRET"),
-      environment: "live",
-      request_shipping_address: true
+    auth = BetterAuth.auth(
+      secret: ENV.fetch("BETTER_AUTH_SECRET"),
+      base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
+      social_providers: {
+        paypal: BetterAuth::SocialProviders.paypal(
+          client_id: ENV.fetch("PAYPAL_CLIENT_ID"),
+          client_secret: ENV.fetch("PAYPAL_CLIENT_SECRET"),
+          environment: "live",
+          request_shipping_address: true
+        )
+      }
     )
-  }
-)
-```
+    ```
   </Step>
 
   <Step>
@@ -95,17 +95,17 @@ auth = BetterAuth.auth(
     * `provider`: The provider to use. It should be set to `paypal`.
 
     ```ruby title="server.rb"
-response = auth.api.sign_in_social(
-  body: {
-    provider: "paypal",
-    callback_url: "/dashboard",
-    error_callback_url: "/login",
-    disable_redirect: true
-  }
-)
+    response = auth.api.sign_in_social(
+      body: {
+        provider: "paypal",
+        callback_url: "/dashboard",
+        error_callback_url: "/login",
+        disable_redirect: true
+      }
+    )
 
-redirect_url = response.fetch(:url)
-```
+    redirect_url = response.fetch(:url)
+    ```
 
     ### Additional Options:
 

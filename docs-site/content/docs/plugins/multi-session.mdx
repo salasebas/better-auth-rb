@@ -1,15 +1,85 @@
 ---
 title: Multi Session
-description: List and revoke device sessions.
+description: Learn how to use multi-session plugin in RubyAuth.
 ---
 
-List and revoke device sessions.
+<RubyAuthDisclaimer />
 
-<Callout type="info">
-This page documents the current Ruby port behavior. Ruby uses snake_case option names and `auth.api` method names; HTTP paths and JSON keys keep the upstream wire shape where implemented.
-</Callout>
+The multi-session plugin allows users to maintain multiple active sessions across different accounts in the same browser. This plugin is useful for applications that require users to switch between multiple accounts without logging out.
 
-## Configure
+## Installation
+
+<Steps>
+  <Step>
+    ### Add the plugin to your **auth** config
+
+    ```ruby title="config/auth.rb"
+    require "better_auth"
+
+    auth = BetterAuth.auth(
+      secret: ENV.fetch("BETTER_AUTH_SECRET"),
+      base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
+      plugins: [
+        BetterAuth::Plugins.multi_session
+      ]
+    )
+    ```
+  </Step>
+
+</Steps>
+
+## Usage
+
+Whenever a user logs in, the plugin will add additional cookie to the browser. This cookie will be used to maintain multiple sessions across different accounts.
+
+### List all device sessions
+
+To list all active sessions for the current user, you can call the `listDeviceSessions` method.
+
+<APIMethod path="/multi-session/list-device-sessions" method="GET" requireSession>
+  ```
+  type listDeviceSessions = {
+  }
+  ```
+</APIMethod>
+
+### Set active session
+
+To set the active session, you can call the `setActive` method.
+
+<APIMethod path="/multi-session/set-active" method="POST" requireSession>
+  ```
+  type setActiveSession = {
+      /**
+       * The session token to activate.
+       */
+      sessionToken: string = "session-token"
+  }
+  ```
+</APIMethod>
+
+### Revoke a session
+
+To revoke a session, you can call the `revoke` method.
+
+<APIMethod path="/multi-session/revoke" method="POST" requireSession>
+  ```
+  type revokeDeviceSession = {
+      /**
+       * The session token to revoke.
+       */
+      sessionToken: string = "session-token"
+  }
+  ```
+</APIMethod>
+
+### Signout and Revoke all sessions
+
+When a user logs out, the plugin will revoke all active sessions for the user. You can do this by calling the existing `signOut` method, which handles revoking all sessions automatically.
+
+### Max Sessions
+
+You can specify the maximum number of sessions a user can have by passing the `maximumSessions` option to the plugin. By default, the plugin allows 5 sessions per device.
 
 ```ruby title="config/auth.rb"
 require "better_auth"
@@ -18,41 +88,7 @@ auth = BetterAuth.auth(
   secret: ENV.fetch("BETTER_AUTH_SECRET"),
   base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
   plugins: [
-    BetterAuth::Plugins.multi_session(maximum_sessions: 5)
+    BetterAuth::Plugins.multi_session
   ]
 )
 ```
-
-## Usage
-
-```ruby title="server.rb"
-sessions = auth.api.list_device_sessions(
-  headers: { "cookie" => request.env["HTTP_COOKIE"] }
-)
-
-auth.api.revoke_device_session(
-  headers: { "cookie" => request.env["HTTP_COOKIE"] },
-  body: { sessionToken: sessions.first["token"] }
-)
-```
-
-## Routes
-
-| Method | Path | Ruby API method |
-| --- | --- | --- |
-| `GET` | `/multi-session/list-device-sessions` | `auth.api.list_device_sessions` |
-| `POST` | `/multi-session/set-active` | `auth.api.set_active_session` |
-| `POST` | `/multi-session/revoke` | `auth.api.revoke_device_session` |
-
-## Options
-
-Current Ruby options accepted by `BetterAuth::Plugins.multi_session`:
-
-- `maximum_sessions`
-
-## Support Notes
-
-- The examples above are based on Ruby plugin source and tests in `packages/better_auth`.
-- If an upstream section is not represented here, treat it as not yet documented or not yet supported by the Ruby port until the matching Ruby implementation exists.
-
-{/* Upstream guide is preserved in reference/upstream-src/1.6.9/repository/docs/content/docs/plugins/multi-session.mdx. */}

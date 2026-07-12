@@ -1,66 +1,154 @@
 ---
 title: FAQ
-description: Frequently asked questions about RubyAuth.
+description: Frequently asked questions about running RubyAuth in Rails, Rack, and Ruby services.
 ---
 
 <RubyAuthDisclaimer />
 
-## Is RubyAuth the same as Better Auth?
+## How do I look up the current session on the server?
 
-No. RubyAuth is an independent Ruby server library inspired by Better Auth v1.6.9. It is not the official npm package or hosted service.
+Use the server API or the framework helper for your integration. In plain Rack,
+pass the request headers to `auth.api.get_session`; in Rails, prefer the
+`better_auth-rails` helper methods documented by the Rails integration.
 
-## Is there a JavaScript client?
+```ruby
+session = auth.api.get_session(headers: request.env)
+user = session&.dig(:user)
+```
 
-No official browser client gem. Frontends call `/api/auth/*` over HTTP with cookies or bearer tokens. External API-key docs note upstream JS client plugins can talk to the Ruby server.
+Do not trust client-provided user IDs. Read the session from the RubyAuth cookie
+or bearer token on every request that needs authentication.
 
-## How do I mount auth in Rails?
+## Why do OAuth callbacks fail in production but work locally?
 
-Add `better_auth-rails`, run `bin/rails generate better_auth:install`, and add `better_auth` to routes. See [Rails integration](/docs/integrations/rails).
+Most callback failures come from a mismatch between the URL RubyAuth uses and
+the URL registered with the provider. Check `base_url`, `base_path`,
+`trusted_origins`, proxy headers, and the callback URL configured in the OAuth
+or SSO dashboard.
 
-## How do I generate a secret?
+```ruby
+BetterAuth.auth(
+  secret: ENV.fetch("BETTER_AUTH_SECRET"),
+  base_url: "https://app.example.com",
+  base_path: "/api/auth",
+  trusted_origins: ["https://app.example.com"],
+  database: :postgres
+)
+```
+
+When the app runs behind a proxy, make sure the proxy preserves `Host`,
+`X-Forwarded-Host`, and `X-Forwarded-Proto` consistently.
+
+## Can I use preview deployments or multiple domains?
+
+Yes. Keep one canonical `base_url` and list full request-facing origin patterns
+in `serving_origins`. See the [multiple serving origins guide](/docs/guides/dynamic-base-url)
+for deployment patterns.
+
+```ruby
+base_url: "https://app.example.com",
+serving_origins: ["https://app.example.com", "https://*.preview.example.com"]
+```
+
+## How do I diagnose duplicate gem or version issues?
+
+Use Bundler. The docs site uses Node tooling internally, but runtime RubyAuth
+apps should diagnose Ruby gem versions with Bundler.
+
+```bash
+bundle info better_auth
+bundle exec ruby -e 'require "better_auth"; puts BetterAuth::VERSION'
+bundle exec ruby -e 'puts Gem.loaded_specs.select { |name, _| name.start_with?("better_auth") }.keys'
+```
+
+If multiple local checkouts or path gems are involved, inspect `Gemfile.lock`
+and any `path:` entries in the application Gemfile.
+
+## Which test framework should I use?
+
+Core RubyAuth uses Minitest. Adapter and plugin packages in this repository use
+RSpec where that package already chose RSpec. Match the package you are editing,
+and run the workspace checks before submitting changes.
+
+```bash
+bundle exec rake test
+bundle exec standardrb
+cd docs-site && pnpm lint && pnpm build
+```
+
+## How should Rails apps mount RubyAuth?
+
+Use `better_auth-rails` when you are in Rails. Configure the initializer and
+mount the generated route at the same path as `config.base_path`.
+
+```ruby title="config/initializers/better_auth.rb"
+BetterAuth::Rails.configure do |config|
+  config.secret = ENV.fetch("BETTER_AUTH_SECRET")
+  config.base_url = ENV.fetch("BETTER_AUTH_URL")
+  config.base_path = "/api/auth"
+  config.database = :postgres
+end
+```
+
+## How should plain Rack apps mount RubyAuth?
+
+Build one `auth` instance at boot and route requests to it. Avoid rebuilding the
+auth object per request because plugins, adapters, and telemetry are intended to
+be initialized once.
+
+```ruby title="config.ru"
+require "better_auth"
+
+auth = BetterAuth.auth(
+  secret: ENV.fetch("BETTER_AUTH_SECRET"),
+  base_url: ENV.fetch("BETTER_AUTH_URL"),
+  database: :postgres
+)
+
+map "/api/auth" do
+  run auth
+end
+```
+
+## How do I reset local development data?
+
+For database-backed development, reset the application database the same way you
+reset the rest of your app. Then rerun the RubyAuth migrations or schema
+generator for your adapter.
+
+```bash
+bundle exec better-auth migrate --cwd . --config config/better_auth.rb --yes
+```
+
+For stateless or memory-backed experiments, restart the process and clear the
+browser cookies for the local auth host.
+
+## Why do I get CSRF or invalid origin errors?
+
+RubyAuth validates origins on browser-facing routes. Add every trusted frontend
+origin explicitly, including local development ports.
+
+```ruby
+trusted_origins: [
+  "http://localhost:3000",
+  "http://localhost:5173",
+  "https://app.example.com"
+]
+```
+
+Do not use broad wildcard origins for production apps unless you also control
+the matching domains.
+
+## Where should secrets live?
+
+Use `BETTER_AUTH_SECRET` or your framework's credential manager. The secret must
+be stable across all running app instances and should be at least 32 characters
+with high entropy.
 
 ```bash
 bundle exec better-auth secret
 ```
 
-Set `BETTER_AUTH_SECRET` in the environment.
-
-## Which databases are supported?
-
-PostgreSQL, MySQL, SQLite, SQL Server, in-memory, and MongoDB (via `better_auth-mongodb`). Rails uses ActiveRecord; Hanami uses Sequel.
-
-## How do migrations work?
-
-```bash
-bundle exec better-auth generate --cwd . --dialect postgres --output db/better_auth/schema.sql
-bundle exec better-auth migrate --cwd . --config config/better_auth.rb --yes
-```
-
-## How do I read the session server-side?
-
-```ruby
-auth.api.get_session(headers: { "cookie" => request.env["HTTP_COOKIE"] })
-```
-
-Or use framework helpers (`current_user` in Rails/Sinatra/Roda/Grape).
-
-## Why do OAuth redirects fail with state_mismatch?
-
-Usually cookie or origin issues. See [State mismatch](/docs/reference/errors/state_mismatch).
-
-## How do I disable sign-up?
-
-Configure provider or global sign-up disable options; OAuth returns `signup_disabled` when blocked.
-
-## Where are plugin options documented?
-
-[Plugins index](/docs/plugins) and individual plugin pages.
-
-## How do I contribute?
-
-See [Contributing](/docs/reference/contributing).
-
-## Related
-
-- [Installation](/docs/installation)
-- [Options](/docs/reference/options)
+Rotating secrets during an OAuth or SSO flow can invalidate state cookies and
+produce callback errors. Use the `secrets` rotation option when you need a
+graceful rollout.

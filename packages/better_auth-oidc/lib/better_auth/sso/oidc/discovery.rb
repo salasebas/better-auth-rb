@@ -27,13 +27,8 @@ module BetterAuth
 
         def validate_discovery_url(url, trusted_origin = nil)
           uri = parse_http_url!(url, "discoveryEndpoint", details: {url: url})
-          return true unless trusted_origin && !trusted_origin.call(uri.to_s)
-
-          raise DiscoveryError.new(
-            "discovery_untrusted_origin",
-            "The main discovery endpoint \"#{uri}\" is not trusted by your trusted origins configuration.",
-            details: {url: uri.to_s}
-          )
+          validate_endpoint_policy!(uri.to_s, "discoveryEndpoint", trusted_origin)
+          true
         end
 
         def validate_discovery_document(document, issuer)
@@ -68,14 +63,13 @@ module BetterAuth
           doc
         end
 
-        def fetch_discovery_document(url, timeout: nil, fetch: nil)
+        def fetch_discovery_document(url, timeout: nil, fetch: nil, trusted_origin: nil)
+          destination = validate_endpoint_policy!(url, "discoveryEndpoint", trusted_origin, resolve: !fetch)
           response = if fetch
             fetch.call(url, timeout: timeout)
           else
-            uri = URI(url)
-            Net::HTTP.start(uri.host, uri.port, use_ssl: uri.scheme == "https", read_timeout: timeout) do |http|
-              http.get(uri.request_uri)
-            end
+            http = EndpointPolicy.build_http(destination, open_timeout: timeout, read_timeout: timeout)
+            http.start { |connection| connection.get(destination.uri.request_uri) }
           end
           parse_discovery_fetch_response(response)
         rescue DiscoveryError
@@ -96,7 +90,7 @@ module BetterAuth
           discovery_url = discovery_endpoint || existing[:discovery_endpoint] || compute_discovery_url(issuer)
           validate_discovery_url(discovery_url, origin_check)
 
-          document = fetch_discovery_document(discovery_url, timeout: timeout, fetch: fetch)
+          document = fetch_discovery_document(discovery_url, timeout: timeout, fetch: fetch, trusted_origin: origin_check)
           validate_discovery_document(document, issuer)
           normalized_document = normalize_discovery_urls(document, issuer, origin_check)
 
@@ -123,15 +117,20 @@ module BetterAuth
           issuer_value = issuer.nil? ? value_or_issuer : issuer
           normalized = normalize_endpoint_url(name, value, issuer_value)
 
-          if trusted_origin && !trusted_origin.call(normalized)
-            raise DiscoveryError.new(
-              "discovery_untrusted_origin",
-              "The #{name} \"#{normalized}\" is not trusted by your trusted origins configuration.",
-              details: {endpoint: name, url: normalized}
-            )
-          end
+          validate_endpoint_policy!(normalized, name, trusted_origin)
 
           normalized
+        end
+
+        def validate_endpoint_policy!(url, name, trusted_origin, resolve: false)
+          EndpointPolicy.validate(url, name: "OIDC #{name}", trusted_origin: trusted_origin, resolve: resolve)
+        rescue EndpointPolicy::Error => error
+          code = (error.reason == :invalid_url) ? "discovery_invalid_url" : "discovery_untrusted_origin"
+          raise DiscoveryError.new(
+            code,
+            error.message,
+            details: {endpoint: name, url: url}
+          )
         end
 
         def needs_runtime_discovery?(oidc_config)

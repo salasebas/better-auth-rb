@@ -42,20 +42,20 @@ description: Salesforce provider setup and usage in Better Auth Ruby.
     To configure the provider, you need to import the provider and pass it to the `social_providers` option of the auth instance.
 
     ```ruby title="config/auth.rb"
-require "better_auth"
+    require "better_auth"
 
-auth = BetterAuth.auth(
-  secret: ENV.fetch("BETTER_AUTH_SECRET"),
-  base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
-  social_providers: {
-    salesforce: BetterAuth::SocialProviders.salesforce(
-      client_id: ENV.fetch("SALESFORCE_CLIENT_ID"),
-      client_secret: ENV.fetch("SALESFORCE_CLIENT_SECRET"),
-      environment: "production"
+    auth = BetterAuth.auth(
+      secret: ENV.fetch("BETTER_AUTH_SECRET"),
+      base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
+      social_providers: {
+        salesforce: BetterAuth::SocialProviders.salesforce(
+          client_id: ENV.fetch("SALESFORCE_CLIENT_ID"),
+          client_secret: ENV.fetch("SALESFORCE_CLIENT_SECRET"),
+          environment: "production"
+        )
+      }
     )
-  }
-)
-```
+    ```
 
     #### Configuration Options
 
@@ -68,22 +68,22 @@ auth = BetterAuth.auth(
     #### Advanced Configuration
 
     ```ruby title="config/auth.rb"
-require "better_auth"
+    require "better_auth"
 
-auth = BetterAuth.auth(
-  secret: ENV.fetch("BETTER_AUTH_SECRET"),
-  base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
-  social_providers: {
-    salesforce: BetterAuth::SocialProviders.salesforce(
-      client_id: ENV.fetch("SALESFORCE_CLIENT_ID"),
-      client_secret: ENV.fetch("SALESFORCE_CLIENT_SECRET"),
-      environment: "sandbox",
-      login_url: "my-company.my.salesforce.com",
-      redirect_uri: "http://localhost:3000/api/auth/callback/salesforce"
+    auth = BetterAuth.auth(
+      secret: ENV.fetch("BETTER_AUTH_SECRET"),
+      base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
+      social_providers: {
+        salesforce: BetterAuth::SocialProviders.salesforce(
+          client_id: ENV.fetch("SALESFORCE_CLIENT_ID"),
+          client_secret: ENV.fetch("SALESFORCE_CLIENT_SECRET"),
+          environment: "sandbox",
+          login_url: "my-company.my.salesforce.com",
+          redirect_uri: "http://localhost:3000/api/auth/callback/salesforce"
+        )
+      }
     )
-  }
-)
-```
+    ```
 
     <Callout type="info">
       * Use `environment: "sandbox"` for testing with Salesforce sandbox orgs
@@ -101,7 +101,7 @@ auth = BetterAuth.auth(
     SALESFORCE_CLIENT_ID=your_consumer_key_here
     SALESFORCE_CLIENT_SECRET=your_consumer_secret_here
     BETTER_AUTH_URL=http://localhost:3000 # Important for redirect URI generation
-```
+    ```
 
     For production:
 
@@ -109,7 +109,7 @@ auth = BetterAuth.auth(
     SALESFORCE_CLIENT_ID=your_consumer_key_here
     SALESFORCE_CLIENT_SECRET=your_consumer_secret_here
     BETTER_AUTH_URL=https://yourdomain.com
-```
+    ```
   </Step>
 
   <Step>
@@ -120,17 +120,17 @@ auth = BetterAuth.auth(
     * `provider`: The provider to use. It should be set to `salesforce`.
 
     ```ruby title="server.rb"
-response = auth.api.sign_in_social(
-  body: {
-    provider: "salesforce",
-    callback_url: "/dashboard",
-    error_callback_url: "/login",
-    disable_redirect: true
-  }
-)
+    response = auth.api.sign_in_social(
+      body: {
+        provider: "salesforce",
+        callback_url: "/dashboard",
+        error_callback_url: "/login",
+        disable_redirect: true
+      }
+    )
 
-redirect_url = response.fetch(:url)
-```
+    redirect_url = response.fetch(:url)
+    ```
   </Step>
 
   <Step>
@@ -146,20 +146,20 @@ redirect_url = response.fetch(:url)
     4. **Override if needed**: Use the `redirect_uri` option to explicitly set the redirect URI
 
     ```ruby title="config/auth.rb"
-require "better_auth"
+    require "better_auth"
 
-auth = BetterAuth.auth(
-  secret: ENV.fetch("BETTER_AUTH_SECRET"),
-  base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
-  social_providers: {
-    salesforce: BetterAuth::SocialProviders.salesforce(
-      client_id: ENV.fetch("SALESFORCE_CLIENT_ID"),
-      client_secret: ENV.fetch("SALESFORCE_CLIENT_SECRET"),
-      redirect_uri: "http://localhost:3000/api/auth/callback/salesforce"
+    auth = BetterAuth.auth(
+      secret: ENV.fetch("BETTER_AUTH_SECRET"),
+      base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
+      social_providers: {
+        salesforce: BetterAuth::SocialProviders.salesforce(
+          client_id: ENV.fetch("SALESFORCE_CLIENT_ID"),
+          client_secret: ENV.fetch("SALESFORCE_CLIENT_SECRET"),
+          redirect_uri: "http://localhost:3000/api/auth/callback/salesforce"
+        )
+      }
     )
-  }
-)
-```
+    ```
 
     #### Environment Issues
 

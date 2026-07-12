@@ -1,0 +1,255 @@
+---
+title: Other Relational Databases
+description: Integrate Better Auth with other relational databases.
+---
+
+<RubyAuthDisclaimer />
+
+RubyAuth supports the core relational database adapters documented here:
+
+## Core Dialects
+
+* [MySQL](/docs/adapters/mysql)
+* [SQLite](/docs/adapters/sqlite)
+* [PostgreSQL](/docs/adapters/postgresql)
+* [MS SQL](/docs/adapters/mssql)
+* `:memory` for development, examples, and tests that do not need persistence
+
+## Choosing an adapter
+
+| Adapter | Ruby package | Best fit |
+| --- | --- | --- |
+| PostgreSQL | `better_auth` + `pg` | Production Rack apps, Rails apps using PostgreSQL, non-default schemas |
+| MySQL | `better_auth` + `mysql2` | Production Rack apps, Rails apps using MySQL |
+| SQLite | `better_auth` + `sqlite3` | Local development, tests, small single-node deployments |
+| MS SQL | `better_auth` + `sequel` + `tiny_tds` | Microsoft SQL Server deployments |
+| MongoDB | `better_auth-mongodb` | NoSQL deployments with MongoDB collections |
+| Memory | `better_auth` | Tests, examples, and non-persistent development |
+
+<UnderDevelopment>
+  Upstream Better Auth supports a wide range of database dialects out of the box thanks to <Link href="https://kysely.dev/">Kysely</Link>.
+
+  Any dialect supported by Kysely can be utilized with upstream Better Auth, including capabilities for generating and migrating database schemas through the <Link href="/docs/concepts/cli">CLI</Link>.
+
+  The dialects listed below are supported by upstream Better Auth via Kysely.
+  RubyAuth does not ship drivers for PlanetScale, Neon, Cloudflare D1, etc.
+  Use a core adapter (PostgreSQL, MySQL, SQLite, MSSQL) or implement a custom
+  adapter - see [Create a database adapter](/docs/guides/create-a-db-adapter).
+
+  ## Kysely Organization Dialects
+
+  * [Postgres.js](https://github.com/kysely-org/kysely-postgres-js)
+  * [SingleStore Data API](https://github.com/kysely-org/kysely-singlestore)
+  * [Supabase](https://github.com/kysely-org/kysely-supabase)
+
+  ## Kysely Community dialects
+
+  * [PlanetScale Serverless Driver](https://github.com/depot/kysely-planetscale)
+  * [Cloudflare D1](https://github.com/aidenwallis/kysely-d1)
+  * [AWS RDS Data API](https://github.com/serverless-stack/kysely-data-api)
+  * [Prisma Postgres](https://github.com/kysely-org/kysely-prisma-postgres)
+  * [SurrealDB](https://github.com/igalklebanov/kysely-surrealdb)
+  * [Neon](https://github.com/seveibar/kysely-neon)
+  * [Xata](https://github.com/xataio/client-ts/tree/main/packages/plugin-client-kysely)
+  * [AWS S3 Select](https://github.com/igalklebanov/kysely-s3-select)
+  * [libSQL/sqld](https://github.com/libsql/kysely-libsql)
+  * [Fetch driver](https://github.com/andersgee/kysely-fetch-driver)
+  * [SQLite WASM](https://github.com/DallasHoff/sqlocal)
+  * [Deno SQLite](https://gitlab.com/soapbox-pub/kysely-deno-sqlite)
+  * [TiDB Cloud Serverless Driver](https://github.com/tidbcloud/kysely)
+  * [Capacitor SQLite Kysely](https://github.com/DawidWetzler/capacitor-sqlite-kysely)
+  * [BigQuery](https://github.com/maktouch/kysely-bigquery)
+  * [Clickhouse](https://github.com/founderpathcom/kysely-clickhouse)
+  * [PGLite](https://github.com/czeidler/kysely-pglite-dialect)
+
+  <Callout>
+    You can see the full list of supported Kysely dialects{" "}
+    <Link href="https://kysely.dev/docs/dialects">here</Link>.
+  </Callout>
+</UnderDevelopment>
+
+## ORM integrations
+
+This page also collects upstream ORM adapter documentation that does not have a
+standalone RubyAuth adapter page.
+
+### Drizzle ORM Adapter
+
+Drizzle ORM is a powerful and flexible ORM for Node.js and TypeScript. It provides a simple and intuitive API for working with databases, and supports a wide range of databases including MySQL, PostgreSQL, SQLite, and more.
+
+Before getting started, make sure you have Drizzle installed and configured. For more information, see [Drizzle Documentation](https://orm.drizzle.team/docs/overview/)
+
+#### Installation
+
+<UnderDevelopment>
+  RubyAuth does not ship `@better-auth/drizzle-adapter` or a Drizzle runtime.
+  Use a native SQL adapter such as [PostgreSQL](/docs/adapters/postgresql),
+  [MySQL](/docs/adapters/mysql), [SQLite](/docs/adapters/sqlite), or
+  [MS SQL](/docs/adapters/mssql).
+</UnderDevelopment>
+
+#### Example Usage
+
+You can use the upstream Drizzle adapter to connect to your database as follows.
+
+<UnderDevelopment>
+  Drizzle examples are TypeScript-only upstream examples and are not RubyAuth
+  configuration. Configure RubyAuth with one of the native SQL adapters instead.
+</UnderDevelopment>
+
+#### Schema generation & migration
+
+The [Better Auth CLI](/docs/concepts/cli) allows you to generate or migrate
+your database schema based on your Better Auth configuration and plugins.
+
+<UnderDevelopment>
+  RubyAuth does not generate Drizzle schema files or run `drizzle-kit`.
+  Use `bundle exec better-auth generate` for SQL output, or let Rails/Hanami
+  generate framework migrations through their integration gems.
+</UnderDevelopment>
+
+#### Joins (Experimental)
+
+Database joins is useful when Better-Auth needs to fetch related data from multiple tables in a single query.
+Endpoints like `/get-session`, `/get-full-organization` and many others benefit greatly from this feature,
+seeing upwards of 2x to 3x performance improvements depending on database latency.
+
+<UnderDevelopment>
+  The upstream Drizzle adapter supports joins when its schema relations are
+  defined. RubyAuth native SQL adapters and the Rails/Hanami adapters implement
+  their own join support.
+</UnderDevelopment>
+
+#### Modifying Table Names
+
+The Drizzle adapter expects the schema you define to match the table names. For example, if your Drizzle schema maps the `user` table to `users`, you need to manually pass the schema and map it to the user table.
+
+<UnderDevelopment>
+  RubyAuth does not consume Drizzle schemas. Use RubyAuth model-name options or
+  framework migration generators to rename tables in Ruby applications.
+</UnderDevelopment>
+
+#### Modifying Field Names
+
+We map field names based on property you passed to your Drizzle schema.
+For example, if you want to modify the `email` field to `email_address`,
+you simply need to change the Drizzle schema.
+
+<UnderDevelopment>
+  RubyAuth does not consume Drizzle field metadata. Use RubyAuth field-name
+  options and keep generated SQL or framework migrations in sync.
+</UnderDevelopment>
+
+#### Using Plural Table Names
+
+If all your tables are using plural form, upstream Drizzle can accept a `usePlural` option.
+
+<UnderDevelopment>
+  RubyAuth handles plural table names through its own database configuration and
+  integration-specific migration generators, not through Drizzle.
+</UnderDevelopment>
+
+#### Additional Information
+
+* If you're looking for performance improvements or tips, take a look at our guide to <Link href="/docs/guides/optimizing-for-performance">performance optimizations</Link>.
+
+### Prisma
+
+Prisma ORM is an open-source database toolkit that simplifies database access and management in applications by providing a type-safe query builder and an intuitive data modeling interface.
+
+Before getting started, make sure you have Prisma installed and configured. For more information, see [Prisma Documentation](https://www.prisma.io/docs/)
+
+#### Installation
+
+<UnderDevelopment>
+  RubyAuth does not ship `@better-auth/prisma-adapter` or a Prisma runtime.
+  Rails applications should use ActiveRecord through `better_auth-rails`.
+</UnderDevelopment>
+
+#### Example Usage
+
+You can use the upstream Prisma adapter to connect to your database as follows.
+
+<UnderDevelopment>
+  Prisma examples are TypeScript-only upstream examples and are not RubyAuth
+  configuration. Configure RubyAuth with ActiveRecord in Rails or a native SQL
+  adapter in Rack applications.
+</UnderDevelopment>
+
+#### Schema generation & migration
+
+The [Better Auth CLI](/docs/concepts/cli) allows you to generate or migrate
+your database schema based on your Better Auth configuration and plugins.
+
+<UnderDevelopment>
+  RubyAuth does not generate Prisma schemas or Prisma migrations. Use Rails
+  migrations with `better_auth-rails`, Hanami ROM migrations with
+  `better_auth-hanami`, or SQL output from `bundle exec better-auth generate`.
+</UnderDevelopment>
+
+#### Joins (Experimental)
+
+Database joins is useful when Better-Auth needs to fetch related data from multiple tables in a single query.
+Endpoints like `/get-session`, `/get-full-organization` and many others benefit greatly from this feature,
+seeing upwards of 2x to 3x performance improvements depending on database latency.
+
+<UnderDevelopment>
+  The upstream Prisma adapter supports joins when Prisma relations are defined.
+  RubyAuth native SQL adapters and Rails/Hanami integrations implement their own
+  join behavior.
+</UnderDevelopment>
+
+#### Additional Information
+
+* If you're looking for performance improvements or tips, take a look at our guide to <Link href="/docs/guides/optimizing-for-performance">performance optimizations</Link>.
+* [How to use Prisma ORM with Better Auth and Next.js](https://www.prisma.io/docs/guides/betterauth-nextjs)
+
+### ActiveRecord (Rails)
+
+Rails is supported through `better_auth-rails`, which uses the Rails
+ActiveRecord connection and migration workflow.
+
+```ruby title="Gemfile"
+gem "better_auth-rails"
+```
+
+```ruby title="config/initializers/better_auth.rb"
+BetterAuth::Rails.configure do |config|
+  config.secret = ENV.fetch("BETTER_AUTH_SECRET")
+  config.base_url = ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000")
+  config.database_adapter = :active_record
+end
+```
+
+```bash title="Terminal"
+bin/rails generate better_auth:install
+bin/rails db:migrate
+```
+
+See [Rails integration](/docs/integrations/rails) for the full setup.
+
+### ActiveRecord (non-Rails)
+
+<UnderDevelopment>
+  ActiveRecord-backed Sinatra and other non-Rails migrations are not supported
+  yet. The Sinatra package README documents that apps may use their own
+  ActiveRecord migrations, but RubyAuth rake tasks do not emit ActiveRecord
+  migrations outside Rails.
+</UnderDevelopment>
+
+### Sequel / ROM (Hanami)
+
+Hanami is supported through `better_auth-hanami`, which uses Hanami's
+ROM/Sequel database gateway for persistence and renders ROM SQL migrations.
+
+```ruby title="Gemfile"
+gem "better_auth-hanami"
+```
+
+```ruby title="config/providers/better_auth.rb"
+config.database = ->(options) {
+  BetterAuth::Hanami::SequelAdapter.from_container(target, options)
+}
+```
+
+See [Hanami integration](/docs/integrations/hanami) for the full setup.

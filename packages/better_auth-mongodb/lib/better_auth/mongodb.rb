@@ -112,6 +112,7 @@ module BetterAuth
       end
 
       def ensure_indexes!
+        seen_indexes = {}
         Schema.auth_tables(options).flat_map do |model, table|
           table.fetch(:fields).filter_map do |field, attributes|
             next if field == "id"
@@ -120,6 +121,17 @@ module BetterAuth
             collection = collection_for(model)
             key = storage_field(model, field)
             index_options = index_options_for(attributes)
+            index_identity = [collection_name(model), key]
+            existing_options = seen_indexes[index_identity]
+            if existing_options
+              if existing_options == index_options
+                next
+              else
+                raise BetterAuth::Error, "Conflicting MongoDB index metadata for #{collection_name(model)}.#{key}"
+              end
+            end
+
+            seen_indexes[index_identity] = index_options
             create_index!(collection, {key => 1}, index_options)
             {
               collection: collection_name(model),

@@ -63,6 +63,53 @@ class BetterAuthMongoDBAdapterTest < Minitest::Test
     assert_includes @database.collection("profiles").indexes.create_one_calls, [{"external_id" => 1}, {unique: true, sparse: true}]
   end
 
+  def test_mongodb_adapter_deduplicates_indexes_for_logical_models_sharing_collection
+    plugin = BetterAuth::Plugin.new(
+      id: "profile-collision",
+      schema: {
+        auditProfile: {
+          model_name: "users",
+          fields: {
+            handle: {type: "string", required: false, field_name: "shared_handle", index: true}
+          }
+        },
+        billingProfile: {
+          model_name: "users",
+          fields: {
+            displayHandle: {type: "string", required: false, field_name: "shared_handle", index: true}
+          }
+        }
+      }
+    )
+    config = BetterAuth::Configuration.new(secret: SECRET, database: :memory, plugins: [plugin])
+    adapter = BetterAuth::Adapters::MongoDB.new(config, database: @database)
+
+    summary = adapter.ensure_indexes!
+
+    assert_equal 1, summary.count { |entry| entry.fetch(:collection) == "users" && entry.fetch(:keys) == {"shared_handle" => 1} }
+    assert_equal 1, @database.collection("users").indexes.create_one_calls.count([{"shared_handle" => 1}, {}])
+  end
+
+  def test_mongodb_adapter_ensures_external_plugin_schema_indexes
+    config = BetterAuth::Configuration.new(
+      secret: SECRET,
+      database: :memory,
+      plugins: [
+        external_api_key_schema_plugin,
+        external_passkey_schema_plugin
+      ]
+    )
+    adapter = BetterAuth::Adapters::MongoDB.new(config, database: @database)
+
+    summary = adapter.ensure_indexes!
+
+    assert_includes summary, {collection: "api_keys", field: "configId", keys: {"config_id" => 1}, unique: false}
+    assert_includes summary, {collection: "api_keys", field: "key", keys: {"key" => 1}, unique: false}
+    assert_includes summary, {collection: "api_keys", field: "referenceId", keys: {"reference_id" => 1}, unique: false}
+    assert_includes summary, {collection: "passkeys", field: "credentialId", keys: {"credential_id" => 1}, unique: true}
+    assert_includes summary, {collection: "passkeys", field: "userId", keys: {"user_id" => 1}, unique: false}
+  end
+
   def test_mongodb_adapter_maps_id_to_bson_id_and_returns_logical_fields
     user = @adapter.create(model: "user", data: {id: "user-1", name: "Ada", email: "ada@example.com"}, force_allow_id: true)
     stored = @database.collection("user").documents.first
@@ -1021,5 +1068,36 @@ class BetterAuthMongoDBAdapterTest < Minitest::Test
     error = assert_raises(BetterAuth::APIError, &block)
     assert_equal "BAD_REQUEST", error.status
     error
+  end
+
+  def external_api_key_schema_plugin
+    BetterAuth::Plugin.new(
+      id: "external-api-key-schema",
+      schema: {
+        apikey: {
+          model_name: "api_keys",
+          fields: {
+            configId: {type: "string", required: true, index: true},
+            key: {type: "string", required: true, index: true},
+            referenceId: {type: "string", required: true, index: true}
+          }
+        }
+      }
+    )
+  end
+
+  def external_passkey_schema_plugin
+    BetterAuth::Plugin.new(
+      id: "external-passkey-schema",
+      schema: {
+        passkey: {
+          model_name: "passkeys",
+          fields: {
+            credentialId: {type: "string", required: true, unique: true},
+            userId: {type: "string", required: true, references: {model: "user", field: "id"}, index: true}
+          }
+        }
+      }
+    )
   end
 end

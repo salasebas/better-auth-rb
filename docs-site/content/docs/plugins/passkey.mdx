@@ -1,15 +1,23 @@
 ---
 title: Passkey
-description: Register and authenticate WebAuthn passkeys.
+description: Passkey
 ---
 
-Register and authenticate WebAuthn passkeys.
+<RubyAuthDisclaimer />
 
-<Callout type="info">
-This page documents the current Ruby port behavior. Ruby uses snake_case option names and `auth.api` method names; HTTP paths and JSON keys keep the upstream wire shape where implemented.
-</Callout>
+Passkeys are a secure, passwordless authentication method using cryptographic key pairs, supported by WebAuthn and FIDO2 standards in web browsers. They replace passwords with unique key pairs: a private key stored on the user's device and a public key shared with the website. Users can log in using biometrics, PINs, or security keys, providing strong, phishing-resistant authentication without traditional passwords.
 
-## Configure
+The passkey plugin implementation is powered by [SimpleWebAuthn](https://simplewebauthn.dev/) behind the scenes.
+
+## Installation
+
+<Steps>
+  <Step>
+    ### Install the plugin
+
+    ```ruby title="Gemfile"
+    gem "better_auth-passkey"
+    ```
 
 ```ruby title="config/auth.rb"
 require "better_auth"
@@ -19,135 +27,365 @@ auth = BetterAuth.auth(
   secret: ENV.fetch("BETTER_AUTH_SECRET"),
   base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
   plugins: [
-    BetterAuth::Plugins.passkey(rp_name: "Example App", rp_id: "localhost", origin: "http://localhost:3000")
+    BetterAuth::Plugins.passkey(
+      registration: {
+        require_session: false,
+        resolve_user: ->(data) {
+          context = data.fetch(:context)
+          user = User.find_by!(email: context)
+          BetterAuth::Plugins.passkey_registration_user_data(
+            id: user.id,
+            name: user.email,
+            display_name: user.name,
+            email: user.email
+          )
+        },
+        extensions: {credProps: true}
+      },
+      authentication: {
+        extensions: {credProps: true}
+      }
+    )
   ]
+)
+```
+  </Step>
+
+  <Step>
+    ### Add the plugin to your auth config
+
+    To add the passkey plugin to your auth config, you need to import the plugin and pass it to the `plugins` option of the auth instance.
+
+    ```ruby title="config/auth.rb"
+    require "better_auth"
+    require "better_auth/passkey"
+
+    auth = BetterAuth.auth(
+      secret: ENV.fetch("BETTER_AUTH_SECRET"),
+      base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
+      plugins: [
+        BetterAuth::Plugins.passkey
+      ]
+    )
+    ```
+  </Step>
+
+  <Step>
+    ### Migrate the database
+
+    Run the migration or generate the schema to add the necessary fields and tables to the database.
+
+    <Tabs items={["migrate", "generate"]}>
+  <Tab value="migrate">
+    ```bash
+    bundle exec better-auth migrate --cwd . --config config/better_auth.rb --yes
+    ```
+  </Tab>
+
+  <Tab value="generate">
+    ```bash
+    bundle exec better-auth generate --cwd . --dialect postgres --output db/better_auth/schema.sql --config config/better_auth.rb
+    ```
+  </Tab>
+</Tabs>
+
+    See the [Schema](#schema) section to add the fields manually.
+  </Step>
+
+</Steps>
+
+## Configuration (Optional)
+
+You can customize the passkey plugin to support passkey-first onboarding or WebAuthn extensions.
+
+```ruby title="config/auth.rb"
+require "better_auth"
+require "better_auth/passkey"
+
+auth = BetterAuth.auth(
+  secret: ENV.fetch("BETTER_AUTH_SECRET"),
+  base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
+  plugins: [
+    BetterAuth::Plugins.passkey
+  ]
+)
+```
+
+### Passkey-first registration (pre-auth)
+
+When `registration.requireSession` is `false`, passkey registration can be initiated without a session. You can pass an opaque `context` to the registration options endpoint; it will be forwarded to `resolveUser`.
+
+```ruby title="server.rb"
+options = auth.api.generate_passkey_registration_options(
+  query: {context: "user@example.com"}
+)
+```
+
+When using passkey-first flows (`registration.requireSession: false`), pass the same `context` from the client when registering the passkey so the server can resolve the user during verification:
+
+```ruby title="server.rb"
+registration = auth.api.generate_passkey_registration_options(
+  query: {context: "user@example.com"},
+  return_headers: true
+)
+
+passkey = auth.api.verify_passkey_registration(
+  headers: {
+    "origin" => "http://localhost:3000",
+    "cookie" => registration.fetch(:headers).fetch("set-cookie")
+  },
+  body: {
+    response: webauthn_response,
+    name: "Primary passkey"
+  }
 )
 ```
 
 ## Usage
 
+### Add/Register a passkey
+
+To add or register a passkey, first generate WebAuthn registration options. By default the user must have a fresh session.
+
+`POST /passkey/generate-register-options`
+
 ```ruby title="server.rb"
-options = auth.api.generate_passkey_registration_options(headers: { "cookie" => request.env["HTTP_COOKIE"] })
-passkey = auth.api.verify_passkey_registration(headers: { "cookie" => request.env["HTTP_COOKIE"] }, body: { response: webauthn_response_from_browser })
+registration = auth.api.generate_passkey_registration_options(
+  headers: {"cookie" => request.env["HTTP_COOKIE"]},
+  query: {
+    name: "Work laptop",
+    authenticatorAttachment: "platform"
+  },
+  return_headers: true
+)
 ```
 
-## Routes
+Send the returned options to the browser's WebAuthn API, then verify the browser response with the challenge cookie returned by the options call.
 
-| Method | Path | Ruby API method |
-| --- | --- | --- |
-| `POST` | `/passkey/generate-register-options` | `auth.api.generate_passkey_registration_options` |
-| `POST` | `/passkey/generate-authenticate-options` | `auth.api.generate_passkey_authentication_options` |
-| `POST` | `/passkey/verify-registration` | `auth.api.verify_passkey_registration` |
-| `POST` | `/passkey/verify-authentication` | `auth.api.verify_passkey_authentication` |
-| `GET` | `/passkey/list-user-passkeys` | `auth.api.list_passkeys` |
-| `POST` | `/passkey/update-passkey` | `auth.api.update_passkey` |
-| `POST` | `/passkey/delete-passkey` | `auth.api.delete_passkey` |
+`POST /passkey/verify-registration`
 
-## Options
+```ruby title="server.rb"
+passkey = auth.api.verify_passkey_registration(
+  headers: {
+    "cookie" => [
+      request.env["HTTP_COOKIE"],
+      registration.fetch(:headers).fetch("set-cookie")
+    ].compact.join("; "),
+    "origin" => request.base_url
+  },
+  body: {
+    response: webauthn_response,
+    name: "Work laptop"
+  }
+)
+```
 
-Current Ruby options accepted by `BetterAuth::Plugins.passkey`:
+### Sign in with a passkey
 
-- `rp_id`: WebAuthn relying party ID. Defaults to the configured `base_url` host.
-- `rp_name`: WebAuthn relying party name. Defaults to the Better Auth app name.
-- `origin`: allowed WebAuthn origin or array of origins. Defaults to `base_url`; verification also uses the request `Origin` header.
-- `authenticator_selection`: maps to WebAuthn `authenticatorSelection`. Supports `resident_key`, `user_verification`, and `authenticator_attachment`.
-- `advanced.web_authn_challenge_cookie`: challenge cookie name. Defaults to `better-auth-passkey`.
-- `registration`: registration-specific callbacks and WebAuthn extensions.
-- `authentication`: authentication-specific callbacks and WebAuthn extensions.
-- `schema`: passkey schema overrides. The Ruby gem deep-merges overrides with built-in fields and normalizes camelCase keys such as `publicKey`.
+To sign in with a passkey, generate authentication options, send them to the browser's WebAuthn API, then verify the assertion.
 
-`registration` supports `require_session`, `resolve_user`, `after_verification`, and `extensions`. Set `require_session: false` for passkey-first registration and provide `resolve_user` when no session is present.
+`POST /passkey/generate-authenticate-options`
 
-`authentication` supports `extensions` and `after_verification`.
+```ruby title="server.rb"
+authentication = auth.api.generate_passkey_authentication_options(
+  return_headers: true
+)
+```
 
-Ruby option and method names are `snake_case`. HTTP paths and JSON keys remain compatible with upstream passkey server behavior. The SQL model uses the Ruby adapter table name `passkeys`.
+`POST /passkey/verify-authentication`
 
-## Passkey-First Registration
+```ruby title="server.rb"
+status, headers, body = auth.api.verify_passkey_authentication(
+  headers: {
+    "cookie" => authentication.fetch(:headers).fetch("set-cookie"),
+    "origin" => request.base_url
+  },
+  body: {
+    response: webauthn_assertion
+  }
+)
+```
 
-Set `registration.require_session` to `false` when the user is not already signed in. Use `context` in the registration-options request to pass an application token or flow identifier into `resolve_user` and `after_verification`.
+The verification response is the normal Better Auth session response. If you call through Rack, forward the returned `set-cookie` header to the browser.
+
+### Extensions
+
+You can configure server-defined WebAuthn extensions for registration and authentication.
 
 ```ruby title="config/auth.rb"
 BetterAuth::Plugins.passkey(
   registration: {
-    require_session: false,
-    resolve_user: lambda do |data|
-      invitation = Invitations.verify!(data.fetch(:context))
-      {
-        id: invitation.user_id,
-        name: invitation.email,
-        display_name: invitation.name,
-        email: invitation.email
-      }
-    end,
-    after_verification: lambda do |data|
-      Audit.passkey_registered!(
-        user_id: data.fetch(:user).fetch(:id),
-        context: data.fetch(:context)
-      )
-      nil
-    end
+    extensions: {credProps: true}
+  },
+  authentication: {
+    extensions: {credProps: true}
   }
 )
 ```
+
+Registration options also accept an optional `context` for passkey-first registration flows and an optional `authenticatorAttachment` value of `"platform"` or `"cross-platform"`.
+
+### List passkeys
+
+`GET /passkey/list-user-passkeys`
 
 ```ruby title="server.rb"
-options = auth.api.generate_passkey_registration_options(
-  query: { context: invitation_token }
+passkeys = auth.api.list_passkeys(
+  headers: {"cookie" => request.env["HTTP_COOKIE"]}
 )
 ```
 
-`after_verification` may return `{ user_id: "..." }` during passkey-first registration to link the verified passkey to a concrete user. Returning `nil` or `""` leaves the resolved user unchanged. Returning any other non-empty-string value (integer, boolean, etc.) raises `RESOLVED_USER_INVALID`. During session-required registration, returning a different user ID is rejected with `YOU_ARE_NOT_ALLOWED_TO_REGISTER_THIS_PASSKEY`.
+### Deleting passkeys
 
-## WebAuthn Extensions
+`POST /passkey/delete-passkey`
 
-Static extension data:
-
-```ruby
-BetterAuth::Plugins.passkey(
-  registration: {
-    extensions: { credProps: true }
-  },
-  authentication: {
-    extensions: { appid: "https://legacy.example.com" }
+```ruby title="server.rb"
+result = auth.api.delete_passkey(
+  headers: {"cookie" => request.env["HTTP_COOKIE"]},
+  body: {
+    id: params.fetch("id")
   }
 )
 ```
 
-Dynamic extension data:
+### Updating passkey names
 
-```ruby
-BetterAuth::Plugins.passkey(
-  registration: {
-    extensions: ->(data) { { credProps: true, txAuthSimple: data.fetch(:ctx).headers["x-passkey-purpose"] } }
-  },
-  authentication: {
-    extensions: ->(_data) { { hmacGetSecret: true } }
+`POST /passkey/update-passkey`
+
+```ruby title="server.rb"
+result = auth.api.update_passkey(
+  headers: {"cookie" => request.env["HTTP_COOKIE"]},
+  body: {
+    id: params.fetch("id"),
+    name: "Renamed passkey"
   }
 )
 ```
 
-## Browser Client Scope
+### Conditional UI
 
-The Ruby gem provides server WebAuthn routes. It does not implement `@better-auth/passkey/client`, `passkeyClient`, `startRegistration`, `startAuthentication`, conditional UI, autofill, or browser extension-result handling. Ruby applications should call the browser WebAuthn APIs directly or wrap them in their own JavaScript client.
+Conditional UI is browser behavior around discoverable credentials and autofill. RubyAuth exposes the server-side pieces through `generate_passkey_authentication_options` and `verify_passkey_authentication`; the browser integration remains application code that calls the WebAuthn API with the returned options.
 
-## WebAuthn Configuration
+```ruby title="server.rb"
+options = auth.api.generate_passkey_authentication_options
+```
 
-The plugin configures `rp_id`, `rp_name`, and allowed origins per request with `WebAuthn::RelyingParty`. It does not mutate global `WebAuthn.configuration`, so multiple Better Auth instances can use different relying-party settings in the same process.
+### Debugging
 
-## Upstream Parity Notes
+Passkey registration and authentication depend on the request origin, relying party ID, challenge cookie, and WebAuthn response. When debugging, check these first:
 
-- `excludeCredentials` entries (registration options) are emitted as `{id, transports?}` to match upstream's `@simplewebauthn/server` output. `allowCredentials` (authentication options) still includes `type: "public-key"`.
-- `transports` is omitted from credential descriptors when the stored value is missing or empty (rather than an empty array).
-- The default storage table is `passkeys` (plural) in the SQL adapters, mapped from the upstream `passkey` model. This is an intentional Ruby-specific adaptation.
-- `credentialID` is unique in the Ruby schema. This is intentional hardening beyond upstream v1.6.9 and prevents storing the same WebAuthn credential more than once.
-- `rp_id` resolution uses `URI.parse(base_url).host` (port stripped). When `base_url` is empty or unparseable, `rp_id` defaults to `"localhost"`.
-- `update_passkey` accepts `name: ""` to match upstream `z.string()`. Missing or non-string `name` still raises `VALIDATION_ERROR`.
-- Cross-user `delete_passkey` raises `UNAUTHORIZED` with the `PASSKEY_NOT_FOUND` message, mirroring upstream's `requireResourceOwnership` middleware behavior when only `notFoundError` is configured.
-- Existing databases should deduplicate historical `credential_id` values before adding the unique constraint during migration.
+* `origin` must match the browser origin that created the WebAuthn response.
+* The challenge cookie from the generate-options call must be sent to the verify call.
+* Registration requires a fresh session unless `registration.require_session` is `false` and `registration.resolve_user` returns a user.
+* Management endpoints only operate on passkeys owned by the authenticated user.
 
-## Support Notes
+## Schema
 
-- Install `better_auth-passkey`; core `better_auth` only ships a compatibility shim for `BetterAuth::Plugins.passkey`.
-- The examples above are based on Ruby plugin source and tests in `packages/better_auth-passkey`.
+The plugin require a new table in the database to store passkey data.
 
-{/* Upstream guide is preserved in reference/upstream-src/1.6.9/repository/docs/content/docs/plugins/passkey.mdx. */}
+Table Name: `passkey`
+
+export const passkeyTableFields = [
+	{
+		name: "id",
+		type: "string",
+		description: "Unique identifier for each passkey",
+		isPrimaryKey: true,
+	},
+	{
+		name: "name",
+		type: "string",
+		description: "The name of the passkey",
+		isOptional: true,
+	},
+	{
+		name: "publicKey",
+		type: "string",
+		description: "The public key of the passkey",
+	},
+	{
+		name: "userId",
+		type: "string",
+		description: "The ID of the user",
+		isForeignKey: true,
+		references: { model: "user", field: "id" },
+	},
+	{
+		name: "credentialID",
+		type: "string",
+		description: "The unique identifier of the registered credential",
+	},
+	{
+		name: "counter",
+		type: "number",
+		description: "The counter of the passkey",
+	},
+	{
+		name: "deviceType",
+		type: "string",
+		description: "The type of device used to register the passkey",
+	},
+	{
+		name: "backedUp",
+		type: "boolean",
+		description: "Whether the passkey is backed up",
+	},
+	{
+		name: "transports",
+		type: "string",
+		description: "The transports used to register the passkey",
+		isOptional: true,
+	},
+	{
+		name: "createdAt",
+		type: "Date",
+		description: "The time when the passkey was created",
+		isOptional: true,
+	},
+	{
+		name: "aaguid",
+		type: "string",
+		description:
+			"Authenticator's Attestation GUID indicating the type of the authenticator",
+		isOptional: true,
+	},
+];
+
+<DatabaseTable name="passkey" fields={passkeyTableFields} />
+
+## Options
+
+**rpID**: A unique identifier for your website based on your auth server origin.
+`'localhost'` is okay for local dev. RP ID can be formed by discarding zero or more labels from the left of its effective domain
+until it hits an effective TLD. So `www.example.com` can use the RP IDs `www.example.com` or `example.com`. But not `com`, because that's an eTLD.
+
+**rpName**: Human-readable title for your website.
+
+**origin**: The origin URL at which your better-auth server is hosted. `http://localhost` and `http://localhost:PORT` are also valid. Do NOT include any trailing /.
+
+**authenticatorSelection**: Allows customization of WebAuthn authenticator selection criteria. Leave unspecified for default settings.
+
+* `authenticatorAttachment`: Specifies the type of authenticator
+  * `platform`: Authenticator is attached to the platform (e.g., fingerprint reader)
+  * `cross-platform`: Authenticator is not attached to the platform (e.g., security key)
+  * Default: `not set` (both platform and cross-platform allowed, with platform preferred)
+* `residentKey`: Determines credential storage behavior.
+  * `required`: User MUST store credentials on the authenticator (highest security)
+  * `preferred`: Encourages credential storage but not mandatory
+  * `discouraged`: No credential storage required (fastest experience)
+  * Default: `preferred`
+* `userVerification`: Controls biometric/PIN verification during authentication:
+  * `required`: User MUST verify identity (highest security)
+  * `preferred`: Verification encouraged but not mandatory
+  * `discouraged`: No verification required (fastest experience)
+  * Default: `preferred`
+
+**advanced**: Advanced options
+
+* `webAuthnChallengeCookie`: Cookie name for storing WebAuthn challenge ID during authentication flow (Default: `better-auth-passkey`)
+
+## Expo Integration
+
+<UnderDevelopment />
+
+RubyAuth does not ship Expo client integration. Use the server endpoints documented above from your app-specific client integration.

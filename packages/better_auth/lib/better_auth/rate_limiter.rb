@@ -4,8 +4,10 @@ require "json"
 
 module BetterAuth
   class RateLimiter
-    MISSING_CLIENT_IP_WARNING = "Rate limiting skipped: could not determine client IP address. " \
-      "Ensure your runtime forwards a trusted client IP header and configure `advanced.ipAddress.ipAddressHeaders` if needed."
+    MISSING_CLIENT_IP = "no-trusted-ip"
+    MISSING_CLIENT_IP_WARNING = "Rate limiting could not determine a trustworthy client IP address and is falling back to a " \
+      "single shared per-path bucket. Ensure your runtime forwards a trusted client IP header, then configure " \
+      "`advanced.ip_address.ip_address_headers` and, for proxy chains, `advanced.ip_address.trusted_proxies`."
 
     class MemoryStore
       def initialize
@@ -45,10 +47,13 @@ module BetterAuth
     def call(request, context, path)
       config = context.rate_limit_config || {}
       return unless config[:enabled]
+      return if context.options.advanced.dig(:ip_address, :disable_ip_tracking)
 
       ip = client_ip(request, context.options)
-      warn_missing_client_ip(context) unless ip
-      return unless ip
+      unless ip
+        warn_missing_client_ip(context)
+        ip = MISSING_CLIENT_IP
+      end
 
       rule = rate_limit_rule(request, context, config, path)
       return if rule == false

@@ -15,6 +15,7 @@ module BetterAuth
         user_info_endpoint: "https://api.atlassian.com/me",
         scopes: scopes,
         pkce: true,
+        require_code_verifier: true,
         auth_params: {audience: "api.atlassian.com"},
         profile_map: ->(profile) {
           {

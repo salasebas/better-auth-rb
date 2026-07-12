@@ -1,41 +1,165 @@
 ---
-title: OAuth Provider
-description: Expose this app as an OAuth 2.0 authorization server.
+title: OAuth 2.1 Provider
+description: A RubyAuth plugin that enables your auth server to serve as an OAuth 2.1 provider.
 ---
 
-Expose this app as an OAuth 2.0 authorization server.
+<RubyAuthDisclaimer />
 
-<Callout type="info">
-Ruby uses snake_case option names and `auth.api` method names. HTTP paths and JSON keys keep the upstream wire shape where implemented.
-</Callout>
+An **OAuth 2.1 Provider Plugin** that allows you to turn your authentication server into an OAuth provider with OIDC compatibility allowing users and other services to authenticate with your API.
 
-## Configure
+The plugin has a secured configuration by default providing ease to users unfamiliar with the details of OAuth.
 
-```ruby title="config/auth.rb"
-require "better_auth"
-require "better_auth/oauth_provider"
+**Key Features**:
 
-auth = BetterAuth.auth(
-  secret: ENV.fetch("BETTER_AUTH_SECRET"),
-  base_url: ENV.fetch("BETTER_AUTH_URL", "https://auth.example.com/api/auth"),
-  plugins: [
-    BetterAuth::Plugins.oauth_provider(
-      scopes: ["openid", "profile", "email", "offline_access"],
-      consent_page: "/oauth2/consent",
-      allow_dynamic_client_registration: true,
-      valid_audiences: ["https://api.example.com"]
+* **OAuth 2.1**: Restricted security practices to [OAuth 2.1](https://oauth.net/2.1/)
+* **Issuer Validation**: Authorization responses include `iss` parameter to prevent [mix-up attacks](https://datatracker.ietf.org/doc/html/rfc9207)
+* **OIDC compatibility**: [OIDC](https://openid.net/specs/openid-connect-core-1_0.html)-compliant with the `openid` scope
+  * **UserInfo**: Endpoint providing current user details
+  * **id\_token**: JWT-signed user information
+  * **OIDC Logout**: [RP-initiated](https://openid.net/specs/openid-connect-rpinitiated-1_0.html)-compliant Logout
+* **Dynamic Client Registration**: Allow clients to register clients dynamically.
+  * **Public Clients**: Support public clients for native mobile clients and user-agent clients (like AI)
+  * **Confidential Clients**: Supports confidential clients for web clients
+  * **Trusted Clients**: Configure hard-coded trusted clients with optional consent bypass.
+* **JWT Plugin compatibility**: required by default with an option to disable
+  * **JWT Signing**: sign JWT tokens when requesting a `resource`
+  * **JWKS Verifiable**: verify tokens remotely at the [`/jwks`](/docs/plugins/jwt#verifying-the-token) endpoint
+* **Authorization Prompts**: prompts that initiate specific login flows
+  * **Consent**: Ensure consent is granted for each scope. Forcible with `prompt=consent`.
+  * **Select Account**: Ensure an account is selected prior when specific scopes being granted. Forcible with `prompt=select_account`.
+* **Resource Endpoints**: Read and manage tokens.
+  * **Introspection**: [RFC7662](https://datatracker.ietf.org/doc/html/rfc7662)-compliant Introspection.
+  * **Revocation**: [RFC7009](https://datatracker.ietf.org/doc/html/rfc7009)-compliant Revocation.
+
+**Grants Supported**
+
+* **authorization\_code**: Code for user token exchange with PKCE and S256 requirements.
+* **refresh\_token**: Issue refresh tokens and handle access token renewal using `offline_access` scope.
+* **client\_credentials**: Machine to Machine tokens for API communication.
+
+## Installation
+
+<Steps>
+  <Step>
+    ### Install the gem
+
+    ```ruby title="Gemfile"
+    gem "better_auth-oauth-provider"
+    ```
+  </Step>
+
+  <Step>
+    ### Mount the plugin
+
+    Add the OAuth provider plugin to your auth config. The JWT plugin is required by default and must be registered before the OAuth provider plugin unless you explicitly set `disable_jwt_plugin: true`.
+
+    ```ruby title="config/auth.rb"
+    require "better_auth"
+    require "better_auth/jwt"
+    require "better_auth/oauth_provider"
+
+    auth = BetterAuth.auth(
+      secret: ENV.fetch("BETTER_AUTH_SECRET"),
+      base_url: ENV.fetch("BETTER_AUTH_URL", "https://auth.example.com/api/auth"),
+      plugins: [
+        BetterAuth::Plugins.jwt,
+        BetterAuth::Plugins.oauth_provider(
+          scopes: ["openid", "profile", "email"],
+          login_page: "/login",
+          consent_page: "/oauth2/consent"
+        )
+      ]
     )
-  ]
+    ```
+  </Step>
+
+  <Step>
+    ### Migrate the database
+
+    Run the migration or generate the schema to add the OAuth provider tables.
+
+    <Tabs items={["migrate", "generate"]}>
+      <Tab value="migrate">
+        ```bash
+        bundle exec better-auth migrate --cwd . --config config/better_auth.rb --yes
+        ```
+      </Tab>
+
+      <Tab value="generate">
+        ```bash
+        bundle exec better-auth generate --cwd . --dialect postgres --output db/better_auth/schema.sql --config config/better_auth.rb
+        ```
+      </Tab>
+    </Tabs>
+
+    See the [Schema](#schema) section to add the fields manually.
+  </Step>
+
+  <Step>
+    ### Create your first OAuth client
+
+    Create a confidential OAuth client from an authenticated server context.
+
+    ```ruby title="server.rb"
+    client = auth.api.create_oauth_client(
+      headers: {"cookie" => request.env["HTTP_COOKIE"]},
+      body: {
+        name: "Example Client",
+        redirectURLs: ["https://client.example.com/callback"],
+        token_endpoint_auth_method: "client_secret_post",
+        grant_types: ["authorization_code", "refresh_token"],
+        response_types: ["code"],
+        scope: "openid profile email"
+      }
+    )
+    ```
+
+    <Callout type="info">
+      To create a public client without a client secret, set `token_endpoint_auth_method: "none"`.
+    </Callout>
+  </Step>
+</Steps>
+
+## Client Plugins
+
+RubyAuth does not ship the upstream browser client helpers for this plugin. Ruby applications should call the JSON endpoints directly, use `auth.api.*` from trusted server code, or wrap those calls in app-specific Rack/Rails controllers.
+
+## Usage
+
+The standard authorization-code flow uses the same public OAuth paths as upstream:
+
+1. The client redirects the user to `/oauth2/authorize` with `client_id`, `redirect_uri`, `response_type=code`, `scope`, `state`, `code_challenge`, and `code_challenge_method=S256`.
+2. RubyAuth validates the request. If the user is not signed in, it redirects to `login_page`. If consent is required, it redirects to `consent_page`.
+3. The app resumes the flow with `/oauth2/continue` and `/oauth2/consent`.
+4. The client exchanges the authorization code at `/oauth2/token`.
+
+```ruby title="token_exchange.rb"
+tokens = auth.api.oauth2_token(
+  body: {
+    grant_type: "authorization_code",
+    code: params.fetch("code"),
+    redirect_uri: "https://client.example.com/callback",
+    client_id: client.fetch(:client_id),
+    client_secret: client.fetch(:client_secret),
+    code_verifier: verifier
+  }
 )
 ```
 
-## Register A Client
+Dynamic client registration is disabled by default. Enable it explicitly and keep registration authenticated unless your deployment has a clear reason to allow unauthenticated public registration.
 
-Dynamic client registration is disabled by default. Enable `allow_dynamic_client_registration` and call registration with a session cookie unless `allow_unauthenticated_client_registration` is enabled.
+```ruby title="config/auth.rb"
+BetterAuth::Plugins.oauth_provider(
+  scopes: ["openid", "profile", "email", "offline_access"],
+  allow_dynamic_client_registration: true,
+  client_registration_default_scopes: ["openid", "profile"],
+  client_registration_allowed_scopes: ["openid", "profile", "email"]
+)
+```
 
-```ruby
-client = auth.api.register_o_auth_client(
-  headers: {"cookie" => session_cookie},
+```ruby title="register_client.rb"
+client = auth.api.register_oauth_client(
+  headers: {"cookie" => request.env["HTTP_COOKIE"]},
   body: {
     client_name: "Example Client",
     redirect_uris: ["https://client.example.com/callback"],
@@ -47,145 +171,1007 @@ client = auth.api.register_o_auth_client(
 )
 ```
 
-Public clients use `token_endpoint_auth_method: "none"` and must use S256 PKCE.
+## API Server
 
-## Authorization Code Flow
+The OAuth provider exposes authorization-server metadata, OIDC metadata, client registration/management, consent management, token, introspection, revocation, UserInfo, and end-session endpoints. The [Ruby API Endpoint Examples](#ruby-api-endpoint-examples) section below lists the generated `auth.api.*` methods and their HTTP paths.
 
-Call `/oauth2/authorize` with `response_type=code`, a registered `redirect_uri`, and S256 PKCE parameters. If consent is needed, the endpoint redirects to `consent_page` with a `consent_code`.
+When your app uses Rack directly, route requests through the Better Auth handler so the following public paths are reachable under your configured auth base path:
 
-```ruby
-consent = auth.api.o_auth2_consent(
-  headers: {"cookie" => session_cookie},
-  body: {
-    accept: true,
-    consent_code: params[:consent_code],
-    scope: "openid profile"
-  }
+* `/.well-known/oauth-authorization-server`
+* `/.well-known/openid-configuration` when `openid` is in `scopes`
+* `/oauth2/authorize`
+* `/oauth2/token`
+* `/oauth2/introspect`
+* `/oauth2/revoke`
+* `/oauth2/userinfo`
+* `/oauth2/end-session`
+
+When `resource` is present and valid, access tokens are JWTs. Without `resource`, access tokens are opaque and introspectable. By default, valid JWT access-token audiences are the provider issuer URL and, when `openid` is granted, the UserInfo endpoint. Set `valid_audiences` to allow additional resource servers.
+
+## Configuration
+
+Common options accepted by `BetterAuth::Plugins.oauth_provider`:
+
+* `login_page` and `consent_page`: application routes used to complete authorization prompts.
+* `scopes`: provider-supported scopes. Use `openid` to enable OIDC metadata, ID tokens, and UserInfo.
+* `claims`: claims advertised and resolved for OIDC responses.
+* `allow_dynamic_client_registration`: enables `/oauth2/register`.
+* `allow_unauthenticated_client_registration`: permits unauthenticated registration and coerces those clients to public-client behavior.
+* `client_registration_default_scopes` and `client_registration_allowed_scopes`: constrain registered client scopes. Values must be included in `scopes`.
+* `cached_trusted_clients`: client IDs that can be treated as trusted by the provider.
+* `valid_audiences`: additional accepted resource audiences for JWT access tokens.
+* `code_expires_in`, `id_token_expires_in`, `refresh_token_expires_in`, `access_token_expires_in`, and `m2m_access_token_expires_in`: token and code lifetimes in seconds.
+* `client_credential_grant_default_scopes`: default scopes for machine-to-machine tokens.
+* `scope_expirations`: per-scope expiration overrides.
+* `prefix`: token and client secret prefixes.
+* `disable_jwt_plugin`: skips the default JWT plugin requirement for legacy HS256 deployments.
+* `pairwise_secret`: enables pairwise subject identifiers and must be at least 32 characters.
+
+```ruby title="config/auth.rb"
+BetterAuth::Plugins.oauth_provider(
+  scopes: ["openid", "profile", "email", "offline_access"],
+  claims: {
+    email: ->(user, _scopes) { user[:email] },
+    name: ->(user, _scopes) { user[:name] }
+  },
+  login_page: "/login",
+  consent_page: "/oauth2/consent",
+  allow_dynamic_client_registration: true,
+  allow_unauthenticated_client_registration: false,
+  client_registration_default_scopes: ["openid", "profile"],
+  client_registration_allowed_scopes: ["openid", "profile", "email"],
+  cached_trusted_clients: ["first-party-dashboard"],
+  valid_audiences: ["https://api.example.com"],
+  code_expires_in: 600,
+  id_token_expires_in: 36_000,
+  refresh_token_expires_in: 2_592_000,
+  access_token_expires_in: 3600,
+  m2m_access_token_expires_in: 3600,
+  scope_expirations: {
+    "offline_access" => 2_592_000
+  },
+  prefix: {
+    opaqueAccessToken: "ba_at_",
+    refreshToken: "ba_rt_",
+    clientSecret: "ba_cs_"
+  },
+  pairwise_secret: ENV.fetch("OAUTH_PAIRWISE_SECRET")
 )
 ```
 
-The consent scope may be narrower than the requested scope.
+<Callout type="warn">
+  If `disable_jwt_plugin` is false, auth initialization fails with `jwt_config` unless `BetterAuth::Plugins.jwt` is registered before the OAuth provider plugin.
+</Callout>
 
-```ruby
-tokens = auth.api.o_auth2_token(
-  body: {
-    grant_type: "authorization_code",
-    code: params[:code],
-    redirect_uri: "https://client.example.com/callback",
-    client_id: client[:client_id],
-    client_secret: client[:client_secret],
-    code_verifier: verifier
-  }
+## Ruby API Endpoint Examples
+
+The Ruby gem exposes the OAuth provider routes through `auth.api`. These examples mirror the public route table in the gem README and keep the same HTTP paths as the upstream OAuth provider plugin.
+
+### `get_oauth_server_config`
+
+`GET` `/.well-known/oauth-authorization-server`
+
+```ruby title="server.rb"
+result = auth.api.get_oauth_server_config(
+  query: {},
 )
 ```
 
-Opaque access tokens are returned by default. If a valid `resource` is supplied, the access token is a JWT and the resource becomes the JWT `aud`. The default valid audience is the provider issuer URL; when `openid` is granted, the UserInfo endpoint is also allowed.
+### `get_openid_config`
 
-## Routes
+`GET` `/.well-known/openid-configuration`
 
-| Method | Path | Ruby API method |
-| --- | --- | --- |
-| `GET` | `/.well-known/oauth-authorization-server` | `auth.api.get_o_auth_server_config` |
-| `GET` | `/.well-known/openid-configuration` | `auth.api.get_open_id_config` |
-| `POST` | `/oauth2/register` | `auth.api.register_o_auth_client` |
-| `POST` | `/oauth2/create-client` | `auth.api.create_o_auth_client` |
-| `POST` | `/admin/oauth2/create-client` | `auth.api.admin_create_o_auth_client` |
-| `PATCH` | `/admin/oauth2/update-client` | `auth.api.admin_update_o_auth_client` |
-| `GET` | `/oauth2/get-client?client_id=...` | `auth.api.get_o_auth_client` |
-| `GET` | `/oauth2/get-clients` | `auth.api.get_o_auth_clients` |
-| `POST` | `/oauth2/update-client` | `auth.api.update_o_auth_client` |
-| `POST` | `/oauth2/delete-client` | `auth.api.delete_o_auth_client` |
-| `GET` | `/oauth2/public-client?client_id=...` | `auth.api.get_o_auth_client_public` |
-| `POST` | `/oauth2/public-client-prelogin` | `auth.api.get_o_auth_client_public_prelogin` |
-| `POST` | `/oauth2/client/rotate-secret` | `auth.api.rotate_o_auth_client_secret` |
-| `GET` | `/oauth2/authorize` | `auth.api.o_auth2_authorize` |
-| `POST` | `/oauth2/continue` | `auth.api.o_auth2_continue` |
-| `POST` | `/oauth2/consent` | `auth.api.o_auth2_consent` |
-| `GET` | `/oauth2/get-consent?id=...` | `auth.api.get_o_auth_consent` |
-| `GET` | `/oauth2/get-consents` | `auth.api.get_o_auth_consents` |
-| `POST` | `/oauth2/update-consent` | `auth.api.update_o_auth_consent` |
-| `POST` | `/oauth2/delete-consent` | `auth.api.delete_o_auth_consent` |
-| `POST` | `/oauth2/token` | `auth.api.o_auth2_token` |
-| `POST` | `/oauth2/introspect` | `auth.api.o_auth2_introspect` |
-| `POST` | `/oauth2/revoke` | `auth.api.o_auth2_revoke` |
-| `GET` | `/oauth2/userinfo` | `auth.api.o_auth2_user_info` |
-| `GET`, `POST` | `/oauth2/end-session` | `auth.api.o_auth2_end_session` |
-
-## Resource-server verification
-
-| Option | Notes |
-| --- | --- |
-| `login_page` | Page used when an authorization request needs login. |
-| `consent_page` | Page used when an authorization request needs consent. |
-| `scopes` | Provider-supported scopes. |
-| `claims` | OIDC claims advertised in metadata. |
-| `grant_types` | Supported grant types. |
-| `allow_dynamic_client_registration` | Enables `/oauth2/register`. |
-| `allow_unauthenticated_client_registration` | Allows unauthenticated DCR and coerces clients to public. |
-| `client_registration_default_scopes` | Default scopes for DCR requests without `scope`. |
-| `client_registration_allowed_scopes` | Scope allow-list for DCR. |
-| `client_credential_grant_default_scopes` | Default scopes for `client_credentials` when the stored client has none. |
-| `store_client_secret` | `plain`, `hashed`, `encrypted`, or custom hash/encrypt callbacks. |
-| `prefix` | Prefixes for opaque access tokens, refresh tokens, and client secrets. |
-| `code_expires_in` | Authorization code lifetime in seconds. |
-| `id_token_expires_in` | ID token lifetime in seconds. |
-| `refresh_token_expires_in` | Refresh token lifetime in seconds. |
-| `access_token_expires_in` | User access token lifetime in seconds. |
-| `m2m_access_token_expires_in` | Client-credentials access token lifetime in seconds. |
-| `scope_expirations` | Per-scope shorter access token lifetimes. |
-| `advertised_metadata` | Overrides metadata fields such as `scopes_supported`, `claims_supported`, and `jwks_uri`. |
-| `valid_audiences` | Accepted `resource` values for JWT access tokens. |
-| `allow_public_client_prelogin` | Allows signed `/oauth2/public-client-prelogin` requests before login. |
-| `custom_token_response_fields` | Adds fields to token responses. |
-| `custom_access_token_claims` | Adds custom JWT access token claims before pinned OAuth claims. |
-| `custom_user_info_claims` | Adds claims to `/oauth2/userinfo`. |
-| `pairwise_secret` | Enables pairwise subject identifiers. |
-| `signup`, `select_account`, `post_login` | Page and callback controls used by `/oauth2/continue`. |
-| `client_privileges` | Callback for client management authorization. |
-| `rate_limit` | Per-endpoint rate limit overrides or `false` to disable a rule. |
-| `jwks_uri` | Advertises a configured JWKS URL. |
-| `disable_jwt_plugin` | Keeps access tokens opaque even when `resource` is supplied. |
-
-When the JWT plugin is registered, JWT access tokens and ID tokens use its configured signing algorithm. Without the JWT plugin, Ruby falls back to HS256 for compatibility.
-
-## Metadata
-
-OpenID metadata is available only when `openid` is in configured scopes. `jwks_uri` is advertised only when explicitly configured through `advertised_metadata[:jwks_uri]`, `jwks_uri`, or `jwks[:remote_url]`.
-
-## Organization Integration
-
-OAuth clients can be tied to an active organization or team through the Ruby organization plugin by providing `client_reference` and, when consent should be scoped to the selected organization, `post_login[:consent_reference_id]`.
-
-```ruby
-auth = BetterAuth.auth(
-  secret: ENV.fetch("BETTER_AUTH_SECRET"),
-  base_url: ENV.fetch("BETTER_AUTH_URL"),
-  plugins: [
-    BetterAuth::Plugins.organization(teams: {enabled: true}),
-    BetterAuth::Plugins.oauth_provider(
-      scopes: ["openid", "read:posts"],
-      allow_dynamic_client_registration: true,
-      client_reference: ->(info) { info[:session]["activeOrganizationId"] },
-      post_login: {
-        page: "/select-organization",
-        should_redirect: ->(info) { info[:session]["activeOrganizationId"].to_s.empty? },
-        consent_reference_id: ->(info) { info[:session]["activeOrganizationId"] }
-      }
-    )
-  ]
+```ruby title="server.rb"
+result = auth.api.get_openid_config(
+  query: {},
 )
 ```
 
-When `client_reference` returns an organization id, dynamically registered clients store it as `reference_id` and do not store `user_id`. Client list/get/update/delete operations are then scoped through the current `client_reference`.
+### `register_oauth_client`
 
-When `post_login[:consent_reference_id]` returns an organization id, consent records and authorization codes carry that reference. A user who already consented for one organization must consent again after selecting a different organization.
+`POST` `/oauth2/register`
 
-## Support Boundary
+```ruby title="server.rb"
+result = auth.api.register_oauth_client(
+  body: {client_name: "CLI",
+  redirect_uris: ["https://app.example/callback"]},
+)
+```
 
-This gem implements the OAuth 2.0/OIDC authorization server behavior from upstream `@better-auth/oauth-provider`: metadata, registration, authorization, consent, token, introspection, revocation, userinfo, logout, pairwise subjects, PKCE, organization references, and rate limits.
+### `create_oauth_client`
 
-It does not currently expose an equivalent to upstream `oauthProviderResourceClient`. That upstream client is for protected resource servers: verifying bearer access tokens, generating OAuth protected resource metadata, and returning `WWW-Authenticate` challenges with `resource_metadata`.
+`POST` `/oauth2/create-client`
 
-MCP support in Ruby currently lives in the core MCP plugin (`BetterAuth::Plugins.mcp`), not in this OAuth provider gem. The upstream OAuth provider MCP tests combine the resource client, MCP SDK transports, and protected-resource metadata helpers. Porting those tests to this gem would require a new public Ruby resource-client API or a dedicated package for protected resource helpers.
+```ruby title="server.rb"
+result = auth.api.create_oauth_client(
+  headers: {"cookie" => request.env["HTTP_COOKIE"]},
+  body: {name: "Dashboard",
+  redirectURLs: ["https://app.example/callback"]},
+)
+```
 
-{/* Upstream guide is preserved in reference/upstream-src/1.6.9/repository/docs/content/docs/plugins/oauth-provider.mdx. */}
+### `admin_create_oauth_client`
+
+`POST` `/admin/oauth2/create-client`
+
+```ruby title="server.rb"
+result = auth.api.admin_create_oauth_client(
+  body: {name: "Internal",
+  redirectURLs: ["https://app.example/callback"]},
+)
+```
+
+### `admin_update_oauth_client`
+
+`PATCH` `/admin/oauth2/update-client`
+
+```ruby title="server.rb"
+result = auth.api.admin_update_oauth_client(
+  body: {client_id: "client-id",
+  name: "Updated"},
+)
+```
+
+### `get_oauth_client`
+
+`GET` `/oauth2/get-client`
+
+```ruby title="server.rb"
+result = auth.api.get_oauth_client(
+  headers: {"cookie" => request.env["HTTP_COOKIE"]},
+  query: {client_id: "client-id"},
+)
+```
+
+### `get_oauth_clients`
+
+`GET` `/oauth2/get-clients`
+
+```ruby title="server.rb"
+result = auth.api.get_oauth_clients(
+  headers: {"cookie" => request.env["HTTP_COOKIE"]},
+)
+```
+
+### `update_oauth_client`
+
+`POST` `/oauth2/update-client`
+
+```ruby title="server.rb"
+result = auth.api.update_oauth_client(
+  headers: {"cookie" => request.env["HTTP_COOKIE"]},
+  body: {client_id: "client-id",
+  name: "Updated"},
+)
+```
+
+### `delete_oauth_client`
+
+`POST` `/oauth2/delete-client`
+
+```ruby title="server.rb"
+result = auth.api.delete_oauth_client(
+  headers: {"cookie" => request.env["HTTP_COOKIE"]},
+  body: {client_id: "client-id"},
+)
+```
+
+### `get_oauth_client_public`
+
+`GET` `/oauth2/public-client`
+
+```ruby title="server.rb"
+result = auth.api.get_oauth_client_public(
+  query: {client_id: "client-id"},
+)
+```
+
+### `get_oauth_client_public_prelogin`
+
+`POST` `/oauth2/public-client-prelogin`
+
+```ruby title="server.rb"
+result = auth.api.get_oauth_client_public_prelogin(
+  body: {client_id: "client-id"},
+)
+```
+
+### `rotate_oauth_client_secret`
+
+`POST` `/oauth2/client/rotate-secret`
+
+```ruby title="server.rb"
+result = auth.api.rotate_oauth_client_secret(
+  headers: {"cookie" => request.env["HTTP_COOKIE"]},
+  body: {client_id: "client-id"},
+)
+```
+
+### `oauth2_authorize`
+
+`GET` `/oauth2/authorize`
+
+```ruby title="server.rb"
+result = auth.api.oauth2_authorize(
+  query: {client_id: "client-id",
+  response_type: "code",
+  redirect_uri: "https://app.example/callback",
+  scope: "openid"},
+)
+```
+
+### `oauth2_continue`
+
+`POST` `/oauth2/continue`
+
+```ruby title="server.rb"
+result = auth.api.oauth2_continue(
+  headers: {"cookie" => request.env["HTTP_COOKIE"]},
+  body: {request_id: "request-id"},
+)
+```
+
+### `oauth2_consent`
+
+`POST` `/oauth2/consent`
+
+```ruby title="server.rb"
+result = auth.api.oauth2_consent(
+  headers: {"cookie" => request.env["HTTP_COOKIE"]},
+  body: {accept: true,
+  consent_code: "consent-code"},
+)
+```
+
+### `get_oauth_consent`
+
+`GET` `/oauth2/get-consent`
+
+```ruby title="server.rb"
+result = auth.api.get_oauth_consent(
+  headers: {"cookie" => request.env["HTTP_COOKIE"]},
+  query: {id: "consent-id"},
+)
+```
+
+### `get_oauth_consents`
+
+`GET` `/oauth2/get-consents`
+
+```ruby title="server.rb"
+result = auth.api.get_oauth_consents(
+  headers: {"cookie" => request.env["HTTP_COOKIE"]},
+)
+```
+
+### `update_oauth_consent`
+
+`POST` `/oauth2/update-consent`
+
+```ruby title="server.rb"
+result = auth.api.update_oauth_consent(
+  headers: {"cookie" => request.env["HTTP_COOKIE"]},
+  body: {id: "consent-id",
+  scopes: ["openid"]},
+)
+```
+
+### `delete_oauth_consent`
+
+`POST` `/oauth2/delete-consent`
+
+```ruby title="server.rb"
+result = auth.api.delete_oauth_consent(
+  headers: {"cookie" => request.env["HTTP_COOKIE"]},
+  body: {id: "consent-id"},
+)
+```
+
+### `oauth2_token`
+
+`POST` `/oauth2/token`
+
+```ruby title="server.rb"
+result = auth.api.oauth2_token(
+  body: {grant_type: "authorization_code",
+  code: "code",
+  redirect_uri: "https://app.example/callback",
+  client_id: "client-id"},
+)
+```
+
+### `oauth2_introspect`
+
+`POST` `/oauth2/introspect`
+
+```ruby title="server.rb"
+result = auth.api.oauth2_introspect(
+  body: {token: "access-token",
+  client_id: "client-id"},
+)
+```
+
+### `oauth2_revoke`
+
+`POST` `/oauth2/revoke`
+
+```ruby title="server.rb"
+result = auth.api.oauth2_revoke(
+  body: {token: "access-token",
+  client_id: "client-id"},
+)
+```
+
+### `oauth2_user_info`
+
+`GET` `/oauth2/userinfo`
+
+```ruby title="server.rb"
+result = auth.api.oauth2_user_info(
+  headers: {"authorization" => "Bearer #{access_token}"},
+)
+```
+
+### `oauth2_end_session`
+
+`POST` `/oauth2/end-session`
+
+```ruby title="server.rb"
+result = auth.api.oauth2_end_session(
+  body: {id_token_hint: "id-token",
+  post_logout_redirect_uri: "https://app.example"},
+)
+```
+
+
+### Route Behavior Notes
+
+#### `register_oauth_client`
+
+* Uses the same Rack-mounted `/api/auth` prefix as other RubyAuth routes.
+* Accepts Ruby keyword arguments through `auth.api` and wire-format JSON keys over HTTP.
+* Raises `BetterAuth::APIError` for validation or authorization failures.
+* Returns parsed Ruby hashes from `auth.api` and JSON responses over HTTP.
+* Covered by the `better_auth-oauth-provider` gem route tests or README route table.
+
+#### `create_oauth_client`
+
+* Uses the same Rack-mounted `/api/auth` prefix as other RubyAuth routes.
+* Accepts Ruby keyword arguments through `auth.api` and wire-format JSON keys over HTTP.
+* Raises `BetterAuth::APIError` for validation or authorization failures.
+* Returns parsed Ruby hashes from `auth.api` and JSON responses over HTTP.
+* Covered by the `better_auth-oauth-provider` gem route tests or README route table.
+
+#### `admin_create_oauth_client`
+
+* Uses the same Rack-mounted `/api/auth` prefix as other RubyAuth routes.
+* Accepts Ruby keyword arguments through `auth.api` and wire-format JSON keys over HTTP.
+* Raises `BetterAuth::APIError` for validation or authorization failures.
+* Returns parsed Ruby hashes from `auth.api` and JSON responses over HTTP.
+* Covered by the `better_auth-oauth-provider` gem route tests or README route table.
+
+#### `admin_update_oauth_client`
+
+* Uses the same Rack-mounted `/api/auth` prefix as other RubyAuth routes.
+* Accepts Ruby keyword arguments through `auth.api` and wire-format JSON keys over HTTP.
+* Raises `BetterAuth::APIError` for validation or authorization failures.
+* Returns parsed Ruby hashes from `auth.api` and JSON responses over HTTP.
+* Covered by the `better_auth-oauth-provider` gem route tests or README route table.
+
+#### `get_oauth_client`
+
+* Uses the same Rack-mounted `/api/auth` prefix as other RubyAuth routes.
+* Accepts Ruby keyword arguments through `auth.api` and wire-format JSON keys over HTTP.
+* Raises `BetterAuth::APIError` for validation or authorization failures.
+* Returns parsed Ruby hashes from `auth.api` and JSON responses over HTTP.
+* Covered by the `better_auth-oauth-provider` gem route tests or README route table.
+
+#### `get_oauth_clients`
+
+* Uses the same Rack-mounted `/api/auth` prefix as other RubyAuth routes.
+* Accepts Ruby keyword arguments through `auth.api` and wire-format JSON keys over HTTP.
+* Raises `BetterAuth::APIError` for validation or authorization failures.
+* Returns parsed Ruby hashes from `auth.api` and JSON responses over HTTP.
+* Covered by the `better_auth-oauth-provider` gem route tests or README route table.
+
+#### `update_oauth_client`
+
+* Uses the same Rack-mounted `/api/auth` prefix as other RubyAuth routes.
+* Accepts Ruby keyword arguments through `auth.api` and wire-format JSON keys over HTTP.
+* Raises `BetterAuth::APIError` for validation or authorization failures.
+* Returns parsed Ruby hashes from `auth.api` and JSON responses over HTTP.
+* Covered by the `better_auth-oauth-provider` gem route tests or README route table.
+
+#### `delete_oauth_client`
+
+* Uses the same Rack-mounted `/api/auth` prefix as other RubyAuth routes.
+* Accepts Ruby keyword arguments through `auth.api` and wire-format JSON keys over HTTP.
+* Raises `BetterAuth::APIError` for validation or authorization failures.
+* Returns parsed Ruby hashes from `auth.api` and JSON responses over HTTP.
+* Covered by the `better_auth-oauth-provider` gem route tests or README route table.
+
+#### `get_oauth_client_public`
+
+* Uses the same Rack-mounted `/api/auth` prefix as other RubyAuth routes.
+* Accepts Ruby keyword arguments through `auth.api` and wire-format JSON keys over HTTP.
+* Raises `BetterAuth::APIError` for validation or authorization failures.
+* Returns parsed Ruby hashes from `auth.api` and JSON responses over HTTP.
+* Covered by the `better_auth-oauth-provider` gem route tests or README route table.
+
+#### `get_oauth_client_public_prelogin`
+
+* Uses the same Rack-mounted `/api/auth` prefix as other RubyAuth routes.
+* Accepts Ruby keyword arguments through `auth.api` and wire-format JSON keys over HTTP.
+* Raises `BetterAuth::APIError` for validation or authorization failures.
+* Returns parsed Ruby hashes from `auth.api` and JSON responses over HTTP.
+* Covered by the `better_auth-oauth-provider` gem route tests or README route table.
+
+#### `rotate_oauth_client_secret`
+
+* Uses the same Rack-mounted `/api/auth` prefix as other RubyAuth routes.
+* Accepts Ruby keyword arguments through `auth.api` and wire-format JSON keys over HTTP.
+* Raises `BetterAuth::APIError` for validation or authorization failures.
+* Returns parsed Ruby hashes from `auth.api` and JSON responses over HTTP.
+* Covered by the `better_auth-oauth-provider` gem route tests or README route table.
+
+#### `oauth2_authorize`
+
+* Uses the same Rack-mounted `/api/auth` prefix as other RubyAuth routes.
+* Accepts Ruby keyword arguments through `auth.api` and wire-format JSON keys over HTTP.
+* Raises `BetterAuth::APIError` for validation or authorization failures.
+* Returns parsed Ruby hashes from `auth.api` and JSON responses over HTTP.
+* Covered by the `better_auth-oauth-provider` gem route tests or README route table.
+
+#### `oauth2_continue`
+
+* Uses the same Rack-mounted `/api/auth` prefix as other RubyAuth routes.
+* Accepts Ruby keyword arguments through `auth.api` and wire-format JSON keys over HTTP.
+* Raises `BetterAuth::APIError` for validation or authorization failures.
+* Returns parsed Ruby hashes from `auth.api` and JSON responses over HTTP.
+* Covered by the `better_auth-oauth-provider` gem route tests or README route table.
+
+#### `oauth2_consent`
+
+* Uses the same Rack-mounted `/api/auth` prefix as other RubyAuth routes.
+* Accepts Ruby keyword arguments through `auth.api` and wire-format JSON keys over HTTP.
+* Raises `BetterAuth::APIError` for validation or authorization failures.
+* Returns parsed Ruby hashes from `auth.api` and JSON responses over HTTP.
+* Covered by the `better_auth-oauth-provider` gem route tests or README route table.
+
+#### `get_oauth_consent`
+
+* Uses the same Rack-mounted `/api/auth` prefix as other RubyAuth routes.
+* Accepts Ruby keyword arguments through `auth.api` and wire-format JSON keys over HTTP.
+* Raises `BetterAuth::APIError` for validation or authorization failures.
+* Returns parsed Ruby hashes from `auth.api` and JSON responses over HTTP.
+* Covered by the `better_auth-oauth-provider` gem route tests or README route table.
+
+#### `get_oauth_consents`
+
+* Uses the same Rack-mounted `/api/auth` prefix as other RubyAuth routes.
+* Accepts Ruby keyword arguments through `auth.api` and wire-format JSON keys over HTTP.
+* Raises `BetterAuth::APIError` for validation or authorization failures.
+* Returns parsed Ruby hashes from `auth.api` and JSON responses over HTTP.
+* Covered by the `better_auth-oauth-provider` gem route tests or README route table.
+
+#### `update_oauth_consent`
+
+* Uses the same Rack-mounted `/api/auth` prefix as other RubyAuth routes.
+* Accepts Ruby keyword arguments through `auth.api` and wire-format JSON keys over HTTP.
+* Raises `BetterAuth::APIError` for validation or authorization failures.
+* Returns parsed Ruby hashes from `auth.api` and JSON responses over HTTP.
+* Covered by the `better_auth-oauth-provider` gem route tests or README route table.
+
+#### `delete_oauth_consent`
+
+* Uses the same Rack-mounted `/api/auth` prefix as other RubyAuth routes.
+* Accepts Ruby keyword arguments through `auth.api` and wire-format JSON keys over HTTP.
+* Raises `BetterAuth::APIError` for validation or authorization failures.
+* Returns parsed Ruby hashes from `auth.api` and JSON responses over HTTP.
+* Covered by the `better_auth-oauth-provider` gem route tests or README route table.
+
+#### `oauth2_token`
+
+* Uses the same Rack-mounted `/api/auth` prefix as other RubyAuth routes.
+* Accepts Ruby keyword arguments through `auth.api` and wire-format JSON keys over HTTP.
+* Raises `BetterAuth::APIError` for validation or authorization failures.
+* Returns parsed Ruby hashes from `auth.api` and JSON responses over HTTP.
+* Covered by the `better_auth-oauth-provider` gem route tests or README route table.
+
+#### `oauth2_introspect`
+
+* Uses the same Rack-mounted `/api/auth` prefix as other RubyAuth routes.
+* Accepts Ruby keyword arguments through `auth.api` and wire-format JSON keys over HTTP.
+* Raises `BetterAuth::APIError` for validation or authorization failures.
+* Returns parsed Ruby hashes from `auth.api` and JSON responses over HTTP.
+* Covered by the `better_auth-oauth-provider` gem route tests or README route table.
+
+#### `oauth2_revoke`
+
+* Uses the same Rack-mounted `/api/auth` prefix as other RubyAuth routes.
+* Accepts Ruby keyword arguments through `auth.api` and wire-format JSON keys over HTTP.
+* Raises `BetterAuth::APIError` for validation or authorization failures.
+* Returns parsed Ruby hashes from `auth.api` and JSON responses over HTTP.
+* Covered by the `better_auth-oauth-provider` gem route tests or README route table.
+
+#### `oauth2_user_info`
+
+* Uses the same Rack-mounted `/api/auth` prefix as other RubyAuth routes.
+* Accepts Ruby keyword arguments through `auth.api` and wire-format JSON keys over HTTP.
+* Raises `BetterAuth::APIError` for validation or authorization failures.
+* Returns parsed Ruby hashes from `auth.api` and JSON responses over HTTP.
+* Covered by the `better_auth-oauth-provider` gem route tests or README route table.
+
+#### `oauth2_end_session`
+
+* Uses the same Rack-mounted `/api/auth` prefix as other RubyAuth routes.
+* Accepts Ruby keyword arguments through `auth.api` and wire-format JSON keys over HTTP.
+* Raises `BetterAuth::APIError` for validation or authorization failures.
+* Returns parsed Ruby hashes from `auth.api` and JSON responses over HTTP.
+* Covered by the `better_auth-oauth-provider` gem route tests or README route table.
+
+#### `get_oauth_server_config`
+
+* Uses the same Rack-mounted `/api/auth` prefix as other RubyAuth routes.
+* Accepts Ruby keyword arguments through `auth.api` and wire-format JSON keys over HTTP.
+* Raises `BetterAuth::APIError` for validation or authorization failures.
+* Returns parsed Ruby hashes from `auth.api` and JSON responses over HTTP.
+* Covered by the `better_auth-oauth-provider` gem route tests or README route table.
+
+#### `get_openid_config`
+
+* Uses the same Rack-mounted `/api/auth` prefix as other RubyAuth routes.
+* Accepts Ruby keyword arguments through `auth.api` and wire-format JSON keys over HTTP.
+* Raises `BetterAuth::APIError` for validation or authorization failures.
+* Returns parsed Ruby hashes from `auth.api` and JSON responses over HTTP.
+* Covered by the `better_auth-oauth-provider` gem route tests or README route table.
+
+
+## Schema
+
+The OAuth Provider plugin adds the following tables to the database:
+
+### OAuth Client
+
+Table Name: `oauthClient`
+
+export const oauthClientTableFields = [
+  {
+    name: "id",
+    type: "string",
+    description: "Database ID of the OAuth client",
+    isPrimaryKey: true,
+  },
+  {
+    name: "clientId",
+    type: "string",
+    description: "Unique identifier for each OAuth client",
+    isUnique: true,
+  },
+  {
+    name: "clientSecret",
+    type: "string",
+    description:
+      "Secret key for the OAuth client. Optional for public clients using PKCE.",
+    isOptional: true,
+  },
+  {
+    name: "disabled",
+    type: "boolean",
+    description: "Field that indicates if the current application is disabled",
+    isOptional: true,
+  },
+  {
+    name: "skipConsent",
+    type: "boolean",
+    description:
+      "Field that indicates if the application can skip consent. You may choose to enable this for trusted applications.",
+    isOptional: true,
+  },
+  {
+    name: "enableEndSession",
+    type: "boolean",
+    description:
+      "Field that indicates if the application can logout via an id_token. You may choose to enable this for trusted applications.",
+    isOptional: true,
+  },
+  {
+    name: "subjectType",
+    type: "string",
+    description:
+      'Subject identifier type for this client. Set to "pairwise" to receive unique, unlinkable sub claims per user. Requires pairwiseSecret to be configured on the server.',
+    isOptional: true,
+  },
+  {
+    name: "scopes",
+    type: "string[]",
+    description: "Scopes this client is allowed to use",
+    isOptional: true,
+  },
+  {
+    name: "userId",
+    type: "string",
+    description: "ID of the client owner. (optional)",
+    isOptional: true,
+    isForeignKey: true,
+    references: { model: "user", field: "id" },
+  },
+  {
+    name: "referenceId",
+    type: "string",
+    description:
+      "ID of the reference of the client owner if not a user. (optional)",
+    isOptional: true,
+  },
+  {
+    name: "createdAt",
+    type: "Date",
+    description: "Timestamp of when the OAuth client was created",
+    isOptional: true,
+  },
+  {
+    name: "updatedAt",
+    type: "Date",
+    description: "Timestamp of when the OAuth client was last updated",
+    isOptional: true,
+  },
+  {
+    name: "name",
+    type: "string",
+    description: "Name of the OAuth client",
+    isOptional: true,
+  },
+  {
+    name: "uri",
+    type: "string",
+    description: "Website Uri displayed on UI Screens",
+    isOptional: true,
+  },
+  {
+    name: "icon",
+    type: "string",
+    description: "Website Icon displayed on UI Screens",
+    isOptional: true,
+  },
+  {
+    name: "contacts",
+    type: "string[]",
+    description:
+      "Client contact list (ie customer service emails, phone numbers) to be displayed on UI Screens",
+    isOptional: true,
+  },
+  {
+    name: "tos",
+    type: "string",
+    description: "Client Terms of Service displayed on UI Screens",
+    isOptional: true,
+  },
+  {
+    name: "policy",
+    type: "string",
+    description: "Client Privacy policy displayed on UI Screens",
+    isOptional: true,
+  },
+  {
+    name: "softwareId",
+    type: "string",
+    description:
+      "Client-defined software identifier. This should remain the same across multiple versions for the same piece of software.",
+    isOptional: true,
+  },
+  {
+    name: "softwareVersion",
+    type: "string",
+    description: "Client-defined version number of the softwareId.",
+    isOptional: true,
+  },
+  {
+    name: "softwareStatement",
+    type: "string",
+    description:
+      "Signed JWT containing the software metadata as signed claims.",
+    isOptional: true,
+  },
+  {
+    name: "redirectUris",
+    type: "string[]",
+    description: "Array of of redirect uris",
+  },
+  {
+    name: "postLogoutRedirectUris",
+    type: "string[]",
+    description: "Array of post-logout redirect URIs",
+    isOptional: true,
+  },
+  {
+    name: "tokenEndpointAuthMethod",
+    type: "string",
+    description:
+      "Indicator of requested authentication method for the token endpoint. Supports: ['none', 'client_secret_basic', 'client_secret_post']",
+    isOptional: true,
+  },
+  {
+    name: "grantTypes",
+    type: "string[]",
+    description:
+      "Array of supported grant types. Supports: ['authorization_code', 'client_credentials', 'refresh_token']",
+    isOptional: true,
+  },
+  {
+    name: "responseTypes",
+    type: "string[]",
+    description: "Array of supported grant types. Supports: ['code']",
+    isOptional: true,
+  },
+  {
+    name: "public",
+    type: "boolean",
+    description: "Indication if the client is confidential or public",
+    isOptional: true,
+  },
+  {
+    name: "type",
+    type: "string",
+    description:
+      "Type of OAuth client. Supports: ['web', 'native', 'user-agent-based']",
+    isOptional: true,
+  },
+  {
+    name: "requirePKCE",
+    type: "boolean",
+    description: "Whether PKCE is required for this client",
+    isOptional: true,
+  },
+  {
+    name: "metadata",
+    type: "json",
+    description: "Additional metadata for the OAuth client",
+    isOptional: true,
+  },
+];
+
+<DatabaseTable name="oauthClient" fields={oauthClientTableFields} />
+
+### OAuth Refresh Token
+
+Table Name: `oauthRefreshToken`
+
+export const oauthRefreshTokenTableFields = [
+  {
+    name: "id",
+    type: "string",
+    description: "Database ID of the refresh token",
+    isPrimaryKey: true,
+  },
+  {
+    name: "token",
+    type: "string",
+    description: "Hashed/encrypted refresh token",
+  },
+  {
+    name: "clientId",
+    type: "string",
+    description: "ID of the OAuth client",
+    isForeignKey: true,
+    references: { model: "oauthClient", field: "clientId" },
+  },
+  {
+    name: "sessionId",
+    type: "string",
+    description:
+      "ID of the session used at issuance of the token (and still active)",
+    isForeignKey: true,
+    isOptional: true,
+    references: { model: "session", field: "id", onDelete: "set null" },
+  },
+  {
+    name: "userId",
+    type: "string",
+    description: "ID of the user associated with the token",
+    isForeignKey: true,
+    references: { model: "user", field: "id" },
+  },
+  {
+    name: "referenceId",
+    type: "string",
+    description: "ID of the consented reference",
+    isOptional: true,
+  },
+  {
+    name: "scopes",
+    type: "string[]",
+    description: "Array of granted scopes",
+  },
+  {
+    name: "revoked",
+    type: "Date",
+    description: "Timestamp when the token was revoked",
+    isOptional: true,
+  },
+  {
+    name: "authTime",
+    type: "Date",
+    description:
+      "Original authentication time. Preserved across token rotation so refreshed ID tokens include a correct auth_time claim per OIDC Core 1.0 Section 12.2.",
+    isOptional: true,
+  },
+  {
+    name: "createdAt",
+    type: "Date",
+    description: "Timestamp when the token was created",
+  },
+  {
+    name: "expiresAt",
+    type: "Date",
+    description: "Timestamp when the token will expire",
+  },
+];
+
+<DatabaseTable name="oauthRefreshToken" fields={oauthRefreshTokenTableFields} />
+
+### OAuth Access Token
+
+Table Name: `oauthAccessToken`
+
+export const oauthAccessTokenTableFields = [
+  {
+    name: "id",
+    type: "string",
+    description: "Database ID of the opaque access token",
+    isPrimaryKey: true,
+  },
+  {
+    name: "token",
+    type: "string",
+    description: "Hashed/encrypted access token",
+    isUnique: true,
+  },
+  {
+    name: "clientId",
+    type: "string",
+    description: "ID of the OAuth client",
+    isForeignKey: true,
+    references: { model: "oauthClient", field: "clientId" },
+  },
+  {
+    name: "sessionId",
+    type: "string",
+    description:
+      "ID of the session used at issuance of the token (and still active)",
+    isForeignKey: true,
+    isOptional: true,
+    references: { model: "session", field: "id", onDelete: "set null" },
+  },
+  {
+    name: "refreshId",
+    type: "string",
+    description: "ID of the refresh associated with the token",
+    isForeignKey: true,
+    isOptional: true,
+    references: { model: "oauthRefreshToken", field: "id" },
+  },
+  {
+    name: "userId",
+    type: "string",
+    description: "ID of the user associated with the token",
+    isForeignKey: true,
+    isOptional: true,
+    references: { model: "user", field: "id" },
+  },
+  {
+    name: "referenceId",
+    type: "string",
+    description: "ID of the consented reference",
+    isOptional: true,
+  },
+  {
+    name: "scopes",
+    type: "string[]",
+    description: "Array of granted scopes",
+  },
+  {
+    name: "createdAt",
+    type: "Date",
+    description: "Timestamp when the token was created",
+  },
+  {
+    name: "expiresAt",
+    type: "Date",
+    description: "Timestamp when the token will expire",
+  },
+];
+
+<DatabaseTable name="oauthAccessToken" fields={oauthAccessTokenTableFields} />
+
+### OAuth Consent
+
+Table Name: `oauthConsent`
+
+export const oauthConsentTableFields = [
+  {
+    name: "id",
+    type: "string",
+    description: "Database ID of the consent",
+    isPrimaryKey: true,
+  },
+  {
+    name: "userId",
+    type: "string",
+    description: "ID of the user who gave consent",
+    isForeignKey: true,
+    references: { model: "user", field: "id" },
+  },
+  {
+    name: "clientId",
+    type: "string",
+    description: "ID of the OAuth client",
+    isForeignKey: true,
+    references: { model: "oauthClient", field: "clientId" },
+  },
+  {
+    name: "referenceId",
+    type: "string",
+    description: "ID of the consented reference",
+    isOptional: true,
+  },
+  {
+    name: "scopes",
+    type: "string[]",
+    description: "Array of scopes consented to",
+  },
+  {
+    name: "createdAt",
+    type: "Date",
+    description: "Timestamp of when the consent was given",
+  },
+  {
+    name: "updatedAt",
+    type: "Date",
+    description: "Timestamp of when the consent was last updated",
+  },
+];
+
+<DatabaseTable name="oauthConsent" fields={oauthConsentTableFields} />
+
+## Options
+
+### Prefix
+
+Add a `prefix` to opaque access tokens, refresh tokens, or client secrets. This is useful for Secret Scanners (ie. [GitHub Secret Scanners](https://docs.github.com/code-security/secret-scanning), [GitGuardian](https://www.gitguardian.com/solutions/secrets-scanning), [Trufflehog](https://github.com/trufflesecurity/trufflehog)) that may rely on the prefix to help determine the token format.
+
+We recommend to add a prefix to each of the following prior to your first production deployment. Once deployed consider them immutable, otherwise the following generate functions as specified:
+
+The following are available under the `prefix` configuration setting:
+
+* **opaqueAccessToken**: `string | undefined` - add a prefix onto opaque access tokens. If previously deployed, utilize `generateOpaqueAccessToken` to perform this functionality instead.
+* **refreshToken**: `string | undefined` - add a prefix onto refresh tokens.  If previously deployed, utilize `generateRefreshToken` to perform this functionality instead.
+* **clientSecret**:: `string | undefined` - add a prefix onto client secrets.  If previously deployed, utilize `generateClientSecret` to perform this functionality instead.
+
+## Optimizations
+
+To improve lookup performance, database adapters may map the field `client_id` on the table `oauthClient` to `id`. Note that `id` should support strings formatted like UUIDs and urls.
+
+## Migrations
+
+RubyAuth does not expose the removed core `oidc-provider` plugin as a supported API. New Ruby applications should add `gem "better_auth-oauth-provider"`, require `better_auth/oauth_provider`, and configure `BetterAuth::Plugins.oauth_provider(...)`.
+
+When migrating an older RubyAuth application:
+
+* Replace `BetterAuth::Plugins.oidc_provider(...)` with `BetterAuth::Plugins.oauth_provider(...)`.
+* Register `BetterAuth::Plugins.jwt` before the OAuth provider plugin unless you intentionally set `disable_jwt_plugin: true`.
+* Replace legacy `/mcp/*` routes with OAuth provider token, introspection, revocation, UserInfo, and resource-server bearer challenge handling.
+* Regenerate or run the OAuth provider schema migration after enabling the gem.
+
+`oauthAccessToken` uses the upstream canonical columns `token`, `expiresAt`, `scopes`, `clientId`, `sessionId`, `userId`, `referenceId`, and `refreshId`. Legacy `access_token`, `refresh_token`, `access_token_expires_at`, and `scope` columns should be copied forward before removal. `oauthConsent#consent_given` is also removed; a consent row means consent was granted.
+
+```sql
+UPDATE better_auth_oauth_access_tokens
+SET token = COALESCE(token, access_token),
+    expires_at = COALESCE(expires_at, access_token_expires_at),
+    scopes = COALESCE(scopes, scope)
+WHERE token IS NULL OR scopes IS NULL;
+
+DELETE FROM better_auth_oauth_consents WHERE consent_given = false;
+```
+
+After enabling the hashed defaults, newly created OAuth client secrets and opaque tokens are stored hashed. Existing plaintext rows continue to require either a migration that re-registers or rotates secrets and tokens, or a temporary explicit `store_client_secret: "plain"` setting for old clients during rollout.

@@ -1,228 +1,788 @@
 ---
 title: Options
-description: RubyAuth configuration options for BetterAuth.auth and BetterAuth::Rails.configure.
+description: RubyAuth configuration options reference.
 ---
 
 <RubyAuthDisclaimer />
 
-RubyAuth configuration maps to `BetterAuth::Configuration` in the core gem. Pass options to `BetterAuth.auth(...)` or `BetterAuth::Rails.configure`.
+List of all the available options for configuring RubyAuth. See [RubyAuth Options](https://github.com/better-auth/better-auth/blob/main/packages/core/src/types/init-options.ts).
 
-## Quick example
+## `appName`
+
+The name of your application. Defaults to `"RubyAuth"`.
+
+It's used as a display name in contexts where your app needs to be identified — for example, when users set up two-factor authentication with an authenticator app (like Google Authenticator), `appName` appears as the issuer name in the TOTP entry. This can be overridden per-plugin (e.g. the [2FA plugin's `issuer` option](/docs/plugins/2fa#issuer)).
 
 ```ruby
-BetterAuth.auth(
-  app_name: "My App",
-  base_url: ENV.fetch("BETTER_AUTH_URL"),
-  base_path: "/api/auth",
+require "better_auth"
+
+auth = BetterAuth.auth(
   secret: ENV.fetch("BETTER_AUTH_SECRET"),
-  database: :postgres,
-  trusted_origins: [ENV.fetch("BETTER_AUTH_URL")],
-  email_and_password: { enabled: true },
-  password_hasher: :scrypt,
-  session: { expires_in: 60 * 60 * 24 * 7 },
-  rate_limit: { enabled: true },
-  social_providers: {},
-  plugins: []
+  base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
+  database: :postgres
 )
 ```
 
-Rails:
+## `base_url`
+
+The required canonical URL for RubyAuth. Pass a static HTTP(S) URL or set `BETTER_AUTH_URL`. RubyAuth fails during initialization when neither is present. Request headers are never used to infer this canonical identity.
+
+If the URL includes a path, that path takes precedence over `base_path`.
 
 ```ruby
-BetterAuth::Rails.configure do |config|
-  config.secret = ENV.fetch("BETTER_AUTH_SECRET")
-  config.base_url = ENV.fetch("BETTER_AUTH_URL")
-  config.database = :postgres
-end
+auth = BetterAuth.auth(
+  secret: ENV.fetch("BETTER_AUTH_SECRET"),
+  base_url: ENV.fetch("BETTER_AUTH_URL"),
+  database: :postgres
+)
 ```
 
-## app_name
+JWT issuer/audience defaults, OAuth/OIDC issuer metadata, provider redirect URI defaults, and OpenAPI servers always use this canonical URL.
 
-Application name used in emails, TOTP issuer labels, and telemetry project id derivation. Default: `"Better Auth"`.
+<Callout type="warn">
+  The legacy hash form of `base_url` is no longer supported. Use a static canonical `base_url` plus `serving_origins`.
+</Callout>
 
-## base_url
+## `serving_origins`
 
-Public URL of your auth deployment. String form:
+Optional request-facing origins from which RubyAuth may serve auth routes. Entries are full HTTP(S) origin patterns without paths. Exact and wildcard matching use the same syntax as `trusted_origins`. The canonical origin from `base_url` is always included.
 
 ```ruby
-base_url: "https://auth.example.com"
+auth = BetterAuth.auth(
+  secret: ENV.fetch("BETTER_AUTH_SECRET"),
+  base_url: "https://auth.example.com",
+  serving_origins: ["https://tenant.example.com", "https://*.preview.example.com"]
+)
 ```
 
-Dynamic form for preview deployments — see [Dynamic base URL guide](/docs/guides/dynamic-base-url):
+For each request, RubyAuth uses the inbound `Host` only when the resulting origin matches this allowlist. It honors `X-Forwarded-Host` and `X-Forwarded-Proto` only when `advanced.trusted_proxy_headers` is explicitly `true`. Unknown or malformed candidates fall back to the canonical URL.
+
+Serving origins are automatically added to `trusted_origins`. This relationship is one-way: a `trusted_origins` entry cannot become a serving origin or control token-bearing links.
+
+See [Multiple Serving Origins](/docs/guides/dynamic-base-url) for deployment examples and migration from dynamic `base_url`.
+
+## `base_path`
+
+Base path for RubyAuth. This is typically the path where the RubyAuth routes are mounted. It will be overridden if there is a path component within `base_url`.
 
 ```ruby
-base_url: {
-  allowed_hosts: ["myapp.com", "*.vercel.app", "localhost:3000"],
-  protocol: "https",
-  fallback: "https://myapp.com"
-}
+require "better_auth"
+
+auth = BetterAuth.auth(
+  secret: ENV.fetch("BETTER_AUTH_SECRET"),
+  base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
+  database: :postgres,
+  base_path: "/auth"
+)
 ```
 
-In production, outbound links containing password-reset, email-verification,
-account-deletion, or magic-link tokens require a static `base_url` or the
-dynamic `allowed_hosts` form. RubyAuth rejects these operations rather than
-putting an untrusted request host into a security-token link.
+Default: `/api/auth`
 
-## base_path
+## `trusted_origins`
 
-Mount path prefix for auth routes. Default: `"/api/auth"`.
+By default, RubyAuth trusts the base URL of your app (i.e. [`base_url`](#baseurl)). You can specify additional trusted origins via this option. Values can be a static array of origins, a function that returns origins dynamically, or wildcard patterns to match multiple domains.
 
-## secret and secrets
+### Static Origins
 
-`secret` — signing key for cookies and tokens. Required in production (32+ chars). Generate with `bundle exec better-auth secret`.
-
-`secrets` — optional rotation config via `BETTER_AUTH_SECRETS` env or hash for multi-secret verification.
-
-## trusted_origins
-
-Array of allowed origins for CSRF/origin checks and redirect validation:
+You can provide a static array of origins:
 
 ```ruby
-trusted_origins: ["http://localhost:3000", "https://app.example.com"]
+require "better_auth"
+
+auth = BetterAuth.auth(
+  secret: ENV.fetch("BETTER_AUTH_SECRET"),
+  base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
+  database: :postgres,
+  trusted_origins: ["http://localhost:3000", "https://example.com"]
+)
 ```
 
-Can be a callable for dynamic origin lists.
+### Dynamic Origins
 
-## database
-
-Dialect symbol (`:postgres`, `:mysql`, `:sqlite`, `:mssql`, `:memory`) or adapter lambda returning `BetterAuth::Adapters::*`. See [adapters](/docs/adapters/postgresql).
-
-## secondary_storage
-
-Optional Redis or custom secondary storage for sessions/rate limits. Requires explicit adapter configuration.
-
-<UnderDevelopment>
-  Secondary storage parity varies by deployment — verify with `bundle exec better-auth doctor`.
-</UnderDevelopment>
-
-## session
+You can provide a function that returns origins dynamically:
 
 ```ruby
-session: {
-  expires_in: 60 * 60 * 24 * 7,
-  update_age: 60 * 60 * 24,
-  fresh_age: 60 * 60 * 24,
-  cookie_cache: { enabled: true, max_age: 300, strategy: "jwe" }
-}
+require "better_auth"
+
+auth = BetterAuth.auth(
+  secret: ENV.fetch("BETTER_AUTH_SECRET"),
+  base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
+  database: :postgres,
+  trusted_origins: ->(request) { ["https://#{request.host}"] }
+)
 ```
 
-## account
+<Callout type="info">
+  The `request` parameter is `undefined` during initialization and when calling `auth.api` directly. Make sure to handle this case by returning default trusted origins.
+</Callout>
 
-Account linking, OAuth token storage, and `update_account_on_sign_in` behavior.
+### Wildcard Support
 
-## user
+You can use wildcard patterns in trusted origins:
 
 ```ruby
-user: {
-  additional_fields: {
-    role: { type: "string", default_value: "member" }
+require "better_auth"
+
+auth = BetterAuth.auth(
+  secret: ENV.fetch("BETTER_AUTH_SECRET"),
+  base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
+  database: :postgres,
+  trusted_origins: ["https://*.example.com", "http://localhost:*"]
+)
+```
+
+#### Pattern Syntax
+
+| Pattern | Description                                          |
+| ------- | ---------------------------------------------------- |
+| `?`     | Matches exactly one character (except `/`)           |
+| `*`     | Matches zero or more characters that don't cross `/` |
+| `**`    | Matches zero or more characters including `/`        |
+
+#### Pattern Examples
+
+| Pattern                  | Matches                                                                                  | Does Not Match                                      |
+| ------------------------ | ---------------------------------------------------------------------------------------- | --------------------------------------------------- |
+| `http://*.example.com`   | `http://api.example.com`<br />`http://app.example.com`<br />`http://api.app.example.com` | `https://api.example.com`<br />`http://example.com` |
+| `https://**.example.com` | `https://api.example.com`<br />`https://api.app.example.com`                             | `http://api.example.com`                            |
+| `https://example.com`    | `https://example.com`<br />`https://example.com/path`                                    | `https://api.example.com`<br />`http://example.com` |
+| `exp://192.168.*.*:*/**` | `exp://192.168.1.100:8081/path`<br />`exp://192.168.50.200:19000/auth/callback`          | `exp://10.0.0.29:8081/path`                         |
+| `myapp://`               | All URLs starting with `myapp://`                                                        | -                                                   |
+
+<Callout type="info">
+  **Notes**
+
+  * For `http://` and `https://` URLs, patterns match the full origin. Paths and query strings are ignored.
+  * For custom schemes (like `exp://` or `myapp://`), patterns match against the full URL including paths when wildcards are present, or use prefix matching when no wildcards exist.
+  * The separator is `/` (forward slash). This means `http://*.example.com` matches both `http://api.example.com` and `http://api.app.example.com`.
+</Callout>
+
+## `secret`
+
+The secret used for encryption, signing, and hashing.
+
+```ruby
+require "better_auth"
+
+auth = BetterAuth.auth(
+  secret: ENV.fetch("BETTER_AUTH_SECRET"),
+  base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
+  database: :postgres,
+  secret: ENV.fetch("BETTER_AUTH_SECRET")
+)
+```
+
+By default, RubyAuth will look for the following environment variables:
+
+* `ENV.fetch("BETTER_AUTH_SECRET")`
+* `process.env.AUTH_SECRET`
+
+If none of these environment variables are set, it will default to `"better-auth-secret-12345678901234567890"`. In production, if it's not set, it will throw an error.
+
+You can generate a good secret using the following command:
+
+```bash
+openssl rand -base64 32
+```
+
+## `secrets`
+
+Versioned secrets for non-destructive secret rotation. When set, encrypted data uses an envelope format that embeds the key version, allowing you to rotate secrets without invalidating existing data.
+
+```ruby
+require "better_auth"
+
+auth = BetterAuth.auth(
+  secret: ENV.fetch("BETTER_AUTH_SECRET"),
+  base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
+  database: :postgres,
+  secrets: [
+    { id: "2026-06", secret: ENV.fetch("BETTER_AUTH_SECRET_CURRENT") },
+    { id: "2026-01", secret: ENV.fetch("BETTER_AUTH_SECRET_PREVIOUS") }
+  ]
+)
+```
+
+* The first entry is the **current** key used for all new encryption.
+* Remaining entries are **decryption-only** (previous rotations).
+* Versions are integers. Gaps are allowed (e.g., `1, 3` after revoking version 2).
+
+You can also set this via the `BETTER_AUTH_SECRETS` environment variable:
+
+```txt title=".env"
+BETTER_AUTH_SECRETS=2:new-secret-base64,1:old-secret-base64
+```
+
+When `secrets` is set, `secret` (singular) is only used as a fallback for decrypting legacy data that predates the envelope format. Both can coexist during migration.
+
+## `database`
+
+Database configuration for RubyAuth.
+
+```ruby
+require "better_auth"
+
+auth = BetterAuth.auth(
+  secret: ENV.fetch("BETTER_AUTH_SECRET"),
+  base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
+  database: :postgres,
+  database: :postgres
+)
+```
+
+RubyAuth supports various database configurations including [PostgreSQL](/docs/adapters/postgresql), [MySQL](/docs/adapters/mysql), and [SQLite](/docs/adapters/sqlite).
+
+Read more about databases [here](/docs/concepts/database).
+
+## `secondary_storage`
+
+Secondary storage configuration used to store session data, verification records, and rate limit data.
+
+```ruby
+require "better_auth"
+
+auth = BetterAuth.auth(
+  secret: ENV.fetch("BETTER_AUTH_SECRET"),
+  base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
+  database: :postgres,
+  secondary_storage: my_secondary_storage
+)
+```
+
+Read more about secondary storage [here](/docs/concepts/database#secondary-storage).
+
+## `email_verification`
+
+Email verification configuration.
+
+```ruby
+require "better_auth"
+
+auth = BetterAuth.auth(
+  secret: ENV.fetch("BETTER_AUTH_SECRET"),
+  base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
+  database: :postgres,
+  email_verification: {
+    send_verification_email: ->(user:, url:, token:) { Mailer.verify(user, url).deliver_now },
+    send_on_sign_up: true,
+    auto_sign_in_after_verification: true
   }
-}
+)
 ```
 
-## verification
+* `send_verification_email`: Function to send verification email
+* `sendOnSignUp`: Send verification email automatically after sign up. `true` always sends, `false` never sends, `undefined` follows `require_email_verification` behavior (default: `undefined`)
+* `sendOnSignIn`: Send verification email automatically on sign in when the user's email is not verified (default: `false`)
+* `auto_sign_inAfterVerification`: Auto sign in the user after they verify their email
+* `expires_in`: Number of seconds the verification token is valid for (default: `3600` seconds)
 
-Email verification token lifetime and send behavior. Works with `email_verification` callbacks.
+## `email_and_password`
 
-## email_and_password
+Email and password authentication configuration.
 
 ```ruby
-email_and_password: {
-  enabled: true,
-  require_email_verification: false,
-  min_password_length: 8,
-  max_password_length: 128
-}
+require "better_auth"
+
+auth = BetterAuth.auth(
+  secret: ENV.fetch("BETTER_AUTH_SECRET"),
+  base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
+  database: :postgres,
+  email_and_password: {
+    enabled: true,
+    min_password_length: 8,
+    max_password_length: 128
+  }
+)
 ```
 
-## password_hasher
+* `enabled`: Enable email and password authentication (default: `false`)
+* `disableSignUp`: Disable email and password sign up (default: `false`)
+* `require_email_verification`: Require email verification before a session can be created
+* `min_password_length`: Minimum password length (default: `8`)
+* `max_password_length`: Maximum password length (default: `128`)
+* `auto_sign_in`: Automatically sign in the user after sign up
+* `send_reset_password`: Function to send reset password email
+* `onPasswordReset`: Callback triggered when a user's password is changed successfully
+* `revokeSessionsOnPasswordReset`: Revoke all other sessions when resetting password (default: `false`)
+* `reset_password_token_expires_in`: Number of seconds the reset password token is valid for (default: `3600` seconds)
+* `onExistingUserSignUp`: Callback triggered when someone signs up with an already-registered email. Only called when `require_email_verification` is `true` or `auto_sign_in` is `false` (default: `undefined`).
+* `customSyntheticUser`: Function to build a custom synthetic user for email enumeration protection. Use when plugins add fields to the user table. See [email enumeration protection](/docs/authentication/email-password#plugins-that-add-user-fields).
+* `password`: Custom password hashing and verification functions
 
-`:scrypt` (default) or `:bcrypt`. RubyAuth does not accept arbitrary JavaScript hash functions.
+## `social_providers`
 
-## email_verification
-
-Mailer callbacks: `send_verification_email`, `send_on_sign_up`, `auto_sign_in_after_verification`.
-
-## social_providers
-
-Hash of provider id => factory result:
+Configure social login providers.
 
 ```ruby
-social_providers: {
-  github: BetterAuth::SocialProviders.github(
-    client_id: ENV.fetch("GITHUB_CLIENT_ID"),
-    client_secret: ENV.fetch("GITHUB_CLIENT_SECRET")
-  )
-}
+require "better_auth"
+
+auth = BetterAuth.auth(
+  secret: ENV.fetch("BETTER_AUTH_SECRET"),
+  base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
+  database: :postgres,
+  social_providers: {
+    github: {
+      client_id: ENV.fetch("GITHUB_CLIENT_ID"),
+      client_secret: ENV.fetch("GITHUB_CLIENT_SECRET")
+    }
+  }
+)
 ```
 
-## plugins
+* `client_id`: OAuth client ID from the provider
+* `client_secret`: OAuth client secret from the provider
+* `clientKey`: Client key (used by some providers like TikTok instead of client_id) (optional)
+* `redirectURI`: Custom redirect URI for the OAuth callback (optional)
+* `scope`: Additional OAuth scopes to request (optional)
+* `mapProfileToUser`: Custom function to map the provider profile to a user (optional)
+* `disableSignUp`: Disable sign up for new users (optional)
+* `disable_implicit_sign_up`: Disable implicit sign up for new users (optional)
+* `overrideUserInfoOnSignIn`: Override user info with provider user info on sign in (optional)
+* `prompt`: The prompt to use for the authorization code request (`"select_account"`, `"consent"`, `"login"`, `"none"`, `"select_account consent"`) (optional)
+* `responseMode`: The response mode to use (`"query"`, `"form_post"`) (optional)
+* `getUserInfo`: Custom function to get user info from the provider (optional)
+* `refreshAccessToken`: Custom function to refresh a token (optional)
+* `verifyIdToken`: Custom function to verify the ID token (optional)
+* `disableIdTokenSignIn`: Disable sign in with ID token sent from the client (optional)
+* `disableDefaultScope`: Disable the provider's default scopes (optional)
+* `authorizationEndpoint`: Custom authorization endpoint URL (optional)
 
-Array of plugin instances: `BetterAuth::Plugins.two_factor`, external gems, etc.
+## `plugins`
 
-## rate_limit
+List of RubyAuth plugins.
 
 ```ruby
-rate_limit: {
-  enabled: true,
-  window: 60,
-  max: 100,
-  storage: :memory
-}
+require "better_auth"
+
+auth = BetterAuth.auth(
+  secret: ENV.fetch("BETTER_AUTH_SECRET"),
+  base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
+  database: :postgres,
+  plugins: [BetterAuth::Plugins.admin]
+)
 ```
 
-## advanced
+## `user`
 
-IP address headers, secure cookies, default cookie attributes, ID generation overrides.
+User configuration options.
 
-`allow_unsafe_token_link_base_url_inference` restores request-host inference for
-production token links when no static or dynamic `base_url` is configured. It
-is intended only as a temporary compatibility escape hatch and is a security
-risk unless the ingress strictly validates `Host` and forwarded host headers.
+```ruby
+require "better_auth"
 
+auth = BetterAuth.auth(
+  secret: ENV.fetch("BETTER_AUTH_SECRET"),
+  base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
+  database: :postgres,
+  user: {
+    additional_fields: {
+      role: { type: "string", required: false, default_value: "member" }
+    }
+  }
+)
+```
+
+* `modelName`: The model name for the user (default: `"user"`)
+* `fields`: Map fields to different column names
+* `additionalFields`: Additional fields for the user table
+* `changeEmail`: Configuration for changing email
+* `deleteUser`: Configuration for user deletion
+
+## `session`
+
+Session configuration options.
+
+```ruby
+require "better_auth"
+
+auth = BetterAuth.auth(
+  secret: ENV.fetch("BETTER_AUTH_SECRET"),
+  base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
+  database: :postgres,
+  session: {
+    expires_in: 60 * 60 * 24 * 7,
+    update_age: 60 * 60 * 24,
+    fresh_age: 60 * 60 * 24,
+    cookie_cache: { enabled: true, max_age: 300, strategy: "jwe" }
+  }
+)
+```
+
+* `modelName`: The model name for the session (default: `"session"`)
+* `fields`: Map fields to different column names
+* `expires_in`: Expiration time for the session token in seconds (default: `604800` - 7 days)
+* `update_age`: How often the session should be refreshed in seconds (default: `86400` - 1 day)
+* `additionalFields`: Additional fields for the session table
+* `storeSessionInDatabase`: Store session in database when secondary storage is provided (default: `false`)
+* `preserveSessionInDatabase`: Preserve session records in database when deleted from secondary storage (default: `false`)
+* `cookie_cache`: Enable caching session in cookie
+
+## `account`
+
+Account configuration options.
+
+```ruby
+require "better_auth"
+
+auth = BetterAuth.auth(
+  secret: ENV.fetch("BETTER_AUTH_SECRET"),
+  base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
+  database: :postgres,
+  account: {
+    account_linking: { enabled: true, trusted_providers: ["google", "github"] },
+    update_account_on_sign_in: true,
+    store_account_cookie: true
+  }
+)
+```
+
+* `modelName`: The model name for the account
+* `fields`: Map fields to different column names
+
+### `encrypt_oauth_tokens`
+
+Encrypt OAuth tokens before storing them in the database. Default: `false`.
+
+### `update_account_on_sign_in`
+
+If enabled (true), the user account data (access_token, id_token, refresh_token, etc.)
+will be updated on sign in with the latest data from the provider.
+
+### `store_account_cookie`
+
+Store account data after OAuth flow in a cookie. This is useful for database-less flows where you want to store account information (access tokens, refresh tokens, etc.) in a cookie instead of the database.
+
+* Default: `false`
+* Automatically set to `true` if no database is provided
+
+When this option is enabled, you can read the decrypted account cookie in hooks or middleware using `getAccountCookie` from `better-auth/cookies`:
+
+```ruby
+require "better_auth"
+
+auth = BetterAuth.auth(
+  secret: ENV.fetch("BETTER_AUTH_SECRET"),
+  base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
+  database: :postgres,
+  account: {
+    account_linking: { enabled: true, trusted_providers: ["google", "github"] },
+    update_account_on_sign_in: true,
+    store_account_cookie: true
+  }
+)
+```
+
+### `account_linking`
+
+Configuration for account linking.
+
+* `enabled`: Enable account linking (default: `true`)
+* `trustedProviders`: List of trusted providers. Can be a static array or an async function that returns providers dynamically based on the request (similar to `trusted_origins`)
+* `allowDifferentEmails`: Allow users to link accounts with different email addresses
+* `allowUnlinkingAll`: Allow users to unlink all accounts
+
+## `verification`
+
+Verification configuration options.
+
+```ruby
+require "better_auth"
+
+auth = BetterAuth.auth(
+  secret: ENV.fetch("BETTER_AUTH_SECRET"),
+  base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
+  database: :postgres,
+  verification: {
+    expires_in: 60 * 60,
+    disable_cleanup: false
+  }
+)
+```
+
+* `modelName`: The model name for the verification table
+* `fields`: Map fields to different column names
+* `disableCleanup`: Disable cleaning up expired values when a verification value is fetched
+* `storeIdentifier`: How to store verification identifiers such as tokens and OTP keys. Supports `"plain"`, `"hashed"`, or a custom hasher. You can also use `{ default, overrides }` to apply different strategies per identifier prefix.
+* `storeInDatabase`: Store verification records in the database even when `secondary_storage` is configured. Default is `false`.
+
+If `secondary_storage` is configured, verification records are stored there by default. That behavior applies to flows that use RubyAuth's shared verification layer, including OTP and magic-link style flows.
+
+## `rateLimit`
+
+Rate limiting configuration.
+
+```ruby
+require "better_auth"
+
+auth = BetterAuth.auth(
+  secret: ENV.fetch("BETTER_AUTH_SECRET"),
+  base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
+  database: :postgres
+)
+```
+
+* `enabled`: Enable rate limiting (defaults: `true` in production, `false` in development)
+* `window`: Time window to use for rate limiting. The value should be in seconds. (default: `10`)
+* `max`: The default maximum number of requests allowed within the window. (default: `100`)
+* `customRules`: Custom rate limit rules to apply to specific paths.
+* `storage`: Storage configuration. If you passed a secondary storage, rate limiting will be stored in the secondary storage. (options: `"memory", "database", "secondary-storage"`, default: `"memory"`)
+* `modelName`: The name of the table to use for rate limiting if database is used as storage. (default: `"rateLimit"`)
+
+## `advanced`
 <UnderDevelopment>
-  Upstream `crossSubDomainCookies` / `customizeDefaultErrorPage` theming is not fully ported — use `advanced` keys documented in `configuration.rb` only.
+  RubyAuth keeps this upstream section for parity. The exact upstream option is not fully exposed or enforced server-side in Ruby yet; use the shown Ruby shape only where your installed gem version documents support.
 </UnderDevelopment>
 
-Cross-subdomain cookies can be configured via `advanced.cross_subdomain_cookies` where supported — verify in your environment.
 
-## hooks and database_hooks
-
-Request hooks (`before`/`after`) and adapter-level record transforms. See [Hooks](/docs/concepts/hooks).
-
-## on_api_error
-
-<span id="on-api-error" />
+Advanced configuration options.
 
 ```ruby
-on_api_error: {
-  error_url: "/api/auth/error",
-  throw: false
-}
+require "better_auth"
+
+auth = BetterAuth.auth(
+  secret: ENV.fetch("BETTER_AUTH_SECRET"),
+  base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
+  database: :postgres,
+  advanced: {
+    cookie_prefix: "better-auth",
+    use_secure_cookies: true
+  }
+)
 ```
 
-## disabled_paths
+* `ip_address`: IP address configuration for rate limiting and session tracking
+  * `disable_ip_tracking`: Disable IP tracking and the built-in per-IP limiter.
+  * `ip_address_headers`: Explicitly trusted, ingress-controlled header names, checked in order.
+  * `trusted_proxies`: Proxy IP addresses or CIDR ranges used to resolve configured forwarded chains from right to left.
+  * `ipv6_subnet`: IPv6 prefix length used to group rate-limit keys (default: `64`).
+* `use_secure_cookies`: By default, cookies are secure in production environments. Set this to `true` to force the `Secure` cookie attribute in all environments.
+* `disable_csrf_check`: Disable all CSRF protection including origin header validation and Fetch Metadata checks (⚠️ security risk)
+* `disable_origin_check`: Disable URL validation for `callback_url`, `redirectTo`, and other redirect URLs (⚠️ security risk)
+* `cross_sub_domain_cookies`: Configure cookies to be shared across subdomains
+* `cookies`: Customize cookie names and attributes
+* `default_cookie_attributes`: Default attributes for all cookies
+* `cookiePrefix`: Prefix for cookies
+* `database`: Database configuration options
+* `backgroundTasks`: Configure background task handling for deferred operations
+* `skipTrailingSlashes`: Skip trailing slash validation in route matching. (default: `false`)
+* OAuth state configuration options (`storeStateStrategy`, `skipStateCookieCheck`) are now part of the `account` option
 
-Disable specific routes by path string.
+<h3 id="advanced-database"><code>database</code></h3>
 
-## telemetry
+Set custom strategies for ID generation and findMany queries.
+
+* `generate_id`: Controls how record IDs are generated. Accepts a custom function, `false`, `"serial"`, or `"uuid"` (default: [random base62 string](https://github.com/better-auth/better-auth/blob/main/packages/core/src/utils/id.ts)). See the [Database documentation](/docs/concepts/database#id-generation) for more info.
+* `defaultFindManyLimit`: The default maximum number of records returned by the `findMany` adapter method. (default: `100`)
 
 ```ruby
-telemetry: { enabled: false }
+require "better_auth"
+
+auth = BetterAuth.auth(
+  secret: ENV.fetch("BETTER_AUTH_SECRET"),
+  base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
+  database: :postgres,
+  advanced: {
+    cookie_prefix: "better-auth",
+    use_secure_cookies: true
+  }
+)
 ```
 
-See [Telemetry](/docs/reference/telemetry) and `gem "better_auth-telemetry"`.
+### `backgroundTasks`
 
-## logger
+Configure background task handling for deferred operations. Background tasks allow non-critical operations (like cleanup, analytics, timing-attack mitigation, or rate limit counter updates) to run after the response is sent. This can significantly improve response times on serverless platforms.
 
-Ruby `Logger` instance for auth internals.
+Some examples are: `waitUntil` from `@vercel/functions` on Vercel, or `ctx.waitUntil` on Cloudflare Workers. See the examples below for more details.
 
-## experimental
+<Callout type="warn">
+  Enabling this introduces eventual consistency where the response returns optimistic data before the database is updated. Only enable if your application can tolerate this trade-off for improved latency.
+</Callout>
 
-Experimental flags — subject to change between releases.
+<Tabs items={["Vercel", "Cloudflare Workers"]}>
+  <Tab value="Vercel">
+    ```ruby
+    require "better_auth"
 
-## Related
+    auth = BetterAuth.auth(
+      secret: ENV.fetch("BETTER_AUTH_SECRET"),
+      base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
+      database: :postgres,
+      advanced: {
+        cookie_prefix: "better-auth",
+        use_secure_cookies: true
+      }
+    )
+    ```
+  </Tab>
 
-- [Installation](/docs/installation)
-- [Security](/docs/reference/security)
-- [Dynamic base URL](/docs/guides/dynamic-base-url)
+  <Tab value="Cloudflare Workers">
+    ```ruby
+    require "better_auth"
+
+    auth = BetterAuth.auth(
+      secret: ENV.fetch("BETTER_AUTH_SECRET"),
+      base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
+      database: :postgres,
+      advanced: {
+        cookie_prefix: "better-auth",
+        use_secure_cookies: true
+      }
+    )
+    ```
+  </Tab>
+</Tabs>
+
+## `logger`
+
+Logger configuration for RubyAuth.
+
+```ruby
+require "better_auth"
+
+auth = BetterAuth.auth(
+  secret: ENV.fetch("BETTER_AUTH_SECRET"),
+  base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
+  database: :postgres,
+  logger: ->(level, message) { Rails.logger.public_send(level, message) }
+)
+```
+
+The logger configuration allows you to customize how RubyAuth handles logging. It supports the following options:
+
+* `disabled`: Disable all logging when set to `true` (default: `false`)
+* `disableColors`: Disable colors in the default logger implementation (default: determined by the terminal's color support)
+* `level`: Set the minimum log level to display (default: `"warn"`)
+  * `"debug"`: Show all logs including debug information
+  * `"info"`: Show all logs except debug information
+  * `"warn"`: Show warnings and errors
+  * `"error"`: Show only errors
+* `log`: Custom logging function that receives:
+  * `level`: The log level
+  * `message`: The log message
+  * `...args`: Additional arguments passed to the logger
+
+Example with custom logging:
+
+```ruby
+require "better_auth"
+
+auth = BetterAuth.auth(
+  secret: ENV.fetch("BETTER_AUTH_SECRET"),
+  base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
+  database: :postgres,
+  logger: ->(level, message) { Rails.logger.public_send(level, message) }
+)
+```
+
+## `database_hooks`
+
+Database lifecycle hooks for core operations.
+
+```ruby
+require "better_auth"
+
+auth = BetterAuth.auth(
+  secret: ENV.fetch("BETTER_AUTH_SECRET"),
+  base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
+  database: :postgres,
+  database: :postgres
+)
+```
+
+## `on_api_error`
+
+API error handling configuration.
+
+```ruby
+require "better_auth"
+
+auth = BetterAuth.auth(
+  secret: ENV.fetch("BETTER_AUTH_SECRET"),
+  base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
+  database: :postgres,
+  on_api_error: {
+    on_error: ->(error, ctx) { Rails.logger.error(error.message) }
+  }
+)
+```
+
+* `throw`: Throw an error on API error (default: `false`)
+* `onError`: Custom error handler
+* `errorURL`: URL to redirect to on error (default: `/api/auth/error`)
+* `customizeDefaultErrorPage`: Configure the default error page provided by RubyAuth. Start your dev server and go to `/api/auth/error` to see the error page.
+  * `colors`: Customize color scheme for the error page
+    * `background`: Background color
+    * `foreground`: Foreground/text color
+    * `primary`: Primary accent color
+    * `primaryForeground`: Text color on primary background
+    * `mutedForeground`: Muted text color
+    * `border`: Border color
+    * `destructive`: Error/destructive color
+    * `titleBorder`: Border color for the title
+    * `titleColor`: Title text color
+    * `gridColor`: Background grid color
+    * `cardBackground`: Card background color
+    * `cornerBorder`: Corner decoration border color
+  * `size`: Customize sizing and spacing
+    * `radiusSm`: Small border radius
+    * `radiusMd`: Medium border radius
+    * `radiusLg`: Large border radius
+    * `textSm`: Small text size
+    * `text2xl`: 2xl text size
+    * `text4xl`: 4xl text size
+    * `text6xl`: 6xl text size
+  * `font`: Customize font families
+    * `defaultFamily`: Default font family
+    * `monoFamily`: Monospace font family
+  * `disableTitleBorder`: Disable the border around the title (default: `false`)
+  * `disableCornerDecorations`: Disable corner decorations (default: `false`)
+  * `disableBackgroundGrid`: Disable the background grid pattern (default: `false`)
+
+## `hooks`
+
+Request lifecycle hooks.
+
+```ruby
+require "better_auth"
+
+auth = BetterAuth.auth(
+  secret: ENV.fetch("BETTER_AUTH_SECRET"),
+  base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
+  database: :postgres,
+  hooks: {
+    before: [{ matcher: ->(ctx) { ctx.path == "/sign-up/email" }, handler: ->(ctx) { nil } }],
+    after: []
+  }
+)
+```
+
+For more details and examples, see the [Hooks documentation](/docs/concepts/hooks).
+
+## `disabled_paths`
+
+Disable specific auth paths.
+
+```ruby
+require "better_auth"
+
+auth = BetterAuth.auth(
+  secret: ENV.fetch("BETTER_AUTH_SECRET"),
+  base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
+  database: :postgres,
+  disabled_paths: ["/sign-up/email"]
+)
+```
+
+## `telemetry`
+
+Enable or disable RubyAuth's telemetry collection. (default: `false`)
+
+```ruby
+require "better_auth"
+
+auth = BetterAuth.auth(
+  secret: ENV.fetch("BETTER_AUTH_SECRET"),
+  base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
+  database: :postgres,
+  telemetry: { enabled: false }
+)
+```

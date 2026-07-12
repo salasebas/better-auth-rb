@@ -1,37 +1,55 @@
 ---
-title: Email Doesn't Match
-description: OAuth error `email_doesn't_match` in RubyAuth.
+title: email_doesn't_match
+description: The email doesn't match the email of the account.
 ---
 
-## When this appears
+## What is it?
 
-Linking a social account but provider email differs from signed-in user.
+This error appears only during OAuth account linking. It happens when a signed-in user tries to
+link an OAuth provider account, but the email returned by the provider does not match the email
+on the currently authenticated user (or the email you expect for that user). To prevent
+accidental cross-account linking or account takeover, RubyAuth blocks the link when emails do
+not align.
 
-Redirect URL shape:
+This does not occur during normal OAuth sign-in; it is specific to the linking flow.
 
+## Common Causes
+
+* The user is logged into the provider with a different email (e.g., work vs personal).
+* The provider returns an unverified or secondary email that differs from the app account email.
+* Email normalization differences (case sensitivity, dots/aliases on Gmail) cause a mismatch.
+* The user's email changed in your app or at the provider since the original account was created.
+
+## How to resolve
+
+### Ask the user to align identities
+
+* Have the user switch to the correct provider account that uses the same email as their app account.
+* Alternatively, update the app account email to the intended email (if your product allows it) and retry linking.
+
+### Debug locally
+
+* Log the current user's email in your app and the email returned by the provider profile.
+* Inspect whether the provider email is verified/primary and whether any normalization is applied.
+* Confirm which provider credentials (dev/staging/prod) are in use and that the returned identity is the expected one.
+
+## When it occurs
+
+The request reached RubyAuth but failed validation for this specific callback or auth flow.
+
+## HTTP status
+
+RubyAuth normally returns `400 Bad Request` for this error, unless the route redirects to a configured error callback URL.
+
+## Example response
+
+```json
+{
+  "code": "EMAIL_DOESN'T_MATCH",
+  "message": "The request reached RubyAuth but failed validation for this specific callback or auth flow."
+}
 ```
-/api/auth/error?error=email_doesn't_match
-```
-
-Or your configured `errorCallbackURL` with the same query parameters.
-
-## Common causes
-
-- User signed in with different email than OAuth profile
-- Account linking rules enforced
 
 ## How to fix
 
-- Sign in with matching email first
-- Review `account.account_linking` options in configuration
-
-## Diagnostics
-
-```bash
-bundle exec better-auth doctor --cwd . --config config/better_auth.rb
-```
-
-## Related
-
-- [OAuth errors index](/docs/reference/errors)
-- [OAuth concepts](/docs/concepts/oauth)
+Verify the RubyAuth route, provider settings, callback URL, cookies, and `BETTER_AUTH_SECRET` used by every running instance. In Rails, also confirm the mounted auth path matches `config.base_path`; in Rack, confirm requests reach the same `auth` instance that initiated the flow.

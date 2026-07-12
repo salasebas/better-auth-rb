@@ -59,6 +59,47 @@ RSpec.describe BetterAuth::Generators::MigrationGenerator do
     expect(Dir[File.join(path, "*_create_better_auth_tables.rb")].length).to eq(1)
   end
 
+  it "reports up to date when incremental planning is empty" do
+    path = File.join(@destination, "db/migrate")
+    FileUtils.mkdir_p(path)
+    File.write(File.join(path, "20260425000000_create_better_auth_tables.rb"), "# existing\n")
+    plan = BetterAuth::MigrationPlan::Plan.new([], [], [], [], :postgres, {})
+    allow(BetterAuth::Rails::Migration).to receive(:plan_pending).and_return(plan)
+
+    expect {
+      described_class.start([], destination_root: @destination)
+    }.to output(/Better Auth schema is up to date/).to_stdout
+
+    expect(Dir[File.join(path, "*_update_better_auth_tables_*.rb")]).to be_empty
+  end
+
+  it "reports when incremental planning cannot inspect a connection" do
+    path = File.join(@destination, "db/migrate")
+    FileUtils.mkdir_p(path)
+    File.write(File.join(path, "20260425000000_create_better_auth_tables.rb"), "# existing\n")
+    allow(BetterAuth::Rails::Migration).to receive(:plan_pending).and_raise(
+      BetterAuth::SQLMigration::UnsupportedAdapterError,
+      "Active Record connection is not inspectable"
+    )
+
+    expect {
+      described_class.start([], destination_root: @destination)
+    }.to output(/Better Auth incremental migration skipped: Active Record connection is not inspectable/).to_stdout
+
+    expect(Dir[File.join(path, "*_update_better_auth_tables_*.rb")]).to be_empty
+  end
+
+  it "re-raises unexpected incremental planning errors" do
+    path = File.join(@destination, "db/migrate")
+    FileUtils.mkdir_p(path)
+    File.write(File.join(path, "20260425000000_create_better_auth_tables.rb"), "# existing\n")
+    allow(BetterAuth::Rails::Migration).to receive(:plan_pending).and_raise(RuntimeError, "broken schema plan")
+
+    expect {
+      described_class.start([], destination_root: @destination)
+    }.to raise_error(RuntimeError, "broken schema plan")
+  end
+
   it "creates an incremental migration for missing plugin schema when the base migration already exists" do
     path = File.join(@destination, "db/migrate")
     FileUtils.mkdir_p(path)

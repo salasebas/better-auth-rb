@@ -53,6 +53,16 @@ class BetterAuthPluginsScimTest < Minitest::Test
     assert_includes mssql, "CONSTRAINT [uniq_scim_providers_scim_token] UNIQUE ([scim_token])"
   end
 
+  def test_scim_fields_reach_migration_projection
+    auth = build_auth
+    fields = BetterAuth::Schema.migration_tables(auth.context.options).fetch("scim_providers").fetch(:fields)
+
+    assert_includes fields, "provider_id"
+    assert_includes fields, "scim_token"
+    assert_equal true, fields.fetch("provider_id").fetch(:unique)
+    assert_equal true, fields.fetch("scim_token").fetch(:unique)
+  end
+
   def test_scim_metadata_endpoints_match_scim_v2_shapes
     auth = build_auth
 

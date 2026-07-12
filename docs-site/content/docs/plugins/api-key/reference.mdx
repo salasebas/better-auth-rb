@@ -1,0 +1,502 @@
+---
+title: Reference
+description: API Key plugin options, permissions, and schema reference.
+---
+
+<RubyAuthDisclaimer />
+
+## API Key plugin options
+
+`configId` <span className="opacity-70">`string`</span>
+
+A unique identifier for this configuration. Required when using multiple configurations. Default is `"default"`. In Ruby configuration hashes, use `config_id`.
+
+`references` <span className="opacity-70">`"user" | "organization"`</span>
+
+What the API key references. This determines ownership over the API key. Default is `"user"`.
+
+* `"user"`: API keys are owned by users (requires `userId` on creation)
+* `"organization"`: API keys are owned by organizations (requires `organizationId` on creation)
+
+`apiKeyHeaders` <span className="opacity-70">`string | string[]`</span>
+
+The header name to check for API key. Default is `x-api-key`. In Ruby configuration hashes, use `api_key_headers`.
+
+`customAPIKeyGetter` <span className="opacity-70">`callable`</span>
+
+A custom callable to get the API key from the context. In Ruby configuration hashes, use `custom_api_key_getter`.
+
+`customAPIKeyValidator` <span className="opacity-70">`callable`</span>
+
+A custom callable to validate the API key. In Ruby configuration hashes, use `custom_api_key_validator`.
+
+`customKeyGenerator` <span className="opacity-70">`callable`</span>
+
+A custom callable to generate the API key. In Ruby configuration hashes, use `custom_key_generator`.
+
+`startingCharactersConfig` <span className="opacity-70">`{ shouldStore?: boolean; charactersLength?: number; }`</span>
+
+Customize the starting characters configuration. In Ruby configuration hashes, use `starting_characters_config`.
+
+<Accordions>
+  <Accordion title="startingCharactersConfig Options">
+    `shouldStore` <span className="opacity-70">`boolean`</span>
+
+    Whether to store the starting characters in the database.
+    If false, we will set `start` to `null`.
+    Default is `true`. In Ruby configuration hashes, use `should_store`.
+
+    `charactersLength` <span className="opacity-70">`number`</span>
+
+    The length of the starting characters to store in the database.
+    This includes the prefix length.
+    Default is `6`. In Ruby configuration hashes, use `characters_length`.
+  </Accordion>
+</Accordions>
+
+`defaultKeyLength` <span className="opacity-70">`number`</span>
+
+The length of the API key. Longer is better. Default is 64. (Doesn't include the prefix length.) In Ruby configuration hashes, use `default_key_length`.
+
+`defaultPrefix` <span className="opacity-70">`string`</span>
+
+The prefix of the API key. In Ruby configuration hashes, use `default_prefix`.
+
+Note: We recommend you append an underscore to the prefix to make the prefix more identifiable. (eg `hello_`)
+
+`maximumPrefixLength` <span className="opacity-70">`number`</span>
+
+The maximum length of the prefix. In Ruby configuration hashes, use `maximum_prefix_length`.
+
+`minimumPrefixLength` <span className="opacity-70">`number`</span>
+
+The minimum length of the prefix. In Ruby configuration hashes, use `minimum_prefix_length`.
+
+`requireName` <span className="opacity-70">`boolean`</span>
+
+Whether to require a name for the API key. Default is `false`. In Ruby configuration hashes, use `require_name`.
+
+`maximumNameLength` <span className="opacity-70">`number`</span>
+
+The maximum length of the name. In Ruby configuration hashes, use `maximum_name_length`.
+
+`minimumNameLength` <span className="opacity-70">`number`</span>
+
+The minimum length of the name. In Ruby configuration hashes, use `minimum_name_length`.
+
+`enableMetadata` <span className="opacity-70">`boolean`</span>
+
+Whether to enable metadata for an API key. In Ruby configuration hashes, use `enable_metadata`.
+
+`keyExpiration` <span className="opacity-70">`{ defaultExpiresIn?: number | null; disableCustomExpiresTime?: boolean; minExpiresIn?: number; maxExpiresIn?: number; }`</span>
+
+Customize the key expiration. In Ruby configuration hashes, use `key_expiration`.
+
+<Accordions>
+  <Accordion title="keyExpiration options">
+    `defaultExpiresIn` <span className="opacity-70">`number | null`</span>
+
+    The default expires time in milliseconds.
+    If `null`, then there will be no expiration time.
+    Default is `null`. In Ruby configuration hashes, use `default_expires_in`.
+
+    `disableCustomExpiresTime` <span className="opacity-70">`boolean`</span>
+
+    Whether to disable the expires time passed from the client.
+    If `true`, the expires time will be based on the default values.
+    Default is `false`. In Ruby configuration hashes, use `disable_custom_expires_time`.
+
+    `minExpiresIn` <span className="opacity-70">`number`</span>
+
+    The minimum expiresIn value allowed to be set from the client. in days.
+    Default is `1`. In Ruby configuration hashes, use `min_expires_in`.
+
+    `maxExpiresIn` <span className="opacity-70">`number`</span>
+
+    The maximum expiresIn value allowed to be set from the client. in days.
+    Default is `365`. In Ruby configuration hashes, use `max_expires_in`.
+  </Accordion>
+</Accordions>
+
+`rateLimit` <span className="opacity-70">`{ enabled?: boolean; timeWindow?: number; maxRequests?: number; }`</span>
+
+Customize the rate-limiting. In Ruby configuration hashes, use `rate_limit`.
+
+<Accordions>
+  <Accordion title="rateLimit options">
+    `enabled` <span className="opacity-70">`boolean`</span>
+
+    Whether to enable rate limiting. (Default true)
+
+    `timeWindow` <span className="opacity-70">`number`</span>
+
+    The duration in milliseconds where each request is counted.
+    Once the `maxRequests` is reached, the request will be rejected until the `timeWindow` has passed, at which point the `timeWindow` will be reset. In Ruby configuration hashes, use `time_window`.
+
+    `maxRequests` <span className="opacity-70">`number`</span>
+
+    Maximum amount of requests allowed within a window.
+    Once the `maxRequests` is reached, the request will be rejected until the `timeWindow` has passed, at which point the `timeWindow` will be reset. In Ruby configuration hashes, use `max_requests`.
+  </Accordion>
+</Accordions>
+
+`schema` <span className="opacity-70">`object`</span>
+
+Custom schema for the API key plugin.
+
+`enableSessionForAPIKeys` <span className="opacity-70">`boolean`</span>
+
+An API Key can represent a valid session, so we can mock a session for the user if we find a valid API key in the request headers. Default is `false`. In Ruby configuration hashes, use `enable_session_for_api_keys`.
+
+`storage` <span className="opacity-70">`"database" | "secondary-storage"`</span>
+
+Storage backend for API keys. Default is `"database"`.
+
+* `"database"`: Store API keys in the database adapter (default)
+* `"secondary-storage"`: Store API keys in the configured secondary storage (e.g., Redis)
+
+`fallbackToDatabase` <span className="opacity-70">`boolean`</span>
+
+When `storage` is `"secondary-storage"`, enable fallback to database if key is not found in secondary storage. Default is `false`. In Ruby configuration hashes, use `fallback_to_database`.
+
+<Callout>
+  When `storage` is set to `"secondary-storage"`, you must configure `secondaryStorage` in your Better Auth options. API keys will be stored using key-value patterns:
+
+  * `api-key:${hashedKey}` - Primary lookup by hashed key
+  * `api-key:by-id:${id}` - Lookup by ID
+  * `api-key:by-ref:${referenceId}` - Reference's API key list (user or organization)
+
+  If an API key has an expiration date (`expiresAt`), a TTL will be automatically set in secondary storage to ensure automatic cleanup.
+</Callout>
+
+```ruby title="config/auth.rb"
+auth = BetterAuth.auth(
+  secret: ENV.fetch("BETTER_AUTH_SECRET"),
+  base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
+  secondary_storage: redis_storage,
+  plugins: [
+    BetterAuth::Plugins.api_key(
+      storage: "secondary-storage"
+    )
+  ]
+)
+```
+
+`customStorage` <span className="opacity-70">`object`</span>
+
+Custom storage methods for API keys. If provided, these methods will be used instead of `ctx.context.secondaryStorage`. Custom methods take precedence over global secondary storage. In Ruby configuration hashes, use `custom_storage`.
+
+Useful when you want to use a different storage backend specifically for API keys, or when you need custom logic for storage operations.
+
+```ruby title="config/auth.rb"
+BetterAuth::Plugins.api_key(
+  storage: "secondary-storage",
+  custom_storage: custom_storage
+)
+```
+
+`deferUpdates` <span className="opacity-70">`boolean`</span>
+
+Defer non-critical updates (rate limiting counters, timestamps, remaining count) to run after the response is sent using the global `backgroundTasks` handler. This can significantly improve response times on serverless platforms. Default is `false`. In Ruby configuration hashes, use `defer_updates`.
+
+Requires `backgroundTasks.handler` to be configured in the main auth options.
+
+<Callout type="warn">
+  Enabling this introduces eventual consistency where the response returns optimistic data before the database is updated. Only enable if your application can tolerate this trade-off for improved latency.
+</Callout>
+
+`permissions` <span className="opacity-70">`{ defaultPermissions?: Statements | callable }`</span>
+
+Permissions for the API key.
+
+Read more about permissions [below](#permissions).
+
+<Accordions>
+  <Accordion title="permissions Options">
+    `defaultPermissions` <span className="opacity-70">`Statements | callable`</span>
+
+    The default permissions for the API key. The `referenceId` is either the user ID or organization ID depending on the `references` setting. In Ruby configuration hashes, use `default_permissions`.
+  </Accordion>
+</Accordions>
+
+`disableKeyHashing` <span className="opacity-70">`boolean`</span>
+
+Disable hashing of the API key. In Ruby configuration hashes, use `disable_key_hashing`.
+
+<Callout type="warn">
+  Security Warning: It's strongly recommended to not disable hashing.
+  Storing API keys in plaintext makes them vulnerable to database breaches, potentially exposing all your users' API keys.
+</Callout>
+
+***
+
+## Permissions
+
+API keys can have permissions associated with them, allowing you to control access at a granular level. Permissions are structured as a record of resource types to arrays of allowed actions.
+
+### Setting Default Permissions
+
+You can configure default permissions that will be applied to all newly created API keys:
+
+```ruby title="config/auth.rb"
+BetterAuth::Plugins.api_key(
+  permissions: {
+    default_permissions: {
+      files: ["read"],
+      users: ["read"]
+    }
+  }
+)
+```
+
+You can also provide a callable that returns permissions dynamically:
+
+```ruby title="config/auth.rb"
+BetterAuth::Plugins.api_key(
+  permissions: {
+    default_permissions: ->(reference_id, ctx) {
+      {
+        files: ["read"],
+        users: ["read"]
+      }
+    }
+  }
+)
+```
+
+### Creating API Keys with Permissions
+
+When creating an API key, you can specify custom permissions:
+
+```ruby title="create_api_key.rb"
+api_key = auth.api.create_api_key(
+  body: {
+    name: "My API Key",
+    permissions: {
+      files: ["read", "write"],
+      users: ["read"]
+    },
+    userId: "userId"
+  }
+)
+```
+
+### Verifying API Keys with Required Permissions
+
+When verifying an API key, you can check if it has the required permissions:
+
+```ruby title="verify_api_key.rb"
+result = auth.api.verify_api_key(
+  body: {
+    key: "your_api_key_here",
+    permissions: {
+      files: ["read"]
+    }
+  }
+)
+
+if result[:valid]
+  # API key is valid and has the required permissions
+else
+  # API key is invalid or doesn't have the required permissions
+end
+```
+
+### Updating API Key Permissions
+
+You can update the permissions of an existing API key:
+
+```ruby title="update_api_key.rb"
+api_key = auth.api.update_api_key(
+  body: {
+    keyId: existing_api_key_id,
+    permissions: {
+      files: ["read", "write", "delete"],
+      users: ["read", "write"]
+    }
+  },
+  headers: user_headers
+)
+```
+
+### Permissions Structure
+
+Permissions follow a resource-based structure:
+
+```ruby
+permissions = {
+  files: ["read", "write", "delete"],
+  users: ["read"],
+  projects: ["read", "write"]
+}
+```
+
+When verifying an API key, all required permissions must be present in the API key's permissions for validation to succeed.
+
+## Schema
+
+Table: `apikey`
+
+export const apiKeyTableFields = [
+	{
+		name: "id",
+		type: "string",
+		description: "The ID of the API key.",
+		isUnique: true,
+		isPrimaryKey: true,
+	},
+	{
+		name: "configId",
+		type: "string",
+		description:
+			"The configuration ID this key belongs to. Default is 'default'.",
+	},
+	{
+		name: "name",
+		type: "string",
+		description: "The name of the API key.",
+		isOptional: true,
+	},
+	{
+		name: "start",
+		type: "string",
+		description:
+			"The starting characters of the API key. Useful for showing the first few characters of the API key in the UI for the users to easily identify.",
+		isOptional: true,
+	},
+	{
+		name: "prefix",
+		type: "string",
+		description: "The API Key prefix. Stored as plain text.",
+		isOptional: true,
+	},
+	{
+		name: "key",
+		type: "string",
+		description: "The hashed API key itself.",
+	},
+	{
+		name: "referenceId",
+		type: "string",
+		description:
+			"The ID of the owner (user ID or organization ID based on the config's `references` setting).",
+		isIndexed: true,
+	},
+	{
+		name: "refillInterval",
+		type: "number",
+		description: "The interval to refill the key in milliseconds.",
+		isOptional: true,
+	},
+	{
+		name: "refillAmount",
+		type: "number",
+		description: "The amount to refill the remaining count of the key.",
+		isOptional: true,
+	},
+	{
+		name: "lastRefillAt",
+		type: "Date",
+		description: "The date and time when the key was last refilled.",
+		isOptional: true,
+	},
+	{
+		name: "enabled",
+		type: "boolean",
+		description: "Whether the API key is enabled.",
+		isOptional: true,
+	},
+	{
+		name: "rateLimitEnabled",
+		type: "boolean",
+		description: "Whether the API key has rate limiting enabled.",
+		isOptional: true,
+	},
+	{
+		name: "rateLimitTimeWindow",
+		type: "number",
+		description: "The time window in milliseconds for the rate limit.",
+		isOptional: true,
+	},
+	{
+		name: "rateLimitMax",
+		type: "number",
+		description:
+			"The maximum number of requests allowed within the `rateLimitTimeWindow`.",
+		isOptional: true,
+	},
+	{
+		name: "requestCount",
+		type: "number",
+		description:
+			"The number of requests made within the rate limit time window.",
+		isOptional: true,
+	},
+	{
+		name: "remaining",
+		type: "number",
+		description: "The number of requests remaining.",
+		isOptional: true,
+	},
+	{
+		name: "lastRequest",
+		type: "Date",
+		description: "The date and time of the last request made to the key.",
+		isOptional: true,
+	},
+	{
+		name: "expiresAt",
+		type: "Date",
+		description: "The date and time when the key will expire.",
+		isOptional: true,
+	},
+	{
+		name: "createdAt",
+		type: "Date",
+		description: "The date and time the API key was created.",
+	},
+	{
+		name: "updatedAt",
+		type: "Date",
+		description: "The date and time the API key was updated.",
+	},
+	{
+		name: "permissions",
+		type: "string",
+		description: "The permissions of the key.",
+		isOptional: true,
+	},
+	{
+		name: "metadata",
+		type: "string",
+		isOptional: true,
+		description: "Any additional metadata you want to store with the key.",
+	},
+];
+
+<DatabaseTable name="apikey" fields={apiKeyTableFields} />
+
+### Migration from Previous Versions
+
+If you're upgrading from a previous version, you'll need to migrate the `userId` field to the new reference system:
+
+```sql
+-- Add new columns
+ALTER TABLE apikey ADD COLUMN config_id VARCHAR(255) NOT NULL DEFAULT 'default';
+ALTER TABLE apikey ADD COLUMN reference_id VARCHAR(255);
+
+-- Migrate existing data (copy userId to referenceId)
+UPDATE apikey SET reference_id = user_id WHERE reference_id IS NULL;
+
+-- Make reference_id required and add indexes
+ALTER TABLE apikey ALTER COLUMN reference_id SET NOT NULL;
+CREATE INDEX idx_apikey_reference_id ON apikey(reference_id);
+CREATE INDEX idx_apikey_config_id ON apikey(config_id);
+
+-- Optionally drop the old column after verifying migration
+-- ALTER TABLE apikey DROP COLUMN user_id;
+```
+
+<Callout type="warn">
+  **Breaking Change**: The `userId` field has been replaced with `referenceId`. API responses now return `referenceId` instead of `userId`. The owner type (user vs organization) is determined by the configuration's `references` setting, not stored on each key.
+</Callout>

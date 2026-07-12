@@ -2,6 +2,23 @@
 
 require_relative "../support/cli_test_case"
 
+class BetterAuthCLISchemaMongoAdapter < BetterAuth::Adapters::Base
+  def ensure_indexes!
+    BetterAuth::Schema.auth_tables(options).flat_map do |_model, table|
+      table.fetch(:fields).filter_map do |field, attributes|
+        next if field == "id"
+        next unless attributes[:unique] || attributes[:index]
+
+        {
+          collection: table.fetch(:model_name),
+          field: attributes[:field_name] || BetterAuth::Schema.physical_name(field),
+          unique: attributes[:unique] == true
+        }
+      end
+    end
+  end
+end
+
 class CliMongoTest < BetterAuthCLITestCase
   def test_unknown_mongo_subcommand_returns_error
     status, stdout, stderr = run_cli_strict("mongo", "wat")
@@ -34,6 +51,40 @@ class CliMongoTest < BetterAuthCLITestCase
       assert_equal 0, status, stderr
       assert_includes stdout, "ensured unique index users.email"
       assert_includes stdout, "ensured index sessions.token"
+    end
+  end
+
+  def test_mongo_indexes_uses_schema_derived_plugin_indexes
+    Dir.mktmpdir("better-auth-cli") do |dir|
+      config_path = write_config(
+        dir,
+        <<~RUBY
+          {
+            secret: #{SECRET.inspect},
+            database: ->(options) { BetterAuthCLISchemaMongoAdapter.new(options) },
+            plugins: [
+              BetterAuth::Plugin.new(
+                id: "schema-index",
+                schema: {
+                  apiKey: {
+                    model_name: "api_keys",
+                    fields: {
+                      lookupKey: {type: "string", required: true, index: true},
+                      token: {type: "string", required: true, unique: true}
+                    }
+                  }
+                }
+              )
+            ]
+          }
+        RUBY
+      )
+
+      status, stdout, stderr = run_cli("mongo", "indexes", "--cwd", dir, "--config", config_path)
+
+      assert_equal 0, status, stderr
+      assert_includes stdout, "ensured index api_keys.lookup_key"
+      assert_includes stdout, "ensured unique index api_keys.token"
     end
   end
 

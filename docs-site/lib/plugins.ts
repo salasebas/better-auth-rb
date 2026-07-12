@@ -88,7 +88,7 @@ const pluginMeta: Record<
 	"oauth-provider": {
 		category: "Enterprise",
 		icon: "Server",
-		tagline: "OAuth 2.1 provider with OIDC compatibility and MCP/resource-server helpers",
+		tagline: "OAuth 2.1 authorization server for RubyAuth integrations",
 	},
 	sso: {
 		category: "Enterprise",

@@ -1,22 +1,185 @@
 ---
-title: SCIM
-description: SCIM 2.0 provisioning endpoints.
+title: System for Cross-domain Identity Management (SCIM)
+description: Integrate SCIM with your application.
 ---
 
-SCIM 2.0 provisioning endpoints.
+<RubyAuthDisclaimer />
 
-<Callout type="info">
-This page documents the current Ruby port behavior. Ruby uses snake_case option names and `auth.api` method names; HTTP paths and JSON keys keep the upstream wire shape where implemented.
+System for Cross-domain Identity Management ([SCIM](https://simplecloud.info/#Specification)) makes managing identities in multi-domain scenarios easier to support via a standardized protocol.
+This plugin exposes a [SCIM](https://simplecloud.info/#Specification) server that allows third party identity providers to sync identities to your service.
+
+<Callout>
+  Need a self-service SCIM setup where your customers can configure their own identity provider sync? [Contact us for enterprise](/enterprise).
 </Callout>
 
-<Callout type="warn">
-Some UI or provider-specific setup from upstream is app-provided in Ruby. The protocol endpoints below are implemented, but you must supply your own pages, callbacks, client objects, or provider metadata where noted by the option names.
-</Callout>
+## Installation
 
-## Configure
+<Steps>
+  <Step>
+    ### Install the plugin
+
+    ```ruby title="Gemfile"
+    gem "better_auth-scim"
+    ```
 
 ```ruby title="config/auth.rb"
 require "better_auth"
+require "better_auth/scim"
+
+auth = BetterAuth.auth(
+  secret: ENV.fetch("BETTER_AUTH_SECRET"),
+  base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
+  plugins: [
+    BetterAuth::Plugins.scim
+  ]
+)
+```
+  </Step>
+
+  <Step>
+    ### Add Plugin to the server
+
+    ```ruby title="config/auth.rb"
+    require "better_auth"
+    require "better_auth/scim"
+
+    auth = BetterAuth.auth(
+      secret: ENV.fetch("BETTER_AUTH_SECRET"),
+      base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
+      plugins: [
+        BetterAuth::Plugins.scim
+      ]
+    )
+    ```
+  </Step>
+
+  <Step>
+    ### Enable HTTP methods
+
+    SCIM requires the `POST`, `GET`, `PUT`, `PATCH` and `DELETE` HTTP methods to be supported by your server.
+    For most frameworks, this will work out of the box, but some frameworks may require additional configuration:
+
+    <Tabs items={["Next.js", "Solid Start"]}>
+      <Tab value="Next.js">
+        ```ruby title="server.rb"
+        # config.ru
+        require_relative "config/auth"
+
+        run auth
+        ```
+      </Tab>
+
+      <Tab value="Solid Start">
+        ```ruby title="config/auth.rb"
+        require "better_auth"
+        require "better_auth/scim"
+
+        auth = BetterAuth.auth(
+          secret: ENV.fetch("BETTER_AUTH_SECRET"),
+          base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
+          plugins: [
+            BetterAuth::Plugins.scim
+          ]
+        )
+        ```
+      </Tab>
+    </Tabs>
+  </Step>
+
+  <Step>
+    ### Migrate the database
+
+    Run the migration or generate the schema to add the necessary fields and tables to the database.
+
+    <Tabs items={["migrate", "generate"]}>
+  <Tab value="migrate">
+    ```bash
+    bundle exec better-auth migrate --cwd . --config config/better_auth.rb --yes
+    ```
+  </Tab>
+
+  <Tab value="generate">
+    ```bash
+    bundle exec better-auth generate --cwd . --dialect postgres --output db/better_auth/schema.sql --config config/better_auth.rb
+    ```
+  </Tab>
+</Tabs>
+
+    See the [Schema](#schema) section to add the fields manually.
+  </Step>
+</Steps>
+
+## Usage
+
+Upon registration, this plugin will expose compliant [SCIM 2.0](https://simplecloud.info/#Specification) server. Generally, this server is meant to be consumed by a third-party (your identity provider), and will require a:
+
+* **SCIM base URL**: This should be the fully qualified URL to the SCIM server (e.g `http://your-app.com/api/auth/scim/v2`)
+* **SCIM bearer token**: See [generating a SCIM token](#generating-a-scim-token)
+
+### Self-Service Directory Sync
+
+If you're using [RubyAuth Infrastructure](https://dash.better-auth.com/sign-in), you get self-service directory sync in the dashboard. Organization admins can create and manage SCIM directory connections and rotate bearer tokens without calling the SCIM APIs directly.
+
+The dashboard is available at:
+
+```
+https://dash.better-auth.com/[project]/organization/[orgId]/enterprise
+```
+
+From the dashboard you can:
+
+* **Create and remove directory connections** scoped to an organization
+* **Regenerate SCIM bearer tokens** when your identity provider requires rotation
+
+This eliminates the back-and-forth typically required when setting up SCIM, reducing onboarding time from days to minutes.
+
+### Generating a SCIM token
+
+Before your identity provider can start syncing information to your SCIM server,
+you need to generate a SCIM token that your identity provider will use to authenticate against it.
+
+A SCIM token is a simple bearer token that you can generate:
+
+<APIMethod path="/scim/generate-token" method="POST" requireSession>
+  ```
+  type generateSCIMToken = {
+    /**
+    * The provider id
+    */
+    providerId: string = "acme-corp"
+    /**
+     * Optional organization id. When specified, the organizations plugin must also be enabled
+    */
+    organizationId?: string = "the-org"
+  }
+  ```
+</APIMethod>
+
+A `SCIM` token is always restricted to a provider, thus you are required to specify a `providerId`. This can be any provider your instance supports (e.g one of the built-in providers such as `credentials` or an external provider registered through an external plugin such as `better_auth-sso`).
+Additionally, when the `organization` plugin is registered, you can optionally restrict the token to an organization via the `organizationId`.
+
+<Callout>
+  **Important:** Personal SCIM connections can still be generated by any authenticated user. Organization-scoped connections are restricted by default to users with the `admin` role or the organization creator role (`organization.creatorRole`, which defaults to `owner`). If you need a different policy, configure [`requiredRole`](#options) and/or add stricter checks in [hooks](#hooks).
+</Callout>
+
+#### Organization-scoped authorization
+
+When `organizationId` is provided, RubyAuth requires the current user to be a member of that organization and to have at least one of the configured `requiredRole` values.
+
+By default, `requiredRole` resolves to:
+
+* `admin`
+* `organization.creatorRole` or `owner`
+
+The same role requirement is also used by the SCIM management endpoints for organization-scoped connections:
+
+* `GET /scim/list-provider-connections`
+* `GET /scim/get-provider-connection`
+* `POST /scim/delete-provider-connection`
+
+```ruby title="config/auth.rb"
+require "better_auth"
+require "better_auth/scim"
 
 auth = BetterAuth.auth(
   secret: ENV.fetch("BETTER_AUTH_SECRET"),
@@ -27,86 +190,461 @@ auth = BetterAuth.auth(
 )
 ```
 
-## Usage
+See the [hooks](#hooks) documentation for more details about supported hooks.
 
-```ruby title="server.rb"
-token = auth.api.generate_scim_token(headers: { "cookie" => admin_cookie }, body: { providerId: "okta", organizationId: organization_id })
-user = auth.api.create_scim_user(headers: { "authorization" => "Bearer #{token[:scimToken]}" }, body: { userName: "ada@example.com" })
-```
+#### Default SCIM token
 
-## Routes
+We also provide a way for you to specify a `SCIM` token to use by default. This allows you to test a SCIM connection without setting up providers in the database:
 
-| Method | Path | Ruby API method |
-| --- | --- | --- |
-| `POST` | `/scim/generate-token` | `auth.api.generate_scim_token` |
-| `GET` | `/scim/list-provider-connections` | `auth.api.list_scim_provider_connections` |
-| `GET` | `/scim/get-provider-connection` | `auth.api.get_scim_provider_connection` |
-| `POST` | `/scim/delete-provider-connection` | `auth.api.delete_scim_provider_connection` |
-| `POST` | `/scim/v2/Users` | `auth.api.create_scim_user` |
-| `GET` | `/scim/v2/Users` | `auth.api.list_scim_users` |
-| `GET` | `/scim/v2/Users/:userId` | `auth.api.get_scim_user` |
-| `PUT` | `/scim/v2/Users/:userId` | `auth.api.update_scim_user` |
-| `PATCH` | `/scim/v2/Users/:userId` | `auth.api.patch_scim_user` |
-| `DELETE` | `/scim/v2/Users/:userId` | `auth.api.delete_scim_user` |
-| `GET` | `/scim/v2/ServiceProviderConfig` | `auth.api.get_scim_service_provider_config` |
-| `GET` | `/scim/v2/Schemas` | `auth.api.get_scim_schemas` |
-| `GET` | `/scim/v2/Schemas/:schemaId` | `auth.api.get_scim_schema` |
-| `GET` | `/scim/v2/ResourceTypes` | `auth.api.get_scim_resource_types` |
-| `GET` | `/scim/v2/ResourceTypes/:resourceTypeId` | `auth.api.get_scim_resource_type` |
+```ruby title="config/auth.rb"
+require "better_auth"
+require "better_auth/scim"
 
-## Filters
-
-`auth.api.list_scim_users` and `GET /scim/v2/Users` support the upstream-compatible `userName eq "value"` filter. The filter value is matched against the canonicalized user email.
-
-Other SCIM filter attributes and operators are not supported in the Ruby port. Filters such as `externalId eq "id"` and operators such as `ne`, `co`, `sw`, `ew`, and `pr` return a SCIM `invalidFilter` error instead of silently widening the result set.
-
-## Options
-
-Current Ruby options accepted by `BetterAuth::Plugins.scim`:
-
-- `store_scim_token`
-- `default_scim`
-- `provider_ownership`
-- `required_role`
-- `before_scim_token_generated`
-- `after_scim_token_generated`
-
-`store_scim_token` defaults to `"hashed"` and accepts `"plain"`, `"hashed"`, `"encrypted"`, `{ hash: ->(token) { ... } }`, or `{ encrypt: ->(token) { ... }, decrypt: ->(stored) { ... } }`.
-
-`provider_ownership: { enabled: true }` stores the user that generated non-organization provider tokens and restricts provider connection management to that owner.
-
-`required_role` controls which organization roles can generate, list, view, or delete organization-scoped SCIM providers. When omitted, Ruby follows upstream and allows `admin` plus the organization creator role.
-
-`default_scim` accepts provider hashes for tests or static providers:
-
-```ruby
-BetterAuth::Plugins.scim(
-  default_scim: [
-    { providerId: "okta", scimToken: "secret-token", organizationId: "org-id" }
+auth = BetterAuth.auth(
+  secret: ENV.fetch("BETTER_AUTH_SECRET"),
+  base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
+  plugins: [
+    BetterAuth::Plugins.scim
   ]
 )
 ```
 
-Static `default_scim` providers are checked before database-backed providers. If a static provider and a database provider share the same `providerId`, the static provider takes precedence and a bearer token generated for the database provider is rejected.
+<Callout type="info">
+  **Important**: Please note that you must base64 encode your `scimToken` before you try to use as follows: `base64(scimToken:providerId[:organizationId])`.
 
-## Ruby behavior notes
+  In our example above, you would need to encode the `some-scim-token:default-scim:the-org` text to base64, resulting in the following scimToken: `c29tZS1zY2ltLXRva2VuOmRlZmF1bHQtc2NpbTp0aGUtb3Jn`
+</Callout>
 
-Ruby canonicalizes SCIM email/userName values to lowercase before storing the user email and returning the SCIM user resource. When `externalId` is omitted, Ruby also stores the lowercase userName as the SCIM account id. Upstream preserves the original userName casing for that account id fallback.
+### SCIM provider connection ownership
 
-Production databases should enforce both of these uniqueness invariants:
+SCIM provider connection ownership applies to personal (non-organization) SCIM connections. It lets your application track who generated a connection and restricts later management operations for that connection to the same user.
 
-- `scimProvider.providerId` is globally unique.
-- SCIM account identity is unique by `(providerId, accountId)`.
+```ruby title="config/auth.rb"
+require "better_auth"
+require "better_auth/scim"
 
-## Plugin Surface
+auth = BetterAuth.auth(
+  secret: ENV.fetch("BETTER_AUTH_SECRET"),
+  base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
+  plugins: [
+    BetterAuth::Plugins.scim
+  ]
+)
+```
 
-`BetterAuth::Plugins.scim` exposes `version` and `client` metadata. The client descriptor uses the upstream id `scim-client` and points back to the server plugin id `scim`.
+When enabled:
 
-When combined with `BetterAuth::Plugins.open_api`, provider management routes are included in the generated schema, while SCIM protocol routes under `/scim/v2/*` are hidden to match upstream `HIDE_METADATA`.
+* Personal connections store the creating user's `userId`
+* Only the owner can regenerate, list, inspect, or delete those personal connections later
+* Organization-scoped connections continue to use the organization role checks configured by `requiredRole`
 
-## Support Notes
+Once enabled, make sure you migrate the database schema (again).
 
-- The examples above are based on Ruby plugin source and tests in `packages/better_auth`.
-- If an upstream section is not represented here, treat it as not yet documented or not yet supported by the Ruby port until the matching Ruby implementation exists.
+<Tabs items={["migrate", "generate"]}>
+  <Tab value="migrate">
+    ```bash
+    bundle exec better-auth migrate --cwd . --config config/better_auth.rb --yes
+    ```
+  </Tab>
 
-{/* Upstream guide is preserved in reference/upstream-src/1.6.9/repository/docs/content/docs/plugins/scim.mdx. */}
+  <Tab value="generate">
+    ```bash
+    bundle exec better-auth generate --cwd . --dialect postgres --output db/better_auth/schema.sql --config config/better_auth.rb
+    ```
+  </Tab>
+</Tabs>
+
+See the [Schema](#if-you-have-provider-ownership-enabled-via-providerownershipenabled) section to add the fields manually.
+
+### Managing SCIM provider connections
+
+You can manage SCIM provider connections from your application using the following endpoints:
+
+#### List SCIM provider connections
+
+List existing connections the current user can manage. For organization-scoped connections, the user must have one of the configured `requiredRole` roles for that organization. For personal connections, access is based on ownership when `providerOwnership.enabled` is turned on.
+
+<APIMethod path="/scim/list-provider-connections" method="GET" requireSession>
+  ```
+  type listSCIMProviderConnections = {
+  }
+  ```
+</APIMethod>
+
+#### Get SCIM provider connection details
+
+Get a single connection by provider id. Access is allowed only if the user can manage that connection: either because they satisfy the configured organization role requirement, or because they own the personal connection.
+
+<APIMethod path="/scim/get-provider-connection" method="GET" requireSession>
+  ```
+  type getSCIMProviderConnection = {
+    /**
+     * Unique provider identifier
+     */
+    providerId: string = "acme-corp"
+  }
+  ```
+</APIMethod>
+
+#### Delete SCIM provider connection
+
+Delete an existing connection. This will immediately invalidate the connection's associated token.
+
+<APIMethod path="/scim/delete-provider-connection" method="POST" requireSession>
+  ```
+  type deleteSCIMProviderConnection = {
+    /**
+     * Unique provider identifier
+     */
+    providerId: string = "acme-corp"
+  }
+  ```
+</APIMethod>
+
+### SCIM endpoints
+
+The following subset of the specification is currently supported:
+
+#### List users
+
+Get a list of available users in the database. This is restricted to list only users associated to the same provider and organization than your SCIM token.
+
+<APIMethod path="/scim/v2/Users" method="GET" requireBearerToken isExternalOnly note="Returns the provisioned SCIM user details. See https://datatracker.ietf.org/doc/html/rfc7644#section-3.4.1">
+  ```
+  type listSCIMUsers = {
+      /**
+       * SCIM compliant filter expression
+      */
+      filter?: string = 'userName eq "user-a"'
+  }
+  ```
+</APIMethod>
+
+#### Get user
+
+Get an user from the database. The user will be only returned if it belongs to the same provider and organization than the SCIM token.
+
+<APIMethod path="/scim/v2/Users/:userId" method="GET" forceAsParam requireBearerToken isExternalOnly note="Returns the provisioned SCIM user details. See https://datatracker.ietf.org/doc/html/rfc7644#section-3.4.1">
+  ```
+  type getSCIMUser = {
+      /**
+       * Unique user identifier
+      */
+      userId: string = "user id"
+  }
+  ```
+</APIMethod>
+
+#### Create new user
+
+Provisions a new user to the database. The user will have an account associated to the same provider and will be member of the same org than the SCIM token.
+
+<APIMethod path="/scim/v2/Users" method="POST" requireBearerToken isExternalOnly note="Provision a new user via SCIM. See https://datatracker.ietf.org/doc/html/rfc7644#section-3.3">
+  ```
+  type createSCIMUser = {
+      /*
+       * Unique external (third party) identifier
+      */
+      externalId?: string = "third party id"
+      /**
+       * User name details
+      */
+      name?: {
+          /**
+           * Formatted name (takes priority over given and family name)
+          */
+          formatted?: string = "Daniel Perez"
+          /**
+           * Given name
+          */
+          givenName?: string = "Daniel"
+          /**
+           * Family name
+          */
+          familyName?: string = "Perez"
+      }
+      /**
+       * List of emails associated to the user, only a single email can be primary
+      */
+      emails?: Array<{ value: string, primary?: boolean }> = [{ value: "daniel@email.com", primary: true }]
+  }
+  ```
+</APIMethod>
+
+#### Update an existing user
+
+Replaces an existing user details in the database. This operation can only update users that belong to the same provider and organization than the SCIM token.
+
+<APIMethod path="/scim/v2/Users/:userId" method="PUT" requireBearerToken isExternalOnly note="Updates an existing user via SCIM. See https://datatracker.ietf.org/doc/html/rfc7644#section-3.3">
+  ```
+  type updateSCIMUser = {
+      /*
+       * Unique external (third party) identifier
+      */
+      externalId?: string = "third party id"
+      /**
+       * User name details
+      */
+      name?: {
+          /**
+           * Formatted name (takes priority over given and family name)
+          */
+          formatted?: string = "Daniel Perez"
+          /**
+           * Given name
+          */
+          givenName?: string = "Daniel"
+          /**
+           * Family name
+          */
+          familyName?: string = "Perez"
+      }
+      /**
+       * List of emails associated to the user, only a single email can be primary
+      */
+      emails?: Array<{ value: string, primary?: boolean }> = [{ value: "daniel@email.com", primary: true }]
+  }
+  ```
+</APIMethod>
+
+#### Partial update an existing user
+
+Allows to apply a partial update to the user details. This operation can only update users that belong to the same provider and organization than the SCIM token.
+
+<APIMethod path="/scim/v2/Users/:userId" method="PATCH" requireBearerToken isExternalOnly note="Partially updates a user resource. See https://datatracker.ietf.org/doc/html/rfc7644#section-3.5.2">
+  ```
+  type patchSCIMUser = {
+      /**
+       * Mandatory schema declaration
+      */
+      schemas: string[] = ["urn:ietf:params:scim:api:messages:2.0:PatchOp"]
+      /**
+       * List of JSON patch operations
+      */
+      Operations: Array<{ op: "replace" | "add" | "remove", path?: string, value: any }> = [{ op: "replace", path: "/userName", value: "any value" }]
+  }
+  ```
+</APIMethod>
+
+#### Deletes a user resource
+
+Completely deletes a user resource from the database. This operation can only delete users that belong to the same provider and organization than the SCIM token.
+
+<APIMethod path="/scim/v2/Users/:userId" method="DELETE" forceAsParam requireBearerToken isExternalOnly note="Deletes an existing user resource. See https://datatracker.ietf.org/doc/html/rfc7644#section-3.6">
+  ```
+  type deleteSCIMUser = {
+      userId: string
+  }
+  ```
+</APIMethod>
+
+#### Get service provider config
+
+Get SCIM metadata describing supported features of this server.
+
+<APIMethod path="/scim/v2/ServiceProviderConfig" method="GET" isExternalOnly note="Standard SCIM metadata endpoint used by identity providers. See https://datatracker.ietf.org/doc/html/rfc7644#section-4">
+  ```
+  type getSCIMServiceProviderConfig = {
+  }
+  ```
+</APIMethod>
+
+#### Get SCIM schemas
+
+Get the list of supported SCIM schemas.
+
+<APIMethod path="/scim/v2/Schemas" method="GET" isExternalOnly note="Standard SCIM metadata endpoint used by identity providers to acquire information about supported schemas. See https://datatracker.ietf.org/doc/html/rfc7644#section-4">
+  ```
+  type getSCIMSchemas = {
+  }
+  ```
+</APIMethod>
+
+#### Get SCIM schema
+
+Get the details of a supported SCIM schema.
+
+<APIMethod path="/scim/v2/Schemas/:schemaId" method="GET" isExternalOnly note="Standard SCIM metadata endpoint used by identity providers to acquire information about a given schema. See https://datatracker.ietf.org/doc/html/rfc7644#section-4">
+  ```
+  type getSCIMSchema = {
+  }
+  ```
+</APIMethod>
+
+#### Get SCIM resource types
+
+Get the list of supported SCIM types.
+
+<APIMethod path="/scim/v2/ResourceTypes" method="GET" isExternalOnly note="Standard SCIM metadata endpoint used by identity providers to get a list of server supported types. See https://datatracker.ietf.org/doc/html/rfc7644#section-4">
+  ```
+  type getSCIMResourceTypes = {
+  }
+  ```
+</APIMethod>
+
+#### Get SCIM resource type
+
+Get the details of a supported SCIM resource type.
+
+<APIMethod path="/scim/v2/ResourceTypes/:resourceTypeId" method="GET" isExternalOnly note="Standard SCIM metadata endpoint used by identity providers to get a server supported type. See https://datatracker.ietf.org/doc/html/rfc7644#section-4">
+  ```
+  type getSCIMResourceType = {
+  }
+  ```
+</APIMethod>
+
+#### SCIM attribute mapping
+
+By default, the SCIM provisioning will automatically map the following fields:
+
+* `user.email`: User primary email or the first available email if there is not a primary one
+* `user.name`: Derived from `name` (`name.formatted` or `name.givenName` + `name.familyName`) and fallbacks to the user primary email
+* `account.providerId`: Provider associated to the `SCIM` token
+* `account.accountId`: Defaults to `externalId` and fallbacks to `userName`
+* `member.organizationId`: Organization associated to the provider
+
+## Schema
+
+The plugin requires additional fields in the `scimProvider` table to store the provider's configuration.
+
+export const scimProviderTableFields = [
+	{
+		name: "id",
+		type: "string",
+		description: "A database identifier",
+		isPrimaryKey: true,
+	},
+	{
+		name: "providerId",
+		type: "string",
+		description:
+			"The provider ID. Used to identify a provider and to generate a redirect URL.",
+		isUnique: true,
+	},
+	{
+		name: "scimToken",
+		type: "string",
+		description:
+			"The SCIM bearer token. Used by your identity provider to authenticate against your server",
+		isUnique: true,
+	},
+	{
+		name: "organizationId",
+		type: "string",
+		description:
+			"The organization Id. If provider is linked to an organization.",
+		isOptional: true,
+	},
+];
+
+<DatabaseTable name="scimProvider" fields={scimProviderTableFields} />
+
+### If you have provider ownership enabled via `providerOwnership.enabled`:
+
+The `scimProvider` schema is extended as follows:
+
+export const scimProviderOwnershipFields = [
+	{
+		name: "userId",
+		type: "string",
+		description:
+			"The user id of the connection owner. Set automatically when generating a token via the API.",
+		isOptional: true,
+	},
+];
+
+<DatabaseTable name="scimProvider" fields={scimProviderOwnershipFields} />
+
+## Options
+
+### Server
+
+* `requiredRole`: `string[]` — Minimum organization role(s) allowed to generate organization-scoped tokens and manage organization-scoped connections. Defaults to `["admin", organization.creatorRole ?? "owner"]`.
+
+```ruby title="config/auth.rb"
+require "better_auth"
+require "better_auth/scim"
+
+auth = BetterAuth.auth(
+  secret: ENV.fetch("BETTER_AUTH_SECRET"),
+  base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
+  plugins: [
+    BetterAuth::Plugins.scim
+  ]
+)
+```
+
+* `providerOwnership`: `{ enabled: boolean }` — When enabled, links each personal provider connection to the user who generated its token. See [Connection ownership](#scim-provider-connection-ownership) for details. Default is `{ enabled: false }`.
+
+```ruby title="config/auth.rb"
+require "better_auth"
+require "better_auth/scim"
+
+auth = BetterAuth.auth(
+  secret: ENV.fetch("BETTER_AUTH_SECRET"),
+  base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
+  plugins: [
+    BetterAuth::Plugins.scim
+  ]
+)
+```
+
+* `defaultSCIM`: Default list of SCIM tokens for testing.
+* `storeSCIMToken`: The method to store the SCIM token in your database, whether `encrypted`, `hashed` or `plain` text. Default is `plain` text.
+
+Alternatively, you can pass a custom encryptor or hasher to store the SCIM token in your database.
+
+**Custom encryptor**
+
+```ruby title="config/auth.rb"
+require "better_auth"
+require "better_auth/scim"
+
+auth = BetterAuth.auth(
+  secret: ENV.fetch("BETTER_AUTH_SECRET"),
+  base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
+  plugins: [
+    BetterAuth::Plugins.scim
+  ]
+)
+```
+
+**Custom hasher**
+
+```ruby title="config/auth.rb"
+require "better_auth"
+require "better_auth/scim"
+
+auth = BetterAuth.auth(
+  secret: ENV.fetch("BETTER_AUTH_SECRET"),
+  base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
+  plugins: [
+    BetterAuth::Plugins.scim
+  ]
+)
+```
+
+### Hooks
+
+The following hooks allow to intercept the lifecycle of the `SCIM` token generation:
+
+<Callout>
+  **Note:** The built-in organization role check runs before these hooks. Use hooks to add stricter rules, not to bypass `requiredRole`.
+</Callout>
+
+```ruby title="config/auth.rb"
+require "better_auth"
+require "better_auth/scim"
+
+auth = BetterAuth.auth(
+  secret: ENV.fetch("BETTER_AUTH_SECRET"),
+  base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
+  plugins: [
+    BetterAuth::Plugins.scim
+  ]
+)
+```
+
+<Callout>
+  **Note**: All hooks support error handling. Throwing an error in a before hook will prevent the operation from proceeding.
+</Callout>

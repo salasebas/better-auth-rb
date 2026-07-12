@@ -1,0 +1,95 @@
+---
+title: Supported Features
+description: Current RubyAuth support inventory for core auth, framework integrations, adapters, storage, and plugins.
+---
+
+<RubyAuthDisclaimer />
+
+RubyAuth targets Better Auth `v1.6.9`. The Ruby port implements a large server-side surface, but exact upstream parity is still being tightened across some routes, adapter edge cases, OpenAPI schemas, and docs pages.
+
+Use this page as a conservative support inventory. A feature listed as supported means RubyAuth has Ruby server-side documentation or package coverage for it. Browser client packages, JavaScript framework integrations, and upstream-only helpers are outside the Ruby server scope unless a Ruby package explicitly documents an equivalent.
+
+## Core Auth
+
+| Area | Status | Docs |
+| --- | --- | --- |
+| Rack core | Supported | [Basic Usage](/docs/basic-usage), [Rack integration](/docs/integrations/rack) |
+| Sessions | Supported | [Session management](/docs/concepts/session-management) |
+| Email/password | Supported | [Email & Password](/docs/authentication/email-password) |
+| Email verification | Supported | [Email](/docs/concepts/email) |
+| Users, accounts, and linked accounts | Supported | [Users & Accounts](/docs/concepts/users-accounts) |
+| Social OAuth | Supported | [OAuth](/docs/concepts/oauth), [Social providers](/docs/authentication/other-social-providers) |
+| CLI migrations and schema generation | Supported | [CLI](/docs/concepts/cli), [Database](/docs/concepts/database) |
+
+## Framework Integrations
+
+| Integration | Status | Docs |
+| --- | --- | --- |
+| Rails | Supported | [Rails](/docs/integrations/rails) |
+| Sinatra | Supported | [Sinatra](/docs/integrations/sinatra) |
+| Hanami | Supported | [Hanami](/docs/integrations/hanami) |
+| Grape | Supported | [Grape](/docs/integrations/grape) |
+| Roda | Supported | [Roda](/docs/integrations/roda) |
+| Rack | Supported | [Rack](/docs/integrations/rack) |
+
+## Database, Adapters, and Storage
+
+| Area | Status | Docs |
+| --- | --- | --- |
+| PostgreSQL | Supported | [PostgreSQL adapter](/docs/adapters/postgresql) |
+| MySQL | Supported | [MySQL adapter](/docs/adapters/mysql) |
+| SQLite | Supported | [SQLite adapter](/docs/adapters/sqlite) |
+| MSSQL | Supported | [MS SQL adapter](/docs/adapters/mssql) |
+| MongoDB | Supported | [MongoDB adapter](/docs/adapters/mongo) |
+| Redis Storage | Supported as secondary storage | [Redis Storage](/docs/reference/redis-storage) |
+
+## Supported Plugin Docs
+
+| Plugin | Status | Docs |
+| --- | --- | --- |
+| Two Factor | Supported | [Two Factor](/docs/plugins/2fa) |
+| Username | Supported | [Username](/docs/plugins/username) |
+| Anonymous | Supported | [Anonymous](/docs/plugins/anonymous) |
+| Phone Number | Supported | [Phone Number](/docs/plugins/phone-number) |
+| Magic Link | Supported | [Magic Link](/docs/plugins/magic-link) |
+| Email OTP | Supported | [Email OTP](/docs/plugins/email-otp) |
+| Passkey | Supported | [Passkey](/docs/plugins/passkey) |
+| Generic OAuth | Supported | [Generic OAuth](/docs/plugins/generic-oauth) |
+| One Tap | Supported server-side docs | [One Tap](/docs/plugins/one-tap) |
+| SIWE | Supported | [Sign In With Ethereum](/docs/plugins/siwe) |
+| Admin | Supported | [Admin](/docs/plugins/admin) |
+| API Key | Supported | [API Key](/docs/plugins/api-key) |
+| Organization | Supported | [Organization](/docs/plugins/organization) |
+| OAuth Provider | Supported Ruby package | [OAuth Provider](/docs/plugins/oauth-provider) |
+| SSO | Supported Ruby package | [SSO](/docs/plugins/sso) |
+| SCIM | Supported Ruby package | [SCIM](/docs/plugins/scim) |
+| Bearer | Supported | [Bearer](/docs/plugins/bearer) |
+| Device Authorization | Supported server-side docs | [Device Authorization](/docs/plugins/device-authorization) |
+| Captcha | Supported | [Captcha](/docs/plugins/captcha) |
+| HIBP | Supported | [Have I Been Pwned](/docs/plugins/have-i-been-pwned) |
+| Last Login Method | Supported | [Last Login Method](/docs/plugins/last-login-method) |
+| Multi Session | Supported | [Multi Session](/docs/plugins/multi-session) |
+| OAuth Proxy | Supported | [OAuth Proxy](/docs/plugins/oauth-proxy) |
+| One-Time Token | Supported | [One-Time Token](/docs/plugins/one-time-token) |
+| Open API | Documented, early-stage | [Open API](/docs/plugins/open-api) |
+| JWT | Supported | [JWT](/docs/plugins/jwt) |
+| i18n | Supported | [Internationalization](/docs/plugins/i18n) |
+| Dub | Supported | [Dub](/docs/plugins/dub) |
+| Stripe | Supported Ruby package | [Stripe](/docs/plugins/stripe) |
+
+## Future or Under Development
+
+| Area | Status | Docs |
+| --- | --- | --- |
+| Test Utils | Future work only. RubyAuth does not expose `BetterAuth::Plugins.test_utils` or a public test helper module yet. | [Test Utils](/docs/plugins/test-utils) |
+
+## Intentionally Omitted or Unsupported Upstream Docs
+
+| Area | RubyAuth status |
+| --- | --- |
+| Browser client packages | Not documented as supported Ruby server features. Call RubyAuth HTTP endpoints from your frontend, mobile client, HTMX, Turbo, or server-rendered forms. |
+| JavaScript framework integrations | Not documented as supported Ruby integrations. Use the Ruby framework integrations listed above. |
+| `mcp` | Not documented as a supported RubyAuth plugin. |
+| Upstream `oidc-provider` | Not documented as a supported RubyAuth plugin. RubyAuth documents its own [OAuth Provider](/docs/plugins/oauth-provider) package separately. |
+| Non-Stripe payment plugins | Not documented as supported RubyAuth payment plugins. |
+| AI and infrastructure pages | Not documented as supported RubyAuth features unless a Ruby package or docs page explicitly covers the feature. |

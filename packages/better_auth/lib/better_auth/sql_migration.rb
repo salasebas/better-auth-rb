@@ -39,7 +39,7 @@ module BetterAuth
     def plan_from_existing(options, existing:, dialect:)
       dialect = normalize_dialect(dialect)
       config = configuration_for(options)
-      desired = BetterAuth::Schema.auth_tables(config)
+      desired = BetterAuth::Schema.migration_tables(config)
       to_create = []
       to_add = []
       to_index = []

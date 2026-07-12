@@ -401,29 +401,40 @@ module BetterAuth
 
       uri = URI.parse(authorization_url.to_s)
       params = URI.decode_www_form(uri.query.to_s)
-      params.concat([
-        ["client_id", provider[:client_id].to_s],
-        ["response_type", provider[:response_type] || "code"],
-        ["redirect_uri", generic_oauth_redirect_uri(ctx, provider)],
-        ["state", state]
-      ])
+      generic_oauth_set_query_param(params, "client_id", provider[:client_id].to_s)
+      generic_oauth_set_query_param(params, "response_type", provider[:response_type] || "code")
+      generic_oauth_set_query_param(params, "redirect_uri", generic_oauth_redirect_uri(ctx, provider))
+      generic_oauth_set_query_param(params, "state", state)
       scopes = Array(body[:scopes]) + Array(provider[:scopes])
-      params << ["scope", scopes.join(" ")] unless scopes.empty?
+      generic_oauth_set_query_param(params, "scope", scopes.join(" ")) unless scopes.empty?
       if provider[:pkce]
-        params << ["code_challenge", generic_oauth_pkce_challenge(code_verifier)]
-        params << ["code_challenge_method", "S256"]
+        generic_oauth_set_query_param(params, "code_challenge", generic_oauth_pkce_challenge(code_verifier))
+        generic_oauth_set_query_param(params, "code_challenge_method", "S256")
       end
-      params << ["prompt", provider[:prompt]] if provider[:prompt]
-      params << ["access_type", provider[:access_type]] if provider[:access_type]
-      params << ["response_mode", provider[:response_mode]] if provider[:response_mode]
+      generic_oauth_set_query_param(params, "prompt", provider[:prompt]) if provider[:prompt]
+      generic_oauth_set_query_param(params, "access_type", provider[:access_type]) if provider[:access_type]
+      generic_oauth_set_query_param(params, "response_mode", provider[:response_mode]) if provider[:response_mode]
       authorization_params = if provider[:authorization_url_params].respond_to?(:call)
         provider[:authorization_url_params].call(ctx)
       else
         provider[:authorization_url_params]
       end
-      normalize_hash(authorization_params || {}).each { |key, value| params << [key.to_s, value.to_s] }
+      normalize_hash(authorization_params || {}).each { |key, value| generic_oauth_set_query_param(params, key, value) }
       uri.query = URI.encode_www_form(params)
       uri.to_s
+    end
+
+    def generic_oauth_set_query_param(params, key, value)
+      name = key.to_s
+      first_index = params.index { |param_name, _param_value| param_name == name }
+      if first_index
+        params[first_index] = [name, value.to_s]
+        (params.length - 1).downto(first_index + 1) do |index|
+          params.delete_at(index) if params[index].first == name
+        end
+      else
+        params << [name, value.to_s]
+      end
     end
 
     def generic_oauth_generate_state(ctx, state_data)
@@ -530,10 +541,20 @@ module BetterAuth
 
     def generic_oauth_user_info(provider, tokens)
       callback = provider[:get_user_info]
-      return normalize_hash(callback.call(tokens)) if callback.respond_to?(:call)
+      if callback.respond_to?(:call)
+        user_info = callback.call(tokens)
+        return nil if user_info.nil?
+
+        return normalize_hash(user_info)
+      end
 
       id_token = tokens[:id_token] || tokens[:idToken]
-      return generic_oauth_user_from_id_token(id_token) if id_token
+      if id_token
+        token_user = generic_oauth_user_from_id_token(id_token)
+        id = fetch_value(token_user, "id")
+        email = fetch_value(token_user, "email")
+        return token_user if !id.to_s.empty? && !email.to_s.empty?
+      end
 
       user_info_url = provider[:user_info_url] || generic_oauth_discovery(provider)["userinfo_endpoint"]
       return nil if user_info_url.to_s.empty?
@@ -613,7 +634,7 @@ module BetterAuth
     end
 
     def generic_oauth_redirect_uri(ctx, provider)
-      provider[:redirect_uri] || provider[:redirectURI] || "#{ctx.context.base_url}/oauth2/callback/#{provider[:provider_id]}"
+      provider[:redirect_uri] || provider[:redirectURI] || "#{ctx.context.canonical_base_url}/oauth2/callback/#{provider[:provider_id]}"
     end
 
     def generic_oauth_validate_issuer!(ctx, provider, query, redirect_error)
@@ -678,7 +699,7 @@ module BetterAuth
     end
 
     def generic_oauth_user_from_id_token(id_token)
-      payload = JWT.decode(id_token, nil, false).first
+      payload = ::JWT.decode(id_token, nil, false).first
       normalize_hash(
         id: payload["sub"],
         email: payload["email"],

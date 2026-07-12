@@ -390,7 +390,7 @@ module BetterAuth
           ],
           status: :partial,
           plan: "010",
-          notes: "Callable membership_limit is not enforced on add_member; type-only schema order tests excluded"
+          notes: "membership_limit enforced on add_member and accept_invitation; type-only schema order tests excluded"
         },
         "plugins/organization/routes/crud-access-control.test.ts" => {
           owner: [
@@ -408,7 +408,7 @@ module BetterAuth
           ],
           status: :partial,
           plan: "010",
-          notes: "Callable membership_limit is not enforced on add_member"
+          notes: "membership_limit enforced on add_member; broader crud-members parity remains partial"
         },
         "plugins/organization/routes/crud-org.test.ts" => {
           owner: [

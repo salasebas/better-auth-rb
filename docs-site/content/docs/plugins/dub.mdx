@@ -1,135 +1,153 @@
 ---
 title: Dub
-description: Track Dub leads on signup and link Dub OAuth accounts.
+description: RubyAuth Plugin for Lead Tracking using Dub links and OAuth Linking
 ---
 
-Track Dub leads on signup and link Dub OAuth accounts.
+<RubyAuthDisclaimer />
 
-<Callout type="info">
-This page documents the current Ruby port behavior. Ruby uses snake_case option names and `auth.api` method names; HTTP paths and JSON keys keep the upstream wire shape where implemented.
-</Callout>
+[Dub](https://dub.co/) is an open source modern link management platform for entrepreneurs, creators, and growth teams.
+
+This plugins allows you to track leads when a user signs up using a Dub link. It also adds OAuth linking support to allow you to build integrations extending Dub's linking management infrastructure.
 
 ## Installation
 
-The Dub plugin ships with the core `better_auth` gem. The Dub SDK remains optional, so applications that do not use Dub do not install it.
+<Steps>
+  <Step>
+    ### Install the plugin
 
-```ruby title="Gemfile"
-gem "better_auth"
-gem "dub"
-```
+    First, install the plugin:
 
-## Configure
+    ```package-install
+    @dub/better-auth
+    ```
+  </Step>
+
+  <Step>
+    ### Install the Dub SDK
+
+    Next, install the Dub SDK on your server:
+
+    ```package-install
+    dub
+    ```
+  </Step>
+
+  <Step>
+    ### Configure the plugin
+
+    Add the plugin to your auth config:
+
+    ```ruby title="config/auth.rb"
+    require "better_auth"
+
+    auth = BetterAuth.auth(
+      secret: ENV.fetch("BETTER_AUTH_SECRET"),
+      base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
+      plugins: [
+        BetterAuth::Plugins.dub(api_key: ENV.fetch("DUB_API_KEY"))
+      ]
+    )
+    ```
+  </Step>
+</Steps>
+
+## Usage
+
+### Lead Tracking
+
+By default, the plugin will track sign up events as leads. You can disable this by setting `disableLeadTracking` to `true`.
 
 ```ruby title="config/auth.rb"
 require "better_auth"
-require "dub"
-
-Models = OpenApiSDK::Models
-
-dub = OpenApiSDK::Dub.new(
-  security: Models::Shared::Security.new(
-    token: ENV.fetch("DUB_API_KEY")
-  )
-)
 
 auth = BetterAuth.auth(
   secret: ENV.fetch("BETTER_AUTH_SECRET"),
   base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
-  email_and_password: { enabled: true },
   plugins: [
-    BetterAuth::Plugins.dub(dub_client: dub)
+    BetterAuth::Plugins.dub(api_key: ENV.fetch("DUB_API_KEY"))
   ]
 )
 ```
 
-`dub_client` can be any object that responds to `track.lead`. The official `dub` gem is used only when your application requires it.
+### OAuth Linking
 
-## Lead Tracking
+The plugin supports OAuth for account linking.
 
-When a signup request includes a `dub_id` cookie, the plugin tracks a Dub lead after the user is created. The default event name is `"Sign Up"`.
+First, you need to setup OAuth app in Dub. Dub supports OAuth 2.0 authentication, which is recommended if you build integrations extending Dub’s functionality [Learn more about OAuth](https://dub.co/docs/integrations/quickstart#integrating-via-oauth-2-0-recommended).
 
-```ruby
-BetterAuth::Plugins.dub(
-  dub_client: dub,
-  lead_event_name: "Created Account"
+Once you get the client ID and client secret, you can configure the plugin.
+
+```ruby title="config/auth.rb"
+auth = BetterAuth.auth(
+  secret: ENV.fetch("BETTER_AUTH_SECRET"),
+  base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
+  plugins: [
+    BetterAuth::Plugins.dub(
+      api_key: ENV.fetch("DUB_API_KEY"),
+      oauth: {
+        client_id: ENV.fetch("DUB_CLIENT_ID"),
+        client_secret: ENV.fetch("DUB_CLIENT_SECRET")
+      }
+    )
+  ]
 )
 ```
 
-Disable automatic lead tracking:
-
-```ruby
-BetterAuth::Plugins.dub(
-  dub_client: dub,
-  disable_lead_tracking: true
-)
-```
-
-Use `custom_lead_track` to replace the default Dub call:
-
-```ruby
-BetterAuth::Plugins.dub(
-  dub_client: dub,
-  custom_lead_track: ->(user, ctx) {
-    Analytics.track_signup(user.fetch("id"), ctx.get_cookie("dub_id"))
-  }
-)
-```
-
-## OAuth Linking
-
-Configure Dub OAuth credentials to enable account linking:
-
-```ruby
-BetterAuth::Plugins.dub(
-  dub_client: dub,
-  oauth: {
-    client_id: ENV.fetch("DUB_OAUTH_CLIENT_ID"),
-    client_secret: ENV.fetch("DUB_OAUTH_CLIENT_SECRET")
-  }
-)
-```
-
-From Ruby, call the generated API method with session cookies:
+For server-rendered Ruby apps, keep Dub's `dub_id` value in a cookie before sign-up so the plugin can attribute the lead when the user is created.
 
 ```ruby title="server.rb"
-link = auth.api.dub_link(
-  headers: { "cookie" => request.env["HTTP_COOKIE"] },
-  body: { callbackURL: "/dashboard" }
-)
+response.set_cookie("dub_id", {
+  value: request.params["dub_id"],
+  path: "/",
+  same_site: "Lax"
+})
 ```
 
-The response contains the Dub authorization URL:
+To link account with Dub, you need to use the `dub.link`.
 
-```ruby
-link[:url]
-link[:redirect] # => true
-```
-
-## Routes
-
-| Method | Path | Ruby API method |
-| --- | --- | --- |
-| `POST` | `/dub/link` | `auth.api.dub_link` |
-| `GET`/`POST` | `/oauth2/callback/:providerId` | `auth.api.dub_o_auth2_callback` |
+<APIMethod path="/dub/link" method="POST" requireSession>
+  ```
+  type dubLink = {
+      /**
+       * Where to return after linking.
+       */
+      callbackURL?: string = "/settings"
+  }
+  ```
+</APIMethod>
 
 ## Options
 
-Current Ruby options accepted by `BetterAuth::Plugins.dub`:
+You can pass the following options to the plugin:
 
-- `dub_client`
-- `disable_lead_tracking`
-- `lead_event_name`
-- `custom_lead_track`
-- `oauth`
-- `oauth.client_id`
-- `oauth.client_secret`
-- `oauth.pkce`
+### `dubClient`
 
-## Support Notes
+The Dub client instance.
 
-- Dub OAuth uses `https://app.dub.co/oauth/authorize` and `https://api.dub.co/oauth/token`.
-- OAuth PKCE is enabled by default. Set `oauth: { pkce: false }` to disable it.
-- The browser-only `dubAnalyticsClient` helper from upstream is not ported. Frontends should call the HTTP endpoint with the user's session cookies.
-- The plugin is based on the upstream `@dub/better-auth` package and adapted to the Ruby plugin and database hook system.
+### `disableLeadTracking`
 
-{/* Upstream guide is preserved in reference/upstream-src/1.6.9/repository/docs/content/docs/plugins/dub.mdx. */}
+Disable lead tracking for sign up events.
+
+### `leadEventName`
+
+Event name for sign up leads.
+
+### `customLeadTrack`
+
+Custom lead track function.
+
+### `oauth`
+
+Dub OAuth configuration.
+
+### `oauth.clientId`
+
+Client ID for Dub OAuth.
+
+### `oauth.clientSecret`
+
+Client secret for Dub OAuth.
+
+### `oauth.pkce`
+
+Enable PKCE for Dub OAuth.

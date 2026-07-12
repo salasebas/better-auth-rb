@@ -1,58 +1,760 @@
 ---
 title: Stripe
-description: Stripe plugin for Better Auth Ruby to manage subscriptions and payments.
+description: Stripe plugin for RubyAuth to manage subscriptions and payments.
 ---
 
-The Stripe plugin integrates Stripe payments and subscriptions with Better Auth Ruby. Since billing and authentication are often tied together, the plugin handles Stripe customer creation, subscription checkout, subscription state synchronization, webhook verification, billing portal sessions, and organization seat billing.
+<RubyAuthDisclaimer />
 
-<Callout type="info">
-Ruby uses snake_case option and API method names. HTTP request bodies may keep upstream camelCase keys, and the plugin normalizes them internally.
-</Callout>
+The Stripe plugin integrates Stripe's payment and subscription functionality with RubyAuth. Since payment and authentication are often tightly coupled, this plugin simplifies the integration of Stripe into your application, handling customer creation, subscription management, and webhook processing.
 
 ## Features
 
-- Create Stripe Customers automatically when users sign up
-- Manage subscription plans and prices
-- Process subscription lifecycle events from Stripe webhooks
-- Verify Stripe webhook signatures
-- Expose active subscription data to your application
-- Support trial periods, plan upgrades, scheduled plan changes, and restores
-- Prevent trial abuse by allowing one trial per reference ID across all plans
-- Associate subscriptions with users or organizations through reference IDs
-- Support team subscriptions with Stripe seat items
+* Create Stripe Customers automatically when users sign up
+* Manage subscription plans and pricing
+* Process subscription lifecycle events (creation, updates, cancellations)
+* Handle Stripe webhooks securely with signature verification
+* Expose subscription data to your application
+* Support for trial periods and subscription upgrades
+* **Automatic trial abuse prevention** - Users can only get one trial per account across all plans
+* Flexible reference system to associate subscriptions with users or organizations
+* Team subscription support with seats management
 
 ## Installation
 
 <Steps>
-<Step>
-### Install The Gem
+  <Step>
+    ### Install the plugin
 
-Add the Stripe plugin package to your application:
+    First, install the plugin:
 
-```ruby title="Gemfile"
-gem "better_auth-stripe"
+    ```ruby title="Gemfile"
+    gem "better_auth-stripe"
+    ```
+
+```ruby title="config/auth.rb"
+require "better_auth"
+require "better_auth/stripe"
+
+auth = BetterAuth.auth(
+  secret: ENV.fetch("BETTER_AUTH_SECRET"),
+  base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
+  plugins: [
+    BetterAuth::Plugins.stripe
+  ]
+)
 ```
 
-Then install dependencies:
+    <Callout>
+      If you're using a separate client and server setup, make sure to install the plugin in both parts of your project.
+    </Callout>
+  </Step>
 
-```bash title="Terminal"
-bundle install
+  <Step>
+    ### Install the Stripe SDK
+
+    Next, install the Stripe SDK on your server:
+
+    ```ruby title="Gemfile"
+    gem "better_auth-stripe"
+    ```
+
+```ruby title="config/auth.rb"
+require "better_auth"
+require "better_auth/stripe"
+
+auth = BetterAuth.auth(
+  secret: ENV.fetch("BETTER_AUTH_SECRET"),
+  base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
+  plugins: [
+    BetterAuth::Plugins.stripe
+  ]
+)
+```
+  </Step>
+
+
+  <Step>
+    ### Migrate the database
+
+    Run the migration or generate the schema to add the necessary tables to the database.
+
+    <Tabs items={["migrate", "generate"]}>
+  <Tab value="migrate">
+    ```bash
+    bundle exec better-auth migrate --cwd . --config config/better_auth.rb --yes
+    ```
+  </Tab>
+
+  <Tab value="generate">
+    ```bash
+    bundle exec better-auth generate --cwd . --dialect postgres --output db/better_auth/schema.sql --config config/better_auth.rb
+    ```
+  </Tab>
+</Tabs>
+
+    See the [Schema](#schema) section to add the tables manually.
+  </Step>
+
+  <Step>
+    ### Set up Stripe webhooks
+
+    Create a webhook endpoint in your Stripe dashboard pointing to:
+
+    ```
+    https://your-domain.com/api/auth/stripe/webhook
+    ```
+
+    `/api/auth` is the default path for the auth server.
+
+    Make sure to select at least these events:
+
+    * `checkout.session.completed`
+    * `customer.subscription.created`
+    * `customer.subscription.updated`
+    * `customer.subscription.deleted`
+
+    Save the webhook signing secret provided by Stripe and add it to your environment variables as `STRIPE_WEBHOOK_SECRET`.
+  </Step>
+</Steps>
+
+## Usage
+
+### Customer Management
+
+You can use this plugin solely for customer management without enabling subscriptions. This is useful if you just want to link Stripe customers to your users.
+
+When you set `createCustomerOnSignUp: true`, a Stripe customer is automatically created on signup and linked to the user in your database.
+You can customize the customer creation process:
+
+```ruby title="config/auth.rb"
+require "better_auth"
+require "better_auth/stripe"
+
+auth = BetterAuth.auth(
+  secret: ENV.fetch("BETTER_AUTH_SECRET"),
+  base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
+  plugins: [
+    BetterAuth::Plugins.stripe
+  ]
+)
 ```
 
-The package depends on the official `stripe` gem.
-</Step>
+### Subscription Management
 
-<Step>
-### Configure Environment Variables
+#### Defining Plans
 
-```txt title=".env"
-STRIPE_SECRET_KEY=sk_test_...
-STRIPE_WEBHOOK_SECRET=whsec_...
+You can define your subscription plans either statically or dynamically:
+
+```ruby title="config/auth.rb"
+require "better_auth"
+require "better_auth/stripe"
+
+auth = BetterAuth.auth(
+  secret: ENV.fetch("BETTER_AUTH_SECRET"),
+  base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
+  plugins: [
+    BetterAuth::Plugins.stripe
+  ]
+)
 ```
-</Step>
 
-<Step>
-### Add The Plugin
+see [plan configuration](#plan-configuration) for more.
+
+#### Creating a Subscription
+
+To create a subscription, use the `subscription.upgrade` method:
+
+<APIMethod path="/subscription/upgrade" method="POST" requireSession>
+  ```
+  type upgradeSubscription = {
+      /**
+       * The name of the plan to upgrade to.
+       */
+      plan: string = "pro"
+      /**
+       * Whether to upgrade to an annual plan.
+       */
+      annual?: boolean = true
+      /**
+       * Reference id of the subscription. Defaults based on customerType.
+       */
+      referenceId?: string = "123"
+      /**
+       * The id of the subscription to upgrade.
+       */
+      subscriptionId?: string = "sub_123"
+      /**
+       * Additional metadata to store with the subscription.
+       */
+      metadata?: Record<string, any>
+      /**
+       * The type of customer for billing. (Default: "user")
+       */
+      customerType?: "user" | "organization"
+      /**
+       * Number of seats to upgrade to (if applicable).
+       */
+      seats?: number = 1
+      /**
+       * The IETF language tag of the locale Checkout is displayed in.
+       * If not provided or set to `auto`, the browser's locale is used.
+       */
+      locale?: string
+      /**
+       * The URL to which Stripe should send customers when payment or setup is complete.
+       */
+      successUrl: string
+      /**
+       * If set, checkout shows a back button and customers will be directed here if they cancel payment.
+       */
+      cancelUrl: string
+      /**
+       * The URL to return to from the Billing Portal (used when upgrading existing subscriptions)
+       */
+      returnUrl?: string
+      /**
+       * Disable redirect after successful subscription.
+       */
+      disableRedirect: boolean = false
+      /**
+       * Schedule the plan change at the end of the current billing period
+       * instead of applying it immediately.
+       */
+      scheduleAtPeriodEnd?: boolean = false
+  }
+  ```
+</APIMethod>
+
+**Simple Example:**
+
+```ruby title="server.rb"
+checkout = auth.api.upgrade_subscription(
+  headers: {"cookie" => session_cookie},
+  body: {
+    plan: "pro",
+    successUrl: "/billing/success",
+    cancelUrl: "/billing"
+  }
+)
+
+redirect_to checkout[:url]
+```
+
+This will create a Checkout Session and redirect the user to the Stripe Checkout page.
+
+<Callout type="info">
+  The plugin only supports one active or trialing subscription per reference ID (user or organization) at a time. Multiple concurrent subscriptions for the same reference ID are not supported.
+
+  If the user already has an active subscription, you **must** provide the `subscriptionId` parameter when upgrading. Otherwise, a new subscription may be created alongside the existing one, resulting in duplicate billing.
+</Callout>
+
+> **Important:** The `successUrl` parameter will be internally modified to handle race conditions between checkout completion and webhook processing. The plugin creates an intermediate redirect that ensures subscription status is properly updated before redirecting to your success page.
+
+```ruby title="server.rb"
+checkout = auth.api.upgrade_subscription(
+  headers: {"cookie" => session_cookie},
+  body: {
+    plan: "pro",
+    successUrl: "/billing/success",
+    cancelUrl: "/billing",
+    returnUrl: "/billing"
+  }
+)
+```
+
+#### Switching Plans
+
+To switch a subscription to a different plan, use the `subscription.upgrade` method:
+
+```ruby title="server.rb"
+checkout = auth.api.upgrade_subscription(
+  headers: {"cookie" => session_cookie},
+  body: {
+    subscriptionId: "sub_current",
+    plan: "team",
+    successUrl: "/billing/success",
+    cancelUrl: "/billing",
+    returnUrl: "/billing"
+  }
+)
+```
+
+This ensures that the user only pays for the new plan, and not both.
+
+#### Scheduling Plan Changes at Period End
+
+By default, plan changes take effect immediately with prorated billing. You may want to defer the change to the end of the current billing period so the user can continue using their current plan until it expires:
+
+```ruby title="server.rb"
+scheduled = auth.api.upgrade_subscription(
+  headers: {"cookie" => session_cookie},
+  body: {
+    subscriptionId: "sub_current",
+    plan: "enterprise",
+    scheduleAtPeriodEnd: true,
+    successUrl: "/billing/success",
+    cancelUrl: "/billing",
+    returnUrl: "/billing"
+  }
+)
+```
+
+This uses the [Stripe Subscription Schedules API](https://docs.stripe.com/billing/subscriptions/subscription-schedules) to create a two-phase schedule: the current plan continues until the billing period ends, then the new plan starts automatically with no proration.
+
+<Callout type="info">
+  When `scheduleAtPeriodEnd` is `true`:
+
+  * The subscription plan is **not changed** until the billing period ends — only `stripeScheduleId` is stored so clients can detect the pending change
+  * No redirect to Stripe Checkout or Billing Portal occurs, the change is applied server-side
+  * At the end of the billing period, Stripe fires a `customer.subscription.updated` webhook which updates the subscription record automatically
+  * If a new upgrade or schedule is requested before the period ends, the existing pending schedule is released first
+</Callout>
+
+#### Listing Active Subscriptions
+
+To get the user's active subscriptions:
+
+<APIMethod path="/subscription/list" method="GET" requireSession resultVariable="subscriptions">
+  ```
+  type listActiveSubscriptions = {
+      /**
+       * Reference id of the subscription to list.
+       */
+      referenceId?: string = '123'
+      /**
+       * The type of customer for billing. (Default: "user")
+       */
+      customerType?: "user" | "organization"
+  }
+
+  // get the active subscription
+  const activeSubscription = subscriptions.find(
+      sub => sub.status === "active" || sub.status === "trialing"
+  );
+
+  // Check subscription limits
+  const projectLimit = subscriptions?.limits?.projects || 0;
+  ```
+</APIMethod>
+
+Make sure to provide `authorizeReference` in your plugin config to authorize the reference ID
+
+```ruby title="config/auth.rb"
+require "better_auth"
+require "better_auth/stripe"
+
+auth = BetterAuth.auth(
+  secret: ENV.fetch("BETTER_AUTH_SECRET"),
+  base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
+  plugins: [
+    BetterAuth::Plugins.stripe
+  ]
+)
+```
+
+#### Canceling a Subscription
+
+To cancel a subscription:
+
+<APIMethod path="/subscription/cancel" method="POST" requireSession>
+  ```
+  type cancelSubscription = {
+      /**
+       * Reference id of the subscription to cancel. Defaults based on customerType.
+       */
+      referenceId?: string = 'org_123'
+      /**
+       * The type of customer for billing. (Default: "user")
+       */
+      customerType?: "user" | "organization"
+      /**
+       * The id of the subscription to cancel.
+       */
+      subscriptionId?: string = 'sub_123'
+      /**
+       * URL to take customers to when they click on the billing portal's link to return to your website.
+       */
+      returnUrl: string = '/account'
+  }
+  ```
+</APIMethod>
+
+This will redirect the user to the Stripe Billing Portal where they can cancel their subscription.
+
+<Callout type="info">
+  **Understanding Cancellation States**
+
+  Stripe supports different types of cancellation, and the plugin tracks all of them:
+
+  | Field               | Description                                                                                                                    |
+  | ------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+  | `cancelAtPeriodEnd` | Whether this subscription will (if status=active) or did (if status=canceled) cancel at the end of the current billing period. |
+  | `cancelAt`          | If the subscription is scheduled to be canceled, this is the time at which the cancellation will take effect.                  |
+  | `canceledAt`        | If the subscription has been canceled, this is the time when it was canceled.                                                  |
+  | `endedAt`           | If the subscription has ended, the date the subscription ended.                                                                |
+  | `status`            | Changes to "canceled" only after the subscription has actually ended.                                                          |
+</Callout>
+
+#### Restoring a Subscription
+
+> <small className="font-normal">**Note:** This only works for subscriptions that are still active but have a pending cancellation or a scheduled plan change. It cannot restore subscriptions that have already ended (`status: "canceled"` with `endedAt` set).</small>
+
+If a user changes their mind after canceling a subscription or scheduling a plan change, you can restore the subscription:
+
+<APIMethod path="/subscription/restore" method="POST" requireSession>
+  ```
+  type restoreSubscription = {
+      /**
+       * Reference id of the subscription to restore. Defaults based on customerType.
+       */
+      referenceId?: string = '123'
+      /**
+       * The type of customer for billing. (Default: "user")
+       */
+      customerType?: "user" | "organization"
+      /**
+       * The id of the subscription to restore.
+       */
+      subscriptionId?: string = 'sub_123'
+  }
+  ```
+</APIMethod>
+
+<Callout type="info">
+  This endpoint handles two cases:
+
+  * **Pending cancellation**: Sets `cancelAtPeriodEnd` to `false` and clears `cancelAt` / `canceledAt`, so the subscription continues to renew.
+  * **Pending plan change** (via `scheduleAtPeriodEnd`): Releases the Stripe subscription schedule and clears `stripeScheduleId`, so the current plan remains unchanged.
+</Callout>
+
+#### Creating Billing Portal Sessions
+
+To create a [Stripe billing portal session](https://docs.stripe.com/api/customer_portal/sessions/create) where customers can manage their subscriptions, update payment methods, and view billing history:
+
+<APIMethod path="/subscription/billing-portal" method="POST" requireSession>
+  ```
+  type createBillingPortal = {
+      /**
+      * The IETF language tag of the locale Customer Portal is displayed in.
+      * If not provided or set to `auto`, the browser's locale is used.
+      */
+      locale?: string
+      /**
+       * Reference id of the subscription.
+       */
+      referenceId?: string = "123"
+      /**
+       * The type of customer for billing. (Default: "user")
+       */
+      customerType?: "user" | "organization"
+      /**
+       * Return URL to redirect back after exiting the billing portal.
+       */
+      returnUrl?: string
+      /**
+       * Disable the automatic redirect to the billing page.
+       * @default false
+       */
+      disableRedirect?: boolean = false
+  }
+  ```
+</APIMethod>
+
+<Callout type="info">
+  For supported locales, see the [IETF language tag documentation](https://docs.stripe.com/js/appendix/supported_locales).
+</Callout>
+
+This endpoint creates a Stripe billing portal session and returns a URL in the response as `data.url`. You can redirect users to this URL to allow them to manage their subscription, payment methods, and billing history.
+
+### Reference System
+
+By default, subscriptions are associated with the user ID. However, you can use a custom reference ID to associate subscriptions with other entities, such as organizations:
+
+```ruby title="server.rb"
+checkout = auth.api.upgrade_subscription(
+  headers: {"cookie" => session_cookie},
+  body: {
+    plan: "team",
+    customerType: "organization",
+    referenceId: organization.fetch("id"),
+    successUrl: "/billing/success",
+    cancelUrl: "/billing"
+  }
+)
+```
+
+#### Team Subscriptions with Seats
+
+For team or organization plans, you can specify the number of seats:
+
+```ruby title="server.rb"
+checkout = auth.api.upgrade_subscription(
+  headers: {"cookie" => session_cookie},
+  body: {
+    plan: "team",
+    customerType: "organization",
+    referenceId: organization.fetch("id"),
+    seats: 5,
+    successUrl: "/billing/success",
+    cancelUrl: "/billing"
+  }
+)
+```
+
+The `seats` parameter is passed to Stripe as the quantity for the subscription item. You can use this value in your application logic to limit the number of members in a team or organization.
+
+To authorize reference IDs, implement the `authorizeReference` function:
+
+```ruby title="config/auth.rb"
+require "better_auth"
+require "better_auth/stripe"
+
+auth = BetterAuth.auth(
+  secret: ENV.fetch("BETTER_AUTH_SECRET"),
+  base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
+  plugins: [
+    BetterAuth::Plugins.stripe
+  ]
+)
+```
+
+### Webhook Handling
+
+The plugin automatically handles common webhook events:
+
+* `checkout.session.completed`: Updates subscription status after checkout
+* `customer.subscription.created`: Creates a subscription when created outside the checkout flow
+* `customer.subscription.updated`: Updates subscription details when changed
+* `customer.subscription.deleted`: Marks subscription as canceled
+
+You can also handle custom events:
+
+```ruby title="config/auth.rb"
+require "better_auth"
+require "better_auth/stripe"
+
+auth = BetterAuth.auth(
+  secret: ENV.fetch("BETTER_AUTH_SECRET"),
+  base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
+  plugins: [
+    BetterAuth::Plugins.stripe
+  ]
+)
+```
+
+### Subscription Lifecycle Hooks
+
+You can hook into various subscription lifecycle events:
+
+```ruby title="config/auth.rb"
+require "better_auth"
+require "better_auth/stripe"
+
+auth = BetterAuth.auth(
+  secret: ENV.fetch("BETTER_AUTH_SECRET"),
+  base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
+  plugins: [
+    BetterAuth::Plugins.stripe
+  ]
+)
+```
+
+### Trial Periods
+
+You can configure trial periods for your plans:
+
+```ruby title="config/auth.rb"
+require "better_auth"
+require "better_auth/stripe"
+
+auth = BetterAuth.auth(
+  secret: ENV.fetch("BETTER_AUTH_SECRET"),
+  base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
+  plugins: [
+    BetterAuth::Plugins.stripe
+  ]
+)
+```
+
+## Schema
+
+The Stripe plugin adds the following tables to your database:
+
+### User
+
+Table Name: `user`
+
+export const stripeUserTableFields = [
+	{
+		name: "stripeCustomerId",
+		type: "string",
+		description: "The Stripe customer ID",
+		isOptional: true,
+	},
+];
+
+<DatabaseTable name="user" fields={stripeUserTableFields} />
+
+### Organization
+
+Table Name: `organization` <small className="text-xs">(only when `organization.enabled` is `true`)</small>
+
+export const stripeOrganizationTableFields = [
+	{
+		name: "stripeCustomerId",
+		type: "string",
+		description: "The Stripe customer ID for the organization",
+		isOptional: true,
+	},
+];
+
+<DatabaseTable name="organization" fields={stripeOrganizationTableFields} />
+
+### Subscription
+
+Table Name: `subscription`
+
+export const stripeSubscriptionTableFields = [
+	{
+		name: "id",
+		type: "string",
+		description: "Unique identifier for each subscription",
+		isPrimaryKey: true,
+	},
+	{
+		name: "plan",
+		type: "string",
+		description: "The name of the subscription plan",
+	},
+	{
+		name: "referenceId",
+		type: "string",
+		description:
+			"The ID this subscription is associated with (user ID by default). This should NOT be a unique field in your database, as it must allow users to resubscribe after a cancellation.",
+		isUnique: false,
+	},
+	{
+		name: "stripeCustomerId",
+		type: "string",
+		description: "The Stripe customer ID",
+		isOptional: true,
+	},
+	{
+		name: "stripeSubscriptionId",
+		type: "string",
+		description: "The Stripe subscription ID",
+		isOptional: true,
+	},
+	{
+		name: "status",
+		type: "string",
+		description: "The status of the subscription (active, canceled, etc.)",
+		defaultValue: "incomplete",
+	},
+	{
+		name: "periodStart",
+		type: "Date",
+		description: "Start date of the current billing period",
+		isOptional: true,
+	},
+	{
+		name: "periodEnd",
+		type: "Date",
+		description: "End date of the current billing period",
+		isOptional: true,
+	},
+	{
+		name: "cancelAtPeriodEnd",
+		type: "boolean",
+		description:
+			"Whether the subscription will be canceled at the end of the period",
+		defaultValue: false,
+		isOptional: true,
+	},
+	{
+		name: "cancelAt",
+		type: "Date",
+		description:
+			"If the subscription is scheduled to be canceled, this is the time at which the cancellation will take effect",
+		isOptional: true,
+	},
+	{
+		name: "canceledAt",
+		type: "Date",
+		description:
+			"If the subscription has been canceled, this is the time when the cancellation was requested. Note: If the subscription was canceled with cancelAtPeriodEnd, this reflects the cancellation request time, not when the subscription actually ends",
+		isOptional: true,
+	},
+	{
+		name: "endedAt",
+		type: "Date",
+		description:
+			"If the subscription has ended, this is the date the subscription ended",
+		isOptional: true,
+	},
+	{
+		name: "seats",
+		type: "number",
+		description: "Number of seats for team plans",
+		isOptional: true,
+	},
+	{
+		name: "trialStart",
+		type: "Date",
+		description: "Start date of the trial period",
+		isOptional: true,
+	},
+	{
+		name: "trialEnd",
+		type: "Date",
+		description: "End date of the trial period",
+		isOptional: true,
+	},
+	{
+		name: "billingInterval",
+		type: "string",
+		description:
+			"The billing interval of the subscription (e.g. 'month', 'year')",
+		isOptional: true,
+	},
+	{
+		name: "stripeScheduleId",
+		type: "string",
+		description:
+			"Stripe Subscription Schedule ID, present when a scheduled plan change is pending",
+		isOptional: true,
+	},
+];
+
+<DatabaseTable name="subscription" fields={stripeSubscriptionTableFields} />
+
+### Customizing the Schema
+
+To change the schema table names or fields, you can pass a `schema` option to the Stripe plugin:
+
+```ruby title="config/auth.rb"
+require "better_auth"
+require "better_auth/stripe"
+
+auth = BetterAuth.auth(
+  secret: ENV.fetch("BETTER_AUTH_SECRET"),
+  base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
+  plugins: [
+    BetterAuth::Plugins.stripe
+  ]
+)
+```
+
+## Options
+
+Common Ruby options accepted by `BetterAuth::Plugins.stripe`:
+
+* `stripe_client`: Stripe client or test adapter. Production apps usually pass a Stripe SDK client configured with the account API key.
+* `stripe_webhook_secret`: webhook signing secret used by the Stripe webhook route.
+* `create_customer_on_sign_up`: creates or reuses a Stripe customer during user sign-up and stores `stripeCustomerId`.
+* `subscription`: subscription configuration. Set `enabled: true` and provide `plans` to register subscription routes.
+* `organization`: organization billing configuration. Set `enabled: true` to allow organization subscriptions and organization customer records.
+* `schema`: custom table and field configuration.
 
 ```ruby title="config/auth.rb"
 require "better_auth"
@@ -63,798 +765,177 @@ auth = BetterAuth.auth(
   base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
   plugins: [
     BetterAuth::Plugins.stripe(
-      stripe_api_key: ENV.fetch("STRIPE_SECRET_KEY"),
       stripe_webhook_secret: ENV.fetch("STRIPE_WEBHOOK_SECRET"),
-      create_customer_on_sign_up: true
+      create_customer_on_sign_up: true,
+      subscription: {
+        enabled: true,
+        plans: [
+          {name: "basic", price_id: "price_basic"},
+          {
+            name: "pro",
+            price_id: "price_pro",
+            annual_discount_price_id: "price_pro_year",
+            limits: {projects: 10},
+            free_trial: {days: 14}
+          }
+        ]
+      }
     )
   ]
 )
 ```
 
-You can pass `stripe_client:` instead of `stripe_api_key:` when you need a custom Stripe client, Stripe Connect behavior, or a test double.
-</Step>
+## Advanced Usage
 
-<Step>
-### Enable Subscriptions
+### Subscription plans
 
-Subscription endpoints are enabled only when `subscription.enabled` is true and plans are configured.
+Enable subscriptions with a `subscription` hash and define each plan by name and Stripe price ID. The `/subscription/upgrade` route accepts `plan`, `annual`, `seats`, `successUrl`, `cancelUrl`, `returnUrl`, `subscriptionId`, and `scheduleAtPeriodEnd` where applicable.
 
-```ruby title="config/auth.rb"
-BetterAuth::Plugins.stripe(
-  stripe_api_key: ENV.fetch("STRIPE_SECRET_KEY"),
-  stripe_webhook_secret: ENV.fetch("STRIPE_WEBHOOK_SECRET"),
-  subscription: {
-    enabled: true,
-    plans: [
-      {
-        name: "basic",
-        price_id: "price_basic_monthly",
-        annual_discount_price_id: "price_basic_yearly",
-        limits: { projects: 5, storage: 10 }
-      },
-      {
-        name: "pro",
-        price_id: "price_pro_monthly",
-        annual_discount_price_id: "price_pro_yearly",
-        limits: { projects: 20, storage: 50 },
-        free_trial: { days: 14 }
-      }
-    ]
-  }
-)
-```
-</Step>
-
-<Step>
-### Migrate The Database
-
-The plugin adds fields to `user`, and when subscriptions are enabled it adds a `subscription` table. Rails apps should regenerate and run Better Auth migrations after enabling the plugin. Rack, Sinatra, Hanami, and custom adapter apps should apply the schema fields listed in the [Schema](#schema) section.
-</Step>
-
-<Step>
-### Set Up Stripe Webhooks
-
-Create a webhook endpoint in the Stripe Dashboard that points to your auth base path:
-
-```txt
-https://your-domain.com/api/auth/stripe/webhook
-```
-
-`/api/auth` is the default Better Auth mount path.
-
-Select at least these events:
-
-- `checkout.session.completed`
-- `customer.subscription.created`
-- `customer.subscription.updated`
-- `customer.subscription.deleted`
-
-Save the webhook signing secret as `STRIPE_WEBHOOK_SECRET`.
-</Step>
-</Steps>
-
-## Usage
-
-### Client Calls
-
-The Ruby port does not provide a separate browser client plugin. From a frontend, call the HTTP endpoints below with the user's session cookies. From Ruby, you can call the generated API methods directly:
-
-```ruby title="billing.rb"
+```ruby title="server.rb"
 checkout = auth.api.upgrade_subscription(
-  headers: { "cookie" => request.env["HTTP_COOKIE"] },
-  body: {
-    plan: "pro",
-    successUrl: "https://app.example.com/dashboard",
-    cancelUrl: "https://app.example.com/pricing"
-  }
-)
-
-redirect_to checkout.fetch(:url)
-```
-
-## Customer Management
-
-You can use the plugin only for Stripe customer management by omitting `subscription.enabled`. When `create_customer_on_sign_up` is true, Better Auth creates or reuses a Stripe Customer on signup and stores the customer ID on the user.
-
-```ruby title="config/auth.rb"
-BetterAuth::Plugins.stripe(
-  stripe_api_key: ENV.fetch("STRIPE_SECRET_KEY"),
-  stripe_webhook_secret: ENV.fetch("STRIPE_WEBHOOK_SECRET"),
-  create_customer_on_sign_up: true,
-  get_customer_create_params: ->(user, _ctx) {
-    {
-      phone: user["phone"],
-      metadata: {
-        referralSource: user.dig("metadata", "referralSource")
-      }
-    }
-  },
-  on_customer_create: ->(payload, _ctx) {
-    stripe_customer = payload.fetch(:stripeCustomer)
-    user = payload.fetch(:user)
-    Rails.logger.info("Created Stripe customer #{stripe_customer.fetch('id')} for #{user.fetch('id')}")
-  }
-)
-```
-
-The plugin protects internal metadata keys like `userId`, `organizationId`, `customerType`, `subscriptionId`, and `referenceId` so request metadata cannot overwrite them.
-
-## Subscription Management
-
-### Defining Plans
-
-Plans can be static or returned dynamically from a callable.
-
-```ruby title="config/auth.rb"
-subscription: {
-  enabled: true,
-  plans: [
-    {
-      name: "basic",
-      price_id: "price_basic_monthly",
-      annual_discount_price_id: "price_basic_yearly",
-      limits: { projects: 5, storage: 10 }
-    },
-    {
-      name: "pro",
-      lookup_key: "pro_monthly",
-      annual_discount_lookup_key: "pro_yearly",
-      limits: { projects: 20, storage: 50 },
-      free_trial: { days: 14 }
-    }
-  ]
-}
-```
-
-```ruby title="config/auth.rb"
-subscription: {
-  enabled: true,
-  plans: -> {
-    Plan.active.map do |plan|
-      {
-        name: plan.slug,
-        price_id: plan.stripe_monthly_price_id,
-        annual_discount_price_id: plan.stripe_yearly_price_id,
-        limits: plan.limits
-      }
-    end
-  }
-}
-```
-
-See [Plan Configuration](#plan-configuration) for all supported plan keys.
-
-### Creating A Subscription
-
-Create a subscription with `auth.api.upgrade_subscription` or `POST /subscription/upgrade`.
-
-```ruby title="billing.rb"
-checkout = auth.api.upgrade_subscription(
-  headers: { "cookie" => request.env["HTTP_COOKIE"] },
+  headers: {"cookie" => request.env["HTTP_COOKIE"]},
   body: {
     plan: "pro",
     annual: true,
-    successUrl: "/dashboard",
-    cancelUrl: "/pricing",
-    metadata: { source: "pricing-page" },
-    seats: 1,
-    locale: "en"
+    successUrl: "/billing/success",
+    cancelUrl: "/billing",
+    returnUrl: "/billing"
   }
 )
 
 checkout.fetch(:url)
 ```
 
-Request body:
+### Free trials and hooks
 
-| Option | Type | Description |
-| --- | --- | --- |
-| `plan` | `String` | Required. Name of the plan to subscribe to. |
-| `annual` | `Boolean` | Use the annual discount price when configured. |
-| `referenceId` / `reference_id` | `String` | Subscription reference ID. Defaults to the user ID, or to active organization ID for organization billing. |
-| `subscriptionId` / `subscription_id` | `String` | Stripe subscription ID to upgrade. Required when changing an existing active subscription. |
-| `metadata` | `Hash` | Extra metadata to pass to Stripe. Internal keys are protected. |
-| `customerType` / `customer_type` | `"user"` or `"organization"` | Billing entity type. Defaults to `"user"`. |
-| `seats` | `Integer` | Seat quantity for user or manual seat billing. Organization plans with `seat_price_id` use member count instead. |
-| `locale` | `String` | Stripe Checkout locale. |
-| `successUrl` / `success_url` | `String` | Required. URL to return to after successful checkout. |
-| `cancelUrl` / `cancel_url` | `String` | Required. URL to return to after canceled checkout. |
-| `returnUrl` / `return_url` | `String` | Return URL for Billing Portal flows and scheduled changes. |
-| `disableRedirect` / `disable_redirect` | `Boolean` | Adds a `redirect` flag to the response for client behavior. |
-| `scheduleAtPeriodEnd` / `schedule_at_period_end` | `Boolean` | Schedule the plan change at the end of the current billing period. |
-
-<Callout type="warning">
-`successUrl`, `cancelUrl`, `returnUrl`, and callback URLs must be relative paths or absolute URLs whose origin is configured in `trusted_origins`.
-</Callout>
-
-The plugin supports one active or trialing subscription per reference ID at a time. If the reference already has an active subscription, pass `subscriptionId` when changing plans so the existing Stripe subscription is updated instead of creating a separate checkout.
-
-<Callout type="info">
-The `successUrl` is wrapped through `/subscription/success` so Better Auth can reconcile checkout completion and webhook timing before redirecting the user to your URL.
-</Callout>
-
-### Switching Plans
-
-Use the same upgrade endpoint and include the existing Stripe subscription ID.
-
-```ruby title="billing.rb"
-auth.api.upgrade_subscription(
-  headers: { "cookie" => request.env["HTTP_COOKIE"] },
-  body: {
-    plan: "pro",
-    subscriptionId: "sub_123",
-    successUrl: "/dashboard",
-    cancelUrl: "/pricing",
-    returnUrl: "/billing"
-  }
-)
-```
-
-Depending on the plan shape, the plugin either updates subscription items directly or opens a Stripe Billing Portal update confirmation flow.
-
-### Scheduling Plan Changes At Period End
-
-Set `scheduleAtPeriodEnd` to defer an active subscription change until the current period ends.
-
-```ruby title="billing.rb"
-auth.api.upgrade_subscription(
-  headers: { "cookie" => request.env["HTTP_COOKIE"] },
-  body: {
-    plan: "pro",
-    subscriptionId: "sub_123",
-    successUrl: "/dashboard",
-    cancelUrl: "/pricing",
-    returnUrl: "/billing",
-    scheduleAtPeriodEnd: true
-  }
-)
-```
-
-When this is enabled:
-
-- Stripe Subscription Schedules are used to create the future phase.
-- The current plan stays active until the period end.
-- Better Auth stores `stripeScheduleId` on the subscription.
-- The response URL is the `returnUrl`; no Stripe Checkout or Billing Portal redirect is required.
-- A later `customer.subscription.updated` webhook updates the subscription after Stripe applies the change.
-- Calling upgrade again before the schedule runs releases the previous Better Auth schedule first.
-
-### Listing Active Subscriptions
-
-```ruby title="billing.rb"
-subscriptions = auth.api.list_active_subscriptions(
-  headers: { "cookie" => request.env["HTTP_COOKIE"] },
-  query: {
-    referenceId: "org_123",
-    customerType: "organization"
-  }
-)
-
-active_subscription = subscriptions.find do |subscription|
-  ["active", "trialing"].include?(subscription.fetch("status"))
-end
-
-project_limit = active_subscription.dig("limits", :projects)
-```
-
-For explicit custom reference IDs, provide `subscription.authorize_reference` so the plugin can verify the current session is allowed to list or manage that reference.
-
-```ruby title="config/auth.rb"
-subscription: {
-  enabled: true,
-  plans: [...],
-  authorize_reference: ->(data, _ctx) {
-    user = data.fetch(:user)
-    reference_id = data.fetch(:reference_id)
-    action = data.fetch(:action)
-
-    return true if reference_id == user.fetch("id")
-
-    membership = OrganizationMember.find_by(
-      user_id: user.fetch("id"),
-      organization_id: reference_id
-    )
-
-    ["owner", "admin"].include?(membership&.role)
-  }
-}
-```
-
-### Canceling A Subscription
-
-```ruby title="billing.rb"
-portal = auth.api.cancel_subscription(
-  headers: { "cookie" => request.env["HTTP_COOKIE"] },
-  body: {
-    referenceId: "org_123",
-    customerType: "organization",
-    subscriptionId: "sub_123",
-    returnUrl: "/account"
-  }
-)
-
-portal.fetch(:url)
-```
-
-This creates a Stripe Billing Portal session for subscription cancellation. Better Auth uses `/subscription/cancel/callback` after the portal flow to refresh pending cancellation state when needed.
-
-Stripe cancellation fields tracked by the plugin:
-
-| Field | Description |
-| --- | --- |
-| `cancelAtPeriodEnd` | Whether the subscription will cancel at the end of the current period. |
-| `cancelAt` | Scheduled cancellation time when Stripe provides one. |
-| `canceledAt` | Time when cancellation was requested. |
-| `endedAt` | Time when the subscription actually ended. |
-| `status` | Changes to `canceled` after the subscription has ended or Stripe sends a delete event. |
-
-### Restoring A Subscription
-
-```ruby title="billing.rb"
-auth.api.restore_subscription(
-  headers: { "cookie" => request.env["HTTP_COOKIE"] },
-  body: {
-    referenceId: "org_123",
-    customerType: "organization",
-    subscriptionId: "sub_123"
-  }
-)
-```
-
-Restore handles two cases:
-
-- Pending cancellation: clears the Stripe cancellation flag and local cancellation fields.
-- Pending scheduled plan change: releases the Stripe subscription schedule and clears `stripeScheduleId`.
-
-It cannot restore subscriptions that have already ended.
-
-### Creating Billing Portal Sessions
-
-```ruby title="billing.rb"
-portal = auth.api.create_billing_portal(
-  headers: { "cookie" => request.env["HTTP_COOKIE"] },
-  body: {
-    referenceId: "org_123",
-    customerType: "organization",
-    returnUrl: "/settings/billing",
-    locale: "en"
-  }
-)
-
-portal.fetch(:url)
-```
-
-Use the Billing Portal for payment method changes, invoice history, and subscription management.
-
-### Reference System
-
-By default, user subscriptions use the user ID as `referenceId`. To associate billing with another entity, pass `referenceId` and authorize it with `authorize_reference`.
-
-```ruby title="billing.rb"
-auth.api.upgrade_subscription(
-  headers: { "cookie" => request.env["HTTP_COOKIE"] },
-  body: {
-    plan: "pro",
-    referenceId: "workspace_123",
-    successUrl: "/dashboard",
-    cancelUrl: "/pricing"
-  }
-)
-```
-
-### Team Subscriptions With Seats
-
-For manual seat billing, pass `seats` during upgrade:
-
-```ruby title="billing.rb"
-auth.api.upgrade_subscription(
-  headers: { "cookie" => request.env["HTTP_COOKIE"] },
-  body: {
-    plan: "team",
-    referenceId: "org_123",
-    seats: 10,
-    successUrl: "/org/billing/success",
-    cancelUrl: "/org/billing"
-  }
-)
-```
-
-For organization seat billing, set `seat_price_id` on the plan. The plugin sends the base plan item with quantity `1` and a separate seat item whose quantity is the current organization member count. Member add, remove, and invitation acceptance hooks sync the seat item quantity.
-
-```ruby title="config/auth.rb"
-plugins: [
-  BetterAuth::Plugins.organization,
-  BetterAuth::Plugins.stripe(
-    stripe_api_key: ENV.fetch("STRIPE_SECRET_KEY"),
-    stripe_webhook_secret: ENV.fetch("STRIPE_WEBHOOK_SECRET"),
-    organization: { enabled: true },
-    subscription: {
-      enabled: true,
-      plans: [
-        {
-          name: "team",
-          price_id: "price_team_base",
-          seat_price_id: "price_team_seat",
-          line_items: [{ price: "price_metered_events" }],
-          proration_behavior: "create_prorations"
-        }
-      ],
-      authorize_reference: ->(_data, _ctx) { true }
-    }
-  )
-]
-```
-
-## Webhook Handling
-
-The plugin automatically handles these Stripe events:
-
-- `checkout.session.completed`: Updates a subscription after Checkout succeeds.
-- `customer.subscription.created`: Creates a local subscription for Stripe-side subscriptions.
-- `customer.subscription.updated`: Updates local subscription state, plan, seats, cancellation fields, trial fields, and limits.
-- `customer.subscription.deleted`: Marks a subscription canceled and clears pending schedules.
-
-You can also handle any Stripe event with `on_event`.
-The configured Stripe client must expose `webhooks.construct_event_async` or
-`webhooks.construct_event`; Ruby rejects webhook requests instead of processing
-unverified payloads when no verifier is available.
+Plans can include `free_trial: {days: 14}`. RubyAuth starts the trial only when the reference has not already trialed. The Stripe webhook handler stores `trialStart` and `trialEnd`, and calls `free_trial[:on_trial_start]` when configured.
 
 ```ruby title="config/auth.rb"
 BetterAuth::Plugins.stripe(
-  stripe_api_key: ENV.fetch("STRIPE_SECRET_KEY"),
-  stripe_webhook_secret: ENV.fetch("STRIPE_WEBHOOK_SECRET"),
-  on_event: ->(event) {
-    case event[:type] || event["type"]
-    when "invoice.paid"
-      BillingEvents.invoice_paid(event)
-    when "payment_intent.succeeded"
-      BillingEvents.payment_succeeded(event)
-    end
-  }
-)
-```
-
-## Subscription Lifecycle Hooks
-
-```ruby title="config/auth.rb"
-subscription: {
-  enabled: true,
-  plans: [...],
-  on_subscription_complete: ->(data, _ctx) {
-    subscription = data.fetch(:subscription)
-    plan = data.fetch(:plan)
-    SubscriptionMailer.welcome(subscription.fetch("referenceId"), plan.fetch(:name)).deliver_later
-  },
-  on_subscription_created: ->(data) {
-    subscription = data.fetch(:subscription)
-    AuditLog.record("stripe.subscription.created", subscription.fetch("id"))
-  },
-  on_subscription_update: ->(data) {
-    subscription = data.fetch(:subscription)
-    AuditLog.record("stripe.subscription.updated", subscription.fetch("id"))
-  },
-  on_subscription_cancel: ->(data) {
-    subscription = data.fetch(:subscription)
-    cancellation_details = data[:cancellationDetails]
-    CancellationMailer.notice(subscription.fetch("referenceId"), cancellation_details).deliver_later
-  },
-  on_subscription_deleted: ->(data) {
-    subscription = data.fetch(:subscription)
-    AuditLog.record("stripe.subscription.deleted", subscription.fetch("id"))
-  }
-}
-```
-
-## Trial Periods
-
-Configure trials per plan:
-
-```ruby title="config/auth.rb"
-{
-  name: "pro",
-  price_id: "price_pro_monthly",
-  free_trial: {
-    days: 14,
-    on_trial_start: ->(subscription) {
-      TrialMailer.started(subscription.fetch("referenceId")).deliver_later
-    },
-    on_trial_end: ->(payload, _ctx) {
-      TrialMailer.ended(payload.fetch(:subscription).fetch("referenceId")).deliver_later
-    },
-    on_trial_expired: ->(subscription, _ctx) {
-      TrialMailer.expired(subscription.fetch("referenceId")).deliver_later
-    }
-  }
-}
-```
-
-Better Auth automatically prevents multiple trials for the same reference ID. Once a reference has ever had a trial, later subscriptions do not receive another trial even if the new plan has `free_trial`.
-
-## Schema
-
-The Stripe plugin adds these fields to the Better Auth schema.
-
-### User
-
-Table name: `user`
-
-| Field | Type | Description |
-| --- | --- | --- |
-| `stripeCustomerId` | `string` | Stripe customer ID for the user. |
-
-### Organization
-
-Table name: `organization`, only when `organization.enabled` is true.
-
-| Field | Type | Description |
-| --- | --- | --- |
-| `stripeCustomerId` | `string` | Stripe customer ID for the organization. |
-
-### Subscription
-
-Table name: `subscription`, only when `subscription.enabled` is true.
-
-| Field | Type | Description |
-| --- | --- | --- |
-| `id` | `string` | Unique subscription row ID. |
-| `plan` | `string` | Better Auth plan name. |
-| `referenceId` | `string` | User, organization, or custom reference this subscription belongs to. This should not be unique, so users can resubscribe after cancellation. |
-| `stripeCustomerId` | `string` | Stripe customer ID. |
-| `stripeSubscriptionId` | `string` | Stripe subscription ID. |
-| `status` | `string` | Stripe subscription status. Defaults to `incomplete`. |
-| `periodStart` | `date` | Start of the current billing period. |
-| `periodEnd` | `date` | End of the current billing period. |
-| `trialStart` | `date` | Trial start time. |
-| `trialEnd` | `date` | Trial end time. |
-| `cancelAtPeriodEnd` | `boolean` | Whether the subscription is scheduled to cancel at period end. Defaults to false. |
-| `cancelAt` | `date` | Scheduled cancellation time. |
-| `canceledAt` | `date` | Time when cancellation was requested. |
-| `endedAt` | `date` | Time when the subscription ended. |
-| `seats` | `number` | Seat quantity. |
-| `billingInterval` | `string` | Billing interval such as `month` or `year`. |
-| `stripeScheduleId` | `string` | Stripe Subscription Schedule ID for a pending scheduled plan change. |
-| `limits` | `json` | Plan limits copied from the active plan. |
-
-## Options
-
-### Plugin Options
-
-| Option | Type | Description |
-| --- | --- | --- |
-| `stripe_api_key` | `String` | Stripe secret key. Defaults to `ENV["STRIPE_SECRET_KEY"]` when omitted. |
-| `stripe_webhook_secret` | `String` | Stripe webhook signing secret. Required for webhooks. |
-| `stripe_client` | `Object` | Custom Stripe-compatible client. |
-| `client` | `Object` | Alias for `stripe_client`. |
-| `create_customer_on_sign_up` | `Boolean` | Create or reuse a Stripe customer during signup. Defaults to false. |
-| `get_customer_create_params` | `Proc` | Customize user customer creation params. Receives `user, ctx`. |
-| `on_customer_create` | `Proc` | Called after a user customer is created or found. Receives `payload, ctx`. |
-| `on_event` | `Proc` | Called for every verified Stripe webhook event. |
-| `subscription` | `Hash` | Subscription configuration. |
-| `organization` | `Hash` | Organization customer configuration. |
-
-### Subscription Options
-
-| Option | Type | Description |
-| --- | --- | --- |
-| `enabled` | `Boolean` | Enables subscription endpoints and schema. |
-| `plans` | `Array<Hash>` or `Proc` | Subscription plans. Required when enabled. |
-| `require_email_verification` | `Boolean` | Requires verified email before upgrade. Defaults to false. |
-| `authorize_reference` | `Proc` | Authorizes reference IDs. Required for organization subscriptions and custom user references. |
-| `get_checkout_session_params` | `Proc` | Customizes Stripe Checkout params and request options. Receives `data, request, ctx`. |
-| `on_subscription_complete` | `Proc` | Called after Checkout-created subscriptions complete. |
-| `on_subscription_created` | `Proc` | Called when a subscription is created outside Checkout and received by webhook. |
-| `on_subscription_update` | `Proc` | Called when a subscription is updated by webhook. |
-| `on_subscription_cancel` | `Proc` | Called when a pending cancellation is detected. |
-| `on_subscription_deleted` | `Proc` | Called when a subscription is deleted by webhook. |
-
-### Plan Configuration
-
-| Option | Type | Description |
-| --- | --- | --- |
-| `name` | `String` | Required plan name. Stored lowercased. |
-| `price_id` | `String` | Stripe price ID. Required unless `lookup_key` is used. |
-| `lookup_key` | `String` | Stripe price lookup key. |
-| `annual_discount_price_id` | `String` | Stripe price ID for annual billing. |
-| `annual_discount_lookup_key` | `String` | Stripe lookup key for annual billing. |
-| `limits` | `Hash` | Plan limits returned with active subscriptions and stored on subscription updates. |
-| `free_trial` | `Hash` | Trial configuration. |
-| `seat_price_id` | `String` | Per-seat Stripe price ID for organization seat billing. |
-| `line_items` | `Array<Hash>` | Additional Stripe Checkout line items. |
-| `proration_behavior` | `String` | Stripe proration behavior for direct subscription updates. |
-
-Stripe Checkout does not support mixed-interval subscription line items. Keep every line item on the same billing interval.
-
-### Free Trial Configuration
-
-| Option | Type | Description |
-| --- | --- | --- |
-| `days` | `Integer` | Trial length in days. |
-| `on_trial_start` | `Proc` | Called when a trial starts. Receives `subscription`. |
-| `on_trial_end` | `Proc` | Called when a trialing subscription becomes active. Receives `payload, ctx`. |
-| `on_trial_expired` | `Proc` | Called when a trial expires without conversion. Receives `subscription, ctx`. |
-
-### Organization Options
-
-| Option | Type | Description |
-| --- | --- | --- |
-| `enabled` | `Boolean` | Enables organization customers and organization subscription references. |
-| `get_customer_create_params` | `Proc` | Customize organization customer creation params. Receives `organization, ctx`. |
-| `on_customer_create` | `Proc` | Called after an organization Stripe customer is created. Receives `payload, ctx`. |
-
-## Advanced Usage
-
-### Using With Organizations
-
-The Stripe plugin integrates with the organization plugin so organizations can be Stripe Customers. This is useful for B2B billing where the organization, not the user, owns the subscription.
-
-When organization billing is enabled:
-
-- A Stripe Customer is created the first time an organization subscribes.
-- Organization name changes are synced to the Stripe Customer.
-- Organizations with active Stripe subscriptions cannot be deleted.
-- `authorize_reference` is required for organization subscription actions.
-
-```ruby title="config/auth.rb"
-plugins: [
-  BetterAuth::Plugins.organization,
-  BetterAuth::Plugins.stripe(
-    stripe_api_key: ENV.fetch("STRIPE_SECRET_KEY"),
-    stripe_webhook_secret: ENV.fetch("STRIPE_WEBHOOK_SECRET"),
-    organization: { enabled: true },
-    subscription: {
-      enabled: true,
-      plans: [
-        { name: "team", price_id: "price_team", seat_price_id: "price_team_seat" }
-      ],
-      authorize_reference: ->(data, _ctx) {
-        member = Member.find_by(
-          user_id: data.fetch(:user).fetch("id"),
-          organization_id: data.fetch(:reference_id)
-        )
-
-        ["owner", "admin"].include?(member&.role)
-      }
-    }
-  )
-]
-```
-
-Create an organization subscription by passing `customerType: "organization"` and either a `referenceId` or an active organization in the session.
-
-```ruby title="billing.rb"
-auth.api.upgrade_subscription(
-  headers: { "cookie" => request.env["HTTP_COOKIE"] },
-  body: {
-    plan: "team",
-    referenceId: active_org.id,
-    customerType: "organization",
-    successUrl: "/org/billing/success",
-    cancelUrl: "/org/billing"
-  }
-)
-```
-
-### Organization Billing Email
-
-Organization billing email is not automatically synced because organizations do not have a built-in unique email. Set it through Stripe Dashboard, or pass it when creating the organization customer:
-
-```ruby title="config/auth.rb"
-organization: {
-  enabled: true,
-  get_customer_create_params: ->(organization, _ctx) {
-    {
-      email: organization["billing_email"],
-      metadata: { billingContact: organization["billing_contact_id"] }
-    }
-  }
-}
-```
-
-### Custom Checkout Session Parameters
-
-Use `get_checkout_session_params` to merge custom Stripe Checkout params and request options.
-
-```ruby title="config/auth.rb"
-subscription: {
-  enabled: true,
-  plans: [...],
-  get_checkout_session_params: ->(data, _request, _ctx) {
-    user = data.fetch(:user)
-    plan = data.fetch(:plan)
-
-    {
-      params: {
-        allow_promotion_codes: true,
-        tax_id_collection: { enabled: true },
-        billing_address_collection: "required",
-        metadata: {
-          planType: plan.fetch(:name),
-          referralCode: user.dig("metadata", "referralCode")
+  subscription: {
+    enabled: true,
+    plans: [
+      {
+        name: "pro",
+        price_id: "price_pro",
+        free_trial: {
+          days: 14,
+          on_trial_start: ->(subscription) {
+            Rails.logger.info("Trial started for #{subscription.fetch("referenceId")}")
+          }
         }
-      },
-      options: {
-        idempotency_key: "sub_#{user.fetch('id')}_#{plan.fetch(:name)}"
       }
+    ],
+    on_subscription_complete: ->(data) {
+      Rails.logger.info("Subscription complete: #{data.inspect}")
+    },
+    on_subscription_cancel: ->(data) {
+      Rails.logger.info("Subscription canceled: #{data.inspect}")
     }
   }
-}
+)
 ```
 
-### Tax Collection
+### Custom checkout/session params
+
+Use `subscription.get_checkout_session_params` to pass additional Stripe Checkout params or request options. RubyAuth deep-merges custom params with required customer, line item, metadata, success, and cancel values.
 
 ```ruby title="config/auth.rb"
-subscription: {
-  enabled: true,
-  plans: [...],
-  get_checkout_session_params: ->(_data, _request, _ctx) {
-    {
-      params: {
-        tax_id_collection: { enabled: true }
+BetterAuth::Plugins.stripe(
+  subscription: {
+    enabled: true,
+    plans: [{name: "pro", price_id: "price_pro"}],
+    get_checkout_session_params: ->(data, _request, _ctx) {
+      {
+        params: {
+          locale: "auto",
+          tax_id_collection: {enabled: true},
+          metadata: {
+            plan: data.fetch(:plan).fetch(:name)
+          }
+        }
       }
     }
   }
-}
+)
 ```
 
-### Automatic Tax Calculation
+### Billing portal
+
+Use the billing portal route for existing Stripe customers. `returnUrl` must be trusted by the configured auth base URL rules.
+
+```ruby title="server.rb"
+portal = auth.api.create_billing_portal(
+  headers: {"cookie" => request.env["HTTP_COOKIE"]},
+  body: {
+    returnUrl: "/billing",
+    locale: "auto"
+  }
+)
+```
+
+### Organization support and seats
+
+When organization billing is enabled, pass `customerType: "organization"` and `referenceId` for organization subscription operations. Plans with `seat_price_id` use organization member count for automatic seat management; organization hooks sync seats after members are added, removed, or invited members accept.
 
 ```ruby title="config/auth.rb"
-subscription: {
-  enabled: true,
-  plans: [...],
-  get_checkout_session_params: ->(_data, _request, _ctx) {
-    {
-      params: {
-        automatic_tax: { enabled: true }
+BetterAuth::Plugins.stripe(
+  organization: {enabled: true},
+  subscription: {
+    enabled: true,
+    plans: [
+      {
+        name: "team",
+        price_id: "price_team_base",
+        seat_price_id: "price_team_seat",
+        proration_behavior: "create_prorations"
       }
+    ],
+    authorize_reference: ->(data, _ctx) {
+      data.fetch(:customer_type) == "organization"
     }
   }
-}
+)
 ```
 
-You must configure tax registrations in Stripe before enabling automatic tax.
-
-## Routes
-
-| Method | Path | Ruby API method |
-| --- | --- | --- |
-| `POST` | `/subscription/upgrade` | `auth.api.upgrade_subscription` |
-| `POST` | `/subscription/cancel` | `auth.api.cancel_subscription` |
-| `POST` | `/subscription/restore` | `auth.api.restore_subscription` |
-| `GET` | `/subscription/list` | `auth.api.list_active_subscriptions` |
-| `POST` | `/subscription/billing-portal` | `auth.api.create_billing_portal` |
-| `GET` | `/subscription/success` | `auth.api.subscription_success` |
-| `GET` | `/subscription/cancel/callback` | `auth.api.cancel_subscription_callback` |
-| `POST` | `/stripe/webhook` | `auth.api.stripe_webhook` |
+```ruby title="server.rb"
+checkout = auth.api.upgrade_subscription(
+  headers: {"cookie" => request.env["HTTP_COOKIE"]},
+  body: {
+    customerType: "organization",
+    referenceId: organization.fetch("id"),
+    plan: "team",
+    successUrl: "/billing/success",
+    cancelUrl: "/billing"
+  }
+)
+```
 
 ## Troubleshooting
 
 ### Webhook Issues
 
-If webhooks are not processed:
+If webhooks aren't being processed correctly:
 
-1. Confirm the webhook URL matches your Better Auth mount path.
-2. Confirm `STRIPE_WEBHOOK_SECRET` matches the webhook endpoint signing secret.
-3. Confirm the required Stripe events are selected.
-4. Check server logs for signature verification and webhook handling errors.
+1. Check that your webhook URL is correctly configured in the Stripe dashboard
+2. Verify that the webhook signing secret is correct
+3. Ensure you've selected all the necessary events in the Stripe dashboard
+4. Check your server logs for any errors during webhook processing
 
 ### Subscription Status Issues
 
-If subscription statuses are not updating:
+If subscription statuses aren't updating correctly:
 
-1. Confirm Stripe webhook events are reaching `/api/auth/stripe/webhook`.
-2. Confirm `stripeCustomerId` and `stripeSubscriptionId` are present in your database.
-3. Confirm the plan price IDs or lookup keys match the Stripe subscription items.
-4. Confirm the reference ID matches the user or organization you expect.
+1. Make sure the webhook events are being received and processed
+2. Check that the `stripeCustomerId` and `stripeSubscriptionId` fields are correctly populated
+3. Verify that the reference IDs match between your application and Stripe
 
 ### Testing Webhooks Locally
 
-Use the Stripe CLI to forward webhooks to your local auth server:
+For local development, you can use the Stripe CLI to forward webhooks to your local environment:
 
-```bash title="Terminal"
+```bash
 stripe listen --forward-to localhost:3000/api/auth/stripe/webhook
 ```
 
-Use the signing secret printed by the CLI as `STRIPE_WEBHOOK_SECRET`.
-
-{/* Upstream guide checked against https://better-auth.com/docs/plugins/stripe and adapted for the Ruby plugin implementation in packages/better_auth-stripe. */}
+This will provide you with a webhook signing secret that you can use in your local environment.

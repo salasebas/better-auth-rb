@@ -70,15 +70,7 @@ module BetterAuth
     def prepare_context_for_call!(request, headers)
       return unless context.respond_to?(:prepare_for_api_call!)
 
-      source = direct_call_source(request, headers)
-      if context.options.dynamic_base_url? && source.nil? && !dynamic_base_url_fallback?
-        raise APIError.new(
-          "INTERNAL_SERVER_ERROR",
-          message: "Dynamic baseURL could not be resolved for this direct auth.api call. Pass `headers: request.headers` (or `request`) to the call, or add `fallback` to your baseURL config."
-        )
-      end
-
-      context.prepare_for_api_call!(source)
+      context.prepare_for_api_call!(direct_call_source(request, headers))
     end
 
     def direct_call_source(request, headers)
@@ -86,13 +78,6 @@ module BetterAuth
       return headers if headers.key?("host") || headers.key?("x-forwarded-host")
 
       nil
-    end
-
-    def dynamic_base_url_fallback?
-      config = context.options.base_url_config
-      return false unless config.is_a?(Hash)
-
-      !!(config[:fallback] || config["fallback"])
     end
 
     def run_endpoint_with_hooks(endpoint, endpoint_context)
