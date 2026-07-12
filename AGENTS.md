@@ -37,6 +37,16 @@ packages provide integration—do not duplicate core logic there.
 - Prefer real, observable tests over mocks. Check upstream tests for parity work.
 - Ask before adding new dependencies.
 
+### Testing
+
+Before running tests that use Redis or a database adapter, start the repository
+services from the workspace root. Do not assume the containers are already
+running:
+
+```bash
+docker compose up -d
+```
+
 ```bash
 bundle exec rake ci          # workspace
 bundle exec rake test        # core only
