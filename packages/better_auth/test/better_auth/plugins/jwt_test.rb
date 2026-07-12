@@ -102,6 +102,23 @@ class BetterAuthPluginsJWTTest < Minitest::Test
     assert_nil auth.api.verify_jwt(body: {token: wrong_audience[:token]})[:payload]
   end
 
+  def test_jwt_identity_stays_canonical_on_an_alternate_serving_origin
+    auth = build_auth(
+      base_url: "https://auth.example.com",
+      serving_origins: ["https://tenant.example.com"],
+      plugins: [BetterAuth::Plugins.jwt]
+    )
+
+    token = auth.api.sign_jwt(
+      headers: {"host" => "tenant.example.com"},
+      body: {payload: {sub: "canonical-claims"}}
+    ).fetch(:token)
+    payload, = JWT.decode(token, nil, false)
+
+    assert_equal "https://auth.example.com/api/auth", payload.fetch("iss")
+    assert_equal "https://auth.example.com/api/auth", payload.fetch("aud")
+  end
+
   def test_jwt_verify_rejects_payloads_without_subject_or_audience
     auth = build_auth(plugins: [BetterAuth::Plugins.jwt])
     auth.api.sign_jwt(body: {payload: {sub: "seed-key"}})

@@ -67,12 +67,15 @@ class BetterAuthDoctorTest < Minitest::Test
     assert result.errors.any? { |error| error.include?("low-entropy") }
   end
 
-  def test_missing_base_url_returns_warning
+  def test_missing_base_url_returns_error
     config = BetterAuth::Configuration.new(secret: HARDENED_SECRET, database: :memory)
+    config.define_singleton_method(:base_url) { "" }
 
-    result = BetterAuth::Doctor.check(config)
+    result = BetterAuth::Doctor::Result.new(ok: [], warnings: [], errors: [])
 
-    assert result.warnings.any? { |warning| warning.include?("base_url is not configured") }
+    BetterAuth::Doctor.check_base_url(config, result)
+
+    assert result.errors.any? { |error| error.include?("base_url is not configured") }
   end
 
   def test_http_base_url_returns_warning

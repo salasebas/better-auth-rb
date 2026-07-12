@@ -84,6 +84,11 @@ STANDARD_PATHS = [
 # Default task: run CI across all packages.
 desc "Run CI in all packages"
 task :ci do
+  # Package test suites exercise auth construction through many adapters. Give
+  # every CI subprocess the canonical URL required by the core contract; tests
+  # for missing configuration explicitly clear this value.
+  ENV["BETTER_AUTH_URL"] ||= "http://localhost:3000"
+
   puts "🔧 Running CI in workspace..."
 
   # Global linting

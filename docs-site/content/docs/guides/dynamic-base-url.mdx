@@ -1,157 +1,81 @@
 ---
-title: Dynamic Base URL
-description: Configure RubyAuth for preview deployments, multiple domains, and per-request URL resolution.
+title: Multiple Serving Origins
+description: Serve RubyAuth from approved hosts while preserving one canonical identity.
 ---
 
 <RubyAuthDisclaimer />
 
-Use dynamic base URL when your app is served from more than one hostname, such as:
+RubyAuth separates its canonical identity from the origins that may serve a request:
 
-* custom domains like `myapp.com` and `www.myapp.com`
-* preview deployments like `my-app-abc123.vercel.app`
-* branch environments like `feature-branch.myapp.com`
+* `base_url` is required (or supplied by `BETTER_AUTH_URL`) and is the stable canonical URL used for OAuth/OIDC identity, provider callback defaults, JWT issuer/audience, and OpenAPI metadata.
+* `serving_origins` is an optional allowlist of full origin patterns that may be selected from an inbound request for self-referential links such as email verification, password reset, account deletion, and magic links.
 
-The configuration itself lives on the [`base_url` option](/docs/reference/options#baseurl). This guide focuses on when to use it and how to structure it safely.
+An unrecognized request host safely falls back to `base_url`. RubyAuth never derives its canonical identity from `Host` or forwarded headers.
 
-## Basic Setup
-
-Configure `base_url` as an object with an `allowed_hosts` allowlist:
+## Basic setup
 
 ```ruby title="config/initializers/better_auth.rb"
-require "better_auth"
-
 auth = BetterAuth.auth(
   secret: ENV.fetch("BETTER_AUTH_SECRET"),
-  base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
-  database: :postgres,
-  base_url: {
-    allowed_hosts: ["myapp.com", "www.myapp.com", "*.vercel.app"],
-    protocol: "https",
-    fallback: "https://myapp.com"
-  }
+  base_url: ENV.fetch("BETTER_AUTH_URL"),
+  serving_origins: [
+    "https://myapp.com",
+    "https://www.myapp.com",
+    "https://*.vercel.app"
+  ],
+  database: :postgres
 )
 ```
 
-When a request comes in, RubyAuth extracts the host from `x-forwarded-host`, `host` header, or the request URL (in that order), validates it against `allowed_hosts`, and uses the matched value to build the request-specific base URL.
+`serving_origins` entries must include `http://` or `https://` and must not include a path. The existing wildcard matching rules apply. The canonical origin is always a serving origin, even when omitted from the list.
 
-## Common Deployment Patterns
+## Reverse proxies
 
-### Vercel Deployment
+RubyAuth reads `Host` for the request-facing candidate. It reads `X-Forwarded-Host` and `X-Forwarded-Proto` only when proxy trust is explicitly enabled:
 
-```ruby title="config/initializers/better_auth.rb"
-require "better_auth"
-
+```ruby
 auth = BetterAuth.auth(
   secret: ENV.fetch("BETTER_AUTH_SECRET"),
-  base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
-  database: :postgres,
-  base_url: {
-    allowed_hosts: ["myapp.com", "*.vercel.app"],
-    protocol: "https",
-    fallback: "https://myapp.com"
-  }
+  base_url: "https://auth.example.com",
+  serving_origins: ["https://*.example.com"],
+  advanced: { trusted_proxy_headers: true }
 )
 ```
 
-### Development + Production
+Only enable proxy-header trust when your edge proxy overwrites those headers and clients cannot supply them directly. A syntactically valid header is still ignored unless its full origin matches `serving_origins`.
 
-```ruby title="config/initializers/better_auth.rb"
-require "better_auth"
+## Serving origins versus trusted origins
 
+Every serving origin is automatically trusted for origin and redirect checks. The reverse is intentionally false: adding a browser frontend to `trusted_origins` does not authorize that frontend's host to receive token-bearing links.
+
+```ruby
 auth = BetterAuth.auth(
   secret: ENV.fetch("BETTER_AUTH_SECRET"),
-  base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
-  database: :postgres,
-  base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
-  trusted_origins: ["http://localhost:5173", "https://myapp.com"]
+  base_url: "https://auth.example.com",
+  serving_origins: ["https://tenant.example.com"],
+  trusted_origins: ["https://frontend.example.com"]
 )
 ```
 
-### Multiple Production Domains
+Here `tenant.example.com` may serve auth routes and appears in generated capability links. `frontend.example.com` may pass CSRF/redirect validation, but can never become the auth serving origin.
 
-```ruby title="config/initializers/better_auth.rb"
-require "better_auth"
+## Migrating from dynamic `base_url`
 
-auth = BetterAuth.auth(
-  secret: ENV.fetch("BETTER_AUTH_SECRET"),
-  base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
-  database: :postgres,
-  base_url: {
-    allowed_hosts: ["app.example.com", "admin.example.com"],
-    protocol: "https",
-    fallback: "https://app.example.com"
-  }
-)
+The former hash form of `base_url` is rejected. Replace its fallback with the canonical `base_url` and convert allowed hosts to full `serving_origins`:
+
+```ruby
+# Before
+base_url: {
+  allowed_hosts: ["app.example.com", "*.vercel.app"],
+  protocol: "https",
+  fallback: "https://app.example.com"
+}
+
+# After
+base_url: "https://app.example.com",
+serving_origins: ["https://app.example.com", "https://*.vercel.app"]
 ```
 
-## Choosing a Fallback
+There is no request-inferred fallback and no first-request caching. Each request gets isolated serving state, and state is cleared after both Rack and direct `auth.api` calls.
 
-By default, RubyAuth throws if the incoming host does not match `allowed_hosts`. That is usually the safer default because it exposes proxy or deployment mistakes immediately.
-
-If you need a fallback, set one explicitly:
-
-```ruby title="config/initializers/better_auth.rb"
-require "better_auth"
-
-auth = BetterAuth.auth(
-  secret: ENV.fetch("BETTER_AUTH_SECRET"),
-  base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
-  database: :postgres,
-  base_url: {
-    allowed_hosts: ["*.example.com"],
-    protocol: "https",
-    fallback: "https://app.example.com"
-  }
-)
-```
-
-Use this only when falling back to a canonical domain is clearly preferable to failing the request.
-
-## Cookies Across Subdomains
-
-If you need to share cookies across subdomains, you can enable `cross_sub_domain_cookies` while still using dynamic base URL. RubyAuth will derive the cookie domain from the resolved host unless you set `domain` explicitly.
-
-```ruby title="config/initializers/better_auth.rb"
-require "better_auth"
-
-auth = BetterAuth.auth(
-  secret: ENV.fetch("BETTER_AUTH_SECRET"),
-  base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
-  database: :postgres,
-  advanced: {
-    cross_sub_domain_cookies: { enabled: true, domain: ".example.com" }
-  }
-)
-```
-
-If you want to force a shared parent domain instead, set it directly:
-
-```ruby title="config/initializers/better_auth.rb"
-require "better_auth"
-
-auth = BetterAuth.auth(
-  secret: ENV.fetch("BETTER_AUTH_SECRET"),
-  base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
-  database: :postgres,
-  advanced: {
-    cross_sub_domain_cookies: { enabled: true, domain: ".example.com" }
-  }
-)
-```
-
-See [Cookies](/docs/concepts/cookies#cross-subdomain-cookies) for the full cookie behavior.
-
-## Security Model
-
-Dynamic base URL uses an allowlist model:
-
-1. Only hosts listed in `allowed_hosts` are accepted
-2. `x-forwarded-host` and `host` headers are sanitized and validated before use
-3. Unknown hosts throw unless you provide `fallback`
-4. `allowed_hosts` are automatically added to [`trusted_origins`](/docs/reference/options#trustedorigins) (localhost entries get both `http` and `https`)
-
-This keeps multi-domain support explicit instead of trusting arbitrary headers or platform-specific behavior.
-
-## Reference
-
-For the exact option shape and property-level behavior, see [`base_url` in the options reference](/docs/reference/options#baseurl).
+Cross-subdomain cookie domains remain explicit under `advanced.cross_subdomain_cookies.domain`; they are not derived from the request host.

@@ -271,7 +271,7 @@ module BetterAuth
         ],
         servers: [
           {
-            url: context.base_url
+            url: context.canonical_base_url
           }
         ],
         tags: [

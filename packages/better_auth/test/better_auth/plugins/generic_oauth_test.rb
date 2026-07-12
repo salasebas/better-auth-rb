@@ -41,6 +41,21 @@ class BetterAuthPluginsGenericOAuthTest < Minitest::Test
     assert params["state"]
   end
 
+  def test_default_redirect_uri_stays_canonical_on_an_alternate_serving_origin
+    auth = build_auth(
+      base_url: "https://auth.example.com",
+      serving_origins: ["https://tenant.example.com"]
+    )
+
+    result = auth.api.sign_in_with_oauth2(
+      headers: {"host" => "tenant.example.com"},
+      body: {providerId: "custom", disableRedirect: true}
+    )
+    params = Rack::Utils.parse_query(URI.parse(result.fetch(:url)).query)
+
+    assert_equal "https://auth.example.com/api/auth/oauth2/callback/custom", params.fetch("redirect_uri")
+  end
+
   def test_sign_in_oauth2_supports_dynamic_authorization_params_and_response_mode
     auth = build_auth(
       provider_overrides: {
