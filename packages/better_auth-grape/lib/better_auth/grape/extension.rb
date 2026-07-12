@@ -85,7 +85,12 @@ module BetterAuth
         def better_auth_path_version_prefix
           settings = inheritable_setting.namespace_inheritable if respond_to?(:inheritable_setting)
           version_options = settings&.[](:version_options) || {}
-          return "/" unless version_options[:using]&.to_sym == :path
+          using = if version_options.respond_to?(:[])
+            version_options[:using]
+          elsif version_options.respond_to?(:using)
+            version_options.using
+          end
+          return "/" unless using&.to_sym == :path
 
           versions = settings&.[](:version)
           version = Array(versions).first
