@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require_relative "../../../test_helper"
+require "socket"
 
 class BetterAuthSSOOIDCDiscoveryTest < Minitest::Test
   Discovery = BetterAuth::SSO::OIDC::Discovery
@@ -46,13 +47,17 @@ class BetterAuthSSOOIDCDiscoveryTest < Minitest::Test
     assert_match(/http or https/, error.message)
   end
 
-  def test_validate_discovery_url_rejects_untrusted_origin
+  def test_validate_discovery_url_rejects_non_public_untrusted_origin
     error = assert_raises(DiscoveryError) do
-      Discovery.validate_discovery_url("https://untrusted.com/.well-known/openid-configuration", ->(_url) { false })
+      Discovery.validate_discovery_url("https://127.0.0.1/.well-known/openid-configuration", ->(_url) { false })
     end
 
     assert_equal "discovery_untrusted_origin", error.code
-    assert_match(/is not trusted/, error.message)
+    assert_match(/publicly routable/, error.message)
+  end
+
+  def test_validate_discovery_url_accepts_public_https_without_a_trusted_origin
+    assert Discovery.validate_discovery_url("https://login.example.com/.well-known/openid-configuration", ->(_url) { false })
   end
 
   def test_validate_discovery_document_accepts_valid_document
@@ -221,17 +226,17 @@ class BetterAuthSSOOIDCDiscoveryTest < Minitest::Test
     assert_match(/authorization_endpoint.*valid|url.*valid/, error.message)
   end
 
-  def test_normalize_discovery_urls_rejects_untrusted_discovered_url
+  def test_normalize_discovery_urls_rejects_non_public_discovered_url
     error = assert_raises(DiscoveryError) do
       Discovery.normalize_discovery_urls(
-        discovery_document(token_endpoint: "/oauth2/token"),
+        discovery_document(token_endpoint: "https://127.0.0.1/oauth2/token"),
         "https://idp.example.com",
-        ->(url) { !url.end_with?("/oauth2/token") }
+        ->(_url) { false }
       )
     end
 
     assert_equal "discovery_untrusted_origin", error.code
-    assert_equal({endpoint: "token_endpoint", url: "https://idp.example.com/oauth2/token"}, error.details)
+    assert_equal({endpoint: "token_endpoint", url: "https://127.0.0.1/oauth2/token"}, error.details)
   end
 
   def test_normalize_url_returns_absolute_endpoint_unchanged
@@ -321,6 +326,45 @@ class BetterAuthSSOOIDCDiscoveryTest < Minitest::Test
     assert_equal expected.fetch(:token_endpoint), result.fetch(:token_endpoint)
     assert_equal expected.fetch(:jwks_uri), result.fetch(:jwks_uri)
     assert_equal ["https://idp.example.com/.well-known/openid-configuration"], calls
+  end
+
+  def test_fetch_discovery_document_validates_before_invoking_custom_fetch
+    calls = []
+
+    assert_raises(DiscoveryError) do
+      Discovery.fetch_discovery_document(
+        "https://169.254.169.254/latest/meta-data",
+        fetch: ->(url, **_options) { calls << url },
+        trusted_origin: ->(_url) { false }
+      )
+    end
+
+    assert_empty calls
+  end
+
+  def test_builtin_discovery_fetch_does_not_follow_redirects
+    server = TCPServer.new("127.0.0.1", 0)
+    url = "http://127.0.0.1:#{server.addr[1]}/redirect"
+    requests = 0
+    server_thread = Thread.new do
+      socket = server.accept
+      requests += 1
+      while (line = socket.gets)
+        break if line == "\r\n"
+      end
+      socket.write("HTTP/1.1 302 Found\r\nLocation: #{url}/target\r\nContent-Length: 0\r\nConnection: close\r\n\r\n")
+      socket.close
+    ensure
+      server.close
+    end
+
+    error = assert_raises(DiscoveryError) do
+      Discovery.fetch_discovery_document(url, timeout: 1, trusted_origin: ->(_candidate) { true })
+    end
+    server_thread.join
+
+    assert_equal "discovery_unexpected_error", error.code
+    assert_equal 1, requests
   end
 
   def test_fetch_discovery_document_raises_not_found_for_404_response
@@ -592,22 +636,22 @@ class BetterAuthSSOOIDCDiscoveryTest < Minitest::Test
     refute result.key?(:user_info_endpoint)
   end
 
-  def test_discover_oidc_config_rejects_untrusted_main_discovery_url
+  def test_discover_oidc_config_rejects_non_public_main_discovery_url
     error = assert_raises(DiscoveryError) do
-      Discovery.discover_oidc_config(issuer: "https://idp.example.com", trusted_origin: ->(_url) { false }, fetch: fetch_with(discovery_document))
+      Discovery.discover_oidc_config(issuer: "https://127.0.0.1", trusted_origin: ->(_url) { false }, fetch: fetch_with(discovery_document(issuer: "https://127.0.0.1")))
     end
 
     assert_equal "discovery_untrusted_origin", error.code
-    assert_equal({url: "https://idp.example.com/.well-known/openid-configuration"}, error.details)
+    assert_equal "https://127.0.0.1/.well-known/openid-configuration", error.details.fetch(:url)
   end
 
-  def test_discover_oidc_config_rejects_untrusted_discovered_urls
+  def test_discover_oidc_config_rejects_non_public_discovered_urls
     issuer = "https://idp.example.com"
     error = assert_raises(DiscoveryError) do
       Discovery.discover_oidc_config(
         issuer: issuer,
-        trusted_origin: ->(url) { url.end_with?(".well-known/openid-configuration") },
-        fetch: fetch_with(discovery_document(issuer: issuer))
+        trusted_origin: ->(_url) { false },
+        fetch: fetch_with(discovery_document(issuer: issuer, token_endpoint: "https://10.0.0.5/token"))
       )
     end
 
@@ -675,9 +719,10 @@ class BetterAuthSSOOIDCDiscoveryTest < Minitest::Test
     assert_equal "discovery_unexpected_error", error.code
   end
 
-  def test_ensure_runtime_discovery_raises_for_untrusted_origin
+  def test_ensure_runtime_discovery_raises_for_non_public_origin
     error = assert_raises(DiscoveryError) do
-      Discovery.ensure_runtime_discovery({issuer: "https://idp.example.com"}, "https://idp.example.com", ->(_url) { false }, fetch: fetch_with(discovery_document))
+      issuer = "https://127.0.0.1"
+      Discovery.ensure_runtime_discovery({issuer: issuer}, issuer, ->(_url) { false }, fetch: fetch_with(discovery_document(issuer: issuer)))
     end
 
     assert_equal "discovery_untrusted_origin", error.code

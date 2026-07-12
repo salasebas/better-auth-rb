@@ -202,28 +202,46 @@ Example of relative endpoint and issuer with base path:
 
 #### Trusted origins
 
-Both the discovery endpoint as well as any URL resolved through the discovery process are subject to your app's [`trustedOrigins`](/docs/reference/security#trusted-origins) configuration.
-Discovery will fail with the `discovery_untrusted_origin` code unless you explicitly update your `trustedOrigins` configuration:
+OIDC discovery, authorization, token, UserInfo, and JWKS endpoints use HTTPS and
+publicly routable hosts by default. Public HTTPS endpoints do not need to be
+listed in [`trustedOrigins`](/docs/reference/security#trusted-origins), and the
+endpoints may use different origins.
+
+Private, loopback, link-local, reserved, or plain HTTP endpoints are rejected.
+For an internal or development IdP, opt in by listing every endpoint's **exact
+origin**, including its scheme and non-default port:
 
 ```ruby title="server.rb"
 auth = BetterAuth.auth(
   secret: ENV.fetch("BETTER_AUTH_SECRET"),
   base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
-  trusted_origins: ["https://your-org.okta.com"],
+  trusted_origins: ["http://10.0.0.8:8080"],
   plugins: [
     BetterAuth::Plugins.sso
   ]
 )
 ```
 
-If your use-case requires to support multiple arbitrary but known IDPs (e.g Okta), we recommend to:
+Wildcard origins do not opt an OIDC endpoint into private-network access. If an
+IdP uses multiple origins, list each private origin separately.
+The app's `base_url` is normally part of the general trusted-origin set, but it
+does not count as this explicit private-IdP opt-in unless you also list it in
+`trusted_origins`.
+
+At request time, RubyAuth resolves every non-trusted hostname, rejects the
+request if any DNS answer is non-public, and pins the connection to a validated
+address. Built-in OIDC requests do not follow redirects. This validation also
+applies to manually supplied endpoints, discovery overrides, provider updates,
+and previously stored providers.
+
+If your use-case requires multiple known private IdPs, you can:
 
 1. Register a list of well known IDPs ahead of time
 
 ```ruby title="server.rb"
 trusted_idps = [
-  "https://acme.okta.com",
-  "https://login.partner.example.com"
+  "http://10.0.0.8:8080",
+  "https://login.partner.internal:8443"
 ]
 
 auth = BetterAuth.auth(
@@ -236,7 +254,7 @@ auth = BetterAuth.auth(
 )
 ```
 
-2. Or dynamically compute the `trustedOrigins` by specifying a callback function:
+2. Or dynamically compute exact `trustedOrigins` by specifying a callback function:
 
 ```ruby title="server.rb"
 auth = BetterAuth.auth(
@@ -253,6 +271,13 @@ auth = BetterAuth.auth(
 ```
 
 See the [`trustedOrigins`](/docs/reference/security#trusted-origins) docs for more information.
+
+<Callout type="warn">
+  Custom `oidc_discovery_fetch` and `oidc_jwks_fetch` hooks receive a URL that
+  RubyAuth has validated, but the hook owns its transport behavior. Custom hooks
+  must independently prevent redirects, DNS rebinding, and proxy-based access to
+  private networks.
+</Callout>
 
 #### Why Discovery Can Fail
 
@@ -274,7 +299,7 @@ If the Identity Provider is misconfigured or unreachable, registration will fail
 | `discovery_not_found`           | The discovery document endpoint returned 404                                                                                        |
 | `discovery_timeout`             | The IdP did not respond within the timeout window (default: 10 seconds)                                                             |
 | `discovery_invalid_url`         | The discovery URL is malformed or uses an unsupported protocol                                                                      |
-| `discovery_untrusted_origin`    | The discovery URL or one of the URLs discovered as part of this process was not trusted by your app's trusted origins configuration |
+| `discovery_untrusted_origin`    | The discovery URL or a discovered endpoint was not public HTTPS and its exact origin was not explicitly trusted                    |
 | `discovery_invalid_json`        | The discovery response is empty or not valid JSON                                                                                   |
 | `unsupported_token_auth_method` | The IdP only supports token auth methods that RubyAuth doesn't support                                                           |
 

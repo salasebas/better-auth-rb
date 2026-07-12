@@ -27,6 +27,7 @@ module BetterAuth
         end
 
         oidc_config = normalize_hash(body[:oidc_config] || {})
+        sso_validate_oidc_endpoint_origins!(ctx, oidc_config) if oidc_config.any?
         oidc_config = sso_hydrate_oidc_config(body[:issuer], oidc_config, ctx) if oidc_config.any? && !oidc_config[:skip_discovery]
         sso_validate_oidc_endpoint_origins!(ctx, oidc_config) if oidc_config.any?
         oidc_config[:override_user_info] = !!(body[:override_user_info] || config[:default_override_user_info]) if oidc_config.any?

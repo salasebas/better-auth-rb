@@ -110,6 +110,13 @@ module BetterAuth
       end
     end
 
+    def explicit_trusted_origins
+      configured = @explicit_options[:trusted_origins]
+      origins = configured.respond_to?(:call) ? [] : Array(configured).compact
+      origins.concat(env_trusted_origins)
+      origins.map(&:to_s).reject(&:empty?).uniq
+    end
+
     def base_url
       Thread.current[base_url_runtime_key] || @base_url
     end
