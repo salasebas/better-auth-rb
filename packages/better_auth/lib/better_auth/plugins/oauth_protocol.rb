@@ -36,11 +36,11 @@ module BetterAuth
       end
 
       def issuer(ctx)
-        ctx.context.options.base_url.to_s.empty? ? origin_for(ctx.context.base_url) : ctx.context.options.base_url
+        origin_for(ctx.context.canonical_base_url)
       end
 
       def endpoint_base(ctx)
-        ctx.context.base_url
+        ctx.context.canonical_base_url
       end
 
       def origin_for(url)

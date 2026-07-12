@@ -46,6 +46,7 @@ require "better_auth/telemetry/options"
 #
 # Validates: Requirements 13.1, 13.5, 13.6, 13.7
 class AuthConfigShapePropertyTest < Minitest::Test
+  CANONICAL_BASE_URL = "https://auth.example.com"
   AuthConfig = BetterAuth::Telemetry::Detectors::AuthConfig
   NormalizedContext = BetterAuth::Telemetry::NormalizedContext
 
@@ -265,7 +266,7 @@ class AuthConfigShapePropertyTest < Minitest::Test
       secret: "0" * 40,
       database: :memory,
       app_name: (rng.rand < 0.5) ? "AcmeApp" : "Better Auth",
-      base_url: nil,
+      base_url: CANONICAL_BASE_URL,
       email_verification: generate_email_verification(rng),
       email_and_password: generate_email_and_password(rng),
       session: generate_session(rng),
@@ -403,7 +404,7 @@ class AuthConfigShapePropertyTest < Minitest::Test
   # sees.
   def generate_trusted_origins(rng)
     count = rng.rand(5)
-    Array.new(count) { |i| "https://trusted-#{i}.example.com" }
+    [CANONICAL_BASE_URL] + Array.new(count) { |i| "https://trusted-#{i}.example.com" }
   end
 
   def generate_rate_limit(rng)

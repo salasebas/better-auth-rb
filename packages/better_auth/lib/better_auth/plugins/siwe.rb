@@ -262,7 +262,7 @@ module BetterAuth
     end
 
     def siwe_create_user(ctx, config, wallet_address, _chain_id, email, anonymous)
-      domain = config[:email_domain_name] || URI.parse(ctx.context.base_url).host || ctx.context.base_url
+      domain = config[:email_domain_name] || URI.parse(ctx.context.canonical_base_url).host || ctx.context.canonical_base_url
       lookup = config[:ens_lookup]
       ens = lookup.respond_to?(:call) ? normalize_hash(lookup.call(wallet_address: wallet_address) || {}) : {}
       ctx.context.internal_adapter.create_user(

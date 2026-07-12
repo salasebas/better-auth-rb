@@ -57,6 +57,14 @@ module BetterAuthCLITestHelpers
     run_cli(*argv)
   end
 
+  def with_env(values)
+    previous = values.to_h { |name, _value| [name, ENV[name]] }
+    values.each { |name, value| value.nil? ? ENV.delete(name) : ENV[name] = value }
+    yield
+  ensure
+    previous&.each { |name, value| value.nil? ? ENV.delete(name) : ENV[name] = value }
+  end
+
   def cli_dir_flags(dir, config: nil, discover_config: false)
     flags = ["--cwd", dir]
     flags += ["--config", config] if config

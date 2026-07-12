@@ -201,14 +201,16 @@ module BetterAuth
         client_secret: oidc_config[:client_secret],
         authentication: oidc_config[:token_endpoint_authentication],
         timeout: plugin_config[:oidc_http_timeout],
-        max_body_size: plugin_config[:oidc_http_max_body_size]
+        max_body_size: plugin_config[:oidc_http_max_body_size],
+        trusted_origin: sso_oidc_trusted_origin_check(ctx)
       )
     rescue
       nil
     end
 
-    def sso_exchange_oidc_code(token_endpoint:, code:, code_verifier:, redirect_uri:, client_id:, client_secret:, authentication:, timeout: nil, max_body_size: nil)
-      uri = URI(token_endpoint.to_s)
+    def sso_exchange_oidc_code(token_endpoint:, code:, code_verifier:, redirect_uri:, client_id:, client_secret:, authentication:, timeout: nil, max_body_size: nil, trusted_origin: nil, resolver: nil)
+      destination = sso_oidc_fetch_destination(token_endpoint, "tokenEndpoint", trusted_origin, resolver)
+      uri = destination.uri
       request = Net::HTTP::Post.new(uri)
       form = {
         grant_type: "authorization_code",
@@ -223,13 +225,12 @@ module BetterAuth
         request.basic_auth(client_id.to_s, client_secret.to_s)
       end
       request.set_form_data(form)
-      response = Net::HTTP.start(
-        uri.hostname,
-        uri.port,
-        use_ssl: uri.scheme == "https",
+      http = BetterAuth::SSO::OIDC::EndpointPolicy.build_http(
+        destination,
         open_timeout: sso_oidc_http_timeout(timeout),
         read_timeout: sso_oidc_http_timeout(timeout)
-      ) { |http| http.request(request) }
+      )
+      response = http.start { |connection| connection.request(request) }
       return nil unless response.is_a?(Net::HTTPSuccess)
       return nil if response.body.to_s.bytesize > sso_oidc_http_max_body_size(max_body_size)
 
@@ -241,7 +242,13 @@ module BetterAuth
       raw = if user_callback.respond_to?(:call)
         user_callback.call(tokens)
       elsif oidc_config[:user_info_endpoint]
-        sso_fetch_oidc_user_info(oidc_config[:user_info_endpoint], tokens[:access_token], timeout: plugin_config[:oidc_http_timeout], max_body_size: plugin_config[:oidc_http_max_body_size])
+        sso_fetch_oidc_user_info(
+          oidc_config[:user_info_endpoint],
+          tokens[:access_token],
+          timeout: plugin_config[:oidc_http_timeout],
+          max_body_size: plugin_config[:oidc_http_max_body_size],
+          trusted_origin: sso_oidc_trusted_origin_check(ctx)
+        )
       elsif tokens[:id_token]
         return {_sso_error: "jwks_endpoint_not_found"} if oidc_config[:jwks_endpoint].to_s.empty?
 
@@ -251,7 +258,8 @@ module BetterAuth
           audience: oidc_config[:client_id],
           issuer: oidc_config[:issuer],
           fetch: plugin_config[:oidc_jwks_fetch],
-          expected_nonce: expected_nonce
+          expected_nonce: expected_nonce,
+          trusted_origin: sso_oidc_trusted_origin_check(ctx)
         ) || {_sso_error: "token_not_verified"}
       else
         {}
@@ -272,17 +280,17 @@ module BetterAuth
       )
     end
 
-    def sso_fetch_oidc_user_info(endpoint, access_token, timeout: nil, max_body_size: nil)
-      uri = URI(endpoint.to_s)
+    def sso_fetch_oidc_user_info(endpoint, access_token, timeout: nil, max_body_size: nil, trusted_origin: nil, resolver: nil)
+      destination = sso_oidc_fetch_destination(endpoint, "userInfoEndpoint", trusted_origin, resolver)
+      uri = destination.uri
       request = Net::HTTP::Get.new(uri)
       request["authorization"] = "Bearer #{access_token}"
-      response = Net::HTTP.start(
-        uri.hostname,
-        uri.port,
-        use_ssl: uri.scheme == "https",
+      http = BetterAuth::SSO::OIDC::EndpointPolicy.build_http(
+        destination,
         open_timeout: sso_oidc_http_timeout(timeout),
         read_timeout: sso_oidc_http_timeout(timeout)
-      ) { |http| http.request(request) }
+      )
+      response = http.start { |connection| connection.request(request) }
       return {} unless response.is_a?(Net::HTTPSuccess)
       return {} if response.body.to_s.bytesize > sso_oidc_http_max_body_size(max_body_size)
 
@@ -291,8 +299,8 @@ module BetterAuth
       {}
     end
 
-    def sso_validate_oidc_id_token(token, jwks_endpoint:, audience:, issuer:, fetch: nil, expected_nonce: nil)
-      jwks = sso_fetch_oidc_jwks(jwks_endpoint, fetch: fetch)
+    def sso_validate_oidc_id_token(token, jwks_endpoint:, audience:, issuer:, fetch: nil, expected_nonce: nil, trusted_origin: nil)
+      jwks = sso_fetch_oidc_jwks(jwks_endpoint, fetch: fetch, trusted_origin: trusted_origin)
       payload, = ::JWT.decode(
         token.to_s,
         nil,
@@ -314,19 +322,18 @@ module BetterAuth
       nil
     end
 
-    def sso_fetch_oidc_jwks(jwks_endpoint, fetch: nil)
+    def sso_fetch_oidc_jwks(jwks_endpoint, fetch: nil, trusted_origin: nil, resolver: nil)
+      destination = sso_oidc_fetch_destination(jwks_endpoint, "jwksEndpoint", trusted_origin, resolver, resolve: !fetch)
       if fetch.respond_to?(:call)
         return normalize_hash(fetch.call(jwks_endpoint))
       end
 
-      uri = URI(jwks_endpoint.to_s)
-      response = Net::HTTP.start(
-        uri.hostname,
-        uri.port,
-        use_ssl: uri.scheme == "https",
+      http = BetterAuth::SSO::OIDC::EndpointPolicy.build_http(
+        destination,
         open_timeout: SSO_DEFAULT_OIDC_HTTP_TIMEOUT,
         read_timeout: SSO_DEFAULT_OIDC_HTTP_TIMEOUT
-      ) { |http| http.get(uri.request_uri) }
+      )
+      response = http.start { |connection| connection.get(destination.uri.request_uri) }
       return {} unless response.is_a?(Net::HTTPSuccess)
       return {} if response.body.to_s.bytesize > SSO_DEFAULT_OIDC_HTTP_MAX_BODY_SIZE
 
@@ -453,7 +460,7 @@ module BetterAuth
         issuer: issuer,
         existing_config: existing,
         fetch: ctx.context.options.plugins.find { |plugin| plugin.id == "sso" }&.options&.fetch(:oidc_discovery_fetch, nil),
-        trusted_origin: ->(url) { ctx.context.trusted_origin?(url, allow_relative_paths: false) },
+        trusted_origin: sso_oidc_trusted_origin_check(ctx),
         timeout: ctx.context.options.plugins.find { |plugin| plugin.id == "sso" }&.options&.fetch(:oidc_http_timeout, nil)
       )
       existing.merge(discovered)
@@ -467,6 +474,7 @@ module BetterAuth
 
     def sso_ensure_runtime_oidc_provider(ctx, provider, plugin_config, require_jwks: false)
       oidc_config = sso_provider_config_hash(provider["oidcConfig"])
+      sso_validate_oidc_endpoint_origins!(ctx, oidc_config)
       needs_discovery = sso_oidc_needs_runtime_discovery?(oidc_config) || (require_jwks && oidc_config[:jwks_endpoint].to_s.empty?)
       return provider if !needs_discovery
 
@@ -474,29 +482,44 @@ module BetterAuth
         issuer: provider.fetch("issuer"),
         existing_config: oidc_config.merge(issuer: provider.fetch("issuer")),
         fetch: plugin_config[:oidc_discovery_fetch],
-        trusted_origin: ->(url) { ctx.context.trusted_origin?(url, allow_relative_paths: false) },
+        trusted_origin: sso_oidc_trusted_origin_check(ctx),
         timeout: plugin_config[:oidc_http_timeout]
       )
-      provider.merge("oidcConfig" => oidc_config.merge(discovered))
+      merged = oidc_config.merge(discovered)
+      sso_validate_oidc_endpoint_origins!(ctx, merged)
+      provider.merge("oidcConfig" => merged)
     end
 
     def sso_validate_oidc_endpoint_origins!(ctx, oidc_config)
-      return unless sso_oidc_trusted_origin_enforced?(ctx)
-
       config = normalize_hash(oidc_config || {})
       %i[authorization_endpoint token_endpoint jwks_endpoint user_info_endpoint discovery_endpoint].each do |field|
         url = config[field]
         next if url.to_s.empty?
 
-        sso_validate_url!(url, "OIDC #{Schema.storage_key(field)} must be a valid URL")
-        next if ctx.context.trusted_origin?(url.to_s, allow_relative_paths: false)
-
-        raise APIError.new("BAD_REQUEST", message: "OIDC #{Schema.storage_key(field)} is not trusted")
+        BetterAuth::SSO::OIDC::EndpointPolicy.validate(
+          url,
+          name: "OIDC #{Schema.storage_key(field)}",
+          trusted_origin: sso_oidc_trusted_origin_check(ctx)
+        )
+      rescue BetterAuth::SSO::OIDC::EndpointPolicy::Error => error
+        raise APIError.new("BAD_REQUEST", message: error.message)
       end
     end
 
-    def sso_oidc_trusted_origin_enforced?(ctx)
-      Array(ctx.context.trusted_origins).map(&:to_s).uniq.length > 1
+    def sso_oidc_trusted_origin_check(ctx)
+      ->(url) do
+        BetterAuth::SSO::OIDC::EndpointPolicy.exact_origin_trusted?(url, ctx.context.explicit_trusted_origins)
+      end
+    end
+
+    def sso_oidc_fetch_destination(endpoint, name, trusted_origin, resolver = nil, resolve: true)
+      BetterAuth::SSO::OIDC::EndpointPolicy.validate(
+        endpoint,
+        name: "OIDC #{name}",
+        trusted_origin: trusted_origin,
+        resolve: resolve,
+        resolver: resolver
+      )
     end
   end
 end

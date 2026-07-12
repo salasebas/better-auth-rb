@@ -51,6 +51,18 @@ class BetterAuthPluginsOpenAPITest < Minitest::Test
     )
   end
 
+  def test_open_api_server_stays_canonical_on_an_alternate_serving_origin
+    auth = build_auth(
+      base_url: "https://auth.example.com",
+      serving_origins: ["https://tenant.example.com"],
+      plugins: [BetterAuth::Plugins.open_api]
+    )
+
+    schema = auth.api.generate_openapi_schema(headers: {"host" => "tenant.example.com"})
+
+    assert_equal [{url: "https://auth.example.com/api/auth"}], schema[:servers]
+  end
+
   def test_open_api_base_path_inventory_matches_upstream_snapshot
     auth = build_auth(plugins: [BetterAuth::Plugins.open_api])
 

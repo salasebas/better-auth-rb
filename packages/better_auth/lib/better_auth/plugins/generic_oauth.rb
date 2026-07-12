@@ -634,7 +634,7 @@ module BetterAuth
     end
 
     def generic_oauth_redirect_uri(ctx, provider)
-      provider[:redirect_uri] || provider[:redirectURI] || "#{ctx.context.base_url}/oauth2/callback/#{provider[:provider_id]}"
+      provider[:redirect_uri] || provider[:redirectURI] || "#{ctx.context.canonical_base_url}/oauth2/callback/#{provider[:provider_id]}"
     end
 
     def generic_oauth_validate_issuer!(ctx, provider, query, redirect_error)

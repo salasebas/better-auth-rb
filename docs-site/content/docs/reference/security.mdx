@@ -206,40 +206,31 @@ Better Auth first verifies that the direct network peer matches `trusted_proxies
   Earlier Better Auth Ruby releases trusted the leftmost `X-Forwarded-For` value by default. After upgrading, configure framework-level trusted proxies or an explicit ingress-controlled header. A missing or rejected address now fails closed into a shared bucket, so validate the deployment before enabling production traffic.
 </Callout>
 
-## Trusted Proxy Headers
+## Canonical and request-serving origins
 
-If your application runs behind a reverse proxy or load balancer, RubyAuth can derive the base URL from the inbound request's `X-Forwarded-Host` and `X-Forwarded-Proto` headers. This is useful when your app is accessible from multiple domains (e.g. `example.com` and `app.example.dev`) and you don't want to hardcode a single `base_url` in the configuration.
+RubyAuth requires a static canonical `base_url` (or `BETTER_AUTH_URL`). Security-sensitive identity values such as OAuth/OIDC issuer metadata, provider callback defaults, JWT issuer/audience, and OpenAPI server metadata always use that canonical URL and never use request headers.
 
-When `trusted_proxy_headers` is enabled and no `base_url` is set in the configuration (or via environment variables), RubyAuth uses the forwarded headers to construct the base URL on each request. This means OAuth callbacks, email verification links, and redirects will automatically use whichever domain the user loaded the app on.
+For approved multi-domain deployments, list full origins in `serving_origins`. RubyAuth may use a matching request origin for self-referential capability links such as verification, password reset, deletion, and magic links. An unknown or malformed host falls back to the canonical URL and is never added to trusted origins.
 
 ```ruby
-require "better_auth"
-
 auth = BetterAuth.auth(
   secret: ENV.fetch("BETTER_AUTH_SECRET"),
-  base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
-  database: :postgres,
-  trusted_origins: ["https://app.example.com"],
-  rate_limit: { enabled: true, window: 10, max: 100 }
+  base_url: "https://auth.example.com",
+  serving_origins: ["https://tenant.example.com", "https://*.preview.example.com"],
+  trusted_origins: ["https://frontend.example.com"],
+  advanced: { trusted_proxy_headers: true }
 )
 ```
 
-<Callout type="warning">
-  Only enable this option if you trust the proxy headers reaching your application. Your reverse proxy or load balancer must be configured to set `X-Forwarded-Host` and `X-Forwarded-Proto` correctly, and end users must not be able to set these headers directly. If untrusted clients can forge these headers, they could manipulate redirects and callback URLs.
-</Callout>
+`serving_origins` are automatically trusted for CSRF and redirect validation. A `trusted_origins` entry is not promoted to serving status, so a frontend-only origin cannot control token-bearing URLs.
 
-When enabled, the base URL resolution follows this priority:
+### Trusted proxy headers
 
-1. Static `base_url` from the configuration (if set, proxy headers are ignored)
-2. Environment variables (`BETTER_AUTH_URL`, `NEXT_PUBLIC_BETTER_AUTH_URL`, etc.)
-3. `X-Forwarded-Host` + `X-Forwarded-Proto` headers (when `trusted_proxy_headers` is `true`)
-4. The request URL origin as a final fallback
+By default, `X-Forwarded-Host` and `X-Forwarded-Proto` are ignored. Set `advanced.trusted_proxy_headers: true` only when a trusted edge proxy overwrites both headers and prevents clients from supplying them directly. Even then, the resulting full origin must match `serving_origins`; syntactic header validation alone is not authorization.
 
-If you're serving your app from multiple approved domains, you'll typically want to:
+Request-specific state is isolated and cleared after every Rack or direct `auth.api` call. One request can never change the canonical URL or select a serving origin for a later request.
 
-* **Omit `base_url`** from the configuration so it's derived per-request from the proxy headers
-* Set **`trusted_origins`** to an allowlist of your approved domains (see below)
-* Leave `cross_sub_domain_cookies` disabled — cookies are host-only by default, which means each domain gets its own independent session
+See [Multiple Serving Origins](/docs/guides/dynamic-base-url) for deployment and migration guidance.
 
 ## Trusted Origins
 

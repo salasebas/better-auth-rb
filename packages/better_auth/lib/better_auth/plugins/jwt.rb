@@ -206,8 +206,8 @@ module BetterAuth
       payload = stringify_payload(payload).dup
       payload["iat"] ||= now
       payload["exp"] ||= jwt_expiration(jwt_config[:expiration_time] || "15m", payload["iat"])
-      payload["iss"] ||= jwt_config[:issuer] || ctx.context.base_url
-      payload["aud"] ||= jwt_config[:audience] || ctx.context.base_url
+      payload["iss"] ||= jwt_config[:issuer] || ctx.context.canonical_base_url
+      payload["aud"] ||= jwt_config[:audience] || ctx.context.canonical_base_url
 
       return jwt_config[:sign].call(payload) if jwt_config[:sign].respond_to?(:call)
 
@@ -227,9 +227,9 @@ module BetterAuth
 
       options = {
         algorithm: key["alg"] || "RS256",
-        iss: config.dig(:jwt, :issuer) || ctx.context.base_url,
+        iss: config.dig(:jwt, :issuer) || ctx.context.canonical_base_url,
         verify_iss: true,
-        aud: config.dig(:jwt, :audience) || ctx.context.base_url,
+        aud: config.dig(:jwt, :audience) || ctx.context.canonical_base_url,
         verify_aud: true
       }
       decoded, = ::JWT.decode(token.to_s, JWT.public_key(key), true, options)
@@ -448,8 +448,8 @@ module BetterAuth
       payload = JSON.parse(Crypto.base64url_decode(payload_segment))
       now = Time.now.to_i
       return nil if payload["exp"] && payload["exp"].to_i <= now
-      issuer = config.dig(:jwt, :issuer) || ctx.context.base_url
-      audience = config.dig(:jwt, :audience) || ctx.context.base_url
+      issuer = config.dig(:jwt, :issuer) || ctx.context.canonical_base_url
+      audience = config.dig(:jwt, :audience) || ctx.context.canonical_base_url
       return nil if issuer && payload["iss"] != issuer
       return nil if audience && Array(payload["aud"]).map(&:to_s).none?(audience.to_s)
       return nil unless jwt_payload_valid?(payload)

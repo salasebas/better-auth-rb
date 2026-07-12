@@ -98,8 +98,8 @@ module BetterAuth
           state: state,
           codeVerifier: code_verifier,
           code_verifier: code_verifier,
-          redirectURI: "#{ctx.context.base_url}/callback/#{provider_id}",
-          redirect_uri: "#{ctx.context.base_url}/callback/#{provider_id}",
+          redirectURI: "#{ctx.context.canonical_base_url}/callback/#{provider_id}",
+          redirect_uri: "#{ctx.context.canonical_base_url}/callback/#{provider_id}",
           scopes: body["scopes"],
           loginHint: body["loginHint"] || body["login_hint"]
         })
@@ -135,7 +135,7 @@ module BetterAuth
         if ctx.method == "POST"
           merged = normalize_hash(ctx.query).merge(normalize_hash(ctx.body))
           query = URI.encode_www_form(merged.reject { |_key, value| value.nil? || value.to_s.empty? })
-          target = "#{ctx.context.base_url}/callback/#{provider_id}"
+          target = "#{ctx.context.canonical_base_url}/callback/#{provider_id}"
           target = "#{target}?#{query}" unless query.empty?
           raise ctx.redirect(target)
         end
@@ -157,8 +157,8 @@ module BetterAuth
           code: data["code"],
           codeVerifier: state_data["codeVerifier"],
           code_verifier: state_data["codeVerifier"],
-          redirectURI: "#{ctx.context.base_url}/callback/#{provider_id}",
-          redirect_uri: "#{ctx.context.base_url}/callback/#{provider_id}"
+          redirectURI: "#{ctx.context.canonical_base_url}/callback/#{provider_id}",
+          redirect_uri: "#{ctx.context.canonical_base_url}/callback/#{provider_id}"
         })
         raise ctx.redirect(oauth_error_url(error_url, "invalid_code")) unless tokens
 
@@ -281,8 +281,8 @@ module BetterAuth
           state: state,
           codeVerifier: code_verifier,
           code_verifier: code_verifier,
-          redirectURI: "#{ctx.context.base_url}/callback/#{provider_id}",
-          redirect_uri: "#{ctx.context.base_url}/callback/#{provider_id}",
+          redirectURI: "#{ctx.context.canonical_base_url}/callback/#{provider_id}",
+          redirect_uri: "#{ctx.context.canonical_base_url}/callback/#{provider_id}",
           scopes: body["scopes"],
           loginHint: body["loginHint"] || body["login_hint"]
         })

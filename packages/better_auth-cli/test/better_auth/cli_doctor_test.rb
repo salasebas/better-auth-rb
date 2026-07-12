@@ -93,7 +93,7 @@ class CliDoctorTest < BetterAuthCLITestCase
     end
   end
 
-  def test_doctor_reports_missing_base_url_and_secondary_storage_rate_limit_ok
+  def test_doctor_rejects_missing_base_url_and_accepts_secondary_storage_rate_limit
     Dir.mktmpdir("better-auth-cli") do |dir|
       missing_base_url = write_hash_config(
         dir,
@@ -101,9 +101,12 @@ class CliDoctorTest < BetterAuthCLITestCase
         database: :memory,
         filename: "no_base_url.rb"
       )
-      status, stdout, stderr = run_cli("doctor", "--cwd", dir, "--config", missing_base_url)
-      assert_equal 0, status, stderr
-      assert_includes stdout, "WARN base_url is not configured"
+      with_env("OPEN_AUTH_URL" => nil, "BETTER_AUTH_URL" => nil, "BASE_URL" => nil) do
+        status, stdout, stderr = run_cli("doctor", "--cwd", dir, "--config", missing_base_url)
+        assert_equal 1, status
+        assert_empty stdout
+        assert_includes stderr, "base_url is required"
+      end
 
       secondary_config = write_hash_config(
         dir,

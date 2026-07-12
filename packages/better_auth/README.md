@@ -390,15 +390,39 @@ The gem is available as open source under the terms of the [MIT License](https:/
 
 ## Security
 
+### Canonical and serving origins
+
+`base_url` (or `BETTER_AUTH_URL`) is required and defines the stable canonical
+identity of the auth server. RubyAuth never infers that identity from request
+headers. For an approved multi-domain deployment, configure full origin
+patterns separately:
+
+```ruby
+BetterAuth.auth(
+  secret: ENV.fetch("BETTER_AUTH_SECRET"),
+  base_url: "https://auth.example.com",
+  serving_origins: ["https://tenant.example.com", "https://*.preview.example.com"],
+  trusted_origins: ["https://frontend.example.com"]
+)
+```
+
+`serving_origins` may select the request-facing URL used by verification,
+password-reset, deletion, and magic-link capabilities. Unknown hosts fall back
+to the canonical URL. Serving origins are trusted for CSRF and redirect checks,
+but the reverse is intentionally false: a `trusted_origins` entry cannot become
+a serving origin or control token-bearing links.
+
+`X-Forwarded-Host` and `X-Forwarded-Proto` are considered only when
+`advanced.trusted_proxy_headers` is explicitly `true`, and the resulting origin
+must still match `serving_origins`. The former hash/dynamic form of `base_url`
+is unsupported; migrate its fallback to `base_url` and its allowlist to full
+`serving_origins` patterns.
+
 ### Trusted origins
 
-`trusted_origins` is merged with the resolved application origin and deployment
-configuration rather than acting as an adapter-local CORS switch. Upstream
-Better Auth also incorporates environment-driven origins and dynamic
-configuration, so an explicit empty array should not be assumed to mean "reject
-every browser origin" unless the deployed core configuration documents that full
-merge contract. Configure concrete origins for each environment and keep browser
-CORS headers in the host Rack stack or reverse proxy. See
+`trusted_origins` is merged with the canonical and serving origins rather than
+acting as an adapter-local CORS switch. Configure concrete origins for each
+environment and keep browser CORS headers in the host Rack stack or reverse proxy. See
 [`host-app-responsibilities.md`](../../.docs/features/host-app-responsibilities.md)
 for the boundary between origin validation, CORS, and CSRF ownership.
 
