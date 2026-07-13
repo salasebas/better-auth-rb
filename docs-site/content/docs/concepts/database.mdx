@@ -118,7 +118,12 @@ these helpers; configure database-backed verification storage instead if the
 secondary backend cannot provide them. Reservation markers intentionally omit
 a non-atomic reverse index and are consumed or deleted by identifier.
 `increment` prevents lost counter updates and keeps rate-limit windows fixed
-from their first request. This strict behavior is a Ruby safety adaptation.
+from their first request. It returns the post-increment count, applies the TTL
+only when the logical key is created, and must not extend that TTL later.
+Over-limit responses conservatively return the full configured window. Legacy
+JSON rate-limit values are consumed with the compatibility path until they
+expire, then the same logical key migrates to the atomic counter. This strict
+behavior is a Ruby safety adaptation.
 
 Then, provide your implementation to the `BetterAuth.auth` function:
 

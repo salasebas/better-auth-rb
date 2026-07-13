@@ -47,8 +47,7 @@ class BetterAuthPluginsRateLimitMatrixTest < Minitest::Test
     end
 
     assert_equal [200] * 10 + [429], statuses
-    stored = JSON.parse(storage.data.fetch("127.0.0.1|/phone-number/send-otp"))
-    assert_equal 10, stored.fetch("count")
+    assert_equal 11, storage.data.fetch("127.0.0.1|/phone-number/send-otp")
     assert_equal 60, storage.ttls.fetch("127.0.0.1|/phone-number/send-otp")
   end
 

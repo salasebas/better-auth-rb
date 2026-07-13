@@ -509,8 +509,7 @@ class RedisStorageTest < Minitest::Test
 
     rate_limit_keys = storage.list_keys.select { |key| key == "127.0.0.1|/limited" }
     refute_empty rate_limit_keys
-    parsed = JSON.parse(storage.get(rate_limit_keys.first))
-    assert_equal ["count", "key", "lastRequest"], parsed.keys.sort
+    assert_equal 2, storage.get(rate_limit_keys.first)
   end
 
   def test_secondary_storage_can_back_verification_values

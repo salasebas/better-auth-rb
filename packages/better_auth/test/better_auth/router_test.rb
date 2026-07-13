@@ -512,7 +512,8 @@ class BetterAuthRouterTest < Minitest::Test
     assert_equal 403, auth.call(rack_env("POST", "/api/auth/protected/data", body: {"callbackURL" => "https://evil.com"})).first
   end
 
-  def test_rate_limit_runs_after_plugin_on_request
+  def test_rate_limit_runs_after_middleware_and_before_plugin_on_request
+    order = []
     auth = BetterAuth.auth(
       base_url: "http://localhost:3000",
       secret: SECRET,
@@ -520,15 +521,40 @@ class BetterAuthRouterTest < Minitest::Test
       plugins: [
         {
           id: "test",
+          middlewares: [
+            {
+              path: "/**",
+              middleware: lambda do |_ctx|
+                order << "middleware"
+                nil
+              end
+            }
+          ],
           endpoints: {
             limited: BetterAuth::Endpoint.new(path: "/limited", method: "GET") { {ok: true} }
-          }
+          },
+          on_request: lambda do |_request, _ctx|
+            order << "on-request"
+            nil
+          end,
+          on_response: lambda do |response, _ctx|
+            order << "on-response"
+            response[1]["x-wrapped"] = "yes"
+            {response: response}
+          end
         }
       ]
     )
 
     assert_equal 200, auth.call(rack_env("GET", "/api/auth/limited")).first
-    assert_equal 429, auth.call(rack_env("GET", "/api/auth/limited")).first
+    status, headers, = auth.call(rack_env("GET", "/api/auth/limited"))
+
+    assert_equal 429, status
+    assert_equal "yes", headers.fetch("x-wrapped")
+    assert_equal [
+      "middleware", "on-request", "on-response",
+      "middleware", "on-response"
+    ], order
   end
 
   def test_rate_limit_uses_custom_storage_with_upstream_retry_header

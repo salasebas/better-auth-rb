@@ -138,7 +138,7 @@ rate_limit: {
 
 ### Storage
 
-By default, rate-limit data is stored in memory. Memory storage is fine for local development and single-process deployments, but it is not shared across processes, machines, or serverless instances. Use database, secondary storage, or custom storage for production deployments that need shared counters.
+By default, rate-limit data is stored in memory. Each `BetterAuth.auth` instance owns an independent, thread-safe store capped at 100,000 live keys. Accepted requests use a rolling window; rejected requests do not extend it. Memory storage is not shared across auth instances, processes, machines, or serverless instances, so use database, secondary storage, or custom storage when counters must be shared.
 
 **Using Database**
 
@@ -155,6 +155,8 @@ auth = BetterAuth.auth(
 
 Run migrations after enabling database storage so the `rateLimit` table exists. RubyAuth's generated physical table name is `rate_limits` by default, while the logical schema model remains `rateLimit`.
 
+Database consumption is atomic and uses rolling windows. Expired-row cleanup is best effort and never fails a request. Cleanup accounts for every static rule; when a callable rule can return an unknown window, RubyAuth conservatively skips cleanup. `lastRequest` is stored as integer milliseconds for upstream schema compatibility, while Ruby configuration uses seconds.
+
 **Using Secondary Storage**
 
 If you configured a [secondary storage](/docs/concepts/database#secondary-storage), the rate limiter can store counters there. This is typically a good fit for Redis-like shared storage.
@@ -170,18 +172,17 @@ auth = BetterAuth.auth(
 )
 ```
 
+When secondary storage implements atomic `increment(key, ttl)`, counters use a fixed window beginning with the first request. The TTL is applied only when the counter is created and is not extended by later requests; an over-limit response therefore reports the full configured window. Existing legacy JSON counters continue through their current rolling window and migrate in place to atomic counters after expiry. Without `increment`, enforcement remains best effort and logs one compatibility warning.
+
 **Custom Storage**
 
-Implement a custom storage object when database and secondary storage do not fit your deployment. The object must respond to `get(key)` and `set(key, value, ...)`. RubyAuth passes a TTL when the storage supports it.
+Implement a custom storage object when database and secondary storage do not fit your deployment. For strict enforcement it must provide `consume(key, window:, max:)` and return `{allowed:, retry_after:}` atomically. `allowed` must be boolean, and `retry_after` must be `nil` or a finite nonnegative number. Legacy `get`/`set` implementations remain supported as best-effort compatibility and log one warning because concurrent requests can bypass a split read/write check.
 
 ```ruby
 class RateLimitStorage
-  def get(key)
-    @store[key]
-  end
-
-  def set(key, value, ttl: nil, update: false)
-    @store[key] = value
+  def consume(key, window:, max:)
+    # Atomically check and increment key in the backing store.
+    {allowed: true, retry_after: nil}
   end
 end
 
@@ -195,6 +196,8 @@ auth = BetterAuth.auth(
 ```
 
 ## Handling Rate Limit Errors
+
+For routed Rack requests, rate limiting runs after origin checks, plugin router middleware, and disabled-path checks, but before plugin `on_request`. A rejected request skips `on_request`; plugin `on_response` still wraps the `429`. Direct API calls do not pass through the Rack router and retain their existing caveat.
 
 When a request exceeds the limit, Better Auth returns `429` and the `x-retry-after` header. The header value is the number of seconds until the client can retry.
 

@@ -15,6 +15,48 @@ class BetterAuthRateLimiterTest < Minitest::Test
     assert_nil store.get("key")
   end
 
+  def test_memory_consume_is_atomic_and_exactly_max_requests_win
+    store = BetterAuth::RateLimiter::MemoryStore.new
+    ready = Queue.new
+    start = Queue.new
+    threads = 20.times.map do
+      Thread.new do
+        ready << true
+        start.pop
+        store.consume("key", window: 60, max: 5)
+      end
+    end
+    20.times { ready.pop }
+    20.times { start << true }
+
+    assert_equal 5, threads.map(&:value).count { |result| result[:allowed] }
+  end
+
+  def test_memory_boundary_reset_sweep_and_cap_are_deterministic
+    now = 100.0
+    clock = -> { now }
+    store = BetterAuth::RateLimiter::MemoryStore.new(clock: clock, max_entries: 2)
+
+    assert store.consume("boundary", window: 10, max: 1)[:allowed]
+    now = 110.0
+    refute store.consume("boundary", window: 10, max: 1)[:allowed]
+    now = 110.001
+    assert store.consume("boundary", window: 10, max: 1)[:allowed]
+    store.set("second", {count: 1}, ttl: 10)
+    store.set("third", {count: 1}, ttl: 10)
+
+    assert_equal 2, store.size
+    assert_nil store.get("boundary")
+  end
+
+  def test_memory_default_cap_is_never_exceeded
+    store = BetterAuth::RateLimiter::MemoryStore.new
+    100_001.times { |index| store.set("key-#{index}", {count: 1}, ttl: 60) }
+
+    assert_equal 100_000, store.size
+    assert_nil store.get("key-0")
+  end
+
   def test_rate_limiter_returns_nil_when_disabled
     auth = build_auth(rate_limit: {enabled: false})
     limiter = BetterAuth::RateLimiter.new
@@ -71,6 +113,73 @@ class BetterAuthRateLimiterTest < Minitest::Test
     storage.calls.each do |(_key, _value, ttl, _update)|
       assert_equal 60, ttl
     end
+  end
+
+  def test_custom_consume_is_preferred_and_normalizes_string_result_keys
+    storage = AtomicRateLimitStorage.new({"allowed" => false, "retry_after" => 1.2})
+    auth = build_auth(rate_limit: {enabled: true, window: 60, max: 2, custom_storage: storage})
+
+    status, headers, = BetterAuth::RateLimiter.new.call(rack_request("GET", "/limited"), auth.context, "/limited")
+
+    assert_equal 429, status
+    assert_equal "2", headers.fetch("x-retry-after")
+    assert_equal [["127.0.0.1|/limited", {window: 60.0, max: 2}]], storage.calls
+    refute storage.legacy_called
+  end
+
+  def test_custom_consume_errors_and_malformed_results_propagate
+    storage = AtomicRateLimitStorage.new({allowed: true, retry_after: Float::INFINITY})
+    auth = build_auth(rate_limit: {enabled: true, custom_storage: storage})
+    limiter = BetterAuth::RateLimiter.new
+
+    assert_raises(BetterAuth::APIError) do
+      limiter.call(rack_request("GET", "/limited"), auth.context, "/limited")
+    end
+
+    storage.error = ArgumentError.new("storage failure")
+    error = assert_raises(ArgumentError) do
+      limiter.call(rack_request("GET", "/limited"), auth.context, "/limited")
+    end
+    assert_equal "storage failure", error.message
+  end
+
+  def test_legacy_custom_storage_warns_once
+    messages = []
+    auth = build_auth(
+      logger: ->(level, message) { messages << [level, message] },
+      rate_limit: {enabled: true, window: 60, max: 10, custom_storage: RecordingRateLimitStorage.new}
+    )
+    limiter = BetterAuth::RateLimiter.new
+
+    2.times { limiter.call(rack_request("GET", "/limited"), auth.context, "/limited") }
+
+    assert_equal 1, messages.count { |level, message| level == :warn && message.include?("best-effort") }
+  end
+
+  def test_secondary_increment_uses_fixed_window_and_migrates_legacy_json_in_place
+    storage = IncrementingSecondaryStorage.new
+    auth = build_auth(
+      secondary_storage: storage,
+      rate_limit: {enabled: true, window: 60, max: 1, storage: "secondary-storage"}
+    )
+    limiter = BetterAuth::RateLimiter.new
+
+    assert_nil limiter.call(rack_request("GET", "/limited"), auth.context, "/limited")
+    status, headers, = limiter.call(rack_request("GET", "/limited"), auth.context, "/limited")
+    assert_equal 429, status
+    assert_equal "60", headers.fetch("x-retry-after")
+    assert_equal [60], storage.ttls
+
+    legacy_key = "127.0.0.1|/legacy"
+    storage.data[legacy_key] = JSON.generate(key: legacy_key, count: 1, lastRequest: (Time.now.to_f * 1000).to_i)
+    status, = limiter.call(rack_request("GET", "/legacy"), auth.context, "/legacy")
+    assert_equal 429, status
+    assert_kind_of String, storage.data.fetch(legacy_key)
+    refute_includes storage.incremented_keys, legacy_key
+
+    storage.data.delete(legacy_key)
+    assert_nil limiter.call(rack_request("GET", "/legacy"), auth.context, "/legacy")
+    assert_includes storage.incremented_keys, legacy_key
   end
 
   def test_rate_limiter_applies_plugin_path_matcher_rule
@@ -267,6 +376,59 @@ class BetterAuthRateLimiterTest < Minitest::Test
     def set(key, value, ttl: nil, update: false)
       @keys << key unless @keys.include?(key)
       @data[key] = value
+    end
+  end
+
+  class AtomicRateLimitStorage
+    attr_reader :calls, :legacy_called
+    attr_accessor :error
+
+    def initialize(result)
+      @result = result
+      @calls = []
+      @legacy_called = false
+    end
+
+    def consume(key, window:, max:)
+      raise error if error
+
+      calls << [key, {window: window, max: max}]
+      @result
+    end
+
+    def get(_key)
+      @legacy_called = true
+    end
+
+    def set(*)
+      @legacy_called = true
+    end
+  end
+
+  class IncrementingSecondaryStorage
+    attr_reader :data, :ttls, :incremented_keys
+
+    def initialize
+      @data = {}
+      @ttls = []
+      @incremented_keys = []
+    end
+
+    def get(key)
+      data[key]
+    end
+
+    def increment(key, ttl)
+      incremented_keys << key
+      unless data.key?(key)
+        data[key] = 0
+        ttls << ttl
+      end
+      data[key] = data[key].to_i + 1
+    end
+
+    def set(key, value, _ttl)
+      data[key] = value
     end
   end
 end

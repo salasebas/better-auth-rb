@@ -21,12 +21,13 @@ module BetterAuthMongoAdapterTestSupport
     attr_reader :aggregate_pipelines
     attr_reader :find_one_and_update_calls
     attr_reader :update_many_calls
+    attr_reader :update_one_calls
     attr_reader :delete_one_calls
     attr_reader :delete_many_calls
     attr_reader :indexes
 
     InsertResult = Struct.new(:inserted_id)
-    UpdateResult = Struct.new(:modified_count)
+    UpdateResult = Struct.new(:modified_count, :upserted_id)
     DeleteResult = Struct.new(:deleted_count)
 
     def initialize(database)
@@ -36,6 +37,7 @@ module BetterAuthMongoAdapterTestSupport
       @aggregate_pipelines = []
       @find_one_and_update_calls = []
       @update_many_calls = []
+      @update_one_calls = []
       @delete_one_calls = []
       @delete_many_calls = []
       @indexes = FakeMongoIndexes.new
@@ -62,7 +64,10 @@ module BetterAuthMongoAdapterTestSupport
       document = writable_documents(options).find { |entry| matches_filter?(entry, filter) }
       return nil unless document
 
-      document.merge!(deep_dup(update.fetch("$set")))
+      deep_dup(update.fetch("$inc", {})).each do |field, delta|
+        document[field] = (document[field].is_a?(Numeric) ? document[field] : 0) + delta
+      end
+      document.merge!(deep_dup(update.fetch("$set", {})))
       deep_dup(document)
     end
 
@@ -76,6 +81,19 @@ module BetterAuthMongoAdapterTestSupport
         count += 1
       end
       UpdateResult.new(count)
+    end
+
+    def update_one(filter, update, options = {})
+      @update_one_calls << [deep_dup(filter), deep_dup(update), options]
+      documents = writable_documents(options)
+      existing = documents.find { |entry| matches_filter?(entry, filter) }
+      return UpdateResult.new(0, nil) if existing
+
+      raise "upsert required" unless options[:upsert]
+
+      document = deep_dup(update.fetch("$setOnInsert"))
+      documents << document
+      UpdateResult.new(0, document.fetch("_id"))
     end
 
     def delete_one(filter, options = {})

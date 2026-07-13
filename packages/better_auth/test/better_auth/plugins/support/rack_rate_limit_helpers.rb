@@ -59,6 +59,14 @@ module RackRateLimitHelpers
       ttls[key] = ttl
     end
 
+    def increment(key, ttl)
+      unless data.key?(key)
+        data[key] = 0
+        ttls[key] = ttl
+      end
+      data[key] = data[key].to_i + 1
+    end
+
     def delete(key)
       data.delete(key)
       ttls.delete(key)

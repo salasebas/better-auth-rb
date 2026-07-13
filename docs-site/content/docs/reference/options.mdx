@@ -526,6 +526,9 @@ auth = BetterAuth.auth(
 * `customRules`: Custom rate limit rules to apply to specific paths.
 * `storage`: Storage configuration. If you passed a secondary storage, rate limiting will be stored in the secondary storage. (options: `"memory", "database", "secondary-storage"`, default: `"memory"`)
 * `modelName`: The name of the table to use for rate limiting if database is used as storage. (default: `"rateLimit"`)
+* `customStorage`: A custom backend. Implement atomic `consume(key, window:, max:) => {allowed:, retry_after:}` for strict concurrency enforcement. Legacy `get`/`set` backends remain best effort and emit one warning.
+
+Memory and database storage use rolling windows. Memory is scoped to one auth instance and capped at 100,000 keys. Secondary storage with `increment` uses a fixed first-request window and returns the full window as retry-after when blocked. Rate limiting runs before plugin `on_request` but after plugin router middleware; plugin `on_response` still receives `429` responses.
 
 ## `advanced`
 <UnderDevelopment>

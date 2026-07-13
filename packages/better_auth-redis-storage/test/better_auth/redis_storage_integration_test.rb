@@ -208,13 +208,25 @@ class RedisStorageIntegrationTest < Minitest::Test
       ]
     )
 
-    assert_equal 200, auth.call(rack_env("GET", "/api/auth/limited")).first
-    assert_equal 429, auth.call(rack_env("GET", "/api/auth/limited")).first
+    ready = Queue.new
+    start = Queue.new
+    threads = 8.times.map do
+      Thread.new do
+        ready << true
+        start.pop
+        auth.call(rack_env("GET", "/api/auth/limited")).first
+      end
+    end
+    8.times { ready.pop }
+    8.times { start << true }
+    statuses = threads.map(&:value)
+
+    assert_equal 1, statuses.count(200)
+    assert_equal 7, statuses.count(429)
 
     key = @storage.list_keys.find { |entry| entry == "127.0.0.1|/limited" }
     refute_nil key
-    stored = JSON.parse(@storage.get(key))
-    assert_equal 1, stored.fetch("count")
+    assert_equal "8", @storage.get(key)
     assert_operator @client.ttl("#{@prefix_root}:#{key}"), :>, 0
   end
 

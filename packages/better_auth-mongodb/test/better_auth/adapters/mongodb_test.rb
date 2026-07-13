@@ -27,6 +27,21 @@ class BetterAuthMongoDBAdapterTest < Minitest::Test
     assert_equal "Winner", @adapter.find_one(model: "user", where: [{field: "id", value: "reservation"}]).fetch("name")
   end
 
+  def test_mongodb_create_if_absent_uses_non_id_unique_field_without_overwriting_winner
+    config = BetterAuth::Configuration.new(secret: SECRET, database: :memory, rate_limit: {storage: "database"})
+    adapter = BetterAuth::Adapters::MongoDB.new(config, database: @database)
+    winner = {key: "127.0.0.1|/limited", count: 1, lastRequest: 1_000}
+    loser = winner.merge(count: 99, lastRequest: 2_000)
+
+    assert adapter.create_if_absent(model: "rateLimit", data: winner, conflict_field: "key")
+    refute adapter.create_if_absent(model: "rateLimit", data: loser, conflict_field: "key")
+
+    stored = adapter.find_one(model: "rateLimit", where: [{field: "key", value: winner.fetch(:key)}])
+    assert_equal 1, stored.fetch("count")
+    assert_equal 1_000, stored.fetch("lastRequest")
+    assert_equal({"key" => winner.fetch(:key)}, @database.collection("rateLimit").update_one_calls.first.first)
+  end
+
   def test_mongodb_increment_rejects_non_numeric_fields
     user = @adapter.create(model: "user", data: {name: "Ada", email: "increment-invalid@example.com"})
 

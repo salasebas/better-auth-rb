@@ -42,17 +42,13 @@ module BetterAuth
       def create_if_absent(model:, data:, conflict_field: "id", force_allow_id: true)
         model = model.to_s
         field = resolve_atomic_field(model, conflict_field)
-        unless field == "id"
-          raise APIError.new("BAD_REQUEST", message: "MongoDB create_if_absent requires conflict_field id")
-        end
-
         record = transform_input(model, data, "create", force_allow_id)
         raise APIError.new("BAD_REQUEST", message: "Missing conflict field #{conflict_field}") unless record.key?(field)
 
         document = to_document(model, record)
-        id = document.fetch("_id")
+        physical_field = (field == "id") ? "_id" : storage_field(model, field)
         result = collection_for(model).update_one(
-          {"_id" => id},
+          {physical_field => document.fetch(physical_field)},
           {"$setOnInsert" => document},
           session_options.merge(upsert: true)
         )

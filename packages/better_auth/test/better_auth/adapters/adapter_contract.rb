@@ -124,6 +124,54 @@ module BetterAuthAdapterContract
     end
   end
 
+  def test_adapter_contract_rate_limit_guard_allows_exactly_max_concurrent_requests
+    config = contract_config(rate_limit: {storage: "database"})
+
+    with_contract_adapter(config) do |adapter|
+      now = (Time.now.to_f * 1000).to_i
+      adapter.create_if_absent(
+        model: "rateLimit",
+        data: {key: "atomic-burst", count: 0, lastRequest: now},
+        conflict_field: "key"
+      )
+      ready = Queue.new
+      start = Queue.new
+      threads = ATOMIC_THREAD_COUNT.times.map do
+        Thread.new do
+          ready << true
+          start.pop
+          adapter.increment_one(
+            model: "rateLimit",
+            where: [
+              {field: "key", value: "atomic-burst"},
+              {field: "lastRequest", operator: "gte", value: now - 60_000},
+              {field: "count", operator: "lt", value: 3}
+            ],
+            increment: {count: 1},
+            set: {lastRequest: now}
+          )
+        end
+      end
+      ATOMIC_THREAD_COUNT.times { ready.pop }
+      ATOMIC_THREAD_COUNT.times { start << true }
+
+      assert_equal 3, threads.map(&:value).compact.length
+      row = adapter.find_one(model: "rateLimit", where: [{field: "key", value: "atomic-burst"}])
+      assert_equal 3, row.fetch("count")
+
+      reset = adapter.increment_one(
+        model: "rateLimit",
+        where: [
+          {field: "key", value: "atomic-burst"},
+          {field: "lastRequest", operator: "lte", value: now}
+        ],
+        increment: {},
+        set: {count: 1, lastRequest: now + 61_000}
+      )
+      assert_equal 1, reset.fetch("count")
+    end
+  end
+
   def test_adapter_contract_nested_transactions_reuse_the_active_transaction
     config = contract_config
 

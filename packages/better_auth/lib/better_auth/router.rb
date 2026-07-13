@@ -75,11 +75,11 @@ module BetterAuth
 
       return run_on_response_chain(not_found) if disabled_path?(route_path)
 
-      request = run_on_request_chain(request)
-      return run_on_response_chain(request) if rack_response?(request)
-
       response = rate_limiter.call(request, context, route_path)
       return run_on_response_chain(response) if response
+
+      request = run_on_request_chain(request)
+      return run_on_response_chain(request) if rack_response?(request)
 
       endpoint_context = rebuild_endpoint_context(endpoint_context, request, route_path, params, endpoint)
       result = API.new(context, endpoints).execute(endpoint, endpoint_context)
