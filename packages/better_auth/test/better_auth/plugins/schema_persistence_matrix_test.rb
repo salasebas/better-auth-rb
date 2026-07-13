@@ -95,6 +95,15 @@ class BetterAuthPluginsSchemaPersistenceMatrixTest < Minitest::Test
     assert_includes session_fields, "traceId"
 
     assert_includes tables.fetch("twoFactor").fetch(:fields), "backupCodes"
+    two_factor_fields = tables.fetch("twoFactor").fetch(:fields)
+    failed_count = two_factor_fields.fetch("failedVerificationCount")
+    locked_until = two_factor_fields.fetch("lockedUntil")
+    assert_equal({type: "number", required: false, default_value: 0, input: false, returned: false}, failed_count.slice(:type, :required, :default_value, :input, :returned))
+    assert_equal({type: "date", required: false, input: false, returned: false}, locked_until.slice(:type, :required, :input, :returned))
+
+    two_factor_columns = migration_tables.fetch("two_factors").fetch(:fields)
+    assert_equal "failed_verification_count", two_factor_columns.fetch("failed_verification_count").fetch(:field_name)
+    assert_equal "locked_until", two_factor_columns.fetch("locked_until").fetch(:field_name)
     assert_includes tables.fetch("deviceCode").fetch(:fields), "pollingInterval"
     assert_includes tables.fetch("walletAddress").fetch(:fields), "address"
     assert_includes tables.fetch("jwks").fetch(:fields), "privateKey"
@@ -196,6 +205,8 @@ class BetterAuthPluginsSchemaPersistenceMatrixTest < Minitest::Test
       {logical_table: "user", logical_field: "isAnonymous", physical_table: "users", physical_column: "is_anonymous"},
       {logical_table: "user", logical_field: "phoneNumber", physical_table: "users", physical_column: "phone_number"},
       {logical_table: "user", logical_field: "twoFactorEnabled", physical_table: "users", physical_column: "two_factor_enabled"},
+      {logical_table: "twoFactor", logical_field: "failedVerificationCount", physical_table: "two_factors", physical_column: "failed_verification_count"},
+      {logical_table: "twoFactor", logical_field: "lockedUntil", physical_table: "two_factors", physical_column: "locked_until"},
       {logical_table: "organization", logical_field: "slug", physical_table: "organizations", physical_column: "slug"},
       {logical_table: "team", logical_field: "organizationId", physical_table: "teams", physical_column: "organization_id"},
       {logical_table: "organizationRole", logical_field: "permission", physical_table: "organization_roles", physical_column: "permission"},

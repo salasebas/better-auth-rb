@@ -170,6 +170,19 @@ RSpec.describe BetterAuth::Hanami::Migration do
     expect(migration).to include("column :username, String")
   end
 
+  it "renders two-factor account lockout fields" do
+    plugin_config = BetterAuth::Configuration.new(
+      secret: secret,
+      database: :memory,
+      plugins: [BetterAuth::Plugins.two_factor]
+    )
+
+    migration = described_class.render(plugin_config)
+
+    expect(migration).to include("column :failed_verification_count, Integer, default: 0")
+    expect(migration).to include("column :locked_until, DateTime")
+  end
+
   it "renders pending ROM migrations from the shared migration plan" do
     plugin = BetterAuth::Plugin.new(
       id: "audit",

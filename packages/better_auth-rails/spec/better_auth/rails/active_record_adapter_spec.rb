@@ -414,6 +414,44 @@ RSpec.describe BetterAuth::Rails::ActiveRecordAdapter do
     end
   end
 
+  it "requires explicit privilege to increment server-managed numeric fields" do
+    atomic_config = BetterAuth::Configuration.new(
+      secret: secret,
+      database: :memory,
+      user: {additional_fields: {failedAttempts: {type: "number", required: false, input: false}}}
+    )
+    atomic_adapter = described_class.new(atomic_config, connection: connection)
+    record = BetterAuthRailsFakeRecord.new(
+      "id" => "managed-user",
+      "email" => "managed-increment@example.com",
+      "failed_attempts" => nil
+    )
+    relation = BetterAuthRailsFakeRelation.new([record])
+    atomic_adapter.send(:model_class, "user").relation = relation
+    allow(fake_connection).to receive(:transaction).and_yield
+    where = [{field: "id", value: "managed-user"}]
+
+    expect {
+      atomic_adapter.increment_one(model: "user", where: where, increment: {failedAttempts: 1})
+    }.to raise_error(BetterAuth::APIError, /mutable numeric field/)
+
+    result = atomic_adapter.increment_one(
+      model: "user",
+      where: where,
+      increment: {failedAttempts: 1},
+      allow_server_managed: true
+    )
+
+    expect(result).to include("failedAttempts" => 1)
+    expect(record.attributes.fetch("failed_attempts")).to eq(1)
+    expect {
+      atomic_adapter.increment_one(model: "user", where: where, increment: {id: 1}, allow_server_managed: true)
+    }.to raise_error(BetterAuth::APIError, /mutable numeric field/)
+    expect {
+      atomic_adapter.increment_one(model: "user", where: where, increment: {failedAttempts: Float::INFINITY}, allow_server_managed: true)
+    }.to raise_error(BetterAuth::APIError, /must be numeric/)
+  end
+
   it "has one consume winner and no lost increments under a thread barrier" do
     atomic_config = BetterAuth::Configuration.new(
       secret: secret,

@@ -273,6 +273,38 @@ RSpec.describe BetterAuth::Hanami::SequelAdapter do
     expect(atomic_adapter.increment_one(model: "user", where: [{field: "id", value: "reservation"}], increment: {credits: 1})).to include("credits" => 2)
   end
 
+  it "requires explicit privilege to increment server-managed numeric fields" do
+    atomic_config = BetterAuth::Configuration.new(
+      secret: secret,
+      database: :memory,
+      user: {additional_fields: {failedAttempts: {type: "number", required: false, input: false}}}
+    )
+    db = Sequel.sqlite
+    apply_migration(db, atomic_config)
+    atomic_adapter = described_class.new(atomic_config, connection: db)
+    user = atomic_adapter.create(model: "user", data: {name: "Managed", email: "managed-increment@example.com"})
+    where = [{field: "id", value: user.fetch("id")}]
+
+    expect {
+      atomic_adapter.increment_one(model: "user", where: where, increment: {failedAttempts: 1})
+    }.to raise_error(BetterAuth::APIError, /mutable numeric field/)
+
+    result = atomic_adapter.increment_one(
+      model: "user",
+      where: where,
+      increment: {failedAttempts: 1},
+      allow_server_managed: true
+    )
+
+    expect(result).to include("failedAttempts" => 1)
+    expect {
+      atomic_adapter.increment_one(model: "user", where: where, increment: {id: 1}, allow_server_managed: true)
+    }.to raise_error(BetterAuth::APIError, /mutable numeric field/)
+    expect {
+      atomic_adapter.increment_one(model: "user", where: where, increment: {failedAttempts: Float::INFINITY}, allow_server_managed: true)
+    }.to raise_error(BetterAuth::APIError, /must be numeric/)
+  end
+
   it "raises controlled API errors for invalid query fields and pagination" do
     db = Sequel.sqlite
     apply_migration(db, config)

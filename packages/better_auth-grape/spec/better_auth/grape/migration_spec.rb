@@ -113,6 +113,19 @@ RSpec.describe BetterAuth::Grape::Migration do
     expect(sql).to include('CREATE INDEX IF NOT EXISTS "index_api_keys_on_user_id"')
   end
 
+  it "renders two-factor account lockout fields" do
+    config = BetterAuth::Configuration.new(
+      secret: secret,
+      database: :memory,
+      plugins: [BetterAuth::Plugins.two_factor]
+    )
+
+    sql = described_class.render(config, dialect: :postgres)
+
+    expect(sql).to include('"failed_verification_count" integer DEFAULT 0')
+    expect(sql).to include('"locked_until" timestamptz')
+  end
+
   it "omits plugin tables with migrations disabled" do
     plugin = BetterAuth::Plugin.new(
       id: "external-audit",

@@ -4,6 +4,7 @@ require "base64"
 require "json"
 require "openssl"
 require "securerandom"
+require "time"
 require "uri"
 
 module BetterAuth
@@ -17,6 +18,7 @@ module BetterAuth
       "INVALID_BACKUP_CODE" => "Invalid backup code",
       "INVALID_CODE" => "Invalid code",
       "TOO_MANY_ATTEMPTS_REQUEST_NEW_CODE" => "Too many attempts. Please request a new code.",
+      "ACCOUNT_TEMPORARILY_LOCKED" => "Too many failed verification attempts. Your account is temporarily locked. Please try again later.",
       "INVALID_TWO_FACTOR_COOKIE" => "Invalid two factor cookie"
     }.freeze
 
@@ -25,6 +27,9 @@ module BetterAuth
     TRUST_DEVICE_COOKIE_MAX_AGE = 30 * 24 * 60 * 60
     TWO_FACTOR_COOKIE_MAX_AGE = 10 * 60
     TWO_FACTOR_MODEL = "twoFactor"
+    DEFAULT_TWO_FACTOR_ALLOWED_ATTEMPTS = 5
+    DEFAULT_ACCOUNT_LOCKOUT_MAX_FAILED_ATTEMPTS = 10
+    DEFAULT_ACCOUNT_LOCKOUT_DURATION_SECONDS = 15 * 60
 
     module_function
 
@@ -33,6 +38,11 @@ module BetterAuth
         two_factor_table: "twoFactor",
         trust_device_max_age: TRUST_DEVICE_COOKIE_MAX_AGE,
         two_factor_cookie_max_age: TWO_FACTOR_COOKIE_MAX_AGE,
+        account_lockout: {
+          enabled: true,
+          max_failed_attempts: DEFAULT_ACCOUNT_LOCKOUT_MAX_FAILED_ATTEMPTS,
+          duration_seconds: DEFAULT_ACCOUNT_LOCKOUT_DURATION_SECONDS
+        },
         backup_code_options: {store_backup_codes: "encrypted"},
         otp_options: {},
         totp_options: {}
@@ -40,6 +50,11 @@ module BetterAuth
       config[:backup_code_options] = {store_backup_codes: "encrypted"}.merge(normalize_hash(config[:backup_code_options]))
       config[:otp_options] = normalize_hash(config[:otp_options])
       config[:totp_options] = normalize_hash(config[:totp_options])
+      config[:account_lockout] = {
+        enabled: true,
+        max_failed_attempts: DEFAULT_ACCOUNT_LOCKOUT_MAX_FAILED_ATTEMPTS,
+        duration_seconds: DEFAULT_ACCOUNT_LOCKOUT_DURATION_SECONDS
+      }.merge(normalize_hash(config[:account_lockout]))
       config[:backup_code_options][:allow_passwordless] = config[:allow_passwordless] unless config[:backup_code_options].key?(:allow_passwordless)
       config[:totp_options][:allow_passwordless] = config[:allow_passwordless] unless config[:totp_options].key?(:allow_passwordless)
 
@@ -169,8 +184,22 @@ module BetterAuth
           raise APIError.new("BAD_REQUEST", message: TWO_FACTOR_ERROR_CODES["TOTP_NOT_ENABLED"])
         end
 
-        secret = Crypto.symmetric_decrypt(key: ctx.context.secret_config, data: record["secret"])
-        raise APIError.new("UNAUTHORIZED", message: TWO_FACTOR_ERROR_CODES["INVALID_CODE"]) unless two_factor_totp_valid?(secret, body[:code], options: config[:totp_options])
+        sign_in = data[:session][:session].nil?
+        two_factor_assert_not_locked!(ctx, config, record) if sign_in
+        attempt = sign_in ? data[:begin_attempt].call(DEFAULT_TWO_FACTOR_ALLOWED_ATTEMPTS) : nil
+        valid_code = begin
+          secret = Crypto.symmetric_decrypt(key: ctx.context.secret_config, data: record["secret"])
+          two_factor_totp_valid?(secret, body[:code], options: config[:totp_options])
+        rescue
+          attempt&.fetch(:restore)&.call
+          raise
+        end
+        unless valid_code
+          attempt&.fetch(:record_failure)&.call
+          two_factor_record_failure!(ctx, config, record) if sign_in
+          raise APIError.new("UNAUTHORIZED", message: TWO_FACTOR_ERROR_CODES["INVALID_CODE"])
+        end
+        two_factor_reset_failures!(ctx, config, record) if sign_in
 
         if record["verified"] != true
           if !data[:session][:user]["twoFactorEnabled"] && data[:session][:session]
@@ -215,6 +244,14 @@ module BetterAuth
       Endpoint.new(path: "/two-factor/verify-otp", method: "POST", metadata: two_factor_openapi("verifyTwoFactorOTP", "Verify a two factor OTP", two_factor_verification_response_schema)) do |ctx|
         body = normalize_hash(ctx.body)
         data = two_factor_verification_context(ctx, config)
+        sign_in = data[:session][:session].nil?
+        record = nil
+        if sign_in
+          record = two_factor_record(ctx, config, data[:session][:user]["id"])
+          raise APIError.new("BAD_REQUEST", message: TWO_FACTOR_ERROR_CODES["TWO_FACTOR_NOT_ENABLED"]) unless record
+
+          two_factor_assert_not_locked!(ctx, config, record)
+        end
         identifier = "2fa-otp-#{data[:key]}"
         verification = ctx.context.internal_adapter.consume_verification_value(identifier)
         stored, counter = verification&.fetch("value", nil).to_s.split(":", 2)
@@ -228,9 +265,13 @@ module BetterAuth
         end
 
         unless two_factor_otp_matches?(ctx, stored, body[:code].to_s, config[:otp_options])
-          ctx.context.internal_adapter.create_verification_value(identifier: identifier, value: "#{stored}:#{counter.to_i + 1}", expiresAt: verification["expiresAt"])
+          rearmed = ctx.context.internal_adapter.create_verification_value(identifier: identifier, value: "#{stored}:#{counter.to_i + 1}", expiresAt: verification["expiresAt"])
+          raise Error, "Failed to re-arm two-factor OTP attempt counter" unless rearmed
+
+          two_factor_record_failure!(ctx, config, record) if sign_in
           raise APIError.new("UNAUTHORIZED", message: TWO_FACTOR_ERROR_CODES["INVALID_CODE"])
         end
+        two_factor_reset_failures!(ctx, config, record) if sign_in
 
         if !data[:session][:user]["twoFactorEnabled"] && data[:session][:session]
           updated_user = ctx.context.internal_adapter.update_user(data[:session][:user]["id"], twoFactorEnabled: true)
@@ -251,13 +292,28 @@ module BetterAuth
         record = two_factor_record(ctx, config, data[:session][:user]["id"])
         raise APIError.new("BAD_REQUEST", message: TWO_FACTOR_ERROR_CODES["BACKUP_CODES_NOT_ENABLED"]) unless record
 
-        codes = two_factor_read_backup_codes(ctx.context.secret_config, record["backupCodes"], config[:backup_code_options])
+        sign_in = data[:session][:session].nil?
+        two_factor_assert_not_locked!(ctx, config, record) if sign_in
+        attempt = sign_in ? data[:begin_attempt].call(DEFAULT_TWO_FACTOR_ALLOWED_ATTEMPTS) : nil
+        codes = begin
+          two_factor_read_backup_codes(ctx.context.secret_config, record["backupCodes"], config[:backup_code_options])
+        rescue
+          attempt&.fetch(:restore)&.call
+          raise
+        end
         unless codes.include?(body[:code].to_s)
+          attempt&.fetch(:record_failure)&.call
+          two_factor_record_failure!(ctx, config, record) if sign_in
           raise APIError.new("UNAUTHORIZED", message: TWO_FACTOR_ERROR_CODES["INVALID_BACKUP_CODE"])
         end
 
         remaining = codes.reject { |code| code == body[:code].to_s }
-        stored = two_factor_store_backup_codes(ctx.context.secret_config, remaining, config[:backup_code_options])
+        stored = begin
+          two_factor_store_backup_codes(ctx.context.secret_config, remaining, config[:backup_code_options])
+        rescue
+          attempt&.fetch(:restore)&.call
+          raise
+        end
         updated = ctx.context.adapter.update(
           model: TWO_FACTOR_MODEL,
           where: [{field: "id", value: record["id"]}, {field: "backupCodes", value: record["backupCodes"]}],
@@ -265,6 +321,7 @@ module BetterAuth
         )
         raise APIError.new("CONFLICT", message: "Failed to verify backup code. Please try again.") unless updated
 
+        two_factor_reset_failures!(ctx, config, record) if sign_in
         body[:disable_session] ? ctx.json({token: data[:session][:session]&.fetch("token", nil), user: Schema.parse_output(ctx.context.options, "user", data[:session][:user])}) : data[:valid].call
       end
     end
@@ -370,7 +427,9 @@ module BetterAuth
             secret: {type: "string", required: true, returned: false, index: true},
             backupCodes: {type: "string", required: true, returned: false},
             userId: {type: "string", required: true, returned: false, index: true, references: {model: "user", field: "id"}},
-            verified: {type: "boolean", required: false, default_value: true, input: false}
+            verified: {type: "boolean", required: false, default_value: true, input: false},
+            failedVerificationCount: {type: "number", required: false, default_value: 0, input: false, returned: false},
+            lockedUntil: {type: "date", required: false, input: false, returned: false}
           }
         }
       }
@@ -390,10 +449,16 @@ module BetterAuth
       ctx.context.internal_adapter.delete_session(data[:session]["token"])
       cookie = ctx.context.create_auth_cookie(TWO_FACTOR_COOKIE_NAME, max_age: config[:two_factor_cookie_max_age])
       identifier = "2fa-#{Crypto.random_string(20)}"
+      expires_at = Time.now + config[:two_factor_cookie_max_age].to_i
       ctx.context.internal_adapter.create_verification_value(
         identifier: identifier,
         value: data[:user]["id"],
-        expiresAt: Time.now + config[:two_factor_cookie_max_age].to_i
+        expiresAt: expires_at
+      )
+      ctx.context.internal_adapter.create_verification_value(
+        identifier: "2fa-attempts-#{identifier}",
+        value: "0",
+        expiresAt: expires_at
       )
       ctx.set_signed_cookie(cookie.name, identifier, ctx.context.secret, cookie.attributes)
       ctx.json({twoFactorRedirect: true, twoFactorMethods: two_factor_methods(ctx, config, data[:user]["id"])})
@@ -403,7 +468,13 @@ module BetterAuth
       session = Routes.current_session(ctx, allow_nil: true)
       if session
         key = "#{session[:user]["id"]}!#{session[:session]["id"]}"
-        return {session: session, key: key, valid: -> { ctx.json({token: session[:session]["token"], user: Schema.parse_output(ctx.context.options, "user", session[:user])}) }}
+        no_op_attempt = ->(_allowed_attempts) { {record_failure: -> {}, restore: -> {}} }
+        return {
+          session: session,
+          key: key,
+          valid: -> { ctx.json({token: session[:session]["token"], user: Schema.parse_output(ctx.context.options, "user", session[:user])}) },
+          begin_attempt: no_op_attempt
+        }
       end
 
       cookie = ctx.context.create_auth_cookie(TWO_FACTOR_COOKIE_NAME)
@@ -435,7 +506,41 @@ module BetterAuth
         ctx.json({token: new_session["token"], user: Schema.parse_output(ctx.context.options, "user", user)})
       end
 
-      {session: {session: nil, user: user}, key: identifier, valid: valid}
+      begin_attempt = lambda do |allowed_attempts|
+        attempts_identifier = "2fa-attempts-#{identifier}"
+        consumed = begin
+          ctx.context.internal_adapter.consume_verification_value(attempts_identifier)
+        rescue
+          nil
+        end
+        raise APIError.new("UNAUTHORIZED", message: TWO_FACTOR_ERROR_CODES["INVALID_TWO_FACTOR_COOKIE"]) unless consumed
+
+        raw_count = consumed["value"].to_s
+        attempts = raw_count.match?(/\A\d+\z/) ? raw_count.to_i : allowed_attempts
+        if attempts >= allowed_attempts
+          begin
+            ctx.context.internal_adapter.consume_verification_value(identifier)
+          rescue
+            nil
+          end
+          Cookies.expire_cookie(ctx, cookie)
+          raise APIError.new("BAD_REQUEST", message: TWO_FACTOR_ERROR_CODES["TOO_MANY_ATTEMPTS_REQUEST_NEW_CODE"])
+        end
+
+        rearm = lambda do |count|
+          created = ctx.context.internal_adapter.create_verification_value(
+            identifier: attempts_identifier,
+            value: count.to_s,
+            expiresAt: verification["expiresAt"]
+          )
+          raise Error, "Failed to re-arm two-factor attempt counter" unless created
+
+          created
+        end
+        {record_failure: -> { rearm.call(attempts + 1) }, restore: -> { rearm.call(attempts) }}
+      end
+
+      {session: {session: nil, user: user}, key: identifier, valid: valid, begin_attempt: begin_attempt}
     end
 
     def two_factor_set_trusted_device(ctx, config, user_id)
@@ -468,6 +573,64 @@ module BetterAuth
 
     def two_factor_record(ctx, config, user_id)
       ctx.context.adapter.find_one(model: TWO_FACTOR_MODEL, where: [{field: "userId", value: user_id}])
+    end
+
+    def two_factor_assert_not_locked!(ctx, config, record)
+      lockout = config[:account_lockout]
+      return unless lockout && lockout[:enabled] != false && record["lockedUntil"]
+
+      locked_until = two_factor_lock_time(record["lockedUntil"])
+      if locked_until > Time.now
+        raise APIError.new("TOO_MANY_REQUESTS", message: TWO_FACTOR_ERROR_CODES["ACCOUNT_TEMPORARILY_LOCKED"])
+      end
+
+      cleared = ctx.context.adapter.increment_one(
+        model: TWO_FACTOR_MODEL,
+        where: [
+          {field: "id", value: record["id"]},
+          {field: "lockedUntil", operator: "lte", value: Time.now}
+        ],
+        increment: {},
+        set: {failedVerificationCount: 0, lockedUntil: nil}
+      )
+      raise Error, "Failed to clear expired two-factor account lock" unless cleared
+    end
+
+    def two_factor_record_failure!(ctx, config, record)
+      lockout = config[:account_lockout]
+      return unless lockout && lockout[:enabled] != false
+
+      updated = ctx.context.adapter.increment_one(
+        model: TWO_FACTOR_MODEL,
+        where: [{field: "id", value: record["id"]}],
+        increment: {failedVerificationCount: 1},
+        allow_server_managed: true
+      )
+      raise Error, "Failed to record two-factor verification failure" unless updated
+      return if updated["failedVerificationCount"].to_i < lockout[:max_failed_attempts].to_i
+
+      locked = ctx.context.adapter.update(
+        model: TWO_FACTOR_MODEL,
+        where: [{field: "id", value: record["id"]}],
+        update: {lockedUntil: Time.now + lockout[:duration_seconds].to_i}
+      )
+      raise Error, "Failed to lock two-factor account" unless locked
+    end
+
+    def two_factor_reset_failures!(ctx, config, record)
+      lockout = config[:account_lockout]
+      return unless lockout && lockout[:enabled] != false
+
+      reset = ctx.context.adapter.update(
+        model: TWO_FACTOR_MODEL,
+        where: [{field: "id", value: record["id"]}],
+        update: {failedVerificationCount: 0, lockedUntil: nil}
+      )
+      raise Error, "Failed to reset two-factor verification failures" unless reset
+    end
+
+    def two_factor_lock_time(value)
+      value.is_a?(Time) ? value : Time.parse(value.to_s)
     end
 
     def two_factor_methods(ctx, config, user_id)
@@ -561,8 +724,6 @@ module BetterAuth
         stored
       end
       JSON.parse(data.to_s)
-    rescue JSON::ParserError
-      []
     end
 
     def two_factor_random_digits(length)

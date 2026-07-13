@@ -134,9 +134,9 @@ module BetterAuth
         end
       end
 
-      def increment_one(model:, where:, increment:, set: nil)
+      def increment_one(model:, where:, increment:, set: nil, allow_server_managed: false)
         model = model.to_s
-        increments, assignments = normalize_atomic_update(model, increment, set)
+        increments, assignments = normalize_atomic_update(model, increment, set, allow_server_managed)
         transaction do
           record = relation_for(model, where: where || []).limit(1).lock(true).first
           if record
@@ -327,14 +327,16 @@ module BetterAuth
         raise APIError.new("BAD_REQUEST", message: "No fields to update") unless has_updatable_field
       end
 
-      def normalize_atomic_update(model, increment, set)
+      def normalize_atomic_update(model, increment, set, allow_server_managed)
         raise BetterAuth::APIError.new("BAD_REQUEST", message: "increment must be a Hash") unless increment.is_a?(Hash)
 
         fields = schema_for(model).fetch(:fields)
         increments = increment.each_with_object({}) do |(field, delta), result|
           logical_field = atomic_schema_field(fields, field)
           attributes = fields[logical_field]
-          unless attributes && logical_field != "id" && attributes[:type] == "number" && attributes[:input] != false
+          valid_field = attributes && logical_field != "id" && attributes[:type] == "number"
+          valid_field = false if attributes && attributes[:input] == false && allow_server_managed != true
+          unless valid_field
             raise BetterAuth::APIError.new("BAD_REQUEST", message: "Invalid increment field #{field}; expected a mutable numeric field")
           end
           if !delta.is_a?(Numeric) || (delta.respond_to?(:finite?) && !delta.finite?)

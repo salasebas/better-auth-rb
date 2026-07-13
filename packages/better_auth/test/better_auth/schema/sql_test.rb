@@ -696,4 +696,23 @@ class BetterAuthSchemaSQLTest < Minitest::Test
     assert_includes sql, '"username" text'
     assert_includes sql, 'FOREIGN KEY ("user_id") REFERENCES "users" ("id") ON DELETE CASCADE'
   end
+
+  def test_two_factor_lockout_fields_use_expected_types_and_defaults_for_each_dialect
+    config = BetterAuth::Configuration.new(
+      secret: SECRET,
+      database: :memory,
+      plugins: [BetterAuth::Plugins.two_factor]
+    )
+
+    {
+      sqlite: ['"failed_verification_count" integer DEFAULT 0', '"locked_until" date'],
+      postgres: ['"failed_verification_count" integer DEFAULT 0', '"locked_until" timestamptz'],
+      mysql: ["`failed_verification_count` integer DEFAULT 0", "`locked_until` datetime(6)"],
+      mssql: ["[failed_verification_count] integer NULL DEFAULT 0", "[locked_until] datetime2(3) NULL"]
+    }.each do |dialect, fields|
+      sql = BetterAuth::Schema::SQL.create_statements(config, dialect: dialect).join("\n")
+
+      fields.each { |field| assert_includes sql, field, dialect.to_s }
+    end
+  end
 end

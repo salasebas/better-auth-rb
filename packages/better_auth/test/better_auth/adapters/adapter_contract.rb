@@ -42,6 +42,79 @@ module BetterAuthAdapterContract
     end
   end
 
+  def test_adapter_contract_increment_one_requires_explicit_privilege_for_server_managed_fields
+    config = contract_config(
+      user: {
+        additional_fields: {
+          failedAttempts: {type: "number", required: false, input: false}
+        }
+      }
+    )
+
+    with_contract_adapter(config) do |adapter|
+      user = adapter.create(model: "user", data: {name: "Managed", email: "managed-increment@example.com"})
+      where = [{field: "id", value: user.fetch("id")}]
+
+      assert_raises(BetterAuth::APIError) do
+        adapter.increment_one(model: "user", where: where, increment: {failedAttempts: 1})
+      end
+      assert_raises(BetterAuth::APIError) do
+        adapter.increment_one(model: "user", where: where, increment: {failedAttempts: 1}, allow_server_managed: "true")
+      end
+
+      incremented = adapter.increment_one(
+        model: "user",
+        where: where,
+        increment: {failedAttempts: 2},
+        allow_server_managed: true
+      )
+      assert_equal 2, incremented.fetch("failedAttempts")
+
+      %i[id email missing].each do |field|
+        assert_raises(BetterAuth::APIError) do
+          adapter.increment_one(
+            model: "user",
+            where: where,
+            increment: {field => 1},
+            allow_server_managed: true
+          )
+        end
+      end
+      [Float::INFINITY, -Float::INFINITY, Float::NAN].each do |delta|
+        assert_raises(BetterAuth::APIError) do
+          adapter.increment_one(
+            model: "user",
+            where: where,
+            increment: {failedAttempts: delta},
+            allow_server_managed: true
+          )
+        end
+      end
+
+      concurrent = adapter.create(model: "user", data: {name: "Managed race", email: "managed-race@example.com"})
+      ready = Queue.new
+      start = Queue.new
+      threads = ATOMIC_THREAD_COUNT.times.map do
+        Thread.new do
+          ready << true
+          start.pop
+          adapter.increment_one(
+            model: "user",
+            where: [{field: "id", value: concurrent.fetch("id")}],
+            increment: {failedAttempts: 1},
+            allow_server_managed: true
+          )
+        end
+      end
+      ATOMIC_THREAD_COUNT.times { ready.pop }
+      ATOMIC_THREAD_COUNT.times { start << true }
+
+      assert_equal ATOMIC_THREAD_COUNT, threads.map(&:value).compact.length
+      stored = adapter.find_one(model: "user", where: [{field: "id", value: concurrent.fetch("id")}])
+      assert_equal ATOMIC_THREAD_COUNT, stored.fetch("failedAttempts")
+    end
+  end
+
   def test_adapter_contract_consume_one_deletes_and_returns_at_most_one_row
     config = contract_config
 

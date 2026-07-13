@@ -58,7 +58,10 @@ module BetterAuth
 
       # Atomically apply signed numeric deltas, with +where+ acting as the
       # selector and guard, and return the resulting row or nil on a miss.
-      def increment_one(**)
+      # Server-managed schema fields remain protected unless a trusted plugin
+      # or runtime caller opts in explicitly with +allow_server_managed+.
+      # Never derive privileged field names from user-controlled input.
+      def increment_one(model:, where:, increment:, set: nil, allow_server_managed: false)
         raise NotImplementedError
       end
 

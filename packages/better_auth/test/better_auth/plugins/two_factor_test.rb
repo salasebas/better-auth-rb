@@ -6,6 +6,23 @@ require_relative "../../test_helper"
 class BetterAuthPluginsTwoFactorTest < Minitest::Test
   SECRET = "phase-nine-two-factor-secret-with-enough-entropy"
 
+  def test_account_lockout_options_normalize_snake_and_camel_case_over_defaults
+    defaults = BetterAuth::Plugins.two_factor.options.fetch(:account_lockout)
+    assert_equal true, defaults.fetch(:enabled)
+    assert_equal 10, defaults.fetch(:max_failed_attempts)
+    assert_equal 900, defaults.fetch(:duration_seconds)
+
+    snake = BetterAuth::Plugins.two_factor(account_lockout: {max_failed_attempts: 3}).options.fetch(:account_lockout)
+    assert_equal true, snake.fetch(:enabled)
+    assert_equal 3, snake.fetch(:max_failed_attempts)
+    assert_equal 900, snake.fetch(:duration_seconds)
+
+    camel = BetterAuth::Plugins.two_factor(accountLockout: {enabled: false, maxFailedAttempts: 4, durationSeconds: 30}).options.fetch(:account_lockout)
+    assert_equal false, camel.fetch(:enabled)
+    assert_equal 4, camel.fetch(:max_failed_attempts)
+    assert_equal 30, camel.fetch(:duration_seconds)
+  end
+
   def test_enable_then_verify_totp_requires_second_factor_on_next_sign_in
     auth = build_auth
     cookie = sign_up_cookie(auth, email: "totp@example.com")

@@ -132,14 +132,16 @@ module BetterAuth
         result ? from_document(model, stringify_document(result)) : nil
       end
 
-      def increment_one(model:, where:, increment:, set: nil)
+      def increment_one(model:, where:, increment:, set: nil, allow_server_managed: false)
         model = model.to_s
         raise APIError.new("BAD_REQUEST", message: "increment must be a Hash") unless increment.is_a?(Hash)
 
         increments = increment.each_with_object({}) do |(field, delta), result|
           logical_field = resolve_atomic_field(model, field)
           attributes = fields_for(model)[logical_field]
-          unless attributes && logical_field != "id" && attributes[:type] == "number" && attributes[:input] != false
+          valid_field = attributes && logical_field != "id" && attributes[:type] == "number"
+          valid_field = false if attributes && attributes[:input] == false && allow_server_managed != true
+          unless valid_field
             raise APIError.new("BAD_REQUEST", message: "Invalid increment field #{field}; expected a mutable numeric field")
           end
           if !delta.is_a?(Numeric) || (delta.respond_to?(:finite?) && !delta.finite?)

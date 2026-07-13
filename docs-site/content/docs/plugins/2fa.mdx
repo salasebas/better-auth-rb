@@ -127,6 +127,10 @@ Handle the second factor challenge on your server by checking the `twoFactorRedi
   ```
 </Callout>
 
+During a sign-in challenge, TOTP and backup-code verification share a fixed budget of five failed attempts. Switching between those two methods does not reset the budget. After it is exhausted, the challenge is invalidated and the user must sign in again. OTP codes use their own configurable `allowedAttempts` budget instead (five by default).
+
+These per-challenge budgets are separate from the account-wide lockout described under [Account lockout](#account-lockout). A failed TOTP, OTP, or backup-code verification consumes both its applicable challenge budget and the shared account counter.
+
 ### Disabling 2FA
 
 To disable two-factor authentication, call `twoFactor.disable` with the user's password (required for credential accounts). If you enable `allowPasswordless`, the password can be omitted for users without a credential account.
@@ -334,7 +338,7 @@ auth = BetterAuth.auth(
 
 ## Schema
 
-The plugin requires 1 additional field in the `user` table and 1 additional table to store the two factor authentication data.
+The plugin requires 1 additional field in the `user` table and 1 additional table to store the two factor authentication data. Account lockout also adds `failedVerificationCount` and `lockedUntil` to the `twoFactor` table.
 
 Table: `user`
 
@@ -381,9 +385,27 @@ export const twoFactorTableFields = [
 		type: "boolean",
 		description: "Whether this TOTP secret has been verified during enrollment",
 	},
+	{
+		name: "failedVerificationCount",
+		type: "number",
+		description:
+			"Consecutive failed sign-in verifications across TOTP, OTP, and backup codes. Defaults to 0 and is managed by the server.",
+		isOptional: true,
+	},
+	{
+		name: "lockedUntil",
+		type: "date",
+		description:
+			"When the account lock expires. Null when the account is not locked and managed by the server.",
+		isOptional: true,
+	},
 ];
 
 <DatabaseTable name="twoFactor" fields={twoFactorTableFields} />
+
+<Callout type="warn">
+  Existing deployments must run `better-auth migrate` or regenerate and apply their schema after upgrading. The migration adds a zero-default failure counter and a nullable lock expiry; do not make `lockedUntil` non-null, because an absent value represents an unlocked account.
+</Callout>
 
 ## Options
 
@@ -430,6 +452,11 @@ export const twoFactorOtpOptionsType = {
     type: "number",
     default: 3,
   },
+  allowedAttempts: {
+    description: "The maximum number of failed verification attempts allowed for one OTP code before it is invalidated.",
+    type: "number",
+    default: 5,
+  },
   storeOTP: {
     description:
       "How to transform the stored OTP value, whether plain text, encrypted, or hashed. You can also provide a custom encryptor or hasher. The storage backend is controlled by the global verification config, so secondary storage can be used instead of the database.",
@@ -468,3 +495,51 @@ export const twoFactorBackupCodeOptionsType = {
 }
 
 <TypeTable type={twoFactorBackupCodeOptionsType} />
+
+### Account lockout
+
+Account lockout limits consecutive failed second-factor verifications during sign-in. TOTP, OTP, and backup-code failures from separate challenges all increment the same per-account counter. Once the limit is reached, subsequent verification attempts—including a correct code—return HTTP `429` with `ACCOUNT_TEMPORARILY_LOCKED` until the lock expires.
+
+```ruby title="config/auth.rb"
+auth = BetterAuth.auth(
+  secret: ENV.fetch("BETTER_AUTH_SECRET"),
+  base_url: ENV.fetch("BETTER_AUTH_URL"),
+  plugins: [
+    BetterAuth::Plugins.two_factor(
+      issuer: "My App",
+      account_lockout: {
+        enabled: true,
+        max_failed_attempts: 10,
+        duration_seconds: 900
+      },
+      otp_options: {
+        allowed_attempts: 5
+      }
+    )
+  ]
+)
+```
+
+export const twoFactorAccountLockoutOptionsType = {
+  enabled: {
+    description: "Whether account-wide lockout is enforced.",
+    type: "boolean",
+    default: true,
+  },
+  maxFailedAttempts: {
+    description: "Consecutive failures across sign-in challenges and factors before the account is locked.",
+    type: "number",
+    default: 10,
+  },
+  durationSeconds: {
+    description: "How long the account remains locked, in seconds.",
+    type: "number",
+    default: 900,
+  },
+}
+
+<TypeTable type={twoFactorAccountLockoutOptionsType} />
+
+A successful sign-in verification resets both `failedVerificationCount` and `lockedUntil`. When the lock duration elapses, the next sign-in verification clears the expired lock and starts from a zero counter. Account lockout applies only to second-factor verification during sign-in; authenticated enrollment and reverification are not blocked by it.
+
+Choose `max_failed_attempts` and `duration_seconds` with both security and availability in mind. A very low threshold makes deliberate account lockouts easier for an attacker who can reach the second-factor step, while a high threshold permits more guesses. Setting `enabled: false` removes cross-challenge, cross-factor account protection, but it does **not** disable the fixed five-attempt TOTP/backup challenge budget or OTP's `allowed_attempts` budget.

@@ -52,6 +52,36 @@ class BetterAuthMongoDBAdapterTest < Minitest::Test
     end
   end
 
+  def test_mongodb_increment_requires_explicit_privilege_for_server_managed_fields
+    config = BetterAuth::Configuration.new(
+      secret: SECRET,
+      database: :memory,
+      user: {additional_fields: {failedAttempts: {type: "number", required: false, input: false}}}
+    )
+    adapter = BetterAuth::Adapters::MongoDB.new(config, database: @database)
+    user = adapter.create(model: "user", data: {name: "Managed", email: "managed-increment@example.com"})
+    where = [{field: "id", value: user.fetch("id")}]
+
+    assert_raises(BetterAuth::APIError) do
+      adapter.increment_one(model: "user", where: where, increment: {failedAttempts: 1})
+    end
+    result = adapter.increment_one(
+      model: "user",
+      where: where,
+      increment: {failedAttempts: 1},
+      allow_server_managed: true
+    )
+
+    assert_equal 1, result.fetch("failedAttempts")
+    assert_equal({"$inc" => {"failed_attempts" => 1}}, @database.collection("user").find_one_and_update_calls.last.fetch(1))
+    assert_raises(BetterAuth::APIError) do
+      adapter.increment_one(model: "user", where: where, increment: {id: 1}, allow_server_managed: true)
+    end
+    assert_raises(BetterAuth::APIError) do
+      adapter.increment_one(model: "user", where: where, increment: {failedAttempts: Float::INFINITY}, allow_server_managed: true)
+    end
+  end
+
   def test_mongodb_atomic_consume_increment_and_nested_transaction_reuse
     config = BetterAuth::Configuration.new(
       secret: SECRET,

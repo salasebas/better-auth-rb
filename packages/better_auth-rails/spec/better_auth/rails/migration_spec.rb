@@ -292,6 +292,19 @@ RSpec.describe BetterAuth::Rails::Migration do
     expect(migration).to include("add_index :external_credentials, :user_id")
   end
 
+  it "renders two-factor account lockout fields" do
+    plugin_config = BetterAuth::Configuration.new(
+      secret: "test-secret-that-is-long-enough-for-validation",
+      database: :memory,
+      plugins: [BetterAuth::Plugins.two_factor]
+    )
+
+    migration = described_class.render(plugin_config)
+
+    expect(migration).to include("t.integer :failed_verification_count, default: 0")
+    expect(migration).to include("t.datetime :locked_until")
+  end
+
   it "renders MSSQL nullable unique fields as filtered unique indexes" do
     plugin_config = BetterAuth::Configuration.new(
       secret: "test-secret-that-is-long-enough-for-validation",

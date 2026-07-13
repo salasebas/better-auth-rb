@@ -231,6 +231,36 @@ class BetterAuthMigrationSQLTest < Minitest::Test
     refute_includes sql, 'CREATE TABLE IF NOT EXISTS "users"'
   end
 
+  def test_plans_two_factor_lockout_fields_for_an_existing_two_factor_table
+    plugin = BetterAuth::Plugins.two_factor
+    legacy_schema = plugin.schema.to_h do |model, definition|
+      fields = definition.fetch(:fields).except(:failed_verification_count, :locked_until)
+      [model, definition.merge(fields: fields)]
+    end
+    legacy_config = BetterAuth::Configuration.new(
+      secret: SECRET,
+      database: :memory,
+      plugins: [BetterAuth::Plugin.new(id: "two-factor-legacy", schema: legacy_schema)]
+    )
+    connection = SQLite3::Database.new(":memory:")
+    connection.results_as_hash = true
+    BetterAuth::SQLMigration.execute_sql(
+      connection,
+      BetterAuth::Schema::SQL.create_statements(legacy_config, dialect: :sqlite).join("\n")
+    )
+    config = BetterAuth::Configuration.new(secret: SECRET, database: :memory, plugins: [plugin])
+
+    plan = BetterAuth::SQLMigration.plan(config, connection: connection, dialect: :sqlite)
+    sql = BetterAuth::SQLMigration.render_pending(config, connection: connection, dialect: :sqlite, generator: "better_auth-test")
+    two_factor_change = plan.to_add.find { |change| change.table_name == "two_factors" }
+
+    refute_nil two_factor_change
+    assert_equal %w[failed_verification_count locked_until], two_factor_change.fields.keys
+    assert_includes sql, 'ALTER TABLE "two_factors" ADD COLUMN "failed_verification_count" integer DEFAULT 0;'
+    assert_includes sql, 'ALTER TABLE "two_factors" ADD COLUMN "locked_until" date;'
+    refute_includes sql, 'CREATE TABLE IF NOT EXISTS "two_factors"'
+  end
+
   def test_postgres_pending_migration_backfills_missing_plugin_id_columns
     plugin = BetterAuth::Plugin.new(
       id: "idless-plugin",
