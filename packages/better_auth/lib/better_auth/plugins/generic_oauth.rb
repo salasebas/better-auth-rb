@@ -311,6 +311,7 @@ module BetterAuth
         account_id = fetch_value(mapped_user, "id").to_s
         redirect_error.call("email_is_missing") if email.empty?
         redirect_error.call("name_is_missing") if name.empty?
+        redirect_error.call("user_info_is_missing") if Routes.blank_remote_id?(account_id)
 
         link = state_data["link"]
         callback_url = state_data["callbackURL"] || "/"
@@ -323,21 +324,14 @@ module BetterAuth
         if !existing && (provider[:disable_sign_up] || (provider[:disable_implicit_sign_up] && !state_data["requestSignUp"]))
           redirect_error.call("signup_disabled")
         end
-        if existing && provider[:override_user_info]
-          ctx.context.internal_adapter.update_user(
-            existing[:user]["id"],
-            "name" => name,
-            "image" => fetch_value(mapped_user, "image"),
-            "emailVerified" => !!fetch_value(mapped_user, "emailVerified")
-          )
-        end
-
         session_data = Routes.persist_social_user(
           ctx,
           provider_id,
           mapped_user.merge("email" => email, "name" => name, "id" => account_id),
-          generic_oauth_account_info(ctx, provider_id, account_id, tokens)
+          generic_oauth_account_info(ctx, provider_id, account_id, tokens),
+          override_user_info: provider[:override_user_info]
         )
+        redirect_error.call(session_data[:error].tr(" ", "_")) if session_data[:error]
         generic_oauth_set_account_cookie(ctx, provider_id, account_id, session_data[:user]["id"])
         Cookies.set_session_cookie(ctx, session_data)
         raise ctx.redirect(existing ? callback_url : (state_data["newUserURL"] || state_data["newUserCallbackURL"] || callback_url))

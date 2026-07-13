@@ -351,18 +351,174 @@ class BetterAuthRoutesSignUpTest < Minitest::Test
     assert_nil second[:user]["banExpires"]
   end
 
-  def test_sign_up_existing_email_with_auto_sign_in_false_still_raises_without_verification
-    auth = build_auth(email_and_password: {auto_sign_in: false})
+  def test_sign_up_existing_email_with_auto_sign_in_false_returns_indistinguishable_synthetic_response
+    callbacks = []
+    hashed_passwords = []
+    auth = build_auth(
+      email_and_password: {
+        auto_sign_in: false,
+        on_existing_user_sign_up: ->(data) { callbacks << data },
+        password: {
+          hash: lambda do |password|
+            hashed_passwords << password
+            "observed:#{password}"
+          end,
+          verify: ->(password:, hash:) { hash == "observed:#{password}" }
+        }
+      },
+      user: {
+        additional_fields: {
+          displayName: {type: "string", required: false},
+          isAdmin: {type: "boolean", default_value: false, input: false}
+        }
+      }
+    )
 
-    first = auth.api.sign_up_email(body: {email: "auto-disabled-existing@example.com", password: "password123", name: "First"})
-    assert_nil first[:token]
+    first_status, _first_headers, first_body = auth.api.sign_up_email(body: {
+      email: "auto-disabled-existing@example.com",
+      password: "password123",
+      name: "First",
+      displayName: "First Display",
+      isAdmin: true
+    }, as_response: true)
+    first = JSON.parse(first_body.join)
+    assert_nil first["token"]
+    assert_equal false, first.dig("user", "isAdmin")
 
-    error = assert_raises(BetterAuth::APIError) do
-      auth.api.sign_up_email(body: {email: "auto-disabled-existing@example.com", password: "password123", name: "Second"})
+    second_status, _second_headers, second_body = auth.api.sign_up_email(body: {
+      email: "auto-disabled-existing@example.com",
+      password: "password456",
+      name: "Second",
+      displayName: "Second Display",
+      isAdmin: true
+    }, as_response: true)
+    second = JSON.parse(second_body.join)
+
+    assert_equal first_status, second_status
+    assert_equal first.keys, second.keys
+    assert_equal first.fetch("user").keys, second.fetch("user").keys
+    assert_nil second["token"]
+    assert_equal "Second", second.dig("user", "name")
+    assert_equal "Second Display", second.dig("user", "displayName")
+    assert_equal false, second.dig("user", "isAdmin")
+    refute_equal first.dig("user", "id"), second.dig("user", "id")
+    assert_equal ["password123", "password456"], hashed_passwords
+    assert_equal 1, callbacks.length
+    assert_equal first.dig("user", "id"), callbacks.first[:user]["id"]
+  end
+
+  def test_sign_up_protected_duplicate_validates_input_false_without_default_before_lookup
+    auth = build_auth(
+      email_and_password: {auto_sign_in: false},
+      user: {
+        additional_fields: {
+          role: {type: "string", required: false, input: false}
+        }
+      }
+    )
+    auth.api.sign_up_email(body: {
+      email: "protected-input-known@example.com",
+      password: "password123",
+      name: "Known"
+    })
+
+    errors = ["protected-input-known@example.com", "protected-input-new@example.com"].map do |email|
+      assert_raises(BetterAuth::APIError) do
+        auth.api.sign_up_email(body: {
+          email: email,
+          password: "password456",
+          name: "Attempt",
+          role: "admin"
+        })
+      end
     end
 
-    assert_equal 422, error.status_code
-    assert_equal BetterAuth::BASE_ERROR_CODES["USER_ALREADY_EXISTS_USE_ANOTHER_EMAIL"], error.message
+    assert_equal [400, 400], errors.map(&:status_code)
+    assert_equal ["role is not allowed to be set"] * 2, errors.map(&:message)
+  end
+
+  def test_sign_up_protected_duplicate_ignores_js_falsy_input_false_values_before_lookup
+    auth = build_auth(
+      email_and_password: {auto_sign_in: false},
+      user: {
+        additional_fields: {
+          lockedField: {type: "string", required: false, input: false}
+        }
+      }
+    )
+    auth.api.sign_up_email(body: {
+      email: "falsy-input-known@example.com",
+      password: "password123",
+      name: "Known"
+    })
+
+    ["", 0].each_with_index do |value, index|
+      known = auth.api.sign_up_email(body: {
+        email: "falsy-input-known@example.com",
+        password: "password456",
+        name: "Known Attempt",
+        lockedField: value
+      })
+      new_email = "falsy-input-new-#{index}@example.com"
+      created = auth.api.sign_up_email(body: {
+        email: new_email,
+        password: "password456",
+        name: "New Attempt",
+        lockedField: value
+      })
+
+      assert_nil known[:token]
+      assert_nil created[:token]
+      refute known[:user].key?("lockedField")
+      refute created[:user].key?("lockedField")
+      refute auth.context.internal_adapter.find_user_by_email(new_email).fetch(:user).key?("lockedField")
+    end
+  end
+
+  def test_sign_up_protected_duplicate_validates_required_additional_fields_before_lookup
+    auth = build_auth(
+      email_and_password: {auto_sign_in: false},
+      user: {
+        additional_fields: {
+          tenantId: {type: "string", required: true}
+        }
+      }
+    )
+    auth.api.sign_up_email(body: {
+      email: "required-known@example.com",
+      password: "password123",
+      name: "Known",
+      tenantId: "tenant-1"
+    })
+
+    errors = ["required-known@example.com", "required-new@example.com"].map do |email|
+      assert_raises(BetterAuth::APIError) do
+        auth.api.sign_up_email(body: {
+          email: email,
+          password: "password456",
+          name: "Attempt"
+        })
+      end
+    end
+
+    assert_equal [400, 400], errors.map(&:status_code)
+    assert_equal ["tenantId is required"] * 2, errors.map(&:message)
+  end
+
+  def test_sign_up_existing_callback_runs_only_for_protected_duplicate_branch
+    callbacks = []
+    auth = build_auth(
+      email_and_password: {
+        auto_sign_in: false,
+        on_existing_user_sign_up: ->(data) { callbacks << data }
+      }
+    )
+
+    auth.api.sign_up_email(body: {email: "callback-duplicate@example.com", password: "password123", name: "First"})
+    assert_empty callbacks
+
+    auth.api.sign_up_email(body: {email: "callback-duplicate@example.com", password: "password456", name: "Second"})
+    assert_equal 1, callbacks.length
   end
 
   def test_sign_up_new_user_with_auto_sign_in_false_returns_null_token

@@ -101,6 +101,14 @@ namespace for account linking: configure trusted SSO providers as
 `sso:<providerId>` (for example, `sso:acme`) so a same-named social provider
 cannot confer trust on an SSO connection.
 
+Trusted provider or verified-domain status is not enough to attach a new OIDC
+or SAML identity to an existing email-matched user: the local email must also be
+verified by default. The deprecated
+`account.account_linking.require_local_email_verified: false` option restores
+the legacy implicit-linking behavior, but it is a high-risk compatibility escape
+hatch and is not recommended. It does not affect authenticated, explicit account
+linking.
+
 A redirect URL will be automatically generated using the provider ID. For instance, if the provider ID is `hydra`, the redirect URL would be `{baseURL}/api/auth/sso/callback/hydra`. Note that `/api/auth` may vary depending on your base path configuration.
 
 <Callout type="info">
@@ -1334,6 +1342,11 @@ For a detailed guide on setting up SAML SSO with examples for Okta and testing w
 **disableImplicitSignUp**: Disable implicit sign up for new users.
 
 If you want to allow account linking for specific trusted providers, enable the `accountLinking` option in your auth config and specify SSO providers in the `trustedProviders` list with the `sso:` prefix (for example, `sso:acme`). Bare provider names refer to the social-provider namespace and do not trust same-named SSO providers.
+
+Implicit OIDC and SAML linking also requires the existing local user's email to
+be verified. `requireLocalEmailVerified: false` is a deprecated, high-risk
+compatibility escape hatch for legacy implicit linking and is not recommended;
+authenticated explicit linking is unchanged.
 
 export const ssoOptionsType = {
 	provisionUser: {

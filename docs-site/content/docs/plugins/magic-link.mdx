@@ -76,6 +76,13 @@ If you want to handle the verification manually, (e.g, if you send the user a di
   ```
 </APIMethod>
 
+<Callout type="info">
+  When a magic link proves control of an email for an existing unverified user,
+  RubyAuth removes every pre-proof credential account and active session before
+  marking the email verified. It then creates one new session for the mailbox
+  owner. Already-verified users keep their existing credentials and sessions.
+</Callout>
+
 ## Configuration Options
 
 **sendMagicLink**: The `sendMagicLink` function is called when a user requests a magic link. It takes an object with the following properties:

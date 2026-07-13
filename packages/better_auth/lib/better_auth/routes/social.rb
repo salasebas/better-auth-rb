@@ -172,6 +172,7 @@ module BetterAuth
         user = user_info[:user] || user_info["user"] if user_info
         raise ctx.redirect(oauth_error_url(error_url, "unable_to_get_user_info")) unless user
         raise ctx.redirect(oauth_error_url(error_url, "email_not_found")) if fetch_value(user, "email").to_s.empty?
+        raise ctx.redirect(oauth_error_url(error_url, "unable_to_get_user_info")) if blank_remote_id?(fetch_value(user, "id"))
 
         link = state_data["link"] || state_data[:link]
         if link
@@ -313,6 +314,7 @@ module BetterAuth
       user = user_info[:user] || user_info["user"] if user_info
       raise APIError.new("UNAUTHORIZED", message: BASE_ERROR_CODES["FAILED_TO_GET_USER_INFO"]) unless user
       raise APIError.new("UNAUTHORIZED", message: BASE_ERROR_CODES["USER_EMAIL_NOT_FOUND"]) if fetch_value(user, "email").to_s.empty?
+      raise APIError.new("UNAUTHORIZED", message: BASE_ERROR_CODES["FAILED_TO_GET_USER_INFO"]) if blank_remote_id?(fetch_value(user, "id"))
 
       {
         user: user,
@@ -327,9 +329,11 @@ module BetterAuth
       }
     end
 
-    def self.persist_social_user(ctx, provider_id, user_info, account_info, callback_url: nil, disable_sign_up: false)
+    def self.persist_social_user(ctx, provider_id, user_info, account_info, callback_url: nil, disable_sign_up: false, override_user_info: false)
       email = fetch_value(user_info, "email").to_s.downcase
       account_id = (account_info["accountId"] || account_info[:accountId] || account_info[:account_id] || fetch_value(user_info, "id")).to_s
+      return {error: "unable to get user info"} if blank_remote_id?(account_id)
+
       existing = ctx.context.internal_adapter.find_oauth_user(email, account_id, provider_id)
 
       if existing && existing[:linked_account]
@@ -342,13 +346,18 @@ module BetterAuth
         user = verified_user if verified_user
         new_user = false
       elsif existing
-        unless linkable_provider?(ctx, provider_id, user_info, implicit: true)
-          return {error: "account not linked"}
+        linkable = linkable_provider?(ctx, provider_id, user_info, implicit: true, local_user: existing[:user])
+        unless linkable
+          return {error: existing[:user]["banned"] ? "banned" : "account not linked"}
         end
         user = existing[:user]
-        ctx.context.internal_adapter.create_account(account_info.merge("providerId" => provider_id, "accountId" => account_id, "userId" => user["id"]))
-        verified_user = update_verified_email_on_link(ctx, user["id"], user["email"], user_info)
-        user = verified_user if verified_user
+        user = ctx.context.adapter.transaction do
+          account = ctx.context.internal_adapter.create_account(account_info.merge("providerId" => provider_id, "accountId" => account_id, "userId" => user["id"]))
+          raise BetterAuth::Error, "Failed to link social account" unless account
+
+          promoted = promote_verified_email_on_link!(ctx, user, user_info)
+          promoted || user
+        end
         new_user = false
       else
         return {error: "signup disabled"} if disable_sign_up
@@ -366,7 +375,10 @@ module BetterAuth
         user = created[:user]
         new_user = true
       end
-      user = override_social_user_info(ctx, user, user_info) if existing && provider_override_user_info_on_sign_in?(provider_id, ctx.context)
+      if existing && (override_user_info || provider_override_user_info_on_sign_in?(provider_id, ctx.context))
+        user = override_social_user_info(ctx, user, user_info)
+      end
+      return {error: "unable to create user"} unless user
 
       session = ctx.context.internal_adapter.create_session(user["id"], false, session_overrides(ctx), true, ctx)
       {session: session, user: user, new_user: new_user}
@@ -405,17 +417,32 @@ module BetterAuth
       !!(fetch_value(provider, "disableSignUp") || fetch_value(fetch_value(provider, "options") || {}, "disableSignUp"))
     end
 
-    def self.linkable_provider?(ctx, provider_id, user_info, implicit: false)
+    def self.linkable_provider?(ctx, provider_id, user_info, implicit: false, local_user: nil)
       linking = ctx.context.options.account[:account_linking] || {}
       return false if linking[:enabled] == false
       return false if implicit && linking[:disable_implicit_linking] == true
+      if implicit && linking.fetch(:require_local_email_verified, true) && !local_user&.fetch("emailVerified", false)
+        return false
+      end
 
       trusted = Array(linking[:trusted_providers]).map(&:to_s).include?(provider_id.to_s)
       trusted || !!fetch_value(user_info, "emailVerified")
     end
 
+    def self.implicit_link_allowed?(ctx, local_user)
+      linking = ctx.context.options.account[:account_linking] || {}
+      return false if linking[:enabled] == false || linking[:disable_implicit_linking] == true
+
+      linking[:require_local_email_verified] == false || !!local_user["emailVerified"]
+    end
+
+    def self.blank_remote_id?(value)
+      value.nil? || value.to_s.strip.empty?
+    end
+
     def self.link_social_account_from_callback(ctx, provider_id, user_info, tokens, link)
       return {error: "unable_to_link_account"} unless linkable_provider?(ctx, provider_id, user_info)
+      return {error: "unable_to_link_account"} if blank_remote_id?(fetch_value(user_info, "id"))
 
       email = fetch_value(user_info, "email").to_s.downcase
       link_email = fetch_value(link, "email").to_s.downcase
@@ -468,7 +495,7 @@ module BetterAuth
         "image" => fetch_value(user_info, "image"),
         "emailVerified" => email_verified
       }.reject { |_key, value| value.nil? }
-      ctx.context.internal_adapter.update_user(user["id"], update) || user
+      ctx.context.internal_adapter.update_user(user["id"], update)
     end
 
     def self.safe_additional_state(body)
@@ -505,6 +532,17 @@ module BetterAuth
       return unless fetch_value(social_user, "email").to_s.downcase == current_email.to_s.downcase
 
       ctx.context.internal_adapter.update_user(user_id, {"emailVerified" => true})
+    end
+
+    def self.promote_verified_email_on_link!(ctx, local_user, social_user)
+      return if local_user["emailVerified"] == true
+      return unless fetch_value(social_user, "emailVerified")
+      return unless fetch_value(social_user, "email").to_s.strip.downcase == local_user["email"].to_s.strip.downcase
+
+      updated = ctx.context.internal_adapter.update_user(local_user.fetch("id"), {"emailVerified" => true})
+      raise BetterAuth::Error, "Failed to promote verified email" unless updated
+
+      updated
     end
 
     def self.parse_json_hash(value)

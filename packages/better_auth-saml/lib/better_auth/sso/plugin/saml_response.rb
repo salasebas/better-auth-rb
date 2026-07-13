@@ -72,6 +72,8 @@ module BetterAuth
       user_info = normalize_hash(user_info)
       email = user_info[:email].to_s.downcase
       account_id = (user_info[:id] || user_info["id"]).to_s
+      return {error: "invalid_provider"} if Routes.blank_remote_id?(account_id)
+
       provider_id = provider.fetch("providerId")
       storage_provider_id = provider["samlConfig"] ? provider_id : "sso:#{provider_id}"
       existing_account = account_id.empty? ? nil : (
@@ -90,23 +92,32 @@ module BetterAuth
         elsif !already_linked_provider && !sso_oidc_trusted_provider?(ctx, provider, email)
           return {error: "account_not_linked"}
         end
+        return {error: "account_not_linked"} unless Routes.implicit_link_allowed?(ctx, found[:user])
 
         user = found[:user]
-        unless account_id.empty?
-          ctx.context.internal_adapter.create_account(
-            accountId: account_id,
-            providerId: storage_provider_id,
-            userId: user.fetch("id")
-          )
-        end
+        account = ctx.context.internal_adapter.create_account(
+          accountId: account_id,
+          providerId: storage_provider_id,
+          userId: user.fetch("id")
+        )
+        raise BetterAuth::Error, "Failed to link SSO account" unless account
+
         oidc_config = sso_provider_config_hash(provider["oidcConfig"])
+        update = {}
+        if user_info[:email_verified] == true &&
+            user["emailVerified"] != true &&
+            user["email"].to_s.strip.downcase == email.strip
+          update[:emailVerified] = true
+        end
         if oidc_config[:override_user_info] || config[:default_override_user_info]
-          update = {}
           update[:name] = user_info[:name] if user_info.key?(:name)
           update[:image] = user_info[:image] if user_info.key?(:image)
           update[:emailVerified] = !!user_info[:email_verified] if user_info.key?(:email_verified)
-          user = ctx.context.internal_adapter.update_user(user.fetch("id"), update) if update.any?
         end
+        updated = ctx.context.internal_adapter.update_user(user.fetch("id"), update) if update.any?
+        raise BetterAuth::Error, "Failed to update linked SSO user" if update.any? && !updated
+
+        user = updated || user
         created = false
       else
         created = ctx.context.internal_adapter.create_user(
@@ -116,7 +127,7 @@ module BetterAuth
           image: user_info[:image]
         )
         ctx.context.internal_adapter.create_account(
-          accountId: account_id.empty? ? created.fetch("id") : account_id,
+          accountId: account_id,
           providerId: storage_provider_id,
           userId: created.fetch("id")
         )

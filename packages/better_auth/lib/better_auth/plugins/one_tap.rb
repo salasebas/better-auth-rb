@@ -50,6 +50,7 @@ module BetterAuth
         id_token = body[:id_token].to_s
         payload = one_tap_verify_id_token(ctx, config, id_token)
         email = fetch_value(payload, "email").to_s.downcase
+        raise APIError.new("BAD_REQUEST", message: "invalid id token") if Routes.blank_remote_id?(fetch_value(payload, "sub"))
 
         if email.empty?
           next ctx.json({error: "Email not available in token"})
@@ -131,24 +132,31 @@ module BetterAuth
 
     def one_tap_link_account_unless_present!(ctx, _config, user, payload, id_token)
       sub = fetch_value(payload, "sub").to_s
-      account = ctx.context.internal_adapter.find_account(sub)
-      return if account
+      account = ctx.context.internal_adapter.find_account_by_provider_id(sub, "google")
+      if account
+        return if account["userId"] == user[:user]["id"]
 
-      account_linking = ctx.context.options.account[:account_linking] || {}
-      trusted = Array(account_linking[:trusted_providers]).map(&:to_s).include?("google")
-      enabled = account_linking.fetch(:enabled, true)
-      should_link_account = enabled != false && (trusted || one_tap_boolean_value(fetch_value(payload, "email_verified")))
+        raise APIError.new("UNAUTHORIZED", message: "Google sub doesn't match")
+      end
+
+      user_info = payload.merge("emailVerified" => one_tap_boolean_value(fetch_value(payload, "email_verified")))
+      should_link_account = Routes.linkable_provider?(ctx, "google", user_info, implicit: true, local_user: user[:user])
       unless should_link_account
         raise APIError.new("UNAUTHORIZED", message: "Google sub doesn't match")
       end
 
-      ctx.context.internal_adapter.link_account(
-        userId: user[:user]["id"],
-        providerId: "google",
-        accountId: sub,
-        scope: "openid,profile,email",
-        idToken: id_token
-      )
+      user[:user] = ctx.context.adapter.transaction do
+        account = ctx.context.internal_adapter.link_account(
+          userId: user[:user]["id"],
+          providerId: "google",
+          accountId: sub,
+          scope: "openid,profile,email",
+          idToken: id_token
+        )
+        raise BetterAuth::Error, "Failed to link One Tap account" unless account
+
+        Routes.promote_verified_email_on_link!(ctx, user[:user], user_info) || user[:user]
+      end
     end
 
     def one_tap_create_session(ctx, user)

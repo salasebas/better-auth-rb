@@ -262,6 +262,7 @@ class BetterAuthPluginsSSOSAMLTest < Minitest::Test
   def test_saml_runs_provision_user_hook_for_new_users_and_every_login_when_enabled
     provisioned = []
     auth = build_auth(
+      account: {account_linking: {require_local_email_verified: false}},
       plugins: [
         BetterAuth::Plugins.sso(
           provision_user: ->(user:, provider:, **data) {
@@ -1231,6 +1232,8 @@ class BetterAuthPluginsSSOSAMLTest < Minitest::Test
       ]
     )
     sign_up_cookie(auth, email: "trusted-saml@example.com")
+    trusted_user = auth.context.internal_adapter.find_user_by_email("trusted-saml@example.com").fetch(:user)
+    auth.context.internal_adapter.update_user(trusted_user.fetch("id"), emailVerified: true)
     owner_cookie = sign_up_cookie(auth, email: "owner-trusted@example.com")
     auth.api.register_sso_provider(
       headers: {"cookie" => owner_cookie},

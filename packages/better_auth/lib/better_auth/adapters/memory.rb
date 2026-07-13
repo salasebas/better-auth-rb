@@ -142,15 +142,59 @@ module BetterAuth
         return yield active_transaction_adapter if active_transaction_adapter
 
         @lock.synchronize do
-          snapshot = Marshal.load(Marshal.dump(db))
-          with_transaction_context(self) { yield self }
-        rescue
-          db.replace(snapshot)
-          raise
+          snapshot = transaction_snapshot(db)
+          begin
+            with_transaction_context(self) { yield self }
+          rescue
+            db.replace(snapshot)
+            raise
+          end
         end
       end
 
       private
+
+      def transaction_snapshot(value, copies = {})
+        object_id = value.object_id
+        return copies.fetch(object_id) if copies.key?(object_id)
+
+        copy = case value
+        when Hash
+          value.dup.tap do |hash|
+            hash.clear
+            copies[object_id] = hash
+            if value.default_proc
+              hash.default_proc = value.default_proc
+            else
+              hash.default = transaction_snapshot(value.default, copies)
+            end
+            value.each do |key, child|
+              hash[transaction_snapshot(key, copies)] = transaction_snapshot(child, copies)
+            end
+          end
+        when Array
+          value.dup.tap do |array|
+            array.clear
+            copies[object_id] = array
+            value.each { |child| array << transaction_snapshot(child, copies) }
+          end
+        when Struct
+          value.dup.tap do |struct|
+            copies[object_id] = struct
+            value.each_pair do |member, child|
+              struct[member] = transaction_snapshot(child, copies)
+            end
+          end
+        when String, Time
+          value.dup.tap { |object| copies[object_id] = object }
+        when Proc, Method, UnboundMethod, NilClass, TrueClass, FalseClass, Symbol, Numeric
+          return value
+        else
+          raise TypeError, "Unsupported Memory transaction snapshot value: #{value.class}"
+        end
+        copy.freeze if value.frozen?
+        copy
+      end
 
       def build_db
         Schema.auth_tables(options).keys.to_h { |model| [model, []] }

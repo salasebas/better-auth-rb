@@ -8,6 +8,16 @@ description: One Tap plugin for RubyAuth
 The One Tap plugin allows users to log in with a single tap using Google's One Tap API. The plugin
 provides a simple way to integrate One Tap into your application, handling the server-side callback logic for you.
 
+<Callout type="warn">
+  One Tap only links a new Google identity to an email-matched local user when
+  that local email is already verified. This default also applies when Google
+  reports a verified email. The deprecated
+  `account.account_linking.require_local_email_verified: false` option restores
+  legacy implicit linking, but it is a high-risk compatibility escape hatch and
+  is not recommended. It does not change authenticated, explicit account
+  linking.
+</Callout>
+
 ## Installation
 
 <Steps>

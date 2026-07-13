@@ -7,6 +7,7 @@ class BetterAuthMemoryAdapterTest < Minitest::Test
   include BetterAuthAdapterContract
 
   SECRET = "test-secret-that-is-long-enough-for-validation"
+  SnapshotLeaf = Struct.new(:items, :shared, :owner, :callback)
 
   def setup
     @config = BetterAuth::Configuration.new(secret: SECRET, database: :memory)
@@ -123,6 +124,92 @@ class BetterAuthMemoryAdapterTest < Minitest::Test
     assert_equal "Grace", @adapter.find_one(model: "user", where: [{field: "id", value: user["id"]}])["name"]
     assert_equal 1, @adapter.delete_many(model: "user", where: [{field: "id", value: user["id"]}])
     assert_nil @adapter.find_one(model: "user", where: [{field: "id", value: user["id"]}])
+  end
+
+  def test_transaction_snapshots_nested_mutable_values_without_copying_callables
+    callback = -> { "called" }
+    callback_default = ->(_hash, _key) { callback }
+    shared_label = +"original"
+    shared_value = +"shared"
+    settings = Hash.new(+"fallback")
+    settings["labels"] = [shared_label, shared_label]
+    settings["dynamic"] = Hash.new(&callback_default)
+    leaf = SnapshotLeaf.new([+"leaf"], shared_value, nil, callback)
+    config = {
+      "callback" => callback,
+      "settings" => settings,
+      "frozen" => (+"fixed").freeze,
+      "shared" => shared_value,
+      "leaf" => leaf,
+      "leafAlias" => leaf
+    }
+    config["cycle"] = config
+    leaf.owner = config
+    adapter = memory_adapter_with_callback_store
+    adapter.create(model: "callbackStore", data: {name: "oidc", config: config})
+
+    adapter.transaction do |transaction_adapter|
+      transaction_adapter.create(model: "user", data: {name: "Committed", email: "committed@example.com"})
+    end
+    committed = adapter.find_one(model: "callbackStore", where: [{field: "name", value: "oidc"}]).fetch("config")
+    assert_same callback, committed.fetch("callback")
+    assert_equal "called", committed.fetch("callback").call
+
+    error = assert_raises(RuntimeError) do
+      adapter.transaction do |transaction_adapter|
+        stored = transaction_adapter.db.fetch("callbackStore").first.fetch("config")
+        stored.fetch("settings").fetch("labels").first << "-mutated"
+        stored.fetch("settings").fetch("labels") << "new"
+        stored.fetch("settings").default << "-mutated"
+        stored.fetch("shared") << "-mutated"
+        stored.fetch("leaf").items.first << "-mutated"
+        stored.fetch("leaf").items << "new"
+        stored["new"] = {"values" => ["temporary"]}
+        transaction_adapter.create(model: "user", data: {name: "Rolled Back", email: "rolled-back@example.com"})
+        raise "boom"
+      end
+    end
+
+    restored = adapter.find_one(model: "callbackStore", where: [{field: "name", value: "oidc"}]).fetch("config")
+    labels = restored.fetch("settings").fetch("labels")
+    assert_equal "boom", error.message
+    assert_same callback, restored.fetch("callback")
+    assert_equal "called", restored.fetch("callback").call
+    assert_equal ["original", "original"], labels
+    assert_same labels.first, labels.last
+    assert_equal "fallback", restored.fetch("settings").default
+    assert_same callback_default, restored.fetch("settings").fetch("dynamic").default_proc
+    assert_same restored, restored.fetch("cycle")
+    assert_predicate restored.fetch("frozen"), :frozen?
+    assert_equal ["leaf"], restored.fetch("leaf").items
+    assert_same restored.fetch("leaf"), restored.fetch("leafAlias")
+    assert_equal "shared", restored.fetch("shared")
+    assert_same restored.fetch("shared"), restored.fetch("leaf").shared
+    assert_same restored, restored.fetch("leaf").owner
+    assert_same callback, restored.fetch("leaf").callback
+    refute restored.key?("new")
+    assert adapter.find_one(model: "user", where: [{field: "email", value: "committed@example.com"}])
+    assert_nil adapter.find_one(model: "user", where: [{field: "email", value: "rolled-back@example.com"}])
+  end
+
+  def test_transaction_rejects_unknown_mutable_leaves_before_running_body
+    adapter = memory_adapter_with_callback_store
+    unknown = Object.new
+    unknown.instance_variable_set(:@items, [+"mutable"])
+    adapter.create(model: "callbackStore", data: {name: "unknown", config: {"unknown" => unknown}})
+    body_ran = false
+
+    error = assert_raises(TypeError) do
+      adapter.transaction do
+        body_ran = true
+      end
+    end
+
+    assert_equal "Unsupported Memory transaction snapshot value: Object", error.message
+    refute body_ran
+    stored = adapter.find_one(model: "callbackStore", where: [{field: "name", value: "unknown"}]).fetch("config").fetch("unknown")
+    assert_same unknown, stored
+    assert_equal ["mutable"], stored.instance_variable_get(:@items)
   end
 
   def test_update_many_returns_count_and_rejects_empty_updates
@@ -280,6 +367,22 @@ class BetterAuthMemoryAdapterTest < Minitest::Test
   end
 
   private
+
+  def memory_adapter_with_callback_store
+    plugin = BetterAuth::Plugin.new(
+      id: "callback-store",
+      schema: {
+        callbackStore: {
+          fields: {
+            name: {type: "string", required: true},
+            config: {type: "json", required: true}
+          }
+        }
+      }
+    )
+    config = BetterAuth::Configuration.new(secret: SECRET, database: :memory, plugins: [plugin])
+    BetterAuth::Adapters::Memory.new(config)
+  end
 
   def with_contract_adapter(config)
     yield BetterAuth::Adapters::Memory.new(config)

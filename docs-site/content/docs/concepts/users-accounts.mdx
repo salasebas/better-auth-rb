@@ -284,6 +284,12 @@ refreshed = auth.api.refresh_token(
 
 Account linking lets users associate multiple authentication methods with the same user. By default, linked accounts are accepted when the provider identity and email rules are satisfied. Configure account-linking rules when you need to trust specific providers, allow different emails, update user profile data after linking, or disable linking.
 
+Implicit linking to an existing email-matched user requires that the local email
+is already verified, even when the remote provider reports a verified email or
+is configured as trusted. This prevents a remote identity from attaching to a
+local row that has not proved mailbox control. Authenticated explicit linking is
+not subject to this local-verification gate.
+
 ```ruby
 auth = BetterAuth.auth(
   secret: ENV.fetch("BETTER_AUTH_SECRET"),
@@ -311,6 +317,11 @@ account: {
 ```
 
 Forced linking is only appropriate for providers whose email or subject claims your app trusts. If the provider does not verify ownership, leave automatic linking disabled and require an explicit user action.
+
+For temporary compatibility with legacy implicit linking, you can set
+`require_local_email_verified: false` inside `account.account_linking`. This
+option is deprecated, high risk, and not recommended. It does not relax remote
+provider trust checks or the rules for authenticated explicit linking.
 
 #### Manually Linking Accounts
 

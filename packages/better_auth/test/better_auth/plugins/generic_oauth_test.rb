@@ -546,6 +546,224 @@ class BetterAuthPluginsGenericOAuthTest < Minitest::Test
     assert_equal "https://example.com/updated.png", user.fetch("image")
   end
 
+  def test_callback_rejects_implicit_link_to_unverified_local_user_by_default
+    auth = build_auth(user_info: {id: "implicit-sub", email: "implicit@example.com", name: "Remote", emailVerified: true})
+    sign_up_cookie(auth, email: "implicit@example.com")
+    user = auth.context.internal_adapter.find_user_by_email("implicit@example.com")[:user]
+    old_session_tokens = auth.context.internal_adapter.list_sessions(user["id"]).map { |session| session["token"] }
+    sign_in = auth.api.sign_in_with_oauth2(body: {providerId: "custom", callbackURL: "/dashboard", errorCallbackURL: "/error"})
+    state = Rack::Utils.parse_query(URI.parse(sign_in[:url]).query).fetch("state")
+
+    status, headers, = auth.api.oauth2_callback(params: {providerId: "custom"}, query: {code: "oauth-code", state: state}, as_response: true)
+
+    assert_equal 302, status
+    assert_equal "/error?error=account_not_linked", headers.fetch("location")
+    assert_nil auth.context.internal_adapter.find_account_by_provider_id("implicit-sub", "custom")
+    assert_equal old_session_tokens, auth.context.internal_adapter.list_sessions(user["id"]).map { |session| session["token"] }
+    refute auth.context.internal_adapter.find_user_by_id(user["id"])["emailVerified"]
+  end
+
+  def test_callback_implicitly_links_verified_local_user
+    auth = build_auth(user_info: {id: "verified-local-sub", email: "verified-local-oauth@example.com", name: "Remote", emailVerified: true})
+    sign_up_cookie(auth, email: "verified-local-oauth@example.com")
+    user = auth.context.internal_adapter.find_user_by_email("verified-local-oauth@example.com")[:user]
+    auth.context.internal_adapter.update_user(user["id"], emailVerified: true)
+    sign_in = auth.api.sign_in_with_oauth2(body: {providerId: "custom", callbackURL: "/dashboard"})
+    state = Rack::Utils.parse_query(URI.parse(sign_in[:url]).query).fetch("state")
+
+    status, headers, = auth.api.oauth2_callback(params: {providerId: "custom"}, query: {code: "oauth-code", state: state}, as_response: true)
+
+    assert_equal 302, status
+    assert_equal "/dashboard", headers.fetch("location")
+    assert auth.context.internal_adapter.find_account_by_provider_id("verified-local-sub", "custom")
+  end
+
+  def test_callback_require_local_email_verified_opt_out_supports_snake_and_camel_case
+    [
+      {account: {account_linking: {require_local_email_verified: false}}},
+      {account: {accountLinking: {requireLocalEmailVerified: false}}}
+    ].each_with_index do |linking_options, index|
+      email = "generic-opt-out-#{index}@example.com"
+      account_id = "generic-opt-out-#{index}"
+      auth = build_auth(linking_options.merge(user_info: {id: account_id, email: email, name: "Opt Out", emailVerified: true}))
+      sign_up_cookie(auth, email: email)
+      sign_in = auth.api.sign_in_with_oauth2(body: {providerId: "custom", callbackURL: "/dashboard"})
+      state = Rack::Utils.parse_query(URI.parse(sign_in[:url]).query).fetch("state")
+
+      status, = auth.api.oauth2_callback(params: {providerId: "custom"}, query: {code: "oauth-code", state: state}, as_response: true)
+
+      assert_equal 302, status
+      assert auth.context.internal_adapter.find_account_by_provider_id(account_id, "custom")
+      assert auth.context.internal_adapter.find_user_by_email(email)[:user]["emailVerified"]
+    end
+  end
+
+  def test_callback_rolls_back_implicit_link_when_verified_email_promotion_is_vetoed
+    auth = build_auth(
+      account: {account_linking: {require_local_email_verified: false}},
+      database_hooks: {
+        user: {
+          update: {
+            before: ->(data, _context) { false if data["emailVerified"] == true }
+          }
+        }
+      },
+      user_info: {id: "generic-promotion-veto", email: "generic-promotion-veto@example.com", name: "Veto", emailVerified: true}
+    )
+    sign_up_cookie(auth, email: "generic-promotion-veto@example.com")
+    user = auth.context.internal_adapter.find_user_by_email("generic-promotion-veto@example.com").fetch(:user)
+    session_count = auth.context.internal_adapter.list_sessions(user.fetch("id")).length
+    sign_in = auth.api.sign_in_with_oauth2(body: {providerId: "custom", callbackURL: "/dashboard"})
+    state = Rack::Utils.parse_query(URI.parse(sign_in[:url]).query).fetch("state")
+
+    assert_raises(BetterAuth::Error) do
+      auth.api.oauth2_callback(params: {providerId: "custom"}, query: {code: "oauth-code", state: state}, as_response: true)
+    end
+
+    assert_nil auth.context.internal_adapter.find_account_by_provider_id("generic-promotion-veto", "custom")
+    refute auth.context.internal_adapter.find_user_by_id(user.fetch("id")).fetch("emailVerified")
+    assert_equal session_count, auth.context.internal_adapter.list_sessions(user.fetch("id")).length
+  end
+
+  def test_override_user_info_failure_links_account_without_creating_session
+    auth = build_auth(
+      database_hooks: {
+        user: {
+          update: {
+            before: lambda do |data, _context|
+              raise "override storage failed" if data["name"] == "Override Failure"
+            end
+          }
+        }
+      },
+      user_info: {
+        id: "override-failure-sub",
+        email: "override-failure@example.com",
+        name: "Override Failure",
+        emailVerified: true
+      },
+      provider_overrides: {override_user_info: true}
+    )
+    sign_up_cookie(auth, email: "override-failure@example.com")
+    user = auth.context.internal_adapter.find_user_by_email("override-failure@example.com").fetch(:user)
+    auth.context.internal_adapter.update_user(user.fetch("id"), emailVerified: true)
+    session_tokens = auth.context.internal_adapter.list_sessions(user.fetch("id")).map { |session| session.fetch("token") }
+    sign_in = auth.api.sign_in_with_oauth2(body: {providerId: "custom", callbackURL: "/dashboard"})
+    state = Rack::Utils.parse_query(URI.parse(sign_in.fetch(:url)).query).fetch("state")
+
+    error = assert_raises(RuntimeError) do
+      auth.api.oauth2_callback(params: {providerId: "custom"}, query: {code: "oauth-code", state: state}, as_response: true)
+    end
+
+    assert_equal "override storage failed", error.message
+    assert auth.context.internal_adapter.find_account_by_provider_id("override-failure-sub", "custom")
+    assert_equal session_tokens, auth.context.internal_adapter.list_sessions(user.fetch("id")).map { |session| session.fetch("token") }
+  end
+
+  def test_override_user_info_veto_links_account_without_creating_session
+    auth = build_auth(
+      database_hooks: {
+        user: {
+          update: {
+            before: ->(data, _context) { false if data["name"] == "Override Veto" }
+          }
+        }
+      },
+      user_info: {
+        id: "override-veto-sub",
+        email: "override-veto@example.com",
+        name: "Override Veto",
+        emailVerified: true
+      },
+      provider_overrides: {override_user_info: true}
+    )
+    sign_up_cookie(auth, email: "override-veto@example.com")
+    user = auth.context.internal_adapter.find_user_by_email("override-veto@example.com").fetch(:user)
+    auth.context.internal_adapter.update_user(user.fetch("id"), emailVerified: true)
+    session_tokens = auth.context.internal_adapter.list_sessions(user.fetch("id")).map { |session| session.fetch("token") }
+    sign_in = auth.api.sign_in_with_oauth2(body: {
+      providerId: "custom",
+      callbackURL: "/dashboard",
+      errorCallbackURL: "/error"
+    })
+    state = Rack::Utils.parse_query(URI.parse(sign_in.fetch(:url)).query).fetch("state")
+
+    status, headers, = auth.api.oauth2_callback(
+      params: {providerId: "custom"},
+      query: {code: "oauth-code", state: state},
+      as_response: true
+    )
+
+    assert_equal 302, status
+    assert_equal "/error?error=unable_to_create_user", headers.fetch("location")
+    assert auth.context.internal_adapter.find_account_by_provider_id("override-veto-sub", "custom")
+    assert_equal session_tokens, auth.context.internal_adapter.list_sessions(user.fetch("id")).map { |session| session.fetch("token") }
+  end
+
+  def test_override_user_info_cannot_pre_promote_unverified_local_user_past_gate
+    auth = build_auth(
+      user_info: {id: "override-bypass-sub", email: "override-bypass@example.com", name: "Remote Name", emailVerified: true},
+      provider_overrides: {override_user_info: true}
+    )
+    sign_up_cookie(auth, email: "override-bypass@example.com")
+    user = auth.context.internal_adapter.find_user_by_email("override-bypass@example.com")[:user]
+    old_session_tokens = auth.context.internal_adapter.list_sessions(user["id"]).map { |session| session["token"] }
+    sign_in = auth.api.sign_in_with_oauth2(body: {providerId: "custom", callbackURL: "/dashboard", errorCallbackURL: "/error"})
+    state = Rack::Utils.parse_query(URI.parse(sign_in[:url]).query).fetch("state")
+
+    status, headers, = auth.api.oauth2_callback(params: {providerId: "custom"}, query: {code: "oauth-code", state: state}, as_response: true)
+
+    stored = auth.context.internal_adapter.find_user_by_id(user["id"])
+    assert_equal 302, status
+    assert_equal "/error?error=account_not_linked", headers.fetch("location")
+    assert_equal "OAuth User", stored["name"]
+    refute stored["emailVerified"]
+    assert_nil auth.context.internal_adapter.find_account_by_provider_id("override-bypass-sub", "custom")
+    assert_equal old_session_tokens, auth.context.internal_adapter.list_sessions(user["id"]).map { |session| session["token"] }
+  end
+
+  def test_callback_disable_implicit_linking_blocks_existing_user_but_allows_new_user
+    profile = {id: "blocked-generic", email: "blocked-generic@example.com", name: "Blocked", emailVerified: true}
+    auth = build_auth(account: {account_linking: {disable_implicit_linking: true}}, provider_overrides: {get_user_info: ->(_tokens) { profile }})
+    sign_up_cookie(auth, email: profile[:email])
+    sign_in = auth.api.sign_in_with_oauth2(body: {providerId: "custom", callbackURL: "/dashboard", errorCallbackURL: "/error"})
+    state = Rack::Utils.parse_query(URI.parse(sign_in[:url]).query).fetch("state")
+
+    _status, headers, = auth.api.oauth2_callback(params: {providerId: "custom"}, query: {code: "oauth-code", state: state}, as_response: true)
+    assert_equal "/error?error=account_not_linked", headers.fetch("location")
+
+    profile[:id] = "new-generic"
+    profile[:email] = "new-generic@example.com"
+    new_sign_in = auth.api.sign_in_with_oauth2(body: {providerId: "custom", callbackURL: "/dashboard"})
+    new_state = Rack::Utils.parse_query(URI.parse(new_sign_in[:url]).query).fetch("state")
+    _status, headers, = auth.api.oauth2_callback(params: {providerId: "custom"}, query: {code: "oauth-code", state: new_state}, as_response: true)
+
+    assert_equal "/dashboard", headers.fetch("location")
+    assert auth.context.internal_adapter.find_account_by_provider_id("new-generic", "custom")
+  end
+
+  def test_callback_rejects_blank_remote_id_for_implicit_and_explicit_flows
+    [false, true].each do |explicit|
+      email = explicit ? "blank-explicit@example.com" : "blank-implicit@example.com"
+      auth = build_auth(user_info: {id: "  ", email: email, name: "Blank", emailVerified: true})
+      cookie = explicit ? sign_up_cookie(auth, email: email) : nil
+      start = if explicit
+        auth.api.oauth2_link_account(headers: {"cookie" => cookie}, body: {providerId: "custom", callbackURL: "/settings", errorCallbackURL: "/error"})
+      else
+        auth.api.sign_in_with_oauth2(body: {providerId: "custom", callbackURL: "/dashboard", errorCallbackURL: "/error"})
+      end
+      state = Rack::Utils.parse_query(URI.parse(start[:url]).query).fetch("state")
+      existing_sessions = auth.context.internal_adapter.adapter.find_many(model: "session").length
+
+      status, headers, = auth.api.oauth2_callback(params: {providerId: "custom"}, query: {code: "oauth-code", state: state}, as_response: true)
+
+      assert_equal 302, status
+      assert_equal "/error?error=user_info_is_missing", headers.fetch("location")
+      assert_empty auth.context.internal_adapter.adapter.find_many(model: "account").select { |account| account["accountId"].to_s.strip.empty? }
+      assert_equal existing_sessions, auth.context.internal_adapter.adapter.find_many(model: "session").length
+    end
+  end
+
   def test_link_account_generates_link_state_and_callback_links_to_current_user
     auth = build_auth(user_info: {id: "linked-sub", email: "link@example.com", name: "Linked User"})
     cookie = sign_up_cookie(auth, email: "link@example.com")

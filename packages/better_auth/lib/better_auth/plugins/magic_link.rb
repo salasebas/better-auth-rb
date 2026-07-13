@@ -158,7 +158,13 @@ module BetterAuth
         end
 
         unless user["emailVerified"]
-          user = ctx.context.internal_adapter.update_user(user["id"], emailVerified: true)
+          user = ctx.context.adapter.transaction do
+            ctx.context.internal_adapter.revoke_unproven_account_access(user["id"])
+            updated = ctx.context.internal_adapter.update_user(user["id"], emailVerified: true)
+            raise Error, "Failed to verify magic-link user" unless updated
+
+            updated
+          end
         end
 
         session = ctx.context.internal_adapter.create_session(user["id"])

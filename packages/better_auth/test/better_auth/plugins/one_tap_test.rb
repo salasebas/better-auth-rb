@@ -55,7 +55,7 @@ class BetterAuthPluginsOneTapTest < Minitest::Test
     assert_equal 1, auth.context.internal_adapter.find_accounts(first[:user]["id"]).length
   end
 
-  def test_callback_links_existing_user_when_google_email_is_verified
+  def test_callback_rejects_existing_unverified_user_by_default_even_when_google_email_is_verified
     auth = build_auth(
       plugins: [
         BetterAuth::Plugins.one_tap(verify_id_token: google_verifier(
@@ -68,15 +68,19 @@ class BetterAuthPluginsOneTapTest < Minitest::Test
     )
     auth.api.sign_up_email(body: {email: "link@example.com", password: "password123", name: "Linked"})
 
-    result = auth.api.one_tap_callback(body: {idToken: "verified-token"})
+    user = auth.context.internal_adapter.find_user_by_email("link@example.com")[:user]
+    old_session_tokens = auth.context.internal_adapter.list_sessions(user["id"]).map { |session| session["token"] }
 
-    assert_equal "link@example.com", result[:user]["email"]
-    account = auth.context.internal_adapter.find_account_by_provider_id("google-sub-link", "google")
-    refute_nil account
-    assert_equal "openid,profile,email", account["scope"]
+    error = assert_raises(BetterAuth::APIError) do
+      auth.api.one_tap_callback(body: {idToken: "verified-token"})
+    end
+
+    assert_equal "Google sub doesn't match", error.message
+    assert_nil auth.context.internal_adapter.find_account_by_provider_id("google-sub-link", "google")
+    assert_equal old_session_tokens, auth.context.internal_adapter.list_sessions(user["id"]).map { |session| session["token"] }
   end
 
-  def test_callback_links_existing_user_when_google_is_trusted_even_if_email_is_unverified
+  def test_callback_rejects_trusted_google_for_existing_unverified_user_by_default
     auth = build_auth(
       account: {account_linking: {trusted_providers: ["google"]}},
       plugins: [
@@ -90,11 +94,137 @@ class BetterAuthPluginsOneTapTest < Minitest::Test
     )
     auth.api.sign_up_email(body: {email: "trusted-link@example.com", password: "password123", name: "Trusted Link"})
 
-    result = auth.api.one_tap_callback(body: {idToken: "trusted-token"})
+    error = assert_raises(BetterAuth::APIError) do
+      auth.api.one_tap_callback(body: {idToken: "trusted-token"})
+    end
 
-    assert_equal "trusted-link@example.com", result[:user]["email"]
-    account = auth.context.internal_adapter.find_account_by_provider_id("google-sub-trusted-link", "google")
-    refute_nil account
+    assert_equal "Google sub doesn't match", error.message
+    assert_nil auth.context.internal_adapter.find_account_by_provider_id("google-sub-trusted-link", "google")
+  end
+
+  def test_callback_links_existing_verified_local_user
+    auth = build_auth(
+      plugins: [
+        BetterAuth::Plugins.one_tap(verify_id_token: google_verifier(
+          email: "verified-local-one-tap@example.com",
+          email_verified: true,
+          name: "Verified Local",
+          sub: "google-sub-verified-local"
+        ))
+      ]
+    )
+    auth.api.sign_up_email(body: {email: "verified-local-one-tap@example.com", password: "password123", name: "Verified"})
+    user = auth.context.internal_adapter.find_user_by_email("verified-local-one-tap@example.com")[:user]
+    auth.context.internal_adapter.update_user(user["id"], emailVerified: true)
+
+    result = auth.api.one_tap_callback(body: {idToken: "verified-token"})
+
+    assert_equal user["id"], result[:user]["id"]
+    assert auth.context.internal_adapter.find_account_by_provider_id("google-sub-verified-local", "google")
+  end
+
+  def test_callback_require_local_email_verified_opt_out_supports_snake_and_camel_case
+    [
+      {account: {account_linking: {require_local_email_verified: false}}},
+      {account: {accountLinking: {requireLocalEmailVerified: false}}}
+    ].each_with_index do |linking_options, index|
+      email = "one-tap-opt-out-#{index}@example.com"
+      sub = "one-tap-opt-out-#{index}"
+      auth = build_auth(
+        linking_options.merge(
+          plugins: [
+            BetterAuth::Plugins.one_tap(verify_id_token: google_verifier(
+              email: email,
+              email_verified: true,
+              name: "Opt Out",
+              sub: sub
+            ))
+          ]
+        )
+      )
+      auth.api.sign_up_email(body: {email: email, password: "password123", name: "Opt Out"})
+
+      result = auth.api.one_tap_callback(body: {idToken: "verified-token"})
+
+      assert_equal email, result[:user]["email"]
+      assert_equal true, result[:user]["emailVerified"]
+      assert auth.context.internal_adapter.find_account_by_provider_id(sub, "google")
+      stored = auth.context.internal_adapter.find_user_by_email(email).fetch(:user)
+      assert_equal true, stored.fetch("emailVerified")
+    end
+  end
+
+  def test_callback_rolls_back_implicit_link_when_verified_email_promotion_is_vetoed
+    auth = build_auth(
+      account: {account_linking: {require_local_email_verified: false}},
+      database_hooks: {
+        user: {
+          update: {
+            before: ->(data, _context) { false if data["emailVerified"] == true }
+          }
+        }
+      },
+      plugins: [
+        BetterAuth::Plugins.one_tap(verify_id_token: google_verifier(
+          email: "one-tap-promotion-veto@example.com",
+          email_verified: true,
+          name: "Veto",
+          sub: "one-tap-promotion-veto"
+        ))
+      ]
+    )
+    auth.api.sign_up_email(body: {email: "one-tap-promotion-veto@example.com", password: "password123", name: "Veto"})
+    user = auth.context.internal_adapter.find_user_by_email("one-tap-promotion-veto@example.com").fetch(:user)
+    session_count = auth.context.internal_adapter.list_sessions(user.fetch("id")).length
+
+    assert_raises(BetterAuth::Error) do
+      auth.api.one_tap_callback(body: {idToken: "verified-token"})
+    end
+
+    assert_nil auth.context.internal_adapter.find_account_by_provider_id("one-tap-promotion-veto", "google")
+    refute auth.context.internal_adapter.find_user_by_id(user.fetch("id")).fetch("emailVerified")
+    assert_equal session_count, auth.context.internal_adapter.list_sessions(user.fetch("id")).length
+  end
+
+  def test_callback_respects_disable_implicit_linking_but_allows_new_user
+    payload = {email: "blocked-one-tap@example.com", email_verified: true, name: "Blocked", sub: "blocked-one-tap"}
+    auth = build_auth(
+      account: {account_linking: {disable_implicit_linking: true}},
+      plugins: [BetterAuth::Plugins.one_tap(verify_id_token: ->(_token, _ctx = nil, **_options) { payload.transform_keys(&:to_s) })]
+    )
+    auth.api.sign_up_email(body: {email: payload[:email], password: "password123", name: "Blocked"})
+
+    error = assert_raises(BetterAuth::APIError) do
+      auth.api.one_tap_callback(body: {idToken: "verified-token"})
+    end
+    assert_equal "Google sub doesn't match", error.message
+
+    payload[:email] = "new-one-tap@example.com"
+    payload[:sub] = "new-one-tap"
+    result = auth.api.one_tap_callback(body: {idToken: "verified-token"})
+    assert_equal "new-one-tap@example.com", result[:user]["email"]
+  end
+
+  def test_callback_rejects_blank_sub_without_persistence
+    auth = build_auth(
+      plugins: [
+        BetterAuth::Plugins.one_tap(verify_id_token: google_verifier(
+          email: "blank-one-tap@example.com",
+          email_verified: true,
+          name: "Blank",
+          sub: "  "
+        ))
+      ]
+    )
+
+    error = assert_raises(BetterAuth::APIError) do
+      auth.api.one_tap_callback(body: {idToken: "verified-token"})
+    end
+
+    assert_equal "invalid id token", error.message
+    assert_nil auth.context.internal_adapter.find_user_by_email("blank-one-tap@example.com")
+    assert_empty auth.context.internal_adapter.adapter.find_many(model: "account")
+    assert_empty auth.context.internal_adapter.adapter.find_many(model: "session")
   end
 
   def test_callback_rejects_linking_when_account_linking_is_disabled

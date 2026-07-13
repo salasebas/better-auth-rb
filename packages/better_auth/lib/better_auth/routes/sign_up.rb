@@ -70,14 +70,16 @@ module BetterAuth
 
         validate_auth_callback_url!(ctx.context, callback_url, "callbackURL")
         validate_sign_up_input!(email, password, email_config)
+        reserved = %w[email password name image callbackURL callbackUrl callback_url rememberMe remember_me]
+        additional_user_fields = parse_sign_up_additional_user_fields(ctx, body.except(*reserved))
 
         ctx.context.adapter.transaction do
           existing = ctx.context.internal_adapter.find_user_by_email(email)
           if existing
-            if email_config[:require_email_verification]
+            if email_config[:require_email_verification] || email_config[:auto_sign_in] == false
               hash_password(ctx, password)
               call_existing_sign_up_callback(ctx, email_config, existing)
-              synthetic_user = synthetic_sign_up_user(ctx, body, email, name, image)
+              synthetic_user = synthetic_sign_up_user(ctx, additional_user_fields, email, name, image)
               next ctx.json({token: nil, user: Schema.parse_output(options, "user", synthetic_user)})
             end
 
@@ -88,7 +90,7 @@ module BetterAuth
           end
 
           hashed_password = hash_password(ctx, password)
-          created_user = create_sign_up_user(ctx, body, email, name, image)
+          created_user = create_sign_up_user(ctx, additional_user_fields, email, name, image)
           raise APIError.new("UNPROCESSABLE_ENTITY", message: BASE_ERROR_CODES["FAILED_TO_CREATE_USER"]) unless created_user
 
           ctx.context.internal_adapter.link_account(
@@ -145,9 +147,7 @@ module BetterAuth
       raise APIError.new("FORBIDDEN", message: "Invalid #{label}")
     end
 
-    def self.create_sign_up_user(ctx, body, email, name, image)
-      reserved = %w[email password name image callbackURL callbackUrl callback_url rememberMe remember_me]
-      additional = parse_declared_input(ctx, "user", body.except(*reserved), allowed_base: [])
+    def self.create_sign_up_user(ctx, additional, email, name, image)
       ctx.context.internal_adapter.create_user(
         additional.merge(
           "email" => email.downcase,
@@ -176,7 +176,7 @@ module BetterAuth
       end
     end
 
-    def self.synthetic_sign_up_user(ctx, body, email, name, image)
+    def self.synthetic_sign_up_user(ctx, additional, email, name, image)
       now = Time.now
       core_fields = {
         "id" => SecureRandom.hex(16),
@@ -187,8 +187,6 @@ module BetterAuth
         "createdAt" => now,
         "updatedAt" => now
       }
-      reserved = %w[email password name image callbackURL callbackUrl callback_url rememberMe remember_me]
-      additional = synthetic_additional_user_fields(ctx, body.except(*reserved))
       custom = ctx.context.options.email_and_password[:custom_synthetic_user]
       return core_fields.merge(additional) unless custom.respond_to?(:call)
 
@@ -202,20 +200,37 @@ module BetterAuth
       stringify_synthetic_user(custom.call(value))
     end
 
-    def self.synthetic_additional_user_fields(ctx, data)
-      additional = parse_declared_input(ctx, "user", data, allowed_base: [])
-      configured = ctx.context.options.user[:additional_fields] || {}
-      configured.each do |field, attributes|
-        storage_field = Schema.storage_key(field)
-        next if additional.key?(storage_field)
+    def self.parse_sign_up_additional_user_fields(ctx, data)
+      input = normalize_hash(data || {})
+      fields = Schema.auth_tables(ctx.context.options).fetch("user").fetch(:fields)
+        .except(*core_model_fields("user"))
 
-        field_attributes = normalize_hash(attributes || {})
-        next unless field_attributes.key?("defaultValue") || field_attributes.key?("default_value")
+      fields.each_with_object({}) do |(field, attributes), result|
+        if input.key?(field)
+          if attributes[:input] == false
+            if attributes.key?(:default_value)
+              result[field] = resolve_default(attributes[:default_value])
+            elsif js_truthy_input?(input[field])
+              raise APIError.new("BAD_REQUEST", message: "#{field} is not allowed to be set")
+            end
+            next
+          end
 
-        default = field_attributes.key?("defaultValue") ? field_attributes["defaultValue"] : field_attributes["default_value"]
-        additional[storage_field] = resolve_default(default)
+          result[field] = coerce_input_value(input[field], attributes)
+        elsif attributes.key?(:default_value)
+          result[field] = resolve_default(attributes[:default_value])
+        elsif attributes[:required]
+          raise APIError.new("BAD_REQUEST", message: "#{field} is required")
+        end
       end
-      additional
+    end
+
+    def self.js_truthy_input?(value)
+      return false if value.nil? || value == false
+      return false if value.is_a?(Numeric) && (value.zero? || (value.respond_to?(:nan?) && value.nan?))
+      return false if value.is_a?(String) && value.empty?
+
+      true
     end
 
     def self.resolve_default(value)

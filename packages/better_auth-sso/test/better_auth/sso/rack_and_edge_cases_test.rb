@@ -91,6 +91,175 @@ class BetterAuthSSORackAndEdgeCasesTest < Minitest::Test
     end
   end
 
+  def test_oidc_callback_rejects_trusted_provider_for_unverified_local_user_by_default
+    auth = build_sso_auth(account: {account_linking: {trusted_providers: ["sso:local-gate-oidc"]}})
+    owner_cookie = sign_up_cookie(auth, email: "local-gate-oidc-owner@example.com")
+    sign_up_cookie(auth, email: "local-gate-oidc@example.com")
+    user = auth.context.internal_adapter.find_user_by_email("local-gate-oidc@example.com").fetch(:user)
+    register_oidc_provider(auth, cookie: owner_cookie, provider_id: "local-gate-oidc", domain: "example.com", oidcConfig: serializable_oidc_config)
+    state = Rack::Utils.parse_query(URI.parse(auth.api.sign_in_sso(body: {providerId: "local-gate-oidc", callbackURL: "/dashboard"}).fetch(:url)).query).fetch("state")
+    session_count = auth.context.adapter.find_many(model: "session").length
+
+    with_oidc_network_stubs(email: user.fetch("email"), sub: "local-gate-oidc-sub") do
+      status, headers, = auth.api.callback_sso(params: {providerId: "local-gate-oidc"}, query: {state: state, code: "good"}, as_response: true)
+
+      assert_equal 302, status
+      assert_equal "/dashboard?error=account_not_linked", headers.fetch("location")
+    end
+    assert_nil auth.context.internal_adapter.find_account_by_provider_id("local-gate-oidc-sub", "sso:local-gate-oidc")
+    assert_equal session_count, auth.context.adapter.find_many(model: "session").length
+  end
+
+  def test_oidc_callback_links_verified_local_user
+    auth = build_sso_auth(account: {account_linking: {trusted_providers: ["sso:verified-local-oidc"]}})
+    owner_cookie = sign_up_cookie(auth, email: "verified-local-oidc-owner@example.com")
+    sign_up_cookie(auth, email: "verified-local-oidc@example.com")
+    user = auth.context.internal_adapter.find_user_by_email("verified-local-oidc@example.com").fetch(:user)
+    auth.context.internal_adapter.update_user(user.fetch("id"), emailVerified: true)
+    register_oidc_provider(auth, cookie: owner_cookie, provider_id: "verified-local-oidc", domain: "example.com", oidcConfig: serializable_oidc_config)
+    state = Rack::Utils.parse_query(URI.parse(auth.api.sign_in_sso(body: {providerId: "verified-local-oidc", callbackURL: "/dashboard"}).fetch(:url)).query).fetch("state")
+
+    with_oidc_network_stubs(email: user.fetch("email"), sub: "verified-local-oidc-sub") do
+      _status, headers, = auth.api.callback_sso(params: {providerId: "verified-local-oidc"}, query: {state: state, code: "good"}, as_response: true)
+      assert_equal "/dashboard", headers.fetch("location")
+    end
+    assert auth.context.internal_adapter.find_account_by_provider_id("verified-local-oidc-sub", "sso:verified-local-oidc")
+  end
+
+  def test_oidc_callback_links_verified_local_user_with_callable_provider_config
+    code_verifier = nil
+    auth = build_sso_auth(account: {account_linking: {trusted_providers: ["sso:callable-oidc"]}})
+    owner_cookie = sign_up_cookie(auth, email: "callable-oidc-owner@example.com")
+    sign_up_cookie(auth, email: "sso-user@example.com")
+    user = auth.context.internal_adapter.find_user_by_email("sso-user@example.com").fetch(:user)
+    auth.context.internal_adapter.update_user(user.fetch("id"), emailVerified: true)
+    register_oidc_provider(
+      auth,
+      cookie: owner_cookie,
+      provider_id: "callable-oidc",
+      domain: "example.com",
+      oidcConfig: {
+        clientId: "client-id",
+        clientSecret: "client-secret",
+        skipDiscovery: true,
+        pkce: true,
+        authorizationEndpoint: "https://idp.example.com/authorize",
+        tokenEndpoint: "https://idp.example.com/token",
+        getToken: lambda do |**data|
+          code_verifier = data.fetch(:codeVerifier)
+          {accessToken: "access-token"}
+        end,
+        getUserInfo: ->(_tokens) { {id: "callable-oidc-subject", email: "sso-user@example.com", name: "Callable OIDC"} }
+      }
+    )
+    sign_in = auth.api.sign_in_sso(body: {providerId: "callable-oidc", callbackURL: "/dashboard"})
+    sign_in_params = Rack::Utils.parse_query(URI.parse(sign_in.fetch(:url)).query)
+    state = sign_in_params.fetch("state")
+    session_count = auth.context.internal_adapter.list_sessions(user.fetch("id")).length
+
+    status, headers, = auth.api.callback_sso(params: {providerId: "callable-oidc"}, query: {state: state, code: "good"}, as_response: true)
+
+    refute_empty sign_in_params.fetch("code_challenge")
+    assert_equal 302, status
+    assert_equal "/dashboard", headers.fetch("location")
+    refute_empty code_verifier
+    assert auth.context.internal_adapter.find_account_by_provider_id("callable-oidc-subject", "sso:callable-oidc")
+    assert_equal session_count + 1, auth.context.internal_adapter.list_sessions(user.fetch("id")).length
+  end
+
+  def test_oidc_callback_local_verification_opt_out_supports_snake_and_camel_case
+    [
+      {account: {account_linking: {trusted_providers: ["sso:opt-out-oidc"], require_local_email_verified: false}}},
+      {account: {accountLinking: {trustedProviders: ["sso:opt-out-oidc"], requireLocalEmailVerified: false}}}
+    ].each_with_index do |options, index|
+      email = "opt-out-oidc-#{index}@example.com"
+      sub = "opt-out-oidc-sub-#{index}"
+      auth = build_sso_auth(**options, plugin_options: {trust_email_verified: true})
+      owner_cookie = sign_up_cookie(auth, email: "opt-out-oidc-owner-#{index}@example.com")
+      sign_up_cookie(auth, email: email)
+      local = auth.context.internal_adapter.find_user_by_email(email).fetch(:user)
+      register_oidc_provider(auth, cookie: owner_cookie, provider_id: "opt-out-oidc", domain: "example.com", oidcConfig: serializable_oidc_config)
+      state = Rack::Utils.parse_query(URI.parse(auth.api.sign_in_sso(body: {providerId: "opt-out-oidc", callbackURL: "/dashboard"}).fetch(:url)).query).fetch("state")
+
+      with_oidc_network_stubs(email: email, sub: sub, email_verified: true) do
+        _status, headers, = auth.api.callback_sso(params: {providerId: "opt-out-oidc"}, query: {state: state, code: "good"}, as_response: true)
+        assert_equal "/dashboard", headers.fetch("location")
+      end
+      assert auth.context.internal_adapter.find_account_by_provider_id(sub, "sso:opt-out-oidc")
+      promoted = auth.context.internal_adapter.find_user_by_id(local.fetch("id"))
+      assert_equal true, promoted.fetch("emailVerified")
+      refute_equal "Rack OIDC", promoted.fetch("name")
+    end
+  end
+
+  def test_oidc_callback_keeps_implicit_link_when_verified_email_promotion_is_vetoed
+    auth = build_sso_auth(
+      account: {account_linking: {trusted_providers: ["sso:promotion-veto-oidc"], require_local_email_verified: false}},
+      database_hooks: {
+        user: {
+          update: {
+            before: ->(data, _context) { false if data["emailVerified"] == true }
+          }
+        }
+      },
+      plugin_options: {trust_email_verified: true}
+    )
+    owner_cookie = sign_up_cookie(auth, email: "promotion-veto-oidc-owner@example.com")
+    sign_up_cookie(auth, email: "promotion-veto-oidc@example.com")
+    user = auth.context.internal_adapter.find_user_by_email("promotion-veto-oidc@example.com").fetch(:user)
+    session_count = auth.context.internal_adapter.list_sessions(user.fetch("id")).length
+    register_oidc_provider(auth, cookie: owner_cookie, provider_id: "promotion-veto-oidc", domain: "example.com", oidcConfig: serializable_oidc_config)
+    state = Rack::Utils.parse_query(URI.parse(auth.api.sign_in_sso(body: {providerId: "promotion-veto-oidc", callbackURL: "/dashboard"}).fetch(:url)).query).fetch("state")
+
+    assert_raises(BetterAuth::Error) do
+      with_oidc_network_stubs(email: user.fetch("email"), sub: "promotion-veto-oidc-sub", email_verified: true) do
+        auth.api.callback_sso(params: {providerId: "promotion-veto-oidc"}, query: {state: state, code: "good"}, as_response: true)
+      end
+    end
+
+    assert auth.context.internal_adapter.find_account_by_provider_id("promotion-veto-oidc-sub", "sso:promotion-veto-oidc")
+    refute auth.context.internal_adapter.find_user_by_id(user.fetch("id")).fetch("emailVerified")
+    assert_equal session_count, auth.context.internal_adapter.list_sessions(user.fetch("id")).length
+  end
+
+  def test_oidc_callback_respects_disable_implicit_linking_but_allows_new_user
+    auth = build_sso_auth(account: {account_linking: {trusted_providers: ["sso:disabled-implicit-oidc"], disable_implicit_linking: true}})
+    owner_cookie = sign_up_cookie(auth, email: "disabled-implicit-owner@example.com")
+    sign_up_cookie(auth, email: "disabled-implicit-oidc@example.com")
+    local = auth.context.internal_adapter.find_user_by_email("disabled-implicit-oidc@example.com").fetch(:user)
+    auth.context.internal_adapter.update_user(local.fetch("id"), emailVerified: true)
+    register_oidc_provider(auth, cookie: owner_cookie, provider_id: "disabled-implicit-oidc", domain: "example.com", oidcConfig: serializable_oidc_config)
+    state = Rack::Utils.parse_query(URI.parse(auth.api.sign_in_sso(body: {providerId: "disabled-implicit-oidc", callbackURL: "/dashboard"}).fetch(:url)).query).fetch("state")
+
+    with_oidc_network_stubs(email: local.fetch("email"), sub: "disabled-implicit-existing") do
+      _status, headers, = auth.api.callback_sso(params: {providerId: "disabled-implicit-oidc"}, query: {state: state, code: "good"}, as_response: true)
+      assert_equal "/dashboard?error=account_not_linked", headers.fetch("location")
+    end
+
+    new_state = Rack::Utils.parse_query(URI.parse(auth.api.sign_in_sso(body: {providerId: "disabled-implicit-oidc", callbackURL: "/dashboard"}).fetch(:url)).query).fetch("state")
+    with_oidc_network_stubs(email: "new-disabled-implicit@example.com", sub: "disabled-implicit-new") do
+      _status, headers, = auth.api.callback_sso(params: {providerId: "disabled-implicit-oidc"}, query: {state: new_state, code: "good"}, as_response: true)
+      assert_equal "/dashboard", headers.fetch("location")
+    end
+    assert auth.context.internal_adapter.find_account_by_provider_id("disabled-implicit-new", "sso:disabled-implicit-oidc")
+  end
+
+  def test_oidc_callback_rejects_whitespace_remote_id_without_persistence
+    auth = build_sso_auth
+    owner_cookie = sign_up_cookie(auth, email: "blank-oidc-owner@example.com")
+    register_oidc_provider(auth, cookie: owner_cookie, provider_id: "blank-oidc", domain: "example.com", oidcConfig: serializable_oidc_config)
+    state = Rack::Utils.parse_query(URI.parse(auth.api.sign_in_sso(body: {providerId: "blank-oidc", callbackURL: "/dashboard"}).fetch(:url)).query).fetch("state")
+    session_count = auth.context.adapter.find_many(model: "session").length
+
+    with_oidc_network_stubs(email: "blank-oidc@example.com", sub: " \t ") do
+      _status, headers, = auth.api.callback_sso(params: {providerId: "blank-oidc"}, query: {state: state, code: "good"}, as_response: true)
+      assert_equal "/dashboard?error=invalid_provider", headers.fetch("location")
+    end
+    assert_nil auth.context.internal_adapter.find_user_by_email("blank-oidc@example.com")
+    assert_empty auth.context.adapter.find_many(model: "account").select { |account| account["accountId"].to_s.strip.empty? }
+    assert_equal session_count, auth.context.adapter.find_many(model: "session").length
+  end
+
   def test_provider_ids_are_encoded_in_oidc_redirect_uri_and_saml_metadata_urls
     auth = build_sso_auth
     cookie = sign_up_cookie(auth)
@@ -158,10 +327,10 @@ class BetterAuthSSORackAndEdgeCasesTest < Minitest::Test
     }
   end
 
-  def with_oidc_network_stubs(email: "rack-callback-user@example.com", sub: "rack-callback-sub")
+  def with_oidc_network_stubs(email: "rack-callback-user@example.com", sub: "rack-callback-sub", email_verified: false)
     with_singleton_method(BetterAuth::Plugins, :sso_exchange_oidc_code, ->(**_kwargs) { {accessToken: "rack-token"} }) do
       with_singleton_method(BetterAuth::Plugins, :sso_fetch_oidc_user_info, ->(_endpoint, _access_token, **_kwargs) {
-        {sub: sub, email: email, name: "Rack OIDC"}
+        {sub: sub, email: email, email_verified: email_verified, name: "Rack OIDC"}
       }) do
         yield
       end

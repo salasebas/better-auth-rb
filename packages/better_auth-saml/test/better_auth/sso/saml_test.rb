@@ -640,6 +640,8 @@ class BetterAuthSSOSAMLMirrorTest < Minitest::Test
       saml_user_info: {id: "trusted-saml-id", email: "trusted-saml@example.com", name: "Trusted SAML"}
     )
     sign_up_cookie(auth, email: "trusted-saml@example.com")
+    trusted_user = auth.context.internal_adapter.find_user_by_email("trusted-saml@example.com").fetch(:user)
+    auth.context.internal_adapter.update_user(trusted_user.fetch("id"), emailVerified: true)
     owner_cookie = sign_up_cookie(auth, email: "owner-trusted@example.com")
     register_saml_provider(auth, owner_cookie, provider_id: "trusted-saml-provider", saml_config: {callbackUrl: "/dashboard"})
 
@@ -654,6 +656,139 @@ class BetterAuthSSOSAMLMirrorTest < Minitest::Test
     user = auth.context.internal_adapter.find_user_by_email("trusted-saml@example.com").fetch(:user)
     account = auth.context.internal_adapter.find_account_by_provider_id("trusted-saml-id", "trusted-saml-provider")
     assert_equal user.fetch("id"), account.fetch("userId")
+  end
+
+  def test_trusted_saml_provider_rejects_existing_unverified_email_by_default
+    auth = build_auth_with_json_saml_parser(
+      account: {account_linking: {enabled: true, trusted_providers: ["sso:local-gate-saml"]}},
+      saml_user_info: {id: "local-gate-saml-id", email: "local-gate-saml@example.com", name: "Local Gate"}
+    )
+    sign_up_cookie(auth, email: "local-gate-saml@example.com")
+    user = auth.context.internal_adapter.find_user_by_email("local-gate-saml@example.com").fetch(:user)
+    owner_cookie = sign_up_cookie(auth, email: "local-gate-owner@example.com")
+    register_saml_provider(auth, owner_cookie, provider_id: "local-gate-saml", saml_config: {callbackUrl: "/dashboard"})
+    session_count = auth.context.adapter.find_many(model: "session").length
+
+    status, headers, _body = auth.api.acs_endpoint(
+      params: {providerId: "local-gate-saml"},
+      body: {SAMLResponse: saml_json_response(id: "ignored", email: "ignored@example.com")},
+      as_response: true
+    )
+
+    assert_equal 302, status
+    assert_equal "/dashboard?error=account_not_linked", headers.fetch("location")
+    assert_nil auth.context.internal_adapter.find_account_by_provider_id("local-gate-saml-id", "local-gate-saml")
+    assert_equal session_count, auth.context.adapter.find_many(model: "session").length
+    refute auth.context.internal_adapter.find_user_by_id(user.fetch("id")).fetch("emailVerified")
+  end
+
+  def test_saml_local_verification_opt_out_supports_snake_and_camel_case
+    [
+      {account: {account_linking: {trusted_providers: ["sso:saml-opt-out"], require_local_email_verified: false}}},
+      {account: {accountLinking: {trustedProviders: ["sso:saml-opt-out"], requireLocalEmailVerified: false}}}
+    ].each_with_index do |linking_options, index|
+      email = "saml-opt-out-#{index}@example.com"
+      account_id = "saml-opt-out-#{index}"
+      auth = build_auth_with_json_saml_parser(
+        **linking_options,
+        plugin_options: {trust_email_verified: true},
+        saml_user_info: {id: account_id, email: email, email_verified: true, name: "Opt Out"}
+      )
+      sign_up_cookie(auth, email: email)
+      local = auth.context.internal_adapter.find_user_by_email(email).fetch(:user)
+      owner_cookie = sign_up_cookie(auth, email: "saml-opt-out-owner-#{index}@example.com")
+      register_saml_provider(auth, owner_cookie, provider_id: "saml-opt-out", saml_config: {callbackUrl: "/dashboard"})
+
+      _status, headers, = auth.api.acs_endpoint(
+        params: {providerId: "saml-opt-out"},
+        body: {SAMLResponse: saml_json_response(id: "ignored-#{index}", email: "ignored@example.com")},
+        as_response: true
+      )
+
+      assert_equal "/dashboard", headers.fetch("location")
+      assert auth.context.internal_adapter.find_account_by_provider_id(account_id, "saml-opt-out")
+      promoted = auth.context.internal_adapter.find_user_by_id(local.fetch("id"))
+      assert_equal true, promoted.fetch("emailVerified")
+      refute_equal "Opt Out", promoted.fetch("name")
+    end
+  end
+
+  def test_saml_callback_keeps_implicit_link_when_verified_email_promotion_is_vetoed
+    auth = build_auth_with_json_saml_parser(
+      account: {account_linking: {trusted_providers: ["sso:saml-promotion-veto"], require_local_email_verified: false}},
+      database_hooks: {
+        user: {
+          update: {
+            before: ->(data, _context) { false if data["emailVerified"] == true }
+          }
+        }
+      },
+      plugin_options: {trust_email_verified: true},
+      saml_user_info: {
+        id: "saml-promotion-veto-id",
+        email: "saml-promotion-veto@example.com",
+        email_verified: true,
+        name: "Veto"
+      }
+    )
+    owner_cookie = sign_up_cookie(auth, email: "saml-promotion-veto-owner@example.com")
+    sign_up_cookie(auth, email: "saml-promotion-veto@example.com")
+    user = auth.context.internal_adapter.find_user_by_email("saml-promotion-veto@example.com").fetch(:user)
+    session_count = auth.context.internal_adapter.list_sessions(user.fetch("id")).length
+    register_saml_provider(auth, owner_cookie, provider_id: "saml-promotion-veto", saml_config: {callbackUrl: "/dashboard"})
+
+    assert_raises(BetterAuth::Error) do
+      auth.api.acs_endpoint(
+        params: {providerId: "saml-promotion-veto"},
+        body: {SAMLResponse: saml_json_response(id: "ignored", email: "ignored@example.com")},
+        as_response: true
+      )
+    end
+
+    assert auth.context.internal_adapter.find_account_by_provider_id("saml-promotion-veto-id", "saml-promotion-veto")
+    refute auth.context.internal_adapter.find_user_by_id(user.fetch("id")).fetch("emailVerified")
+    assert_equal session_count, auth.context.internal_adapter.list_sessions(user.fetch("id")).length
+  end
+
+  def test_saml_callback_respects_disable_implicit_linking
+    auth = build_auth_with_json_saml_parser(
+      account: {account_linking: {trusted_providers: ["sso:disabled-implicit-saml"], disable_implicit_linking: true}},
+      saml_user_info: {id: "disabled-implicit-saml-id", email: "disabled-implicit-saml@example.com", name: "Disabled"}
+    )
+    sign_up_cookie(auth, email: "disabled-implicit-saml@example.com")
+    user = auth.context.internal_adapter.find_user_by_email("disabled-implicit-saml@example.com").fetch(:user)
+    auth.context.internal_adapter.update_user(user.fetch("id"), emailVerified: true)
+    owner_cookie = sign_up_cookie(auth, email: "disabled-implicit-saml-owner@example.com")
+    register_saml_provider(auth, owner_cookie, provider_id: "disabled-implicit-saml", saml_config: {callbackUrl: "/dashboard"})
+
+    _status, headers, = auth.api.acs_endpoint(
+      params: {providerId: "disabled-implicit-saml"},
+      body: {SAMLResponse: saml_json_response(id: "ignored", email: "ignored@example.com")},
+      as_response: true
+    )
+
+    assert_equal "/dashboard?error=account_not_linked", headers.fetch("location")
+    assert_nil auth.context.internal_adapter.find_account_by_provider_id("disabled-implicit-saml-id", "disabled-implicit-saml")
+  end
+
+  def test_saml_callback_rejects_blank_remote_id_without_user_account_or_session
+    auth = build_auth_with_json_saml_parser(
+      saml_user_info: {id: " \t ", email: "blank-saml@example.com", name: "Blank"}
+    )
+    owner_cookie = sign_up_cookie(auth, email: "blank-saml-owner@example.com")
+    register_saml_provider(auth, owner_cookie, provider_id: "blank-saml", saml_config: {callbackUrl: "/dashboard"})
+    session_count = auth.context.adapter.find_many(model: "session").length
+
+    _status, headers, = auth.api.acs_endpoint(
+      params: {providerId: "blank-saml"},
+      body: {SAMLResponse: saml_json_response(id: "ignored", email: "ignored@example.com")},
+      as_response: true
+    )
+
+    assert_equal "/dashboard?error=invalid_provider", headers.fetch("location")
+    assert_nil auth.context.internal_adapter.find_user_by_email("blank-saml@example.com")
+    assert_empty auth.context.adapter.find_many(model: "account").select { |account| account["accountId"].to_s.strip.empty? }
+    assert_equal session_count, auth.context.adapter.find_many(model: "session").length
   end
 
   def test_social_provider_trust_slug_does_not_trust_same_named_sso_provider
@@ -681,6 +816,8 @@ class BetterAuthSSOSAMLMirrorTest < Minitest::Test
       saml_user_info: {id: "verified-domain-saml-id", email: "member@verified-saml.example.com", name: "Verified Domain"}
     )
     sign_up_cookie(auth, email: "member@verified-saml.example.com")
+    member = auth.context.internal_adapter.find_user_by_email("member@verified-saml.example.com").fetch(:user)
+    auth.context.internal_adapter.update_user(member.fetch("id"), emailVerified: true)
     sign_up_cookie(auth, email: "owner-verified-domain@example.com")
     owner = auth.context.internal_adapter.find_user_by_email("owner-verified-domain@example.com").fetch(:user)
     auth.context.adapter.create(
@@ -776,6 +913,7 @@ class BetterAuthSSOSAMLMirrorTest < Minitest::Test
   def test_saml_provision_user_can_run_on_every_login
     provisioned = []
     auth = build_auth_with_json_saml_parser(
+      account: {account_linking: {require_local_email_verified: false}},
       plugin_options: {
         provision_user_on_every_login: true,
         provision_user: ->(user:, **_data) { provisioned << user.fetch("email") }
@@ -788,7 +926,7 @@ class BetterAuthSSOSAMLMirrorTest < Minitest::Test
     auth.api.callback_sso_saml(
       params: {providerId: "saml-provision-every-login"},
       body: {
-        SAMLResponse: saml_json_response(id: "saml-provision-every-one", email: "saml-provision-every@example.com"),
+        SAMLResponse: saml_json_response(id: "saml-provision-every-two", email: "saml-provision-every@example.com"),
         RelayState: first_relay
       }
     )
@@ -797,7 +935,7 @@ class BetterAuthSSOSAMLMirrorTest < Minitest::Test
     auth.api.callback_sso_saml(
       params: {providerId: "saml-provision-every-login"},
       body: {
-        SAMLResponse: saml_json_response(id: "saml-provision-every-two", email: "saml-provision-every@example.com"),
+        SAMLResponse: saml_json_response(id: "saml-provision-every-one", email: "saml-provision-every@example.com"),
         RelayState: second_relay
       }
     )
@@ -2211,11 +2349,12 @@ class BetterAuthSSOSAMLMirrorTest < Minitest::Test
     )
   end
 
-  def build_auth_with_json_saml_parser(account: {}, saml_options: {}, saml_user_info: nil, plugin_options: {})
+  def build_auth_with_json_saml_parser(account: {}, database_hooks: nil, saml_options: {}, saml_user_info: nil, plugin_options: {})
     BetterAuth.auth(
       base_url: "http://localhost:3000",
       secret: SECRET,
       database: :memory,
+      database_hooks: database_hooks,
       email_and_password: {enabled: true},
       account: account,
       plugins: [

@@ -174,6 +174,26 @@ module BetterAuth
         hooks.delete([{field: "id", value: account_id}], "account")
       end
 
+      # Removes access established before control of an email address was proven.
+      # The user is intentionally left unverified until the caller completes the
+      # proof transition and may safely mint a replacement session.
+      def revoke_unproven_account_access(user_id)
+        adapter.transaction do
+          user = find_user_by_id(user_id)
+          next unless user && !user["emailVerified"]
+
+          find_accounts(user_id).each do |account|
+            next unless account["providerId"] == "credential"
+
+            deleted = delete_account(account.fetch("id"))
+            raise Error, "Credential account revocation was vetoed" if deleted == false
+          end
+
+          deleted_sessions = delete_user_sessions(user_id)
+          raise Error, "Session revocation was vetoed" if deleted_sessions == false
+        end
+      end
+
       def find_oauth_user(email, account_id, provider_id)
         account = find_account_with_user(account_id, provider_id)
         if account

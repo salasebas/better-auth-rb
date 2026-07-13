@@ -268,7 +268,10 @@ class BetterAuthPluginsSSOOIDCTest < Minitest::Test
   end
 
   def test_oidc_callback_overrides_existing_user_info_when_enabled_by_default
-    auth = build_auth(default_override_user_info: true, account: {account_linking: {trusted_providers: ["sso:oidc"]}})
+    auth = build_auth(
+      default_override_user_info: true,
+      account: {account_linking: {trusted_providers: ["sso:oidc"], require_local_email_verified: false}}
+    )
     _existing_status, _existing_headers, _existing_body = auth.api.sign_up_email(
       body: {email: "override@example.com", password: "password123", name: "Old Name"},
       as_response: true
@@ -286,14 +289,25 @@ class BetterAuthPluginsSSOOIDCTest < Minitest::Test
           skipDiscovery: true,
           authorizationEndpoint: "https://idp.example.com/authorize",
           tokenEndpoint: "https://idp.example.com/token",
-          jwksEndpoint: "https://idp.example.com/jwks",
-          getToken: ->(**_data) { {accessToken: "access-token"} },
-          getUserInfo: ->(_tokens) { {id: "oidc-sub", email: "override@example.com", name: "New Name", picture: "https://cdn.example.com/new.png", emailVerified: true} }
+          userInfoEndpoint: "https://idp.example.com/userinfo",
+          jwksEndpoint: "https://idp.example.com/jwks"
         }
       }
     )
     state = Rack::Utils.parse_query(URI.parse(auth.api.sign_in_sso(body: {providerId: "oidc", callbackURL: "/dashboard"})[:url]).query).fetch("state")
-    auth.api.callback_sso(params: {providerId: "oidc"}, query: {code: "code", state: state}, as_response: true)
+    BetterAuth::Plugins.stub(:sso_exchange_oidc_code, ->(**_data) { {accessToken: "access-token"} }) do
+      BetterAuth::Plugins.stub(:sso_oidc_user_info, lambda { |_ctx, _config, _tokens, _plugin_config, **_data|
+        {
+          id: "oidc-sub",
+          email: "override@example.com",
+          name: "New Name",
+          image: "https://cdn.example.com/new.png",
+          email_verified: false
+        }
+      }) do
+        auth.api.callback_sso(params: {providerId: "oidc"}, query: {code: "code", state: state}, as_response: true)
+      end
+    end
 
     user = auth.context.internal_adapter.find_user_by_email("override@example.com").fetch(:user)
     assert_equal "New Name", user.fetch("name")

@@ -114,6 +114,13 @@ Once the user provides the OTP, you can sign in the user using the `signIn.email
   If the user is not registered, they'll be automatically registered. Configured [additional fields](/docs/concepts/typescript#additional-fields) are also accepted for new users. To prevent automatic sign-up, pass `disableSignUp` as `true` in the [options](#options).
 </Callout>
 
+<Callout type="info">
+  When a sign-in OTP proves control of an email for an existing unverified user,
+  RubyAuth removes every pre-proof credential account and active session before
+  marking the email verified. It then creates one new session for the mailbox
+  owner. This does not change the separate email-verification OTP flow.
+</Callout>
+
 ### Verify Email with OTP
 
 To verify the user's email address with OTP, use the `sendVerificationOtp()` method to send an "email-verification" OTP to the user's email address.

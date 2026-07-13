@@ -63,6 +63,9 @@ class BetterAuthPluginsEmailOTPTest < Minitest::Test
       ]
     )
     auth.api.sign_up_email(body: {email: "signin@example.com", password: "password123", name: "Sign In"})
+    user = auth.context.internal_adapter.find_user_by_email("signin@example.com")[:user]
+    social = auth.context.internal_adapter.create_account(userId: user["id"], providerId: "github", accountId: "github-email-otp")
+    auth.context.internal_adapter.create_session(user["id"], false, {token: "pre-proof-email-otp"}, true)
 
     auth.api.send_verification_otp(body: {email: "signin@example.com", type: "sign-in"})
     status, headers, body = auth.api.sign_in_email_otp(
@@ -75,6 +78,8 @@ class BetterAuthPluginsEmailOTPTest < Minitest::Test
     assert_match(/\A[0-9a-f]{32}\z/, data.fetch("token"))
     assert_equal "signin@example.com", data.fetch("user").fetch("email")
     assert_includes headers.fetch("set-cookie"), "better-auth.session_token="
+    assert_equal [social["id"]], auth.context.internal_adapter.find_accounts(user["id"]).map { |account| account["id"] }
+    assert_equal [data.fetch("token")], auth.context.internal_adapter.list_sessions(user["id"]).map { |session| session["token"] }
 
     auth.api.send_verification_otp(body: {email: "new-otp@example.com", type: "sign-in"})
     result = auth.api.sign_in_email_otp(body: {email: "new-otp@example.com", otp: sent.last[:otp]})
@@ -82,6 +87,74 @@ class BetterAuthPluginsEmailOTPTest < Minitest::Test
     assert_match(/\A[0-9a-f]{32}\z/, result[:token])
     assert_equal "new-otp@example.com", result[:user]["email"]
     assert_equal true, result[:user]["emailVerified"]
+  end
+
+  def test_sign_in_email_otp_preserves_access_for_already_verified_user
+    sent = []
+    auth = build_auth(
+      plugins: [
+        BetterAuth::Plugins.email_otp(send_verification_otp: ->(data, _ctx = nil) { sent << data })
+      ]
+    )
+    auth.api.sign_up_email(body: {email: "verified-email-otp@example.com", password: "password123", name: "Verified"})
+    user = auth.context.internal_adapter.find_user_by_email("verified-email-otp@example.com")[:user]
+    auth.context.internal_adapter.update_user(user["id"], emailVerified: true)
+    credential = auth.context.internal_adapter.find_accounts(user["id"]).find { |account| account["providerId"] == "credential" }
+    auth.context.internal_adapter.create_session(user["id"], false, {token: "verified-email-otp-session"}, true)
+    old_session_tokens = auth.context.internal_adapter.list_sessions(user["id"]).map { |session| session["token"] }
+
+    auth.api.send_verification_otp(body: {email: user["email"], type: "sign-in"})
+    result = auth.api.sign_in_email_otp(body: {email: user["email"], otp: sent.last[:otp]})
+
+    assert auth.context.internal_adapter.find_account_by_provider_id(credential["accountId"], "credential")
+    assert_equal (old_session_tokens + [result[:token]]).sort,
+      auth.context.internal_adapter.list_sessions(user["id"]).map { |session| session["token"] }.sort
+  end
+
+  def test_sign_in_email_otp_mints_no_session_when_verification_update_is_vetoed
+    sent = []
+    auth = build_auth(
+      database_hooks: {
+        user: {update: {before: ->(_user, _context) { false }}}
+      },
+      plugins: [
+        BetterAuth::Plugins.email_otp(send_verification_otp: ->(data, _ctx = nil) { sent << data })
+      ]
+    )
+    auth.api.sign_up_email(body: {email: "vetoed-email-otp@example.com", password: "password123", name: "Vetoed"})
+    user = auth.context.internal_adapter.find_user_by_email("vetoed-email-otp@example.com")[:user]
+    old_sessions = auth.context.internal_adapter.list_sessions(user["id"])
+    auth.api.send_verification_otp(body: {email: user["email"], type: "sign-in"})
+
+    assert_raises(BetterAuth::Error) do
+      auth.api.sign_in_email_otp(body: {email: user["email"], otp: sent.last[:otp]})
+    end
+
+    refute auth.context.internal_adapter.find_user_by_id(user["id"])["emailVerified"]
+    assert auth.context.internal_adapter.find_accounts(user["id"]).any? { |account| account["providerId"] == "credential" }
+    assert_equal old_sessions.map { |session| session["token"] },
+      auth.context.internal_adapter.list_sessions(user["id"]).map { |session| session["token"] }
+    assert_nil auth.context.internal_adapter.find_verification_value("sign-in-otp-#{user["email"]}")
+  end
+
+  def test_sign_in_email_otp_revokes_secondary_sessions_before_minting_replacement
+    sent = []
+    storage = StringStorage.new
+    auth = build_auth(
+      secondary_storage: storage,
+      plugins: [
+        BetterAuth::Plugins.email_otp(send_verification_otp: ->(data, _ctx = nil) { sent << data })
+      ]
+    )
+    auth.api.sign_up_email(body: {email: "secondary-email-otp@example.com", password: "password123", name: "Secondary"})
+    user = auth.context.internal_adapter.find_user_by_email("secondary-email-otp@example.com")[:user]
+    auth.context.internal_adapter.create_session(user["id"], false, {token: "pre-proof-secondary-email-otp"}, true)
+    auth.api.send_verification_otp(body: {email: user["email"], type: "sign-in"})
+
+    result = auth.api.sign_in_email_otp(body: {email: user["email"], otp: sent.last[:otp]})
+
+    refute_includes storage.keys, "pre-proof-secondary-email-otp"
+    assert_equal [result[:token]], auth.context.internal_adapter.list_sessions(user["id"]).map { |session| session["token"] }
   end
 
   def test_sign_in_with_email_otp_sign_up_preserves_profile_and_additional_fields
@@ -770,5 +843,32 @@ class BetterAuthPluginsEmailOTPTest < Minitest::Test
       "REMOTE_ADDR" => "127.0.0.1",
       :input => JSON.generate(body)
     )
+  end
+
+  class StringStorage
+    def initialize
+      @store = {}
+      @mutex = Mutex.new
+    end
+
+    def set(key, value, _ttl = nil)
+      @store[key] = value
+    end
+
+    def get(key)
+      @store[key]
+    end
+
+    def delete(key)
+      @store.delete(key)
+    end
+
+    def get_and_delete(key)
+      @mutex.synchronize { @store.delete(key) }
+    end
+
+    def keys
+      @store.keys
+    end
   end
 end

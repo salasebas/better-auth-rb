@@ -74,6 +74,54 @@ class BetterAuthRoutesSocialTest < Minitest::Test
     assert_equal "access-token", account["accessToken"]
   end
 
+  def test_sign_in_social_with_id_token_rejects_blank_remote_id_without_persistence
+    auth = build_auth(
+      social_providers: {
+        github: {
+          id: "github",
+          verify_id_token: ->(_token, _nonce = nil) { true },
+          get_user_info: ->(_tokens) { {user: {id: "  ", email: "blank-id-token@example.com", name: "Blank", emailVerified: true}} }
+        }
+      }
+    )
+
+    error = assert_raises(BetterAuth::APIError) do
+      auth.api.sign_in_social(body: {provider: "github", idToken: {token: "id-token"}})
+    end
+
+    assert_equal BetterAuth::BASE_ERROR_CODES["FAILED_TO_GET_USER_INFO"], error.message
+    assert_nil auth.context.internal_adapter.find_user_by_email("blank-id-token@example.com")
+    assert_empty auth.context.internal_adapter.adapter.find_many(model: "account")
+    assert_empty auth.context.internal_adapter.adapter.find_many(model: "session")
+  end
+
+  def test_callback_social_rejects_blank_remote_id_without_persistence
+    auth = build_auth(
+      social_providers: {
+        github: {
+          id: "github",
+          create_authorization_url: ->(data) { "https://github.example/oauth?state=#{URI.encode_www_form_component(data[:state])}" },
+          validate_authorization_code: ->(_data) { {accessToken: "access"} },
+          get_user_info: ->(_tokens) { {user: {id: "\t", email: "blank-callback@example.com", name: "Blank", emailVerified: true}} }
+        }
+      }
+    )
+    response = auth.api.sign_in_social(body: {provider: "github", callbackURL: "/app", errorCallbackURL: "/error", disableRedirect: true})
+    state = URI.decode_www_form(URI.parse(response[:url]).query).assoc("state").last
+
+    status, headers, = auth.api.callback_oauth(
+      params: {providerId: "github"},
+      query: {code: "code", state: state},
+      as_response: true
+    )
+
+    assert_equal 302, status
+    assert_includes headers.fetch("location"), "error=unable_to_get_user_info"
+    assert_nil auth.context.internal_adapter.find_user_by_email("blank-callback@example.com")
+    assert_empty auth.context.internal_adapter.adapter.find_many(model: "account")
+    assert_empty auth.context.internal_adapter.adapter.find_many(model: "session")
+  end
+
   def test_apple_id_token_sign_in_uses_user_name_from_id_token_body
     token = fake_jwt(
       "sub" => "apple-sub",
@@ -1062,7 +1110,7 @@ class BetterAuthRoutesSocialTest < Minitest::Test
     assert_equal true, auth.context.internal_adapter.find_user_by_id(user_id)["emailVerified"]
   end
 
-  def test_sign_in_social_verified_provider_implicitly_links_without_trusted_provider
+  def test_sign_in_social_rejects_verified_provider_for_unverified_local_user_by_default
     auth = build_auth(
       social_providers: {
         github: {
@@ -1082,15 +1130,181 @@ class BetterAuthRoutesSocialTest < Minitest::Test
       },
       account: {account_linking: {trusted_providers: []}}
     )
-    sign_up_cookie(auth, email: "verified-implicit@example.com")
+    cookie = sign_up_cookie(auth, email: "verified-implicit@example.com")
+    user = auth.context.internal_adapter.find_user_by_email("verified-implicit@example.com")[:user]
+    old_session_tokens = auth.context.internal_adapter.list_sessions(user["id"]).map { |session| session["token"] }
+
+    error = assert_raises(BetterAuth::APIError) do
+      auth.api.sign_in_social(body: {provider: "github", idToken: {token: "id-token"}}, headers: {"cookie" => cookie})
+    end
+
+    assert_equal "account not linked", error.message
+    refute auth.context.internal_adapter.find_accounts(user["id"]).any? { |entry| entry["providerId"] == "github" }
+    assert_equal old_session_tokens, auth.context.internal_adapter.list_sessions(user["id"]).map { |session| session["token"] }
+    refute auth.context.internal_adapter.find_user_by_id(user["id"])["emailVerified"]
+  end
+
+  def test_rejected_implicit_link_does_not_create_session_for_banned_user_when_delete_is_vetoed
+    auth = build_auth(
+      social_providers: {
+        github: {
+          id: "github",
+          verify_id_token: ->(_token, _nonce = nil) { true },
+          get_user_info: ->(_tokens) {
+            {user: {id: "gh-banned-veto", email: "banned-veto@example.com", name: "Banned", emailVerified: true}}
+          }
+        }
+      },
+      user: {
+        additional_fields: {
+          banned: {type: "boolean", default_value: false, input: false}
+        }
+      },
+      database_hooks: {
+        session: {delete: {before: ->(_session, _context) { false }}}
+      }
+    )
+    sign_up_cookie(auth, email: "banned-veto@example.com")
+    user = auth.context.internal_adapter.find_user_by_email("banned-veto@example.com").fetch(:user)
+    auth.context.internal_adapter.update_user(user.fetch("id"), banned: true)
+    session_count = auth.context.internal_adapter.list_sessions(user.fetch("id")).length
+
+    error = assert_raises(BetterAuth::APIError) do
+      auth.api.sign_in_social(body: {provider: "github", idToken: {token: "id-token"}})
+    end
+
+    assert_equal "banned", error.message
+    assert_equal session_count, auth.context.internal_adapter.list_sessions(user.fetch("id")).length
+    assert_nil auth.context.internal_adapter.find_account_by_provider_id("gh-banned-veto", "github")
+  end
+
+  def test_expired_ban_runs_the_final_social_session_hook_once_without_delete_preflight
+    session_create_hooks = 0
+    session_delete_hooks = 0
+    auth = build_auth(
+      plugins: [BetterAuth::Plugins.admin],
+      social_providers: {
+        github: {
+          id: "github",
+          verify_id_token: ->(_token, _nonce = nil) { true },
+          get_user_info: ->(_tokens) {
+            {user: {id: "gh-expired-ban", email: "expired-ban@example.com", name: "Expired Ban", emailVerified: true}}
+          }
+        }
+      },
+      database_hooks: {
+        session: {
+          create: {before: ->(_session, _context) { session_create_hooks += 1 }},
+          delete: {before: ->(_session, _context) { session_delete_hooks += 1 }}
+        }
+      }
+    )
+    sign_up_cookie(auth, email: "expired-ban@example.com")
+    user = auth.context.internal_adapter.find_user_by_email("expired-ban@example.com").fetch(:user)
+    auth.context.internal_adapter.update_user(
+      user.fetch("id"),
+      emailVerified: true,
+      banned: true,
+      banReason: "Expired",
+      banExpires: Time.now - 60
+    )
+    session_count = auth.context.internal_adapter.list_sessions(user.fetch("id")).length
+    session_create_hooks = 0
+    session_delete_hooks = 0
 
     result = auth.api.sign_in_social(body: {provider: "github", idToken: {token: "id-token"}})
 
-    assert_equal false, result.fetch(:redirect)
-    user = auth.context.internal_adapter.find_user_by_email("verified-implicit@example.com")[:user]
-    assert_equal true, user["emailVerified"]
-    account = auth.context.internal_adapter.find_accounts(user["id"]).find { |entry| entry["providerId"] == "github" }
-    assert_equal "gh-verified-implicit", account["accountId"]
+    assert_equal user.fetch("id"), result.fetch(:user).fetch("id")
+    assert_equal false, auth.context.internal_adapter.find_user_by_id(user.fetch("id")).fetch("banned")
+    assert_equal session_count + 1, auth.context.internal_adapter.list_sessions(user.fetch("id")).length
+    assert_equal 1, session_create_hooks
+    assert_equal 0, session_delete_hooks
+  end
+
+  def test_sign_in_social_implicitly_links_verified_local_user
+    provider_user = {
+      id: "gh-verified-local",
+      email: "verified-local@example.com",
+      name: "Verified Local",
+      emailVerified: true
+    }
+    auth = build_auth(
+      social_providers: {
+        github: {
+          id: "github",
+          verify_id_token: ->(_token, _nonce = nil) { true },
+          get_user_info: ->(_tokens) { {user: provider_user} }
+        }
+      }
+    )
+    sign_up_cookie(auth, email: provider_user[:email])
+    user = auth.context.internal_adapter.find_user_by_email(provider_user[:email])[:user]
+    auth.context.internal_adapter.update_user(user["id"], emailVerified: true)
+
+    result = auth.api.sign_in_social(body: {provider: "github", idToken: {token: "id-token"}})
+
+    assert_equal user["id"], result[:user]["id"]
+    assert auth.context.internal_adapter.find_account_by_provider_id(provider_user[:id], "github")
+  end
+
+  def test_sign_in_social_require_local_email_verified_opt_out_supports_snake_and_camel_case
+    [
+      {account: {account_linking: {require_local_email_verified: false}}},
+      {account: {accountLinking: {requireLocalEmailVerified: false}}}
+    ].each_with_index do |linking_options, index|
+      email = "social-opt-out-#{index}@example.com"
+      remote_id = "social-opt-out-#{index}"
+      auth = build_auth(
+        linking_options.merge(
+          social_providers: {
+            github: {
+              id: "github",
+              verify_id_token: ->(_token, _nonce = nil) { true },
+              get_user_info: ->(_tokens) { {user: {id: remote_id, email: email, name: "Opt Out", emailVerified: true}} }
+            }
+          }
+        )
+      )
+      sign_up_cookie(auth, email: email)
+
+      result = auth.api.sign_in_social(body: {provider: "github", idToken: {token: "id-token"}})
+
+      assert_equal true, result[:user]["emailVerified"]
+      assert auth.context.internal_adapter.find_account_by_provider_id(remote_id, "github")
+    end
+  end
+
+  def test_implicit_link_rolls_back_account_and_session_when_verified_email_promotion_is_vetoed
+    auth = build_auth(
+      social_providers: {
+        github: {
+          id: "github",
+          verify_id_token: ->(_token, _nonce = nil) { true },
+          get_user_info: ->(_tokens) {
+            {user: {id: "gh-promotion-veto", email: "promotion-veto@example.com", name: "Veto", emailVerified: true}}
+          }
+        }
+      },
+      account: {account_linking: {require_local_email_verified: false}},
+      database_hooks: {
+        user: {
+          update: {
+            before: ->(data, _context) { false if data["emailVerified"] == true }
+          }
+        }
+      }
+    )
+    sign_up_cookie(auth, email: "promotion-veto@example.com")
+    user = auth.context.internal_adapter.find_user_by_email("promotion-veto@example.com").fetch(:user)
+    session_count = auth.context.internal_adapter.list_sessions(user.fetch("id")).length
+
+    assert_raises(BetterAuth::Error) do
+      auth.api.sign_in_social(body: {provider: "github", idToken: {token: "id-token"}})
+    end
+
+    assert_nil auth.context.internal_adapter.find_account_by_provider_id("gh-promotion-veto", "github")
+    refute auth.context.internal_adapter.find_user_by_id(user.fetch("id")).fetch("emailVerified")
+    assert_equal session_count, auth.context.internal_adapter.list_sessions(user.fetch("id")).length
   end
 
   def test_sign_in_social_disable_implicit_linking_blocks_existing_user_but_allows_new_user
@@ -1127,7 +1341,7 @@ class BetterAuthRoutesSocialTest < Minitest::Test
     assert_equal "new-implicit-user@example.com", result.fetch(:user).fetch("email")
   end
 
-  def test_sign_in_social_override_user_info_updates_existing_user
+  def test_sign_in_social_override_user_info_cannot_bypass_local_verification_gate
     provider_user = {
       id: "gh-override",
       email: "override-social@example.com",
@@ -1150,12 +1364,16 @@ class BetterAuthRoutesSocialTest < Minitest::Test
     user_id = auth.api.get_session(headers: {"cookie" => cookie})[:user]["id"]
     auth.context.internal_adapter.update_user(user_id, "name" => "Initial Name", "emailVerified" => false)
 
-    auth.api.sign_in_social(body: {provider: "github", idToken: {token: "id-token", accessToken: "access-token"}})
+    error = assert_raises(BetterAuth::APIError) do
+      auth.api.sign_in_social(body: {provider: "github", idToken: {token: "id-token", accessToken: "access-token"}})
+    end
 
     user = auth.context.internal_adapter.find_user_by_id(user_id)
-    assert_equal "Updated Social Name", user["name"]
-    assert_equal "https://example.com/updated.png", user["image"]
-    assert_equal true, user["emailVerified"]
+    assert_equal "account not linked", error.message
+    assert_equal "Initial Name", user["name"]
+    assert_nil user["image"]
+    assert_equal false, user["emailVerified"]
+    refute auth.context.internal_adapter.find_account_by_provider_id("gh-override", "github")
   end
 
   def test_sign_in_social_does_not_update_linked_account_tokens_when_disabled

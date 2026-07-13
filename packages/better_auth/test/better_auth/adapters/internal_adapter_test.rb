@@ -250,6 +250,101 @@ class BetterAuthInternalAdapterTest < Minitest::Test
     assert_nil internal.find_session(session["token"])
   end
 
+  def test_revoke_unproven_account_access_removes_credentials_and_database_sessions_only
+    internal = internal_adapter
+    user = internal.create_user(name: "Ada", email: "unproven@example.com", emailVerified: false)
+    2.times do |index|
+      internal.create_account(userId: user["id"], providerId: "credential", accountId: "credential-#{index}", password: "secret")
+    end
+    social = internal.create_account(userId: user["id"], providerId: "github", accountId: "github-1")
+    2.times { internal.create_session(user["id"]) }
+
+    internal.revoke_unproven_account_access(user["id"])
+
+    assert_equal [social["id"]], internal.find_accounts(user["id"]).map { |account| account["id"] }
+    assert_empty internal.list_sessions(user["id"])
+    refute internal.find_user_by_id(user["id"])["emailVerified"]
+  end
+
+  def test_revoke_unproven_account_access_leaves_verified_user_unchanged
+    internal = internal_adapter
+    user = internal.create_user(name: "Ada", email: "verified@example.com", emailVerified: true)
+    credential = internal.create_account(userId: user["id"], providerId: "credential", accountId: user["id"], password: "secret")
+    session = internal.create_session(user["id"])
+
+    internal.revoke_unproven_account_access(user["id"])
+
+    assert_equal credential["id"], internal.find_accounts(user["id"]).first["id"]
+    assert_equal session["token"], internal.list_sessions(user["id"]).first["token"]
+  end
+
+  def test_revoke_unproven_account_access_removes_secondary_and_dual_written_sessions
+    storage = MemoryStorage.new
+    internal = internal_adapter(secondary_storage: storage, session: {store_session_in_database: true})
+    user = internal.create_user(name: "Ada", email: "secondary-unproven@example.com", emailVerified: false)
+    session = internal.create_session(user["id"], false, {token: "unproven-secondary-token"}, true)
+    active_key = "active-sessions-#{user["id"]}"
+
+    internal.revoke_unproven_account_access(user["id"])
+
+    assert_nil storage.get(session["token"])
+    assert_nil storage.get(active_key)
+    assert_empty internal.adapter.find_many(model: "session", where: [{field: "userId", value: user["id"]}])
+  end
+
+  def test_revoke_unproven_account_access_raises_on_delete_veto_and_rolls_back
+    internal = internal_adapter(
+      database_hooks: {
+        account: {delete: {before: ->(_account, _context) { false }}}
+      }
+    )
+    user = internal.create_user(name: "Ada", email: "vetoed@example.com", emailVerified: false)
+    credential = internal.create_account(userId: user["id"], providerId: "credential", accountId: user["id"], password: "secret")
+    session = internal.create_session(user["id"])
+
+    assert_raises(BetterAuth::Error) { internal.revoke_unproven_account_access(user["id"]) }
+
+    assert internal.find_account_by_provider_id(credential["accountId"], "credential")
+    assert internal.find_session(session["token"])
+    refute internal.find_user_by_id(user["id"])["emailVerified"]
+  end
+
+  def test_revoke_unproven_account_access_raises_on_session_delete_veto_and_rolls_back
+    internal = internal_adapter(
+      database_hooks: {
+        session: {delete: {before: ->(_session, _context) { false }}}
+      }
+    )
+    user = internal.create_user(name: "Ada", email: "session-vetoed@example.com", emailVerified: false)
+    credential = internal.create_account(userId: user["id"], providerId: "credential", accountId: user["id"], password: "secret")
+    session = internal.create_session(user["id"])
+
+    assert_raises(BetterAuth::Error) { internal.revoke_unproven_account_access(user["id"]) }
+
+    assert internal.find_account_by_provider_id(credential["accountId"], "credential")
+    assert internal.find_session(session["token"])
+    refute internal.find_user_by_id(user["id"])["emailVerified"]
+  end
+
+  def test_revoke_unproven_account_access_propagates_secondary_storage_failure_and_rolls_back_database
+    storage = MemoryStorage.new
+    internal = internal_adapter(secondary_storage: storage, session: {store_session_in_database: true})
+    user = internal.create_user(name: "Ada", email: "storage-failure@example.com", emailVerified: false)
+    credential = internal.create_account(userId: user["id"], providerId: "credential", accountId: user["id"], password: "secret")
+    session = internal.create_session(user["id"], false, {token: "storage-failure-token"}, true)
+    storage.define_singleton_method(:delete) do |key|
+      raise "storage unavailable" if key == session["token"]
+
+      super(key)
+    end
+
+    error = assert_raises(RuntimeError) { internal.revoke_unproven_account_access(user["id"]) }
+
+    assert_equal "storage unavailable", error.message
+    assert internal.find_account_by_provider_id(credential["accountId"], "credential")
+    refute internal.find_user_by_id(user["id"])["emailVerified"]
+  end
+
   def test_store_session_in_database_keeps_hooked_db_copy_and_falls_back_when_secondary_storage_misses
     storage = MemoryStorage.new
     internal = internal_adapter(

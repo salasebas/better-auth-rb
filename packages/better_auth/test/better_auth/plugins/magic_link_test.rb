@@ -91,6 +91,8 @@ class BetterAuthPluginsMagicLinkTest < Minitest::Test
     )
     auth.api.sign_up_email(body: {email: "unverified-magic@example.com", password: "password123", name: "Unverified"})
     user = auth.context.internal_adapter.find_user_by_email("unverified-magic@example.com")[:user]
+    social = auth.context.internal_adapter.create_account(userId: user["id"], providerId: "github", accountId: "github-unverified")
+    auth.context.internal_adapter.create_session(user["id"], false, {token: "pre-proof-magic-session"}, true)
     assert_equal false, user["emailVerified"]
 
     auth.api.sign_in_magic_link(body: {email: "unverified-magic@example.com"})
@@ -99,6 +101,82 @@ class BetterAuthPluginsMagicLinkTest < Minitest::Test
     assert_equal true, result[:user]["emailVerified"]
     updated = auth.context.internal_adapter.find_user_by_email("unverified-magic@example.com")[:user]
     assert_equal true, updated["emailVerified"]
+    assert_equal [social["id"]], auth.context.internal_adapter.find_accounts(user["id"]).map { |account| account["id"] }
+    assert_equal [result[:token]], auth.context.internal_adapter.list_sessions(user["id"]).map { |session| session["token"] }
+  end
+
+  def test_magic_link_preserves_access_for_already_verified_user
+    sent = []
+    auth = build_auth(
+      plugins: [
+        BetterAuth::Plugins.magic_link(send_magic_link: ->(data, _ctx = nil) { sent << data })
+      ]
+    )
+    auth.api.sign_up_email(body: {email: "verified-magic@example.com", password: "password123", name: "Verified"})
+    user = auth.context.internal_adapter.find_user_by_email("verified-magic@example.com")[:user]
+    verified = auth.context.internal_adapter.update_user(user["id"], emailVerified: true)
+    credential = auth.context.internal_adapter.find_accounts(user["id"]).find { |account| account["providerId"] == "credential" }
+    auth.context.internal_adapter.create_session(user["id"], false, {token: "verified-magic-session"}, true)
+    old_session_tokens = auth.context.internal_adapter.list_sessions(user["id"]).map { |session| session["token"] }
+
+    auth.api.sign_in_magic_link(body: {email: verified["email"]})
+    result = auth.api.magic_link_verify(query: {token: sent.first[:token]})
+
+    assert auth.context.internal_adapter.find_account_by_provider_id(credential["accountId"], "credential")
+    assert_equal (old_session_tokens + [result[:token]]).sort,
+      auth.context.internal_adapter.list_sessions(user["id"]).map { |session| session["token"] }.sort
+  end
+
+  def test_magic_link_mints_no_session_when_verification_update_is_vetoed
+    sent = []
+    auth = build_auth(
+      database_hooks: {
+        user: {update: {before: ->(_user, _context) { false }}}
+      },
+      plugins: [
+        BetterAuth::Plugins.magic_link(send_magic_link: ->(data, _ctx = nil) { sent << data })
+      ]
+    )
+    auth.api.sign_up_email(body: {email: "vetoed-magic@example.com", password: "password123", name: "Vetoed"})
+    user = auth.context.internal_adapter.find_user_by_email("vetoed-magic@example.com")[:user]
+    old_sessions = auth.context.internal_adapter.list_sessions(user["id"])
+    auth.api.sign_in_magic_link(body: {email: user["email"]})
+
+    assert_raises(BetterAuth::Error) do
+      auth.api.magic_link_verify(query: {token: sent.first[:token]})
+    end
+
+    refute auth.context.internal_adapter.find_user_by_id(user["id"])["emailVerified"]
+    assert auth.context.internal_adapter.find_accounts(user["id"]).any? { |account| account["providerId"] == "credential" }
+    assert_equal old_sessions.map { |session| session["token"] },
+      auth.context.internal_adapter.list_sessions(user["id"]).map { |session| session["token"] }
+    assert_nil auth.context.internal_adapter.find_verification_value(sent.first[:token])
+  end
+
+  def test_magic_link_remains_unverified_and_mints_no_session_when_session_revocation_is_vetoed
+    sent = []
+    auth = build_auth(
+      database_hooks: {
+        session: {delete: {before: ->(_session, _context) { false }}}
+      },
+      plugins: [
+        BetterAuth::Plugins.magic_link(send_magic_link: ->(data, _ctx = nil) { sent << data })
+      ]
+    )
+    auth.api.sign_up_email(body: {email: "session-veto-magic@example.com", password: "password123", name: "Vetoed"})
+    user = auth.context.internal_adapter.find_user_by_email("session-veto-magic@example.com")[:user]
+    credential = auth.context.internal_adapter.find_accounts(user["id"]).find { |account| account["providerId"] == "credential" }
+    old_session_tokens = auth.context.internal_adapter.list_sessions(user["id"]).map { |session| session["token"] }
+    auth.api.sign_in_magic_link(body: {email: user["email"]})
+
+    assert_raises(BetterAuth::Error) do
+      auth.api.magic_link_verify(query: {token: sent.first[:token]})
+    end
+
+    refute auth.context.internal_adapter.find_user_by_id(user["id"])["emailVerified"]
+    assert auth.context.internal_adapter.find_account_by_provider_id(credential["accountId"], "credential")
+    assert_equal old_session_tokens, auth.context.internal_adapter.list_sessions(user["id"]).map { |session| session["token"] }
+    assert_nil auth.context.internal_adapter.find_verification_value(sent.first[:token])
   end
 
   def test_magic_link_verifies_last_issued_token_and_sets_cookie_for_json_response
@@ -292,13 +370,18 @@ class BetterAuthPluginsMagicLinkTest < Minitest::Test
       ]
     )
     auth.api.sign_up_email(body: {email: "secondary-magic@example.com", password: "password123", name: "Secondary Magic"})
+    user = auth.context.internal_adapter.find_user_by_email("secondary-magic@example.com")[:user]
+    auth.context.internal_adapter.create_session(user["id"], false, {token: "pre-proof-secondary-magic"}, true)
 
     auth.api.sign_in_magic_link(body: {email: "secondary-magic@example.com"})
     assert verification_keys(storage).any?
-    status, headers, _body = auth.api.magic_link_verify(query: {token: sent.last[:token]}, as_response: true)
+    status, headers, body = auth.api.magic_link_verify(query: {token: sent.last[:token]}, as_response: true)
 
     assert_equal 200, status
     assert_includes headers.fetch("set-cookie"), "better-auth.session_token="
+    refute_includes storage.keys, "pre-proof-secondary-magic"
+    result = JSON.parse(body.join)
+    assert_equal [result.fetch("token")], auth.context.internal_adapter.list_sessions(user["id"]).map { |session| session["token"] }
 
     auth.api.sign_in_magic_link(body: {email: "secondary-new-magic@example.com", name: "Secondary New"})
     result = auth.api.magic_link_verify(query: {token: sent.last[:token]})
