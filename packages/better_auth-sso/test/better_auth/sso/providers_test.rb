@@ -106,6 +106,31 @@ class BetterAuthSSOProvidersTest < Minitest::Test
     assert_equal ["org-provider"], response.fetch(:providers).map { |provider| provider.fetch("providerId") }
   end
 
+  def test_register_provider_requires_organization_admin_or_owner
+    auth = build_auth(plugins: [BetterAuth::Plugins.sso, BetterAuth::Plugins.organization])
+    owner_cookie = sign_up_cookie(auth, "owner@example.com")
+    org = auth.api.create_organization(headers: {"cookie" => owner_cookie}, body: {name: "Test Org", slug: "test-org"})
+    member_cookie = sign_up_cookie(auth, "member@example.com")
+    member = user_by_email(auth, "member@example.com")
+    create_member(auth, member.fetch("id"), org.fetch("id"), "member")
+
+    error = assert_raises(BetterAuth::APIError) do
+      auth.api.register_sso_provider(
+        headers: {"cookie" => member_cookie},
+        body: {
+          providerId: "member-provider",
+          issuer: "https://idp.example.com",
+          domain: "example.com",
+          organizationId: org.fetch("id"),
+          oidcConfig: {clientId: "client", skipDiscovery: true, authorizationEndpoint: "https://idp.example.com/authorize", tokenEndpoint: "https://idp.example.com/token"}
+        }
+      )
+    end
+
+    assert_equal 403, error.status_code
+    assert_equal "You must be an organization owner or admin to register SSO providers", error.message
+  end
+
   def test_list_providers_requires_authentication
     auth = build_auth
 
@@ -522,23 +547,49 @@ class BetterAuthSSOProvidersTest < Minitest::Test
     assert_equal 403, error.status_code
   end
 
-  def test_delete_provider_deletes_provider_but_keeps_linked_accounts
+  def test_delete_provider_transactionally_deletes_linked_accounts_but_preserves_user_and_other_identities
     auth = build_auth
     cookie = sign_up_cookie(auth)
     user = user_by_email(auth, "owner@example.com")
     create_serialized_saml_provider(auth, user.fetch("id"), "saml-provider")
     auth.context.internal_adapter.create_account(userId: user.fetch("id"), providerId: "saml-provider", accountId: "saml-account-id")
-    account_count = auth.context.adapter.find_many(model: "account").length
+    auth.context.internal_adapter.create_account(userId: user.fetch("id"), providerId: "sso:saml-provider", accountId: "prefixed-saml-account-id")
+    auth.context.internal_adapter.create_account(userId: user.fetch("id"), providerId: "other-provider", accountId: "other-account-id")
 
     response = auth.api.delete_sso_provider(headers: {"cookie" => cookie}, body: {providerId: "saml-provider"})
 
     assert_equal({success: true}, response)
-    assert_equal account_count, auth.context.adapter.find_many(model: "account").length
+    accounts = auth.context.adapter.find_many(model: "account", where: [{field: "userId", value: user.fetch("id")}])
+    assert_equal ["credential", "other-provider"], accounts.map { |account| account.fetch("providerId") }.sort
+    assert auth.context.internal_adapter.find_user_by_id(user.fetch("id"))
 
     error = assert_raises(BetterAuth::APIError) do
       auth.api.get_sso_provider(headers: {"cookie" => cookie}, query: {providerId: "saml-provider"})
     end
     assert_equal 404, error.status_code
+  end
+
+  def test_update_provider_blocks_identity_changes_with_links_but_allows_secret_rotation
+    auth = build_auth
+    cookie = sign_up_cookie(auth)
+    user = user_by_email(auth, "owner@example.com")
+    create_serialized_oidc_provider(auth, user.fetch("id"), "oidc-provider", "client123")
+    auth.context.internal_adapter.create_account(userId: user.fetch("id"), providerId: "sso:oidc-provider", accountId: "oidc-subject")
+
+    conflict = assert_raises(BetterAuth::APIError) do
+      auth.api.update_sso_provider(
+        headers: {"cookie" => cookie},
+        body: {providerId: "oidc-provider", oidcConfig: {clientId: "new-client-id"}}
+      )
+    end
+    assert_equal 409, conflict.status_code
+
+    auth.api.update_sso_provider(
+      headers: {"cookie" => cookie},
+      body: {providerId: "oidc-provider", oidcConfig: {clientSecret: "rotated-secret"}}
+    )
+    stored = auth.context.adapter.find_one(model: "ssoProvider", where: [{field: "providerId", value: "oidc-provider"}])
+    assert_equal "rotated-secret", BetterAuth::Plugins.sso_provider_config_hash(stored.fetch("oidcConfig")).fetch(:client_secret)
   end
 
   def test_delete_provider_allows_org_admin_and_rejects_org_member

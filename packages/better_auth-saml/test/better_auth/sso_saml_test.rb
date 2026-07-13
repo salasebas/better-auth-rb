@@ -72,6 +72,27 @@ class BetterAuthPluginsSSOSAMLTest < Minitest::Test
     end
   end
 
+  def test_saml_response_parser_only_trusts_boolean_true_or_string_true
+    values = {true => true, "true" => true, false => false, "false" => false, "1" => false, 1 => false, nil => false}
+    provider = {
+      "providerId" => "saml",
+      "issuer" => "https://idp.example.com",
+      "samlConfig" => {"entryPoint" => "https://idp.example.com/sso", "mapping" => {"emailVerified" => "verified"}}
+    }
+    context = Struct.new(:context).new(Struct.new(:base_url).new("http://localhost:3000/api/auth"))
+    raw_response = Base64.strict_encode64('<Response><Assertion ID="assertion-123"/></Response>')
+
+    values.each do |value, expected|
+      response = Struct.new(:attributes, :nameid, :assertion_id, :sessionindex) do
+        def is_valid? = true
+      end.new({"email" => "user@example.com", "verified" => value}, "user@example.com", "assertion-123", "session-123")
+      with_singleton_method(OneLogin::RubySaml::Response, :new, ->(*) { response }) do
+        parsed = BetterAuth::SSO::SAML.response_parser.call(raw_response: raw_response, provider: provider, context: context)
+        assert_equal expected, parsed.fetch(:email_verified), "expected strict conversion for #{value.inspect}"
+      end
+    end
+  end
+
   def test_saml_metadata_authn_request_rejects_json_response_by_default
     auth = build_auth
     cookie = sign_up_cookie(auth)
@@ -1198,7 +1219,7 @@ class BetterAuthPluginsSSOSAMLTest < Minitest::Test
 
   def test_saml_trusted_provider_links_existing_email_with_upstream_provider_id
     auth = build_auth(
-      account: {account_linking: {enabled: true, trusted_providers: ["saml-link"]}},
+      account: {account_linking: {enabled: true, trusted_providers: ["sso:saml-link"]}},
       plugins: [
         BetterAuth::Plugins.sso(
           saml: {

@@ -169,10 +169,24 @@ module BetterAuth
         saml_config[:single_logout_service_url] ||
         saml_config[:idp_slo_service_url] ||
         saml_config[:logout_url]
-      return direct unless direct.to_s.empty?
+      return sso_validate_saml_http_url!(direct, "Invalid SAML Single Logout Service URL") unless direct.to_s.empty?
 
       service = sso_saml_preferred_service(sso_saml_idp_metadata(saml_config)[:single_logout_service])
-      normalize_hash(service || {})[:location]
+      location = normalize_hash(service || {})[:location]
+      return nil if location.to_s.empty?
+
+      sso_validate_saml_http_url!(location, "Invalid SAML Single Logout Service URL")
+    end
+
+    def sso_validate_saml_http_url!(value, message)
+      uri = URI.parse(value.to_s)
+      unless uri.is_a?(URI::HTTP) && !uri.host.to_s.empty? && uri.userinfo.to_s.empty?
+        raise APIError.new("BAD_REQUEST", message: message)
+      end
+
+      value.to_s
+    rescue URI::InvalidURIError
+      raise APIError.new("BAD_REQUEST", message: message)
     end
 
     def sso_store_saml_session(ctx, provider, assertion, session)
@@ -254,16 +268,16 @@ module BetterAuth
       {}
     end
 
-    def sso_validate_saml_slo_signature!(ctx, raw_message, expected_root, error_message)
+    def sso_validate_saml_slo_signature!(ctx, provider, raw_message, expected_root, error_message)
       signature = sso_fetch(ctx.body, :signature) || sso_fetch(ctx.query, :signature)
       sig_alg = sso_fetch(ctx.body, :sig_alg) || sso_fetch(ctx.query, :sig_alg)
       if !signature.to_s.empty? && !sig_alg.to_s.empty?
-        return true if sso_validate_saml_redirect_signature(ctx, raw_message, signature, sig_alg)
+        return true if sso_validate_saml_redirect_signature(ctx, provider, raw_message, signature, sig_alg)
 
         raise APIError.new("BAD_REQUEST", message: error_message)
       end
 
-      return true if sso_validate_saml_xml_signature(ctx, raw_message, expected_root)
+      return true if sso_validate_saml_xml_signature(provider, raw_message, expected_root)
 
       raise APIError.new("BAD_REQUEST", message: error_message)
     rescue APIError
@@ -272,8 +286,7 @@ module BetterAuth
       raise APIError.new("BAD_REQUEST", message: error_message)
     end
 
-    def sso_validate_saml_xml_signature(ctx, raw_message, expected_root)
-      provider = sso_find_provider!(ctx, sso_fetch(ctx.params, :provider_id))
+    def sso_validate_saml_xml_signature(provider, raw_message, expected_root)
       certificate = OpenSSL::X509::Certificate.new(sso_saml_idp_metadata(provider)[:cert].to_s)
       xml = Base64.decode64(raw_message.to_s.gsub(/\s+/, ""))
       document = XMLSecurity::SignedDocument.new(xml)
@@ -294,8 +307,7 @@ module BetterAuth
       false
     end
 
-    def sso_validate_saml_redirect_signature(ctx, raw_message, signature, sig_alg)
-      provider = sso_find_provider!(ctx, sso_fetch(ctx.params, :provider_id))
+    def sso_validate_saml_redirect_signature(ctx, provider, raw_message, signature, sig_alg)
       cert = sso_saml_idp_metadata(provider)[:cert]
       certificate = OpenSSL::X509::Certificate.new(cert.to_s)
       has_saml_request = sso_fetch(ctx.body, :saml_request) || sso_fetch(ctx.query, :saml_request)
@@ -391,6 +403,7 @@ module BetterAuth
     end
 
     def sso_saml_post_form(action, saml_param, saml_value, relay_state = nil)
+      action = sso_validate_saml_http_url!(action, "Invalid SAML POST action URL")
       relay_input = relay_state.to_s.empty? ? "" : "<input type=\"hidden\" name=\"RelayState\" value=\"#{CGI.escapeHTML(relay_state.to_s)}\" />"
       html = "<!DOCTYPE html><html><body onload=\"document.forms[0].submit();\"><form method=\"POST\" action=\"#{CGI.escapeHTML(action.to_s)}\"><input type=\"hidden\" name=\"#{CGI.escapeHTML(saml_param.to_s)}\" value=\"#{CGI.escapeHTML(saml_value.to_s)}\" />#{relay_input}<noscript><input type=\"submit\" value=\"Continue\" /></noscript></form></body></html>"
       [200, {"content-type" => "text/html"}, [html]]

@@ -39,13 +39,19 @@ packages provide integration—do not duplicate core logic there.
 
 ### Testing
 
-Before running tests that use Redis or a database adapter, start the repository
-services from the workspace root. Do not assume the containers are already
-running:
+Database and Redis services are shared across worktrees. Before running tests
+that use them, start or verify the shared stack from the workspace root. The
+fixed project name prevents worktrees from creating conflicting containers;
+`--wait` returns only after services are running and healthy:
 
 ```bash
-docker compose up -d
+docker compose -p better-auth up -d --wait
 ```
+
+Run only one database/Redis-backed suite across worktrees at a time, including
+`bundle exec rake ci` and adapter integration tests. Tests that do not use these
+services may run in parallel. Do not stop the shared stack while another
+worktree may be using it.
 
 ```bash
 bundle exec rake ci          # workspace

@@ -95,6 +95,12 @@ auth = BetterAuth.auth(
 
 To register an OIDC provider, use the `registerSSOProvider` endpoint and provide the necessary configuration details for the provider.
 
+When `organizationId` is provided and the organization plugin is enabled, the
+caller must be an organization owner or admin. Provider IDs occupy an SSO
+namespace for account linking: configure trusted SSO providers as
+`sso:<providerId>` (for example, `sso:acme`) so a same-named social provider
+cannot confer trust on an SSO connection.
+
 A redirect URL will be automatically generated using the provider ID. For instance, if the provider ID is `hydra`, the redirect URL would be `{baseURL}/api/auth/sso/callback/hydra`. Note that `/api/auth` may vary depending on your base path configuration.
 
 <Callout type="info">
@@ -1124,7 +1130,7 @@ The provider ID is stored in the OAuth state so the callback can identify which 
 
 ## Domain verification
 
-Domain verification is optional and is only registered when `domain_verification.enabled` is true. When enabled, registering an SSO provider creates a `domainVerificationToken`, and the owner or organization admin can request the active token again or verify the domain after publishing the DNS TXT record.
+Domain verification is optional and is only registered when `domain_verification.enabled` is true. When enabled, registering an SSO provider creates a `domainVerificationToken`, and the owner or organization admin can request the active token again or verify the domain after publishing the DNS TXT record. For a comma-separated domain list, publish the proof under every listed domain; verification succeeds only when every domain passes. Each TXT value may be either the raw token or `<identifier>=<token>`.
 
 ```ruby title="config/auth.rb"
 require "better_auth"
@@ -1207,6 +1213,13 @@ result.fetch(:status) # 204
 ```
 
 After verification, the provider record has `domainVerified: true`.
+
+Deleting an SSO provider also deletes account links for that provider inside the
+same database transaction. Users and identities from other providers are
+preserved. Once account links exist, identity-defining settings such as issuer,
+OIDC client/endpoints, SAML audience/endpoints, and subject mappings cannot be
+changed; rotate secrets or certificates instead, or delete and recreate the
+connection so stale identities cannot be reused.
 
 ## Schema
 
@@ -1320,7 +1333,7 @@ For a detailed guide on setting up SAML SSO with examples for Okta and testing w
 
 **disableImplicitSignUp**: Disable implicit sign up for new users.
 
-If you want to allow account linking for specific trusted providers, enable the `accountLinking` option in your auth config and specify those providers in the `trustedProviders` list.
+If you want to allow account linking for specific trusted providers, enable the `accountLinking` option in your auth config and specify SSO providers in the `trustedProviders` list with the `sso:` prefix (for example, `sso:acme`). Bare provider names refer to the social-provider namespace and do not trust same-named SSO providers.
 
 export const ssoOptionsType = {
 	provisionUser: {

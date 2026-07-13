@@ -95,6 +95,7 @@ module BetterAuth
         end
         sso_validate_url!(body[:issuer], "Invalid issuer. Must be a valid URL") if body.key?(:issuer)
         update = {}
+        identity_boundary_changed = body.key?(:issuer) && body[:issuer].to_s != provider["issuer"].to_s
         update[:issuer] = body[:issuer] if body.key?(:issuer)
         update[:domain] = body[:domain].to_s.downcase if body.key?(:domain)
         update[:domainVerified] = false if body.key?(:domain) && body[:domain].to_s.downcase != provider["domain"].to_s
@@ -105,6 +106,7 @@ module BetterAuth
           resolved_issuer = update[:issuer] || current[:issuer] || provider["issuer"]
           update[:oidcConfig] = current.merge(normalize_hash(body[:oidc_config])).merge(issuer: resolved_issuer).compact
           sso_validate_oidc_endpoint_origins!(ctx, update[:oidcConfig])
+          identity_boundary_changed ||= sso_oidc_identity_boundary_changed?(current, update[:oidcConfig])
         end
         if body.key?(:saml_config)
           current = sso_provider_config_hash(provider["samlConfig"])
@@ -114,6 +116,10 @@ module BetterAuth
           merged_saml_config = current.merge(normalize_hash(body[:saml_config])).merge(issuer: resolved_issuer).compact
           sso_validate_saml_config!(merged_saml_config, config)
           update[:samlConfig] = merged_saml_config
+          identity_boundary_changed ||= sso_saml_identity_boundary_changed?(current, merged_saml_config)
+        end
+        if identity_boundary_changed && sso_provider_linked_account?(ctx, provider.fetch("providerId"))
+          raise APIError.new("CONFLICT", message: "Cannot change SSO provider identity fields while linked accounts exist")
         end
         updated = ctx.context.adapter.update(model: "ssoProvider", where: [{field: "id", value: provider.fetch("id")}], update: update)
         ctx.json(sso_sanitize_provider(updated, ctx.context))
@@ -126,9 +132,40 @@ module BetterAuth
         provider = sso_find_provider!(ctx, sso_fetch(ctx.body, :provider_id) || sso_fetch(ctx.params, :provider_id))
         raise APIError.new("FORBIDDEN", message: "You don't have access to this provider") unless sso_provider_access?(provider, session.fetch(:user).fetch("id"), ctx)
 
-        ctx.context.adapter.delete(model: "ssoProvider", where: [{field: "id", value: provider.fetch("id")}])
+        provider_id = provider.fetch("providerId")
+        ctx.context.adapter.transaction do |transaction_adapter|
+          transaction_adapter.delete_many(
+            model: "account",
+            where: [{field: "providerId", value: [provider_id, "sso:#{provider_id}"], operator: "in"}]
+          )
+          transaction_adapter.delete(model: "ssoProvider", where: [{field: "id", value: provider.fetch("id")}])
+        end
         ctx.json({success: true})
       end
+    end
+
+    def sso_provider_linked_account?(ctx, provider_id)
+      !!ctx.context.adapter.find_one(
+        model: "account",
+        where: [{field: "providerId", value: [provider_id, "sso:#{provider_id}"], operator: "in"}]
+      )
+    end
+
+    def sso_oidc_identity_boundary_changed?(current, updated)
+      sso_config_fields_changed?(current, updated, %i[authorization_endpoint client_id discovery_endpoint jwks_endpoint token_endpoint user_info_endpoint]) ||
+        sso_config_fields_changed?(normalize_hash(current[:mapping] || {}), normalize_hash(updated[:mapping] || {}), [:id])
+    end
+
+    def sso_saml_identity_boundary_changed?(current, updated)
+      return true if sso_config_fields_changed?(current, updated, %i[audience callback_url entry_point identifier_format])
+      return true if sso_config_fields_changed?(normalize_hash(current[:mapping] || {}), normalize_hash(updated[:mapping] || {}), [:id])
+      return true if sso_config_fields_changed?(normalize_hash(current[:idp_metadata] || {}), normalize_hash(updated[:idp_metadata] || {}), %i[metadata entity_id single_sign_on_service])
+
+      sso_config_fields_changed?(normalize_hash(current[:sp_metadata] || {}), normalize_hash(updated[:sp_metadata] || {}), %i[metadata entity_id])
+    end
+
+    def sso_config_fields_changed?(current, updated, fields)
+      fields.any? { |field| current[field] != updated[field] }
     end
   end
 end

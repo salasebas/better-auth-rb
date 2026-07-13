@@ -41,6 +41,43 @@ class BetterAuthSSOSAMLMirrorTest < Minitest::Test
     assert sign_in.fetch(:params).fetch("RelayState")
   end
 
+  def test_sp_metadata_uses_default_saml_provider_resolver
+    auth = build_auth(
+      default_sso: [default_saml_provider(provider_id: "default-metadata-saml", domain: "localhost:8081")]
+    )
+
+    response = auth.api.sp_metadata(query: {providerId: "default-metadata-saml", format: "json"})
+
+    assert_equal "default-metadata-saml", response.fetch(:providerId)
+    assert_includes response.fetch(:metadata), "EntityDescriptor"
+    assert_includes response.fetch(:metadata), "default-metadata-saml"
+  end
+
+  def test_sp_initiated_slo_uses_default_saml_provider_resolver
+    auth = build_auth(
+      default_sso: [
+        default_saml_provider(
+          provider_id: "default-initiate-slo",
+          domain: "default-initiate.example.com",
+          saml_config: {singleLogoutService: "https://idp.example.com/default-slo"}
+        )
+      ],
+      saml: {enableSingleLogout: true}
+    )
+    cookie = sign_up_cookie(auth)
+
+    status, headers, _body = auth.api.initiate_slo(
+      headers: {"cookie" => cookie},
+      params: {providerId: "default-initiate-slo"},
+      body: {callbackURL: "/after-logout"},
+      as_response: true
+    )
+
+    assert_equal 302, status
+    assert_match %r{\Ahttps://idp\.example\.com/default-slo\?}, headers.fetch("location")
+    assert Rack::Utils.parse_query(URI.parse(headers.fetch("location")).query).fetch("SAMLRequest")
+  end
+
   def test_signed_authn_request_includes_signature_sigalg_and_relay_state
     key = OpenSSL::PKey::RSA.new(2048)
     auth = build_auth(
@@ -490,6 +527,33 @@ class BetterAuthSSOSAMLMirrorTest < Minitest::Test
     assert_equal "/state-callback", headers.fetch("location")
   end
 
+  def test_saml_hook_error_redirect_uses_error_callback_and_encodes_parameters
+    auth = build_auth_with_json_saml_parser(
+      plugin_options: {
+        provision_user: ->(**) { raise BetterAuth::APIError.new("FORBIDDEN", code: "HOOK_REJECTED", message: "SSO hook rejected this user & tenant") }
+      }
+    )
+    cookie = sign_up_cookie(auth)
+    register_saml_provider(auth, cookie, provider_id: "hook-error-saml")
+    sign_in = sign_in_params(
+      auth,
+      providerId: "hook-error-saml",
+      callbackURL: "/dashboard",
+      errorCallbackURL: "/auth-error?source=saml"
+    )
+
+    _status, headers, _body = auth.api.acs_endpoint(
+      params: {providerId: "hook-error-saml"},
+      body: {
+        SAMLResponse: saml_json_response(id: "hook-error-assertion", email: "hook-error@example.com"),
+        RelayState: sign_in.fetch(:params).fetch("RelayState")
+      },
+      as_response: true
+    )
+
+    assert_equal "/auth-error?source=saml&error=HOOK_REJECTED&error_description=SSO+hook+rejected+this+user+%26+tenant", headers.fetch("location")
+  end
+
   def test_saml_callback_allows_signup_when_disable_implicit_sign_up_and_request_sign_up_is_true
     auth = build_auth_with_json_saml_parser(plugin_options: {disable_implicit_sign_up: true})
     cookie = sign_up_cookie(auth)
@@ -572,7 +636,7 @@ class BetterAuthSSOSAMLMirrorTest < Minitest::Test
 
   def test_trusted_saml_provider_links_existing_email_with_upstream_provider_id
     auth = build_auth_with_json_saml_parser(
-      account: {account_linking: {enabled: true, trusted_providers: ["trusted-saml-provider"]}},
+      account: {account_linking: {enabled: true, trusted_providers: ["sso:trusted-saml-provider"]}},
       saml_user_info: {id: "trusted-saml-id", email: "trusted-saml@example.com", name: "Trusted SAML"}
     )
     sign_up_cookie(auth, email: "trusted-saml@example.com")
@@ -590,6 +654,24 @@ class BetterAuthSSOSAMLMirrorTest < Minitest::Test
     user = auth.context.internal_adapter.find_user_by_email("trusted-saml@example.com").fetch(:user)
     account = auth.context.internal_adapter.find_account_by_provider_id("trusted-saml-id", "trusted-saml-provider")
     assert_equal user.fetch("id"), account.fetch("userId")
+  end
+
+  def test_social_provider_trust_slug_does_not_trust_same_named_sso_provider
+    auth = build_auth_with_json_saml_parser(
+      account: {account_linking: {enabled: true, trusted_providers: ["same-name"]}},
+      saml_user_info: {id: "same-name-subject", email: "same-name@example.com", name: "Same Name"}
+    )
+    sign_up_cookie(auth, email: "same-name@example.com")
+    owner_cookie = sign_up_cookie(auth, email: "same-name-owner@example.com")
+    register_saml_provider(auth, owner_cookie, provider_id: "same-name", saml_config: {callbackUrl: "/dashboard"})
+
+    _status, headers, _body = auth.api.acs_endpoint(
+      params: {providerId: "same-name"},
+      body: {SAMLResponse: saml_json_response(id: "ignored", email: "ignored@example.com")},
+      as_response: true
+    )
+
+    assert_equal "/dashboard?error=account_not_linked", headers.fetch("location")
   end
 
   def test_verified_saml_provider_domain_links_existing_matching_email
@@ -1574,6 +1656,31 @@ class BetterAuthSSOSAMLMirrorTest < Minitest::Test
     assert_equal "IdP does not support Single Logout Service", error.message
   end
 
+  def test_slo_rejects_non_http_post_action_from_metadata
+    auth = build_auth_with_json_saml_parser(saml_options: {enableSingleLogout: true})
+    cookie = sign_up_cookie(auth)
+    register_saml_provider(
+      auth,
+      cookie,
+      provider_id: "unsafe-slo-action",
+      saml_config: {
+        idpMetadata: {
+          metadata: '<EntityDescriptor><IDPSSODescriptor><SingleLogoutService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST" Location="javascript:alert(1)" /></IDPSSODescriptor></EntityDescriptor>'
+        }
+      }
+    )
+
+    error = assert_raises(BetterAuth::APIError) do
+      auth.api.slo_endpoint(
+        params: {providerId: "unsafe-slo-action"},
+        body: {SAMLRequest: saml_logout_request(name_id: "user@example.com", session_index: "session-index")}
+      )
+    end
+
+    assert_equal 400, error.status_code
+    assert_equal "Invalid SAML Single Logout Service URL", error.message
+  end
+
   def test_sp_initiated_slo_generates_logout_request_and_stores_pending_request
     auth = build_auth_with_json_saml_parser(saml_options: {enableSingleLogout: true})
     cookie = sign_up_cookie(auth)
@@ -1852,6 +1959,65 @@ class BetterAuthSSOSAMLMirrorTest < Minitest::Test
     )
 
     assert_equal 302, status
+  end
+
+  def test_default_saml_provider_validates_signed_xml_logout_request_without_database_refetch
+    idp_key = OpenSSL::PKey::RSA.new(2048)
+    idp_cert = saml_test_certificate(idp_key)
+    auth = build_auth(
+      default_sso: [
+        default_saml_provider(
+          provider_id: "default-signed-xml-slo",
+          domain: "default-signed-xml.example.com",
+          saml_config: {singleLogoutService: "https://idp.example.com/default-slo", cert: idp_cert.to_pem}
+        )
+      ],
+      saml: {enableSingleLogout: true, wantLogoutRequestSigned: true}
+    )
+    request = saml_signed_message(
+      saml_logout_request(name_id: "xml-name-id", session_index: "xml-session", id: "_default-xml-request"),
+      idp_key,
+      idp_cert
+    )
+
+    status, headers, body = auth.api.slo_endpoint(
+      params: {providerId: "default-signed-xml-slo"},
+      body: {SAMLRequest: request},
+      as_response: true
+    )
+
+    assert_equal 200, status
+    assert_equal "text/html", headers.fetch("content-type")
+    assert_includes body.join, 'name="SAMLResponse"'
+  end
+
+  def test_default_saml_provider_validates_signed_redirect_logout_request_without_database_refetch
+    idp_key = OpenSSL::PKey::RSA.new(2048)
+    idp_cert = saml_test_certificate(idp_key)
+    auth = build_auth(
+      default_sso: [
+        default_saml_provider(
+          provider_id: "default-signed-redirect-slo",
+          domain: "default-signed-redirect.example.com",
+          saml_config: {singleLogoutService: "https://idp.example.com/default-slo", cert: idp_cert.to_pem}
+        )
+      ],
+      saml: {enableSingleLogout: true, wantLogoutRequestSigned: true}
+    )
+    request = saml_logout_request(name_id: "redirect-name-id", session_index: "redirect-session", id: "_default-redirect-request")
+    relay_state = "/signed-out"
+    sig_alg = XMLSecurity::Document::RSA_SHA256
+    signed_payload = URI.encode_www_form([["SAMLRequest", request], ["RelayState", relay_state], ["SigAlg", sig_alg]])
+    signature = Base64.strict_encode64(idp_key.sign(OpenSSL::Digest.new("SHA256"), signed_payload))
+
+    status, headers, _body = auth.api.slo_endpoint(
+      params: {providerId: "default-signed-redirect-slo"},
+      query: {SAMLRequest: request, RelayState: relay_state, SigAlg: sig_alg, Signature: signature},
+      as_response: true
+    )
+
+    assert_equal 302, status
+    assert_match %r{\Ahttps://idp\.example\.com/default-slo\?}, headers.fetch("location")
   end
 
   def test_slo_rejects_unsigned_logout_response_when_signature_required

@@ -89,7 +89,9 @@ SAML SLO follows upstream route shapes when `saml.enableSingleLogout` is enabled
 - ACS stores SAML `NameID` and `SessionIndex` lookup records so IdP-initiated logout can revoke the matching Better Auth session.
 
 With `better_auth-saml` installed, SAML ACS responses are verified by `ruby-saml`
-before they reach the SSO flow.
+before they reach the SSO flow. SLO destinations from configuration or IdP
+metadata must be absolute HTTP(S) URLs before RubyAuth redirects or renders an
+auto-submit POST form.
 
 SCIM is a separate provisioning feature and lives in `better_auth-scim`.
 
@@ -100,6 +102,18 @@ linked to an SSO provider. SSO login flows assign from the matched provider.
 Generic OAuth callbacks under `/callback/:provider` also assign by verified SSO
 email domain when domain verification is enabled, matching upstream behavior for
 users who sign in through non-SSO OAuth but share an enterprise domain.
+
+Organization-linked providers can only be registered or domain-verified by an
+organization owner or admin. Multi-domain providers must publish the DNS proof
+for every comma-separated domain; TXT values may contain either the raw token or
+the generated `<identifier>=<token>` value.
+
+Trusted SSO account linking uses the `sso:<providerId>` namespace. A bare trusted
+provider name applies to the social-provider namespace and does not trust a
+same-named SSO connection. Deleting an SSO provider transactionally removes its
+account links while preserving users and other identities. Identity-defining
+provider settings cannot change after links exist, although secret and
+certificate rotation remains supported.
 
 ## Schema Compatibility
 

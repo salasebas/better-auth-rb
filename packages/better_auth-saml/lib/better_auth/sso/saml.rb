@@ -73,7 +73,7 @@ module BetterAuth
             id: mapped_attribute(attributes, mapping[:id]) || assertion_identifier(response, email),
             name_id: response.nameid,
             session_index: response.sessionindex,
-            email_verified: (email_verified == false) ? false : !email_verified.to_s.empty?
+            email_verified: email_verified == true || email_verified == "true"
           )
         end
       end

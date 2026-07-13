@@ -61,21 +61,17 @@ module BetterAuth
     end
 
     def sso_authorize_domain_verification!(ctx, provider, user_id)
-      organization_id = provider["organizationId"]
-      is_org_member = true
-      if organization_id
-        is_org_member = !!ctx.context.adapter.find_one(
-          model: "member",
-          where: [{field: "userId", value: user_id}, {field: "organizationId", value: organization_id}]
-        )
-      end
-      return if provider["userId"] == user_id && is_org_member
+      return if sso_provider_access?(provider, user_id, ctx)
 
-      raise APIError.new("FORBIDDEN", message: "User must be owner of or belong to the SSO provider organization", code: "INSUFFICIENT_ACCESS")
+      raise APIError.new("FORBIDDEN", message: "User must own the SSO provider or administer its organization", code: "INSUFFICIENT_ACCESS")
     end
 
-    def sso_txt_record_exact_match?(records, expected)
-      Array(records).flatten.any? { |record| record.to_s.strip == expected.to_s }
+    def sso_txt_record_exact_match?(records, identifier, token)
+      expected = "#{identifier}=#{token}"
+      Array(records).flatten.any? do |record|
+        normalized = record.to_s.strip
+        normalized == token.to_s || normalized == expected
+      end
     end
 
     def sso_domain_verification_identifier(config, provider_id)
@@ -90,14 +86,23 @@ module BetterAuth
       false
     end
 
-    def sso_hostname_from_domain(domain)
-      value = domain.to_s.strip
-      return nil if value.empty?
+    def sso_hostnames_from_domains(domains)
+      values = domains.to_s.split(",").map(&:strip).reject(&:empty?)
+      return nil if values.empty?
 
-      uri = URI(value.include?("://") ? value : "https://#{value}")
-      uri.host
-    rescue URI::InvalidURIError
-      nil
+      hostnames = values.map do |value|
+        uri = URI(value.include?("://") ? value : "https://#{value}")
+        uri.host
+      rescue URI::InvalidURIError
+        nil
+      end
+      return nil if hostnames.any? { |hostname| hostname.to_s.empty? }
+
+      hostnames.map(&:downcase).uniq
+    end
+
+    def sso_hostname_from_domain(domain)
+      sso_hostnames_from_domains(domain)&.first
     end
 
     def sso_resolve_txt_records(hostname, config)

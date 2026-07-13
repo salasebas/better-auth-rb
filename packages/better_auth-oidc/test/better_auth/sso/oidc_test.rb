@@ -8,6 +8,15 @@ require_relative "../../test_helper"
 class BetterAuthSSOOIDCMirrorTest < Minitest::Test
   SECRET = "oidc-mirror-secret-with-enough-entropy-123"
 
+  def test_provider_email_verification_is_strict
+    assert BetterAuth::Plugins.sso_provider_email_verified?(true)
+    assert BetterAuth::Plugins.sso_provider_email_verified?("true")
+    refute BetterAuth::Plugins.sso_provider_email_verified?(false)
+    refute BetterAuth::Plugins.sso_provider_email_verified?("false")
+    refute BetterAuth::Plugins.sso_provider_email_verified?(1)
+    refute BetterAuth::Plugins.sso_provider_email_verified?(nil)
+  end
+
   def test_registers_oidc_provider_and_stores_full_config
     auth = build_auth
     cookie = sign_up_cookie(auth)

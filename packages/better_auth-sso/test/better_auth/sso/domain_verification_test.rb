@@ -236,6 +236,42 @@ class BetterAuthSSODomainVerificationTest < Minitest::Test
     assert_equal "_better-auth-token-bare-domain-provider.hello.com", seen_hostname
   end
 
+  def test_verify_domain_requires_proof_for_every_listed_domain_and_accepts_raw_token
+    seen = []
+    auth = build_auth(
+      domain_verification: {
+        enabled: true,
+        dns_txt_resolver: ->(hostname) {
+          seen << hostname
+          hostname.end_with?("first.example.com") ? [[@domain_verification_token]] : [["_better-auth-token-multi-domain=#{@domain_verification_token}"]]
+        }
+      }
+    )
+    cookie = sign_up_cookie(auth)
+    provider = register_sso_provider(auth, cookie, provider_id: "multi-domain", domain: "first.example.com, second.example.com")
+    @domain_verification_token = provider.fetch(:domainVerificationToken)
+
+    response = auth.api.verify_domain(headers: {"cookie" => cookie}, body: {providerId: provider.fetch("providerId")}, return_status: true)
+
+    assert_equal 204, response.fetch(:status)
+    assert_equal ["_better-auth-token-multi-domain.first.example.com", "_better-auth-token-multi-domain.second.example.com"], seen
+  end
+
+  def test_org_admin_can_verify_provider_owned_by_another_org_admin
+    auth = build_auth(plugins: [BetterAuth::Plugins.sso(domain_verification: {enabled: true, dns_txt_resolver: ->(_hostname) { [[@domain_verification_token]] }}), BetterAuth::Plugins.organization])
+    owner_cookie = sign_up_cookie(auth, "owner@example.com")
+    organization = auth.api.create_organization(headers: {"cookie" => owner_cookie}, body: {name: "Org A", slug: "org-a"})
+    provider = register_sso_provider(auth, owner_cookie, organization_id: organization.fetch("id"))
+    @domain_verification_token = provider.fetch(:domainVerificationToken)
+    admin_cookie = sign_up_cookie(auth, "admin@example.com")
+    admin = auth.context.internal_adapter.find_user_by_email("admin@example.com").fetch(:user)
+    auth.context.adapter.create(model: "member", data: {userId: admin.fetch("id"), organizationId: organization.fetch("id"), role: "admin"})
+
+    response = auth.api.verify_domain(headers: {"cookie" => admin_cookie}, body: {providerId: provider.fetch("providerId")}, return_status: true)
+
+    assert_equal 204, response.fetch(:status)
+  end
+
   def test_verify_domain_rejects_invalid_domain
     auth = build_auth
     cookie = sign_up_cookie(auth)

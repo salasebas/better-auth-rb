@@ -117,7 +117,7 @@ module BetterAuth
       end
 
       result = sso_find_or_create_user_result(ctx, provider, user_info, config)
-      return sso_redirect(ctx, sso_append_error(callback_url, result.fetch(:error))) if result[:error]
+      return sso_redirect(ctx, sso_append_error(error_url, result.fetch(:error))) if result[:error]
 
       if config[:provision_user].respond_to?(:call) && (result.fetch(:created) || config[:provision_user_on_every_login])
         config[:provision_user].call(user: result.fetch(:user), userInfo: user_info, token: tokens, provider: provider)
@@ -126,6 +126,10 @@ module BetterAuth
       Cookies.set_session_cookie(ctx, {session: session, user: result.fetch(:user)})
       redirect_to = (result.fetch(:created) && state["newUserURL"].to_s != "") ? sso_safe_oidc_redirect_url(ctx, state["newUserURL"]) : callback_url
       sso_redirect(ctx, redirect_to || "/")
+    rescue APIError => error
+      raise unless error_url
+
+      sso_redirect(ctx, sso_append_error(error_url, error.code, error.message))
     end
   end
 end

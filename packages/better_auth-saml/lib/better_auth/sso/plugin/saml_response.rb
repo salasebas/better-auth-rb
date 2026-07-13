@@ -27,6 +27,8 @@ module BetterAuth
       sso_validate_saml_response!(config, assertion, provider, ctx)
       in_response_to_result = sso_validate_saml_in_response_to(ctx, config, provider, raw_response, state)
       return in_response_to_result if in_response_to_result.is_a?(Array)
+      callback_url = sso_safe_saml_callback_url(ctx, state["callbackURL"] || sso_saml_callback_url(provider) || "/", provider.fetch("providerId"))
+      error_url = sso_safe_saml_callback_url(ctx, state["errorURL"] || callback_url, provider.fetch("providerId"))
       assertion_id = assertion[:id] || assertion["id"]
       unless assertion_id.to_s.empty?
         replay_key = "#{SSO_SAML_USED_ASSERTION_KEY_PREFIX}#{assertion_id}"
@@ -36,19 +38,17 @@ module BetterAuth
           expiresAt: sso_saml_assertion_replay_expires_at(assertion, config)
         )
         unless reserved
-          callback_url = sso_safe_saml_callback_url(ctx, state["callbackURL"] || sso_saml_callback_url(provider) || "/", provider.fetch("providerId"))
-          return sso_redirect(ctx, sso_append_error(callback_url, "replay_detected", "SAML assertion has already been used"))
+          return sso_redirect(ctx, sso_append_error(error_url, "replay_detected", "SAML assertion has already been used"))
         end
       end
 
-      callback_url = sso_safe_saml_callback_url(ctx, state["callbackURL"] || sso_saml_callback_url(provider) || "/", provider.fetch("providerId"))
       email = (assertion[:email] || assertion["email"]).to_s.downcase
       if config[:disable_implicit_sign_up] && !state["requestSignUp"] && !ctx.context.internal_adapter.find_user_by_email(email)
-        return sso_redirect(ctx, sso_append_error(callback_url, "signup disabled"))
+        return sso_redirect(ctx, sso_append_error(error_url, "signup disabled"))
       end
 
       result = sso_find_or_create_user_result(ctx, provider, assertion, config)
-      return sso_redirect(ctx, sso_append_error(callback_url, result.fetch(:error))) if result[:error]
+      return sso_redirect(ctx, sso_append_error(error_url, result.fetch(:error))) if result[:error]
 
       user = result.fetch(:user)
       if config[:provision_user].respond_to?(:call) && (result.fetch(:created) || config[:provision_user_on_every_login])
@@ -58,6 +58,10 @@ module BetterAuth
       sso_store_saml_session(ctx, provider, assertion, session) if config.dig(:saml, :enable_single_logout)
       Cookies.set_session_cookie(ctx, {session: session, user: user})
       sso_redirect(ctx, callback_url)
+    rescue APIError => error
+      raise unless error_url
+
+      sso_redirect(ctx, sso_append_error(error_url, error.code, error.message))
     end
 
     def sso_find_or_create_user(ctx, provider, user_info, config = {})
@@ -128,7 +132,7 @@ module BetterAuth
       linking = ctx.context.options.account[:account_linking] || {}
       return false if linking[:enabled] == false
 
-      trusted = Array(linking[:trusted_providers]).map(&:to_s).include?(provider_id.to_s)
+      trusted = Array(linking[:trusted_providers]).map(&:to_s).include?("sso:#{provider_id}")
       trusted || (provider["domainVerified"] && sso_email_domain_matches?(email, provider["domain"]))
     end
 
@@ -138,8 +142,7 @@ module BetterAuth
       return false if linking[:enabled] == false
 
       trusted_providers = Array(linking[:trusted_providers]).map(&:to_s)
-      trusted_providers.include?(provider_id.to_s) ||
-        trusted_providers.include?("sso:#{provider_id}") ||
+      trusted_providers.include?("sso:#{provider_id}") ||
         (provider["domainVerified"] && sso_email_domain_matches?(email, provider["domain"]))
     end
 

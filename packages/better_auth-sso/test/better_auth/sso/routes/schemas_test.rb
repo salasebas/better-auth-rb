@@ -135,6 +135,7 @@ class BetterAuthSSORoutesSchemasTest < Minitest::Test
 
   def test_domain_verification_field_reaches_migration_projection
     config = BetterAuth::Configuration.new(
+      base_url: "http://localhost:3000",
       secret: "sso-schema-secret-with-enough-entropy",
       database: :memory,
       plugins: [BetterAuth::Plugins.sso(domain_verification: {enabled: true})]

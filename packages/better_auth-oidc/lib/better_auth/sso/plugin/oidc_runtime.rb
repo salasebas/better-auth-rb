@@ -290,7 +290,7 @@ module BetterAuth
       extra_fields.merge(
         id: raw[normalize_key(mapping[:id] || "sub")] || raw[:id],
         email: raw[normalize_key(mapping[:email] || "email")],
-        email_verified: plugin_config[:trust_email_verified] ? raw[normalize_key(mapping[:email_verified] || "email_verified")] : false,
+        email_verified: plugin_config[:trust_email_verified] ? sso_provider_email_verified?(raw[normalize_key(mapping[:email_verified] || "email_verified")]) : false,
         name: raw[normalize_key(mapping[:name] || "name")],
         image: raw[normalize_key(mapping[:image] || "picture")]
       )
@@ -371,6 +371,10 @@ module BetterAuth
       separator = url.to_s.include?("?") ? "&" : "?"
       query = {error: error, error_description: description}.compact
       "#{url}#{separator}#{URI.encode_www_form(query)}"
+    end
+
+    def sso_provider_email_verified?(value)
+      value == true || value == "true"
     end
 
     def sso_default_provider(config, provider_id:, domain:)
@@ -476,6 +480,12 @@ module BetterAuth
         where: [{field: "userId", value: user_id}, {field: "organizationId", value: organization_id}]
       )
       raise APIError.new("BAD_REQUEST", message: "You are not a member of the organization") unless member
+      return unless ctx.context.options.plugins.any? { |plugin| plugin.id == "organization" }
+
+      roles = member.fetch("role", "").to_s.split(",").map(&:strip)
+      unless roles.any? { |role| %w[owner admin].include?(role) }
+        raise APIError.new("FORBIDDEN", message: "You must be an organization owner or admin to register SSO providers")
+      end
     end
 
     def sso_hydrate_oidc_config(issuer, oidc_config, ctx)
