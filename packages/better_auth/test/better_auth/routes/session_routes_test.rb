@@ -240,7 +240,34 @@ class BetterAuthRoutesSessionTest < Minitest::Test
     assert_equal "stateless-refresh@example.com", refreshed.fetch("user").fetch("email")
     assert_includes headers.fetch("set-cookie"), "better-auth.session_data="
     assert_includes headers.fetch("set-cookie"), "better-auth.session_token="
-    assert_includes headers.fetch("set-cookie"), "Max-Age=300"
+    assert_match(/Max-Age=(?:299|300)/, headers.fetch("set-cookie"))
+  end
+
+  def test_stateless_cookie_cache_refresh_preserves_original_session_expiry
+    auth = build_auth(database: nil, session: {expires_in: 300, cookie_cache: {enabled: true, strategy: "jwe", max_age: 300, refresh_cache: {update_age: 0}}})
+    fixed_now = Time.utc(2026, 7, 12, 12, 0, 0)
+    expires_at = fixed_now + 30
+    session = {
+      "id" => "session-stateless",
+      "token" => "token-stateless",
+      "userId" => "user-stateless",
+      "createdAt" => fixed_now - 60,
+      "updatedAt" => fixed_now - 60,
+      "expiresAt" => expires_at
+    }
+    user = {"id" => "user-stateless", "email" => "stateless-expiry@example.com", "createdAt" => fixed_now, "updatedAt" => fixed_now}
+    ctx = BetterAuth::Endpoint::Context.new(path: "/get-session", method: "GET", query: {}, body: {}, params: {}, headers: {}, context: auth.context)
+
+    Time.stub(:now, fixed_now) do
+      refreshed = BetterAuth::Session.refresh_cached_session(ctx, {session: session, user: user})
+      assert_equal expires_at, refreshed[:session]["expiresAt"]
+
+      set_cookie = ctx.response_headers.fetch("set-cookie")
+      assert set_cookie.lines.all? { |line| !line.include?("Max-Age=") || line.include?("Max-Age=30") }
+      cookie = set_cookie.lines.map { |line| line.split(";").first }.join("; ")
+      payload = BetterAuth::Cookies.get_cookie_cache(cookie, secret: auth.context.secret_config, strategy: "jwe", cookie_full_name: "better-auth.session_data")
+      assert_equal expires_at, BetterAuth::Session.normalize_time(payload.fetch("session").fetch("expiresAt"))
+    end
   end
 
   def test_remember_me_false_stays_session_cookie_after_refresh
@@ -371,6 +398,58 @@ class BetterAuthRoutesSessionTest < Minitest::Test
     result = auth.api.update_session(headers: {"cookie" => cookie}, body: {deviceName: "desktop"})
 
     assert_equal "desktop", result.fetch(:session).fetch("deviceName")
+  end
+
+  def test_update_session_fails_closed_when_cached_backing_session_was_deleted
+    auth = build_auth(
+      session: {cookie_cache: {enabled: true, strategy: "jwe", max_age: 300}},
+      plugins: [
+        BetterAuth::Plugins.additional_fields(
+          session: {deviceName: {type: "string", required: false}}
+        )
+      ]
+    )
+    cookie = sign_up_cookie(auth, email: "revoked-update-session@example.com")
+    token = auth.api.get_session(headers: {"cookie" => cookie})[:session]["token"]
+    auth.context.internal_adapter.delete_session(token)
+
+    error = assert_raises(BetterAuth::APIError) do
+      auth.api.update_session(headers: {"cookie" => cookie}, body: {deviceName: "desktop"})
+    end
+
+    assert_equal 401, error.status_code
+    assert_equal BetterAuth::BASE_ERROR_CODES.fetch("FAILED_TO_GET_SESSION"), error.message
+    assert_nil auth.context.internal_adapter.find_session(token)
+  end
+
+  def test_session_refresh_fails_closed_when_row_is_deleted_during_update
+    adapter = nil
+    delete_on_refresh = false
+    auth = build_auth(
+      session: {update_age: 60, expires_in: 300, cookie_cache: {enabled: false}},
+      database_hooks: {
+        session: {
+          update: {
+            before: lambda do |_data, _context|
+              adapter.delete(model: "session", where: [{field: "token", value: delete_on_refresh}]) if delete_on_refresh
+              nil
+            end
+          }
+        }
+      }
+    )
+    adapter = auth.context.adapter
+    cookie = sign_up_cookie(auth, email: "concurrent-refresh@example.com")
+    session = auth.api.get_session(headers: {"cookie" => cookie})[:session]
+    adapter.update(model: "session", where: [{field: "token", value: session["token"]}], update: {updatedAt: Time.now - 120})
+    delete_on_refresh = session["token"]
+
+    status, headers, body = auth.api.get_session(headers: {"cookie" => cookie}, as_response: true)
+
+    assert_equal 401, status
+    assert_equal BetterAuth::BASE_ERROR_CODES.fetch("FAILED_TO_GET_SESSION"), JSON.parse(body.join).fetch("message")
+    assert headers.fetch("set-cookie").lines.all? { |line| !line.start_with?("better-auth.session_token=") || line.include?("Max-Age=0") }
+    assert_nil auth.context.internal_adapter.find_session(session["token"])
   end
 
   def test_revoke_session_deletes_only_matching_user_session

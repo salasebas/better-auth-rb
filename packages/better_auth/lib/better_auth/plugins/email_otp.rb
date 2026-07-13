@@ -497,7 +497,7 @@ module BetterAuth
         ctx.context.internal_adapter.update_user(found[:user]["id"], emailVerified: true) unless found[:user]["emailVerified"]
         callback = ctx.context.options.email_and_password[:on_password_reset]
         callback.call({user: found[:user]}, ctx.request) if callback.respond_to?(:call)
-        ctx.context.internal_adapter.delete_sessions(found[:user]["id"]) if ctx.context.options.email_and_password[:revoke_sessions_on_password_reset]
+        ctx.context.internal_adapter.delete_user_sessions(found[:user]["id"]) if ctx.context.options.email_and_password[:revoke_sessions_on_password_reset]
         ctx.json({success: true})
       end
     end

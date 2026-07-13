@@ -92,6 +92,25 @@ class BetterAuthPluginsAdminTest < Minitest::Test
     assert_equal user.fetch("id"), auth.api.get_session(headers: {"cookie" => user_cookie}).fetch(:user).fetch("id")
   end
 
+  def test_admin_permission_rechecks_demoted_user_despite_cookie_cache
+    auth = build_auth(session: {cookie_cache: {enabled: true, strategy: "jwe", max_age: 300}})
+    original_cookie = sign_up_cookie(auth, email: "cached-admin@example.com")
+    admin = auth.api.get_session(headers: {"cookie" => original_cookie}).fetch(:user)
+    auth.context.internal_adapter.update_user(admin.fetch("id"), role: "admin")
+    admin_cookie = sign_up_cookie(auth, email: "cached-target@example.com")
+    _status, headers, = auth.api.sign_in_email(body: {email: "cached-admin@example.com", password: "password123"}, as_response: true)
+    cached_admin_cookie = cookie_header(headers.fetch("set-cookie"))
+
+    assert_equal "admin", auth.api.get_session(headers: {"cookie" => cached_admin_cookie}).fetch(:user).fetch("role")
+    auth.context.adapter.update(model: "user", where: [{field: "id", value: admin.fetch("id")}], update: {role: "user"})
+
+    error = assert_raises(BetterAuth::APIError) do
+      auth.api.list_users(headers: {"cookie" => cached_admin_cookie})
+    end
+    assert_equal 403, error.status_code
+    assert auth.api.get_session(headers: {"cookie" => admin_cookie})
+  end
+
   def test_admin_list_users_filters_before_pagination_and_reports_total
     auth = build_auth
     admin_cookie = sign_up_cookie(auth, email: "admin-list@example.com", name: "Admin")

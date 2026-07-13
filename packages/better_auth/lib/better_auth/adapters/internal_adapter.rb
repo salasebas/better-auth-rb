@@ -66,7 +66,7 @@ module BetterAuth
         return false if deleted == false
 
         hooks.delete_many([{field: "userId", value: user_id}], "account")
-        delete_sessions(user_id) if !secondary_storage || options.session[:store_session_in_database]
+        delete_user_sessions(user_id)
         deleted
       end
 
@@ -146,20 +146,24 @@ module BetterAuth
         hooks.delete([{field: "token", value: token}], "session")
       end
 
-      def delete_sessions(user_id_or_tokens)
+      def delete_user_sessions(user_id)
         if secondary_storage
-          if user_id_or_tokens.is_a?(Array)
-            user_id_or_tokens.each { |token| secondary_storage.delete(token) }
-          else
-            active_session_entries(user_id_or_tokens).each { |entry| secondary_storage.delete(entry["token"]) }
-            secondary_storage.delete(active_key(user_id_or_tokens))
-          end
+          active_session_entries(user_id).each { |entry| secondary_storage.delete(entry["token"]) }
+          secondary_storage.delete(active_key(user_id))
           return if !options.session[:store_session_in_database] || options.session[:preserve_session_in_database]
         end
 
-        field = user_id_or_tokens.is_a?(Array) ? "token" : "userId"
-        operator = user_id_or_tokens.is_a?(Array) ? "in" : nil
-        hooks.delete_many([{field: field, value: user_id_or_tokens, operator: operator}], "session")
+        hooks.delete_many([{field: "userId", value: user_id}], "session")
+      end
+
+      def delete_sessions(tokens)
+        session_tokens = Array(tokens)
+        if secondary_storage
+          session_tokens.each { |token| secondary_storage.delete(token) }
+          return if !options.session[:store_session_in_database] || options.session[:preserve_session_in_database]
+        end
+
+        hooks.delete_many([{field: "token", value: session_tokens, operator: "in"}], "session")
       end
 
       def delete_accounts(user_id)

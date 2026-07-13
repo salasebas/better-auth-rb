@@ -55,7 +55,11 @@ module BetterAuth
         mode = headers["sec-fetch-mode"]
         dest = headers["sec-fetch-dest"]
         has_metadata = [site, mode, dest].any? { |value| value && !value.to_s.strip.empty? }
-        return unless has_metadata
+        unless has_metadata
+          origin = headers["origin"] || headers["referer"]
+          validate_origin(endpoint_context, force: true) if login_or_signup_path?(endpoint_context.path) && origin && !origin.to_s.empty?
+          return
+        end
 
         if site == "cross-site" && mode == "navigate"
           log(endpoint_context.context, :error, "Blocked cross-site navigation login attempt (CSRF protection)")
@@ -107,6 +111,10 @@ module BetterAuth
         return false unless skip.is_a?(Array)
 
         skip.any? { |path| endpoint_context.path.start_with?(path.to_s) }
+      end
+
+      def login_or_signup_path?(path)
+        path.to_s.match?(%r{/(?:sign-in|sign-up)(?:/|$)})
       end
 
       def fetch_data(data, key)

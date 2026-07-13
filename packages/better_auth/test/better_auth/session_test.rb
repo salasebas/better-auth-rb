@@ -91,6 +91,26 @@ class BetterAuthSessionTest < Minitest::Test
     assert_equal session.fetch("token"), current_session.fetch(:session).fetch("token")
   end
 
+  def test_sensitive_current_session_bypasses_memoized_stateful_session
+    auth = BetterAuth.auth(secret: SECRET, database: :memory, session: {cookie_cache: {enabled: true, strategy: "jwe", max_age: 300}})
+    user = auth.context.internal_adapter.create_user("name" => "Ada", "email" => "ada-revoked@example.com")
+    session = auth.context.internal_adapter.create_session(user["id"])
+    cookie_ctx = endpoint_context(auth)
+    BetterAuth::Cookies.set_session_cookie(cookie_ctx, {session: session, user: user}, false)
+    cookie = cookie_ctx.response_headers.fetch("set-cookie").lines.map { |line| line.split(";").first }.join("; ")
+    request_ctx = endpoint_context(auth, cookie: cookie)
+
+    assert_equal session["token"], BetterAuth::Routes.current_session(request_ctx)[:session]["token"]
+    auth.context.internal_adapter.delete_session(session["token"])
+
+    error = assert_raises(BetterAuth::APIError) do
+      BetterAuth::Routes.current_session(request_ctx, sensitive: true)
+    end
+    assert_equal 401, error.status_code
+    assert_nil auth.context.current_session
+    assert_includes request_ctx.response_headers.fetch("set-cookie"), "Max-Age=0"
+  end
+
   def test_find_current_session_expires_cookie_when_session_is_missing
     auth = BetterAuth.auth(secret: SECRET, session: {cookie_cache: {enabled: false}})
     ctx = endpoint_context(auth)

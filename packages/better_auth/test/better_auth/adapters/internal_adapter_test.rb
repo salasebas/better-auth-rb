@@ -233,6 +233,23 @@ class BetterAuthInternalAdapterTest < Minitest::Test
     assert_nil internal.find_session("token-1")
   end
 
+  def test_delete_user_removes_secondary_only_sessions_and_active_index
+    storage = MemoryStorage.new
+    internal = internal_adapter(secondary_storage: storage)
+    user = internal.create_user(name: "Ada", email: "secondary-delete@example.com")
+    session = internal.create_session(user["id"], false, {token: "secondary-delete-token"}, true)
+    active_key = "active-sessions-#{user["id"]}"
+
+    assert storage.get(session["token"])
+    assert storage.get(active_key)
+
+    internal.delete_user(user["id"])
+
+    assert_nil storage.get(session["token"])
+    assert_nil storage.get(active_key)
+    assert_nil internal.find_session(session["token"])
+  end
+
   def test_store_session_in_database_keeps_hooked_db_copy_and_falls_back_when_secondary_storage_misses
     storage = MemoryStorage.new
     internal = internal_adapter(

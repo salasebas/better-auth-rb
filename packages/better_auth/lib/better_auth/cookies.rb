@@ -81,10 +81,10 @@ module BetterAuth
       cookie_name = config[:cookie_name] || "session_token"
       cookie_prefix = config[:cookie_prefix] || "better-auth"
       candidates = [
-        "#{cookie_prefix}.#{cookie_name}",
         "#{SECURE_COOKIE_PREFIX}#{cookie_prefix}.#{cookie_name}",
-        "#{cookie_prefix}-#{cookie_name}",
-        "#{SECURE_COOKIE_PREFIX}#{cookie_prefix}-#{cookie_name}"
+        "#{cookie_prefix}.#{cookie_name}",
+        "#{SECURE_COOKIE_PREFIX}#{cookie_prefix}-#{cookie_name}",
+        "#{cookie_prefix}-#{cookie_name}"
       ]
       candidates.lazy.filter_map { |candidate| parsed[candidate] }.first
     end
@@ -99,16 +99,23 @@ module BetterAuth
         ctx.set_signed_cookie(dont_remember_cookie.name, "true", ctx.context.secret, dont_remember_cookie.attributes)
       end
 
-      set_cookie_cache(ctx, session, dont_remember_me)
+      set_cookie_cache(ctx, session, dont_remember_me, max_age: overrides&.fetch(:max_age, nil))
       ctx.context.set_new_session(session) if ctx.context.respond_to?(:set_new_session)
     end
 
-    def set_cookie_cache(ctx, session, dont_remember_me)
+    def set_cookie_cache(ctx, session, dont_remember_me, max_age: nil)
       config = ctx.context.session_config[:cookie_cache] || {}
       return unless config[:enabled]
 
       cookie = ctx.context.auth_cookies[:session_data]
-      max_age = dont_remember_me ? nil : cookie.attributes[:max_age]
+      configured_max_age = cookie.attributes[:max_age]
+      max_age = if dont_remember_me
+        nil
+      elsif max_age
+        [configured_max_age, max_age].compact.map(&:to_i).min
+      else
+        configured_max_age
+      end
       data = filtered_cache_data(ctx, session)
       strategy = config[:strategy] || "compact"
       secret = (strategy.to_s == "jwe") ? ctx.context.secret_config : ctx.context.secret
@@ -166,6 +173,7 @@ module BetterAuth
 
       payload = decode_cookie_cache(raw, secret, strategy: strategy)
       return nil unless payload && payload["session"] && payload["user"]
+      return nil if embedded_session_expired?(payload["session"])
 
       expected_version = cookie_cache_version(version, payload["session"], payload["user"])
       return nil if version && (payload["version"] || "1") != expected_version
@@ -174,6 +182,7 @@ module BetterAuth
     end
 
     def expire_cookie(ctx, cookie)
+      remove_set_cookie_entries(ctx, cookie.name)
       ctx.set_cookie(cookie.name, "", cookie.attributes.merge(max_age: 0))
     end
 
@@ -181,6 +190,11 @@ module BetterAuth
       expire_cookie(ctx, ctx.context.auth_cookies[:session_token])
       expire_cookie(ctx, ctx.context.auth_cookies[:session_data])
       expire_cookie(ctx, ctx.context.auth_cookies[:account_data]) if ctx.context.options.account[:store_account_cookie]
+
+      if ctx.context.options.account[:store_account_cookie]
+        account_store = SessionStore.new(ctx.context.auth_cookies[:account_data].name, ctx.context.auth_cookies[:account_data].attributes, ctx)
+        account_store.set_cookies(account_store.clean)
+      end
 
       store = SessionStore.new(ctx.context.auth_cookies[:session_data].name, ctx.context.auth_cookies[:session_data].attributes, ctx)
       store.set_cookies(store.clean)
@@ -246,6 +260,30 @@ module BetterAuth
       return nil if chunks.empty?
 
       chunks.sort_by(&:first).map(&:last).join
+    end
+
+    def embedded_session_expired?(session)
+      expires_at = session["expiresAt"] || session[:expiresAt] || session["expires_at"] || session[:expires_at]
+      normalized = Session.normalize_time(expires_at)
+      normalized && normalized <= Time.now
+    rescue ArgumentError
+      true
+    end
+
+    def remove_set_cookie_entries(ctx, cookie_name)
+      header = ctx.response_headers["set-cookie"]
+      return unless header
+
+      exact = "#{cookie_name}="
+      chunk = "#{cookie_name}."
+      survivors = header.to_s.lines(chomp: true).reject do |entry|
+        entry.start_with?(exact, chunk)
+      end
+      if survivors.empty?
+        ctx.response_headers.delete("set-cookie")
+      else
+        ctx.response_headers["set-cookie"] = survivors.join("\n")
+      end
     end
 
     def decode_cookie_value(value)

@@ -56,6 +56,29 @@ class BetterAuthCookiesTest < Minitest::Test
     assert_equal "legacy", BetterAuth::Cookies.get_session_cookie(legacy)
   end
 
+  def test_session_cookie_parser_prefers_secure_cookie_over_legacy_cookie
+    header = "better-auth.session_token=legacy; __Secure-better-auth.session_token=secure"
+
+    assert_equal "secure", BetterAuth::Cookies.get_session_cookie(header)
+  end
+
+  def test_expiring_cookie_scrubs_prior_same_name_and_chunked_set_cookie_entries
+    auth = BetterAuth.auth(secret: SECRET, session: {cookie_cache: {enabled: true}})
+    ctx = endpoint_context(auth)
+    cookie = auth.context.auth_cookies[:session_data]
+    ctx.set_cookie(cookie.name, "still-valid", cookie.attributes)
+    ctx.set_cookie("#{cookie.name}.0", "chunk-valid", cookie.attributes)
+    ctx.set_cookie("unrelated", "keep", path: "/")
+
+    BetterAuth::Cookies.expire_cookie(ctx, cookie)
+
+    lines = ctx.response_headers.fetch("set-cookie").lines
+    assert lines.any? { |line| line.start_with?("unrelated=keep") }
+    assert lines.any? { |line| line.start_with?("#{cookie.name}=") && line.include?("Max-Age=0") }
+    refute lines.any? { |line| line.start_with?("#{cookie.name}=still-valid") }
+    refute lines.any? { |line| line.start_with?("#{cookie.name}.0=chunk-valid") }
+  end
+
   def test_signed_cookie_round_trip_and_rejects_tampering
     ctx = endpoint_context(BetterAuth.auth(secret: SECRET))
 

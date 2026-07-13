@@ -177,5 +177,10 @@ module SCIMTestHelper
       data[key] = value
       ttls[key] = ttl
     end
+
+    def delete(key)
+      data.delete(key)
+      ttls.delete(key)
+    end
   end
 end

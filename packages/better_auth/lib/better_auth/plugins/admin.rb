@@ -361,7 +361,7 @@ module BetterAuth
         raise APIError.new("BAD_REQUEST", message: ADMIN_ERROR_CODES.fetch("YOU_CANNOT_BAN_YOURSELF")) if body[:user_id] == session[:user]["id"]
         expires_in = body[:ban_expires_in] || config[:default_ban_expires_in]
         user = ctx.context.internal_adapter.update_user(body[:user_id], banned: true, banReason: body[:ban_reason] || config[:default_ban_reason] || "No reason", banExpires: expires_in ? Time.now + expires_in.to_i : nil, updatedAt: Time.now)
-        ctx.context.internal_adapter.delete_sessions(body[:user_id])
+        ctx.context.internal_adapter.delete_user_sessions(body[:user_id])
         ctx.json({user: Schema.parse_output(ctx.context.options, "user", user)})
       end
     end
@@ -524,7 +524,7 @@ module BetterAuth
         }
       ) do |ctx|
         admin_require_permission!(ctx, config, {session: ["revoke"]}, ADMIN_ERROR_CODES.fetch("YOU_ARE_NOT_ALLOWED_TO_REVOKE_USERS_SESSIONS"))
-        ctx.context.internal_adapter.delete_sessions(normalize_hash(ctx.body)[:user_id])
+        ctx.context.internal_adapter.delete_user_sessions(normalize_hash(ctx.body)[:user_id])
         ctx.json({success: true})
       end
     end

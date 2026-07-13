@@ -89,7 +89,7 @@ module BetterAuth
         ctx.context.internal_adapter.update_account(account["id"], password: hash_password(ctx, new_password))
         token = nil
         if body["revokeOtherSessions"] || body["revoke_other_sessions"]
-          ctx.context.internal_adapter.delete_sessions(session[:user]["id"])
+          ctx.context.internal_adapter.delete_user_sessions(session[:user]["id"])
           new_session = ctx.context.internal_adapter.create_session(session[:user]["id"])
           Cookies.set_session_cookie(ctx, {session: new_session, user: session[:user]})
           token = new_session["token"]
@@ -363,7 +363,7 @@ module BetterAuth
       deleted = ctx.context.internal_adapter.delete_user(session[:user]["id"])
       raise APIError.new("BAD_REQUEST", message: "User delete aborted") if deleted == false
 
-      ctx.context.internal_adapter.delete_sessions(session[:user]["id"])
+      ctx.context.internal_adapter.delete_user_sessions(session[:user]["id"])
       Cookies.delete_session_cookie(ctx)
       call_option(config[:after_delete], session[:user], ctx.request)
     end

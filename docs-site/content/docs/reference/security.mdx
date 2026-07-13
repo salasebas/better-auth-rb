@@ -29,6 +29,8 @@ RubyAuth uses secure session management to protect user data. Sessions are store
 
 RubyAuth allows you to revoke sessions to enhance security. When a session is revoked, the user is logged out and can no longer access the application. A logged in user can also revoke their own sessions to log out from different devices or browsers.
 
+Endpoints that perform sensitive work, including password, account, session-revocation, and administrator operations, use an authoritative session read. When a database or secondary session store is configured, these endpoints bypass both the cookie cache and any session memoized earlier in the request. Stateless deployments continue to treat the signed session cookie as the authority, but refreshing its cache never extends the session beyond its original expiration.
+
 See the [session management](/docs/concepts/session-management) for more details.
 
 ## CSRF Protection
@@ -55,7 +57,7 @@ RubyAuth includes multiple safeguards to prevent Cross-Site Request Forgery (CSR
 
    * If the request is **same-origin** or **same-site**, RubyAuth still validates the `Origin`/`Referer` against your `trusted_origins` configuration, using the existing origin validation logic.
 
-   * If the client does **not** send Fetch Metadata headers (older browsers, some mobile WebViews, non-browser clients), RubyAuth falls back to its **previous behavior** and only performs origin validation when cookies are present, preserving backward compatibility.
+   * If the client does **not** send Fetch Metadata headers but does send an `Origin` or `Referer`, RubyAuth still validates that value for sign-in and sign-up requests. Requests with no cookies, Fetch Metadata, `Origin`, or `Referer` retain the non-browser fallback.
 
    This mechanism allows modern browsers to receive stronger protection against first-login CSRF attacks **without requiring CSRF tokens or client-side JavaScript**, and works seamlessly with progressive enhancement patterns.
 
@@ -145,6 +147,8 @@ To secure OAuth flows, RubyAuth stores the OAuth state and PKCE (Proof Key for C
 ## Cookies
 
 RubyAuth assigns secure cookies by default when the base URL uses `https`. These secure cookies are encrypted and only sent over secure connections, adding an extra layer of protection. They are also set with the `sameSite` attribute to `lax` by default to prevent cross-site request forgery attacks. And the `httpOnly` attribute is enabled to prevent client-side JavaScript from accessing the cookie.
+
+During cookie migrations, a client may temporarily send both a legacy cookie name and its `__Secure-` equivalent. RubyAuth gives the `__Secure-` cookie precedence. When a session or account cookie is expired, earlier same-name `Set-Cookie` values and chunked variants are removed from the response before the expiration value is emitted.
 
 For Cross-Subdomain Cookies, you can set the `cross_sub_domain_cookies` option in the configuration. This option allows cookies to be shared across subdomains, enabling seamless authentication across multiple subdomains.
 

@@ -88,6 +88,11 @@ module BetterAuth
 
         update = body.merge("updatedAt" => Time.now)
         updated = ctx.context.internal_adapter.update_session(session[:session]["token"], update)
+        if !updated && Session.stateful?(ctx)
+          Cookies.delete_session_cookie(ctx)
+          raise APIError.new("UNAUTHORIZED", message: BASE_ERROR_CODES["FAILED_TO_GET_SESSION"])
+        end
+
         merged = session[:session].merge(updated || update)
         Cookies.set_session_cookie(ctx, {session: merged, user: session[:user]}, Cookies.dont_remember?(ctx))
         ctx.json({session: Schema.parse_output(ctx.context.options, "session", merged)})
@@ -144,7 +149,7 @@ module BetterAuth
         }
       ) do |ctx|
         session = current_session(ctx, sensitive: true)
-        ctx.context.internal_adapter.delete_sessions(session[:user]["id"])
+        ctx.context.internal_adapter.delete_user_sessions(session[:user]["id"])
         Cookies.delete_session_cookie(ctx)
         ctx.json({status: true})
       end

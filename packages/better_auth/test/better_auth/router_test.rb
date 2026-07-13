@@ -394,6 +394,33 @@ class BetterAuthRouterTest < Minitest::Test
       JSON.parse(body.join)["message"]
   end
 
+  def test_cookieless_sign_up_validates_present_origin_without_fetch_metadata
+    auth = BetterAuth.auth(
+      base_url: "http://localhost:3000",
+      secret: SECRET,
+      database: :memory,
+      email_and_password: {enabled: true}
+    )
+    body = {email: "origin-signup@example.com", password: "password123", name: "Origin"}
+
+    assert_equal 403, auth.call(rack_env("POST", "/api/auth/sign-up/email", body: body, headers: {"HTTP_ORIGIN" => "https://evil.example"})).first
+    assert_equal 200, auth.call(rack_env("POST", "/api/auth/sign-up/email", body: body, headers: {"HTTP_ORIGIN" => "http://localhost:3000"})).first
+  end
+
+  def test_cookieless_sign_in_validates_present_origin_or_referer_without_fetch_metadata
+    auth = BetterAuth.auth(
+      base_url: "http://localhost:3000",
+      secret: SECRET,
+      database: :memory,
+      email_and_password: {enabled: true}
+    )
+    auth.api.sign_up_email(body: {email: "origin-signin@example.com", password: "password123", name: "Origin"})
+    body = {email: "origin-signin@example.com", password: "password123"}
+
+    assert_equal 403, auth.call(rack_env("POST", "/api/auth/sign-in/email", body: body, headers: {"HTTP_REFERER" => "https://evil.example/login"})).first
+    assert_equal 200, auth.call(rack_env("POST", "/api/auth/sign-in/email", body: body, headers: {"HTTP_ORIGIN" => "http://localhost:3000"})).first
+  end
+
   def test_origin_check_allows_safe_methods_and_rejects_missing_or_malformed_origins_with_cookies
     auth = BetterAuth.auth(
       base_url: "http://localhost:3000",

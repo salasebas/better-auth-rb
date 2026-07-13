@@ -7,7 +7,8 @@ module BetterAuth
     module_function
 
     def find_current(ctx, disable_cookie_cache: false, disable_refresh: false, sensitive: false)
-      if ctx.context.current_session
+      authoritative = sensitive && stateful?(ctx)
+      if ctx.context.current_session && !authoritative
         return ctx.context.current_session
       end
 
@@ -20,7 +21,7 @@ module BetterAuth
         return nil
       end
 
-      cached = cached_session(ctx, token, disable_cookie_cache: disable_cookie_cache, sensitive: sensitive)
+      cached = cached_session(ctx, token, disable_cookie_cache: disable_cookie_cache, sensitive: authoritative)
       if cached
         ctx.context.set_current_session(cached) if ctx.context.respond_to?(:set_current_session)
         return cached
@@ -62,8 +63,14 @@ module BetterAuth
     end
 
     def missing_session(ctx)
+      ctx.context.set_current_session(nil) if ctx.context.respond_to?(:set_current_session)
       Cookies.delete_session_cookie(ctx)
       nil
+    end
+
+    def stateful?(ctx)
+      options = ctx.context.options
+      !options.database.nil? || !options.secondary_storage.nil?
     end
 
     def expired?(session)
@@ -89,7 +96,12 @@ module BetterAuth
         "expiresAt" => expires_at,
         "updatedAt" => now
       )
-      session = stringify_keys(updated || result[:session]).merge("expiresAt" => expires_at, "updatedAt" => now)
+      unless updated
+        missing_session(ctx)
+        raise APIError.new("UNAUTHORIZED", message: BASE_ERROR_CODES["FAILED_TO_GET_SESSION"])
+      end
+
+      session = stringify_keys(updated)
       refreshed = {session: session, user: result[:user]}
       Cookies.set_session_cookie(ctx, refreshed, Cookies.dont_remember?(ctx))
       refreshed
@@ -97,12 +109,13 @@ module BetterAuth
 
     def refresh_cached_session(ctx, result)
       now = Time.now
-      session = stringify_keys(result[:session]).merge(
-        "expiresAt" => now + ctx.context.session_config[:expires_in].to_i,
-        "updatedAt" => now
-      )
+      session = stringify_keys(result[:session])
+      expires_at = normalize_time(session["expiresAt"])
+      return missing_session(ctx) if expires_at && expires_at <= now
+
+      remaining = expires_at && [(expires_at - now).floor, 0].max
       refreshed = {session: session, user: result[:user]}
-      Cookies.set_session_cookie(ctx, refreshed, Cookies.dont_remember?(ctx))
+      Cookies.set_session_cookie(ctx, refreshed, Cookies.dont_remember?(ctx), max_age: remaining)
       refreshed
     end
 

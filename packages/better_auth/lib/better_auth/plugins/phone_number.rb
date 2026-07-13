@@ -325,7 +325,7 @@ module BetterAuth
         Routes.validate_password_length!(new_password, ctx.context.options.email_and_password)
         phone_number_verify_code!(ctx, config, "#{phone_number}-request-password-reset", otp)
         ctx.context.internal_adapter.update_password(user["id"], Routes.hash_password(ctx, new_password))
-        ctx.context.internal_adapter.delete_sessions(user["id"]) if ctx.context.options.email_and_password[:revoke_sessions_on_password_reset]
+        ctx.context.internal_adapter.delete_user_sessions(user["id"]) if ctx.context.options.email_and_password[:revoke_sessions_on_password_reset]
         ctx.json({status: true})
       end
     end

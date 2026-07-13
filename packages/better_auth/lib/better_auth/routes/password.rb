@@ -167,7 +167,7 @@ module BetterAuth
           user = ctx.context.internal_adapter.find_user_by_id(user_id)
           callback.call({user: user}, ctx.request) if user
         end
-        ctx.context.internal_adapter.delete_sessions(user_id) if ctx.context.options.email_and_password[:revoke_sessions_on_password_reset]
+        ctx.context.internal_adapter.delete_user_sessions(user_id) if ctx.context.options.email_and_password[:revoke_sessions_on_password_reset]
 
         ctx.json({status: true})
       end

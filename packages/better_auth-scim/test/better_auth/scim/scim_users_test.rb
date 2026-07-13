@@ -55,6 +55,43 @@ class BetterAuthPluginsScimUsersTest < Minitest::Test
     assert_equal 204, deleted.fetch(:status)
   end
 
+  def test_scim_delete_removes_secondary_only_session_and_rejects_stale_cache
+    storage = SecondaryStorage.new
+    auth = BetterAuth.auth(
+      base_url: "http://localhost:3000",
+      secret: SECRET,
+      database: :memory,
+      secondary_storage: storage,
+      email_and_password: {enabled: true},
+      session: {cookie_cache: {enabled: true, strategy: "jwe", max_age: 300}},
+      plugins: [BetterAuth::Plugins.scim]
+    )
+    owner_cookie = sign_up_cookie(auth)
+    scim_token = auth.api.generate_scim_token(headers: {"cookie" => owner_cookie}, body: {providerId: "secondary-delete"}).fetch(:scimToken)
+    created = auth.api.create_scim_user(headers: bearer(scim_token), body: {userName: "secondary-scim@example.com"})
+    user = auth.context.internal_adapter.find_user_by_id(created.fetch(:id))
+    session = auth.context.internal_adapter.create_session(user.fetch("id"))
+    active_key = "active-sessions-#{user.fetch("id")}"
+    cookie_ctx = BetterAuth::Endpoint::Context.new(path: "/test", method: "GET", query: {}, body: {}, params: {}, headers: {}, context: auth.context)
+    BetterAuth::Cookies.set_session_cookie(cookie_ctx, {session: session, user: user})
+    set_cookie = cookie_ctx.response_headers.fetch("set-cookie")
+    cached_cookie = set_cookie.lines.map { |line| line.split(";").first }.join("; ")
+
+    assert_includes set_cookie, "better-auth.session_data="
+    assert storage.get(session.fetch("token"))
+    assert storage.get(active_key)
+
+    deleted = auth.api.delete_scim_user(headers: bearer(scim_token), params: {userId: created.fetch(:id)}, return_status: true)
+
+    assert_equal 204, deleted.fetch(:status)
+    assert_nil storage.get(session.fetch("token"))
+    assert_nil storage.get(active_key)
+    error = assert_raises(BetterAuth::APIError) do
+      auth.api.change_password(headers: {"cookie" => cached_cookie}, body: {currentPassword: "password123", newPassword: "newpassword123"})
+    end
+    assert_equal 401, error.status_code
+  end
+
   def test_scim_list_users_returns_upstream_list_response_shape_and_order
     auth = build_auth
     cookie = sign_up_cookie(auth)
