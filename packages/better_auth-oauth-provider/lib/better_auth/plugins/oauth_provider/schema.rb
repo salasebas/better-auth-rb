@@ -45,7 +45,7 @@ module BetterAuth
           fields: {
             token: {type: "string", required: true},
             clientId: {type: "string", required: true, index: true, references: {model: "oauthClient", field: "clientId"}},
-            sessionId: {type: "string", required: false, references: {model: "session", field: "id", on_delete: "set null"}},
+            sessionId: {type: "string", required: false, index: true, references: {model: "session", field: "id", on_delete: "set null"}},
             userId: {type: "string", required: false, index: true, references: {model: "user", field: "id"}},
             referenceId: {type: "string", required: false, index: true},
             authTime: {type: "date", required: false},
@@ -62,7 +62,7 @@ module BetterAuth
             expiresAt: {type: "date", required: true},
             clientId: {type: "string", required: true, index: true, references: {model: "oauthClient", field: "clientId"}},
             userId: {type: "string", required: false, index: true, references: {model: "user", field: "id"}},
-            sessionId: {type: "string", required: false, references: {model: "session", field: "id", on_delete: "set null"}},
+            sessionId: {type: "string", required: false, index: true, references: {model: "session", field: "id", on_delete: "set null"}},
             scopes: {type: "string[]", required: true},
             revoked: {type: "date", required: false},
             referenceId: {type: "string", required: false},

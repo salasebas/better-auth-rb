@@ -23,6 +23,18 @@ class OAuthProviderAuthorizationRegistrationTest < Minitest::Test
     end
   end
 
+  def test_runtime_redirect_validation_rejects_dangerous_legacy_client_uri
+    error = assert_raises(BetterAuth::APIError) do
+      BetterAuth::Plugins::OAuthProtocol.validate_redirect_uri!(
+        {"redirectUris" => ["javascript:alert(1)"]},
+        "javascript:alert(1)"
+      )
+    end
+
+    assert_equal 400, error.status_code
+    assert_match(/redirect_uri is invalid/, error.message)
+  end
+
   def test_validate_issuer_url_covers_remaining_upstream_cases
     assert_equal "https://issuer.example.com", BetterAuth::Plugins::OAuthProvider.validate_issuer_url("https://issuer.example.com?x=1")
     assert_equal "https://issuer.example.com/path", BetterAuth::Plugins::OAuthProvider.validate_issuer_url("https://issuer.example.com/path#frag")

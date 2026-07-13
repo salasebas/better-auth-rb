@@ -584,7 +584,7 @@ class BetterAuthPluginsOAuthProviderTest < Minitest::Test
     assert params.fetch("code")
   end
 
-  def test_continue_post_login_reenters_authorize_and_issues_code
+  def test_continue_post_login_reenters_authorize_without_trusting_client_flag
     auth = build_auth(
       post_login: {
         page: "/post-login",
@@ -621,6 +621,7 @@ class BetterAuthPluginsOAuthProviderTest < Minitest::Test
     assert_equal 302, status
     post_login_uri = URI.parse(headers.fetch("location"))
     assert_equal "/post-login", post_login_uri.path
+    assert_equal 1, URI.decode_www_form(post_login_uri.query).count { |key, _value| key == "ba_pl" }
 
     continued = auth.api.oauth2_continue(
       headers: {"cookie" => cookie},
@@ -628,9 +629,180 @@ class BetterAuthPluginsOAuthProviderTest < Minitest::Test
     )
 
     callback = URI.parse(continued[:url])
+    assert_equal "/post-login", callback.path
     params = Rack::Utils.parse_query(callback.query)
     assert_equal "post-login-state", params.fetch("state")
-    assert params.fetch("code")
+    refute params.key?("code")
+  end
+
+  def test_replayed_post_login_continuation_cannot_bypass_live_gate
+    auth = build_auth(post_login: {page: "/post-login", should_redirect: ->(_info) { true }})
+    cookie = sign_up_cookie(auth)
+    client = create_test_client(auth, cookie, grant_types: ["authorization_code"], scope: "read", skip_consent: true)
+    status, headers, = authorize_response(auth, cookie, client, scope: "read")
+    assert_equal 302, status
+    query = URI.parse(headers.fetch("location")).query
+
+    resumed = auth.api.oauth2_continue(headers: {"cookie" => cookie}, body: {postLogin: true, oauth_query: query})
+    assert_equal "/post-login", URI.parse(resumed.fetch(:url)).path
+    replay = assert_raises(BetterAuth::APIError) do
+      auth.api.oauth2_continue(headers: {"cookie" => cookie}, body: {postLogin: true, oauth_query: query})
+    end
+    assert_equal 400, replay.status_code
+  end
+
+  def test_continue_reenters_authorize_through_normal_hook_pipeline
+    authorize_calls = 0
+    auth = build_auth(
+      select_account: {page: "/select-account"},
+      hooks: {before: ->(ctx) {
+        authorize_calls += 1 if ctx.path == "/oauth2/authorize"
+        nil
+      }}
+    )
+    cookie = sign_up_cookie(auth)
+    client = create_test_client(auth, cookie, grant_types: ["authorization_code"], scope: "read", skip_consent: true)
+    status, headers, = authorize_response(auth, cookie, client, scope: "read", prompt: "select_account")
+    assert_equal 302, status
+    assert_equal 1, authorize_calls
+
+    auth.api.oauth2_continue(headers: {"cookie" => cookie}, body: {selected: true, oauth_query: URI.parse(headers.fetch("location")).query})
+
+    assert_equal 2, authorize_calls
+  end
+
+  def test_continue_preserves_hash_from_resumed_authorize_before_hook
+    authorize_calls = 0
+    auth = build_auth(
+      select_account: {page: "/select-account"},
+      hooks: {before: ->(ctx) {
+        next unless ctx.path == "/oauth2/authorize"
+
+        authorize_calls += 1
+        {"blocked" => true} if authorize_calls == 2
+      }}
+    )
+    cookie = sign_up_cookie(auth, email: "continue-hook@example.com")
+    client = create_test_client(auth, cookie, grant_types: ["authorization_code"], scope: "read", skip_consent: true)
+    status, headers, = authorize_response(auth, cookie, client, scope: "read", prompt: "select_account")
+    assert_equal 302, status
+
+    continued = auth.api.oauth2_continue(
+      headers: {"cookie" => cookie},
+      body: {selected: true, oauth_query: URI.parse(headers.fetch("location")).query}
+    )
+
+    assert_equal({"blocked" => true}, continued)
+    assert_equal 2, authorize_calls
+  end
+
+  def test_sign_in_resume_preserves_raw_authorize_hook_response_and_session_cookie
+    authorize_calls = 0
+    auth = build_auth(
+      hooks: {before: ->(ctx) {
+        next unless ctx.path == "/oauth2/authorize"
+
+        authorize_calls += 1
+        if authorize_calls == 2
+          [418, {"content-type" => "text/plain", "x-authorize-hook" => "blocked"}, ["teapot"]]
+        end
+      }}
+    )
+    cookie = sign_up_cookie(auth, email: "resume-hook@example.com")
+    client = create_test_client(auth, cookie, grant_types: ["authorization_code"], scope: "read", skip_consent: true)
+
+    status, headers, = auth.api.oauth2_authorize(
+      query: {
+        response_type: "code",
+        client_id: client[:client_id],
+        redirect_uri: "https://resource.example/callback",
+        scope: "read",
+        state: "resume-hook-state",
+        code_challenge: pkce_challenge,
+        code_challenge_method: "S256"
+      },
+      as_response: true
+    )
+    assert_equal 302, status
+    login_uri = URI.parse(headers.fetch("location"))
+
+    resumed_status, resumed_headers, resumed_body = auth.api.sign_in_email(
+      body: {
+        email: "resume-hook@example.com",
+        password: "password123",
+        oauth_query: login_uri.query
+      },
+      as_response: true
+    )
+
+    assert_equal 418, resumed_status
+    assert_equal "blocked", resumed_headers.fetch("x-authorize-hook")
+    assert_includes resumed_headers.fetch("set-cookie"), auth.context.auth_cookies[:session_token].name
+    assert_equal ["teapot"], resumed_body
+    assert_equal 2, authorize_calls
+  end
+
+  def test_authorize_rejects_client_without_authorization_code_grant
+    auth = build_auth(scopes: ["read"])
+    cookie = sign_up_cookie(auth)
+    client = create_test_client(auth, cookie, grant_types: ["client_credentials"], response_types: [], scope: "read")
+
+    status, headers, = authorize_response(auth, cookie, client, scope: "read")
+
+    assert_equal 302, status
+    params = Rack::Utils.parse_query(URI.parse(headers.fetch("location")).query)
+    assert_equal "unauthorized_client", params.fetch("error")
+  end
+
+  def test_authorize_rejects_disabled_client_before_grant_check
+    auth = build_auth(scopes: ["read"])
+    cookie = sign_up_cookie(auth, email: "disabled-authorize@example.com")
+    client = create_test_client(auth, cookie, grant_types: ["client_credentials"], response_types: [], scope: "read")
+    auth.context.adapter.update(
+      model: "oauthClient",
+      where: [{field: "clientId", value: client[:client_id]}],
+      update: {disabled: true}
+    )
+
+    status, headers, = authorize_response(auth, cookie, client, scope: "read")
+
+    assert_equal 302, status
+    params = Rack::Utils.parse_query(URI.parse(headers.fetch("location")).query)
+    assert_equal "invalid_client", params.fetch("error")
+    assert_equal "client is disabled", params.fetch("error_description")
+  end
+
+  def test_oauth_client_default_grants_allow_authorization_code_and_refresh
+    [nil, []].each do |grant_types|
+      client = {"grantTypes" => grant_types}
+      assert BetterAuth::Plugins.oauth_client_allows_grant?(client, "authorization_code")
+      assert BetterAuth::Plugins.oauth_client_allows_grant?(client, "refresh_token")
+      refute BetterAuth::Plugins.oauth_client_allows_grant?(client, "client_credentials")
+    end
+  end
+
+  def test_authorize_rejects_offline_access_without_effective_refresh_grant
+    auth = build_auth(scopes: ["offline_access", "read"], grant_types: ["authorization_code"])
+    cookie = sign_up_cookie(auth)
+    client = create_test_client(auth, cookie, grant_types: ["authorization_code"], scope: "offline_access read", skip_consent: true)
+
+    status, headers, = authorize_response(auth, cookie, client, scope: "offline_access read")
+
+    assert_equal 302, status
+    params = Rack::Utils.parse_query(URI.parse(headers.fetch("location")).query)
+    assert_equal "invalid_scope", params.fetch("error")
+  end
+
+  def test_token_rejects_client_denied_grant_with_unauthorized_client
+    auth = build_auth(scopes: ["read"])
+    cookie = sign_up_cookie(auth)
+    client = create_test_client(auth, cookie, grant_types: ["authorization_code"], scope: "read")
+
+    error = assert_raises(BetterAuth::APIError) do
+      auth.api.oauth2_token(body: {grant_type: "client_credentials", client_id: client[:client_id], client_secret: client[:client_secret]})
+    end
+
+    assert_match(/unauthorized_client/, error.message)
   end
 
   def test_authorize_requires_pkce_by_default
@@ -1146,7 +1318,7 @@ class BetterAuthPluginsOAuthProviderTest < Minitest::Test
     end
 
     assert_equal 400, error.status_code
-    assert_match(/unsupported_grant_type/i, error.message)
+    assert_match(/unauthorized_client/i, error.message)
   end
 
   def test_token_endpoint_validates_requested_resource_audience
@@ -1798,6 +1970,7 @@ class BetterAuthPluginsOAuthProviderTest < Minitest::Test
   def build_auth(options = {})
     opts = options.dup
     disable_jwt = opts[:disable_jwt_plugin] == true
+    hooks = opts.delete(:hooks)
     oauth_options = {
       scopes: ["read", "write"],
       allow_dynamic_client_registration: true
@@ -1815,6 +1988,7 @@ class BetterAuthPluginsOAuthProviderTest < Minitest::Test
       base_url: "http://localhost:3000",
       secret: SECRET,
       database: :memory,
+      hooks: hooks,
       email_and_password: {enabled: true},
       plugins: plugins
     )
@@ -1883,6 +2057,34 @@ class BetterAuthPluginsOAuthProviderTest < Minitest::Test
       as_response: true
     )
     headers.fetch("set-cookie").lines.map { |line| line.split(";").first }.join("; ")
+  end
+
+  def create_test_client(auth, cookie, overrides = {})
+    auth.api.create_oauth_client(
+      headers: {"cookie" => cookie},
+      body: {
+        redirect_uris: ["https://resource.example/callback"],
+        token_endpoint_auth_method: "client_secret_post",
+        grant_types: ["authorization_code", "refresh_token", "client_credentials"],
+        response_types: ["code"],
+        client_name: "OAuth Client",
+        scope: "openid profile email offline_access read write"
+      }.merge(overrides)
+    )
+  end
+
+  def authorize_response(auth, cookie, client, scope:, prompt: nil)
+    query = {
+      response_type: "code",
+      client_id: client[:client_id],
+      redirect_uri: "https://resource.example/callback",
+      scope: scope,
+      state: "test-state",
+      code_challenge: pkce_challenge,
+      code_challenge_method: "S256"
+    }
+    query[:prompt] = prompt if prompt
+    auth.api.oauth2_authorize(headers: {"cookie" => cookie}, query: query, as_response: true)
   end
 
   def refresh_grant_body(client, refresh_token)

@@ -8,6 +8,8 @@ module BetterAuth
   module Plugins
     module JWT
       SUPPORTED_ALGORITHMS = %w[EdDSA RS256 PS256 ES256 ES512].freeze
+      LocalJwksCache = Struct.new(:keys, :expires_at)
+      RemoteJwksCache = Struct.new(:entries)
 
       module_function
 
@@ -42,6 +44,10 @@ module BetterAuth
     def jwt(options = {})
       config = normalize_hash(options)
       validate_jwt_options!(config)
+      # Mutable caches are owned by this plugin configuration, which is scoped
+      # to one auth instance even when endpoint overrides are merged.
+      config[:local_jwks_cache] = JWT::LocalJwksCache.new
+      config[:remote_jwks_cache] = JWT::RemoteJwksCache.new({})
       jwks_path = config.dig(:jwks, :jwks_path) || "/jwks"
 
       Plugin.new(
@@ -239,7 +245,7 @@ module BetterAuth
     end
 
     def latest_jwk(ctx, config)
-      all_jwks(ctx, config).max_by { |entry| normalize_time(entry["createdAt"]) || Time.at(0) }
+      all_jwks(ctx, config, force_refresh: true).max_by { |entry| normalize_time(entry["createdAt"]) || Time.at(0) }
     end
 
     def signing_jwk(ctx, config)
@@ -258,13 +264,21 @@ module BetterAuth
       end
     end
 
-    def all_jwks(ctx, config)
-      adapter = config[:adapter]
-      if adapter && adapter[:get_jwks].respond_to?(:call)
-        return Array(adapter[:get_jwks].call(ctx)).map { |entry| stringify_payload(entry) }
+    def all_jwks(ctx, config, force_refresh: false)
+      cache = config[:local_jwks_cache] ||= JWT::LocalJwksCache.new
+      if !force_refresh && cache.expires_at && cache.expires_at > Time.now
+        return cache.keys
       end
 
-      ctx.context.adapter.find_many(model: "jwks")
+      adapter = config[:adapter]
+      keys = if adapter && adapter[:get_jwks].respond_to?(:call)
+        Array(adapter[:get_jwks].call(ctx)).map { |entry| stringify_payload(entry) }
+      else
+        ctx.context.adapter.find_many(model: "jwks")
+      end
+      cache.keys = keys
+      cache.expires_at = Time.now + 300
+      keys
     end
 
     def verification_jwks(ctx, config)
@@ -280,13 +294,13 @@ module BetterAuth
       payload = if fetcher.respond_to?(:call)
         fetcher.call(url)
       else
-        cached = @jwt_remote_jwks_cache ||= {}
-        entry = cached[url.to_s]
+        cached = config[:remote_jwks_cache] ||= JWT::RemoteJwksCache.new({})
+        entry = cached.entries[url.to_s]
         if entry && entry[:expires_at] > Time.now
           entry[:payload]
         else
           fetched = HTTPClient.get_json(url)
-          cached[url.to_s] = {payload: fetched, expires_at: Time.now + 300} if fetched
+          cached.entries[url.to_s] = {payload: fetched, expires_at: Time.now + 300} if fetched
           fetched
         end
       end
@@ -320,11 +334,15 @@ module BetterAuth
       data.merge!(public_key_jwk_fields(public_key, alg))
       data["expiresAt"] = Time.now + config.dig(:jwks, :rotation_interval).to_i if config.dig(:jwks, :rotation_interval)
 
-      if adapter && adapter[:create_jwk].respond_to?(:call)
-        return stringify_payload(adapter[:create_jwk].call(data, ctx))
+      created = if adapter && adapter[:create_jwk].respond_to?(:call)
+        stringify_payload(adapter[:create_jwk].call(data, ctx))
+      else
+        ctx.context.adapter.create(model: "jwks", data: data, force_allow_id: true)
       end
-
-      ctx.context.adapter.create(model: "jwks", data: data, force_allow_id: true)
+      cache = config[:local_jwks_cache]
+      cache.keys = nil if cache
+      cache.expires_at = nil if cache
+      created
     end
 
     def public_jwk(key, _config)

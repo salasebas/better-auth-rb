@@ -148,6 +148,8 @@ tokens = auth.api.oauth2_token(
 
 Dynamic client registration is disabled by default. Enable it explicitly and keep registration authenticated unless your deployment has a clear reason to allow unauthenticated public registration.
 
+OAuth continuation URLs are short-lived signed requests; post-login continuations are additionally single-use and session-bound, while the live post-login gate is still checked when resuming. Deployments upgrading to the canonical signed-query format should let any already-issued login, account-selection, or post-login continuation restart at `/oauth2/authorize`; legacy continuation URLs are deliberately not dual-verified. On large existing token tables, create the new `oauthRefreshToken.sessionId` and `oauthAccessToken.sessionId` indexes with your database's online/concurrent-index migration option before enabling the release where possible.
+
 ```ruby title="config/auth.rb"
 BetterAuth::Plugins.oauth_provider(
   scopes: ["openid", "profile", "email", "offline_access"],

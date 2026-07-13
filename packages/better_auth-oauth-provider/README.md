@@ -165,6 +165,8 @@ Use `false` to disable a route-specific rule.
 
 After enabling the hashed defaults, newly created OAuth client secrets and opaque tokens are stored hashed. Existing plaintext rows continue to require either a migration that re-registers/rotates secrets and tokens or a temporary explicit `store_client_secret: "plain"` setting for old clients during rollout.
 
+OAuth continuation URLs use a canonical signed-query format. Post-login continuations are single-use and session-bound, but still re-check the live post-login gate when resumed. During an upgrade, already-issued login, account-selection, and post-login continuation URLs should restart authorization at `/oauth2/authorize`; the legacy format is intentionally not dual-verified. For large tables, add the `oauthRefreshToken.sessionId` and `oauthAccessToken.sessionId` indexes with your database's online/concurrent-index migration option where available.
+
 For non-Rails SQL apps, run the equivalent of:
 
 ```sql

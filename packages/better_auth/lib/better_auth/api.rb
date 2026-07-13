@@ -99,11 +99,7 @@ module BetterAuth
       endpoint_context.returned = result.response
       endpoint_context.response_headers = result.headers.dup
 
-      after_result = run_after_hooks(endpoint_context)
-      result.response = after_result.response
-      result.headers = after_result.headers
-      result.status = after_result.status if after_result.status
-      result
+      run_after_hooks(endpoint_context)
     rescue APIError => error
       Endpoint::Result.new(response: error, status: error.status_code, headers: error.headers)
     end
@@ -148,9 +144,7 @@ module BetterAuth
         next unless hook_result
 
         normalized = Endpoint::Result.from_value(hook_result, endpoint_context)
-        result.response = normalized.response
-        result.status = normalized.status
-        result.headers = normalized.headers
+        result = normalized
         endpoint_context.returned = result.response
         endpoint_context.response_headers = result.headers
       end

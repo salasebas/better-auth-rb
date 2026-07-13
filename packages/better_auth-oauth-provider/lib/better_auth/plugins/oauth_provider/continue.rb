@@ -19,8 +19,10 @@ module BetterAuth
 
         query = oauth_verified_query!(ctx, body["oauth_query"])
         oauth_delete_prompt!(query, action) unless action == "post_login"
-        url = oauth_redirect_location { oauth_authorize_flow(ctx, config, query, continue_post_login: action == "post_login") }
-        ctx.json({redirect: true, url: url})
+        oauth_consume_post_login_marker!(ctx, query, Routes.current_session(ctx, allow_nil: true)) if action == "post_login"
+        result = oauth_dispatch_authorize(ctx, config, query)
+        location = result.headers["location"]
+        location ? ctx.json({redirect: true, url: location}) : result
       end
     end
   end

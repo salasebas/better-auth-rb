@@ -14,10 +14,11 @@ module BetterAuth
         body = OAuthProtocol.request_body!(ctx.body)
         client = OAuthProtocol.authenticate_client!(ctx, "oauthClient", store_client_secret: config[:store_client_secret], prefix: config[:prefix])
         client_id = OAuthProtocol.stringify_keys(client)["clientId"]
-        client_grants = OAuthProtocol.parse_scopes(OAuthProtocol.stringify_keys(client)["grantTypes"])
-        if client_grants.any? && !client_grants.include?(body["grant_type"].to_s)
+        grant_type = body["grant_type"].to_s
+        unless oauth_provider_allows_grant?(config, grant_type)
           raise APIError.new("BAD_REQUEST", message: "unsupported_grant_type")
         end
+        raise APIError.new("BAD_REQUEST", message: "unauthorized_client") unless oauth_client_allows_grant?(client, grant_type)
         token_options = oauth_token_options(config)
         response = case body["grant_type"]
         when OAuthProtocol::AUTH_CODE_GRANT
@@ -38,7 +39,7 @@ module BetterAuth
             client: client,
             session: session,
             scopes: code[:scopes],
-            include_refresh: code[:scopes].include?("offline_access"),
+            include_refresh: code[:scopes].include?("offline_access") && oauth_provider_allows_grant?(config, OAuthProtocol::REFRESH_GRANT) && oauth_client_allows_grant?(client, OAuthProtocol::REFRESH_GRANT),
             issuer: OAuthProvider.validate_issuer_url(OAuthProtocol.issuer(ctx)),
             prefix: config[:prefix],
             refresh_token_expires_in: config[:refresh_token_expires_in],

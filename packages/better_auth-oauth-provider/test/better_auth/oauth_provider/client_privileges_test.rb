@@ -50,6 +50,17 @@ class OAuthProviderClientPrivilegesTest < Minitest::Test
     assert client[:reference_id]
   end
 
+  def test_authenticated_dynamic_registration_respects_create_privilege
+    auth = build_auth(client_privileges: ->(_info) { false })
+    cookie = sign_up_cookie(auth)
+
+    error = assert_raises(BetterAuth::APIError) do
+      register_client(auth, cookie)
+    end
+
+    assert_equal 401, error.status_code
+  end
+
   def test_read_list_update_rotate_and_delete_client_respect_privileges
     blocked_actions = %w[read list update rotate delete]
     blocked_actions.each do |blocked_action|

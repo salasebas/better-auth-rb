@@ -32,15 +32,25 @@ module BetterAuth
         end
 
         def verify_oauth_query_params(oauth_query, secret)
-          pairs = URI.decode_www_form(oauth_query.to_s)
-          signature = pairs.reverse_each.find { |key, _value| key == "sig" }&.last
-          unsigned_pairs = pairs.filter_map { |key, value| [key, value] unless key == "sig" }
-          exp = unsigned_pairs.reverse_each.find { |key, _value| key == "exp" }&.last.to_i
-          unsigned = URI.encode_www_form(unsigned_pairs)
+          return false if oauth_query.to_s.empty? || oauth_query.to_s.include?("#")
 
-          !!signature &&
-            exp >= Time.now.to_i &&
-            Crypto.verify_hmac_signature(unsigned, signature, secret, encoding: :base64url)
+          pairs = URI.decode_www_form(oauth_query.to_s)
+          signatures = oauth_pairs_matching(pairs, "sig").map(&:last)
+          unsigned_pairs = oauth_pairs_excluding(pairs, "sig")
+          signed_names = oauth_pairs_matching(unsigned_pairs, "ba_param").map(&:last)
+          payload_pairs = oauth_pairs_excluding(unsigned_pairs, "ba_param")
+          exp_values = oauth_pairs_matching(payload_pairs, "exp").map(&:last)
+          duplicate_reserved_names = payload_pairs.group_by(&:first).any? do |key, entries|
+            %w[exp ba_iat ba_pl].include?(key) && entries.length != 1
+          end
+          names_valid = signed_names.any? && signed_names.uniq.length == signed_names.length &&
+            signed_names.sort == (payload_pairs.map(&:first) + ["ba_param"]).uniq.sort &&
+            payload_pairs.all? { |key, _value| signed_names.include?(key) }
+          unsigned = URI.encode_www_form(unsigned_pairs.sort_by { |key, value| [key, value] })
+
+          signatures.length == 1 && exp_values.length == 1 && !duplicate_reserved_names && names_valid &&
+            exp_values.first.to_i >= Time.now.to_i &&
+            Crypto.verify_hmac_signature(unsigned, signatures.first, secret, encoding: :base64url)
         rescue ArgumentError
           false
         end
@@ -50,6 +60,14 @@ module BetterAuth
           return OAuthProtocol.stringify_keys(metadata) if metadata.is_a?(Hash)
 
           OAuthProtocol.stringify_keys(JSON.parse(metadata.to_s))
+        end
+
+        def oauth_pairs_matching(pairs, name)
+          pairs.each_with_object([]) { |pair, result| result << pair if pair.first == name }
+        end
+
+        def oauth_pairs_excluding(pairs, name)
+          pairs.each_with_object([]) { |pair, result| result << pair unless pair.first == name }
         end
 
         def parse_prompt(prompt)

@@ -72,6 +72,10 @@ module BetterAuth
       end
 
       endpoints = oauth_provider_endpoints(config)
+      # Continuations must dispatch through the endpoint runner so application
+      # hooks observe the resumed authorization request. The hash is specific
+      # to this plugin instance (and therefore this auth instance).
+      config[:endpoints] = endpoints
       issuer_path = oauth_resolve_issuer_path(config)
       if issuer_path
         endpoints = endpoints.merge(oauth_issuer_path_metadata_endpoints(config, issuer_path))
@@ -167,8 +171,14 @@ module BetterAuth
     def oauth_resume_after_session_cookie(ctx, config)
       query = oauth_verified_query!(ctx, oauth_query_from_body(ctx.body))
       ctx.context.set_current_session(ctx.context.new_session) if ctx.context.respond_to?(:set_current_session) && ctx.context.new_session
-      location = oauth_redirect_location { oauth_authorize_flow(ctx, config, query, continue_post_login: true) }
-      [302, Endpoint::Result.merge_headers(ctx.response_headers, {"location" => location}), [""]]
+      oauth_delete_prompt!(query, ctx.path.start_with?("/sign-in/") ? "login" : "create")
+      result = oauth_dispatch_authorize(ctx, config, query)
+      if result.headers["location"]
+        return [302, Endpoint::Result.merge_headers(ctx.response_headers, result.headers), [""]]
+      end
+
+      status, headers, body = result.to_rack_response
+      [status, Endpoint::Result.merge_headers(ctx.response_headers, headers), body]
     rescue APIError => error
       raise APIError.new(
         error.status,

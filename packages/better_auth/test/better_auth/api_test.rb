@@ -466,6 +466,32 @@ class BetterAuthAPITest < Minitest::Test
     assert_equal ["teapot"], body
   end
 
+  def test_direct_api_after_hook_can_short_circuit_with_rack_tuple
+    auth = BetterAuth.auth(
+      base_url: "http://localhost:3000",
+      secret: SECRET,
+      plugins: [
+        {
+          id: "test",
+          endpoints: {
+            echo: BetterAuth::Endpoint.new(path: "/echo", method: "GET") { {ok: true} }
+          }
+        }
+      ],
+      hooks: {
+        after: lambda do |_ctx|
+          [418, {"content-type" => "text/plain", "x-short-circuit" => "rack"}, ["teapot"]]
+        end
+      }
+    )
+
+    status, headers, body = auth.api.echo(as_response: true)
+
+    assert_equal 418, status
+    assert_equal "rack", headers.fetch("x-short-circuit")
+    assert_equal ["teapot"], body
+  end
+
   def test_direct_api_before_hook_can_short_circuit_with_endpoint_result
     auth = BetterAuth.auth(
       base_url: "http://localhost:3000",

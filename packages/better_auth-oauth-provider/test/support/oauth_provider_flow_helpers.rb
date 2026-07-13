@@ -17,6 +17,7 @@ module OAuthProviderFlowHelpers
     database = opts.delete(:database) || :memory
     secondary_storage = opts.delete(:secondary_storage)
     session = opts.delete(:session)
+    hooks = opts.delete(:hooks)
 
     oauth_options = {
       scopes: ["read", "write"],
@@ -44,6 +45,7 @@ module OAuthProviderFlowHelpers
       database: database,
       secondary_storage: secondary_storage,
       session: session,
+      hooks: hooks,
       email_and_password: {enabled: true},
       plugins: plugins
     )

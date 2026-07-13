@@ -19,6 +19,7 @@ module BetterAuth
         unless session || config[:allow_unauthenticated_client_registration]
           raise APIError.new("UNAUTHORIZED")
         end
+        oauth_assert_client_privilege!(ctx, config, session, "create") if session
         if body.key?("skip_consent") || body.key?("skipConsent")
           raise APIError.new("BAD_REQUEST", message: "skip_consent is not allowed during dynamic client registration")
         end

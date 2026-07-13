@@ -53,6 +53,18 @@ class OAuthProviderUserinfoTest < Minitest::Test
     refute userinfo.key?(:email_verified)
   end
 
+  def test_userinfo_accepts_post_with_the_same_bearer_semantics
+    auth = build_auth(scopes: ["openid"])
+    cookie = sign_up_cookie(auth)
+    client = create_client(auth, cookie, grant_types: ["authorization_code"], response_types: ["code"], scope: "openid")
+    tokens = issue_authorization_code_tokens(auth, cookie, client, scope: "openid")
+
+    get = auth.api.oauth2_user_info(headers: {"authorization" => "Bearer #{tokens[:access_token]}"})
+    post = auth.api.oauth2_user_info(method: "POST", headers: {"authorization" => "Bearer #{tokens[:access_token]}"}, body: {})
+
+    assert_equal get, post
+  end
+
   def test_userinfo_returns_profile_claims_without_email_claims
     auth = build_auth(scopes: ["openid", "profile", "email"])
     cookie = sign_up_cookie(auth, name: "OAuth Profile")

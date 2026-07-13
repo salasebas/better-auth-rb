@@ -28,9 +28,11 @@ module BetterAuth
           raise APIError.new("BAD_REQUEST", message: "invalid_scope")
         end
 
+        # The consent code records the request that was approved, but tokens and
+        # consent must always reflect the currently valid server-side session.
         reference_id = consent[:reference_id]
-        oauth_store_consent(ctx, consent[:client], consent[:session], granted_scopes, reference_id)
-        redirect = oauth_authorization_redirect(ctx, config, query, consent[:session], consent[:client], granted_scopes, reference_id: reference_id)
+        oauth_store_consent(ctx, consent[:client], current_session, granted_scopes, reference_id)
+        redirect = oauth_authorization_redirect(ctx, config, query, current_session, consent[:client], granted_scopes, reference_id: reference_id)
         ctx.json({redirectURI: redirect})
       end
     end

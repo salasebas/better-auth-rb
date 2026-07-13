@@ -26,6 +26,70 @@ class BetterAuthPluginsJWTTest < Minitest::Test
     assert_equal "EdDSA", jwks[:keys].first[:alg]
   end
 
+  def test_local_jwks_are_cached_per_auth_instance_and_invalidated_on_rotation
+    auth = build_auth(plugins: [BetterAuth::Plugins.jwt])
+    auth.api.sign_jwt(body: {payload: {sub: "cache-user"}})
+    adapter = auth.context.adapter
+    calls = 0
+    original_find_many = adapter.method(:find_many)
+    adapter.define_singleton_method(:find_many) do |**arguments|
+      calls += 1 if arguments[:model] == "jwks"
+      original_find_many.call(**arguments)
+    end
+
+    auth.api.get_jwks
+    auth.api.get_jwks
+    assert_equal 1, calls
+
+    key_id = original_find_many.call(model: "jwks").first.fetch("id")
+    adapter.update(model: "jwks", where: [{field: "id", value: key_id}], update: {"expiresAt" => Time.now - 1})
+    auth.api.sign_jwt(body: {payload: {sub: "rotated-cache-user"}})
+    published = auth.api.get_jwks
+
+    assert_equal 2, original_find_many.call(model: "jwks").length
+    assert_equal 2, published[:keys].length
+    assert_equal 3, calls
+  end
+
+  def test_custom_jwks_are_cached_and_invalidated_on_rotation
+    storage = []
+    calls = 0
+    auth = build_auth(
+      plugins: [
+        BetterAuth::Plugins.jwt(
+          jwks: {rotation_interval: 60},
+          adapter: {
+            get_jwks: ->(_ctx) {
+              calls += 1
+              storage
+            },
+            create_jwk: ->(data, _ctx) {
+              key = data.merge("id" => "key-#{storage.length + 1}")
+              storage << key
+              key
+            }
+          }
+        )
+      ]
+    )
+    auth.api.sign_jwt(body: {payload: {sub: "custom-cache-user"}})
+    calls = 0
+
+    first = auth.api.get_jwks
+    second = auth.api.get_jwks
+
+    assert_equal 1, calls
+    assert_equal first, second
+
+    storage.first["expiresAt"] = Time.now - 1
+    auth.api.sign_jwt(body: {payload: {sub: "custom-rotated-cache-user"}})
+    published = auth.api.get_jwks
+
+    assert_equal 2, storage.length
+    assert_equal ["key-1", "key-2"], published[:keys].map { |key| key[:kid] }
+    assert_equal 3, calls
+  end
+
   def test_jwt_plugin_persists_generated_jwks_with_sql_adapters
     require "sqlite3"
 
@@ -238,6 +302,7 @@ class BetterAuthPluginsJWTTest < Minitest::Test
     assert_equal ["key-1", "key-2"], auth.api.get_jwks[:keys].map { |key| key[:kid] }
 
     storage.first["expiresAt"] = Time.now - 2
+    auth.api.sign_jwt(body: {payload: {sub: "refresh-expired-key-cache"}})
 
     assert_equal ["key-2"], auth.api.get_jwks[:keys].map { |key| key[:kid] }
   end

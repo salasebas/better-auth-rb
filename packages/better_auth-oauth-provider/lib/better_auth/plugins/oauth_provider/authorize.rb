@@ -26,13 +26,23 @@ module BetterAuth
       end
     end
 
-    def oauth_authorize_flow(ctx, config, query, continue_post_login: false)
+    def oauth_authorize_flow(ctx, config, query)
       query = oauth_resolve_request_uri!(ctx, config, query)
       response_type = query["response_type"].to_s
 
       client = OAuthProtocol.find_client(ctx, "oauthClient", query["client_id"])
       raise APIError.new("BAD_REQUEST", message: "invalid_client") unless client
       OAuthProtocol.validate_redirect_uri!(client, query["redirect_uri"])
+      client_data = OAuthProtocol.stringify_keys(client)
+      if client_data["disabled"]
+        raise ctx.redirect(oauth_authorize_error_redirect(ctx, query, "invalid_client", "client is disabled"))
+      end
+      unless oauth_client_allows_grant?(client, OAuthProtocol::AUTH_CODE_GRANT)
+        raise ctx.redirect(oauth_authorize_error_redirect(ctx, query, "unauthorized_client", "client is not authorized to use the authorization_code grant"))
+      end
+      unless oauth_provider_allows_grant?(config, OAuthProtocol::AUTH_CODE_GRANT)
+        raise ctx.redirect(oauth_authorize_error_redirect(ctx, query, "unsupported_grant_type", "authorization_code grant is disabled"))
+      end
       if response_type != "code"
         raise ctx.redirect(oauth_authorize_error_redirect(ctx, query, "unsupported_response_type", "response_type must be code"))
       end
@@ -43,14 +53,13 @@ module BetterAuth
       if prompts.include?("none") && (prompts - ["none"]).any?
         raise ctx.redirect(oauth_authorize_error_redirect(ctx, query, "invalid_request", "prompt none cannot be combined with other prompts"))
       end
-      client_data = OAuthProtocol.stringify_keys(client)
-      if client_data["disabled"]
-        raise ctx.redirect(oauth_authorize_error_redirect(ctx, query, "invalid_client", "client is disabled"))
-      end
       allowed_scopes = OAuthProtocol.parse_scopes(client_data["scopes"])
       allowed_scopes = OAuthProtocol.parse_scopes(config[:scopes]) if allowed_scopes.empty?
       unless scopes.all? { |scope| allowed_scopes.include?(scope) }
         raise ctx.redirect(oauth_authorize_error_redirect(ctx, query, "invalid_scope", "invalid scope"))
+      end
+      if scopes.include?("offline_access") && (!oauth_provider_allows_grant?(config, OAuthProtocol::REFRESH_GRANT) || !oauth_client_allows_grant?(client, OAuthProtocol::REFRESH_GRANT))
+        raise ctx.redirect(oauth_authorize_error_redirect(ctx, query, "invalid_scope", "offline_access requires refresh_token support"))
       end
       pkce_error = OAuthProtocol.validate_authorize_pkce(client_data, scopes, query["code_challenge"], query["code_challenge_method"])
       raise ctx.redirect(oauth_authorize_error_redirect(ctx, query, "invalid_request", pkce_error)) if pkce_error
@@ -68,11 +77,11 @@ module BetterAuth
         raise ctx.redirect(oauth_prompt_redirect(ctx, config, query, "login"))
       end
 
-      if oauth_requires_login?(session, prompts, query) && !continue_post_login
+      if oauth_requires_login?(session, prompts, query)
         raise ctx.redirect(oauth_prompt_redirect(ctx, config, query, "login"))
       end
 
-      if prompts.include?("select_account") && !continue_post_login
+      if prompts.include?("select_account")
         if prompts.include?("none")
           raise ctx.redirect(OAuthProtocol.redirect_uri_with_params(query["redirect_uri"], error: "account_selection_required", state: query["state"], iss: OAuthProvider.validate_issuer_url(OAuthProtocol.issuer(ctx))))
         end
@@ -80,14 +89,14 @@ module BetterAuth
         raise ctx.redirect(oauth_prompt_redirect(ctx, config, query, "select_account"))
       end
 
-      if config.dig(:post_login, :should_redirect).respond_to?(:call) && !continue_post_login
+      if config.dig(:post_login, :should_redirect).respond_to?(:call)
         should_redirect = config.dig(:post_login, :should_redirect).call({user: session[:user], session: session[:session], client: client_data, scopes: scopes})
         if should_redirect
           if prompts.include?("none")
             raise ctx.redirect(OAuthProtocol.redirect_uri_with_params(query["redirect_uri"], error: "interaction_required", state: query["state"], iss: OAuthProvider.validate_issuer_url(OAuthProtocol.issuer(ctx))))
           end
 
-          raise ctx.redirect(oauth_prompt_redirect(ctx, config, query, "post_login", page: should_redirect.is_a?(String) ? should_redirect : nil))
+          raise ctx.redirect(oauth_prompt_redirect(ctx, config, query, "post_login", page: should_redirect.is_a?(String) ? should_redirect : nil, session: session))
         end
       end
 
@@ -129,10 +138,11 @@ module BetterAuth
       false
     end
 
-    def oauth_prompt_redirect(ctx, config, query, type, page: nil)
+    def oauth_prompt_redirect(ctx, config, query, type, page: nil, session: nil)
       target = page || oauth_prompt_page(config, type)
+      post_login_marker = oauth_store_post_login_marker(ctx, query, session) if type == "post_login"
 
-      "#{target}?#{oauth_signed_query(ctx, query)}"
+      "#{target}?#{oauth_signed_query(ctx, query, post_login_marker: post_login_marker)}"
     end
 
     def oauth_prompt_page(config, type)
@@ -150,35 +160,135 @@ module BetterAuth
       end
     end
 
-    def oauth_signed_query(ctx, query)
+    def oauth_signed_query(ctx, query, post_login_marker: nil)
       data = OAuthProtocol.stringify_keys(query).compact
+      %w[sig ba_param ba_iat exp ba_pl].each { |key| data.delete(key) }
+      data["ba_pl"] = post_login_marker if post_login_marker
       data["exp"] = (Time.now.to_i + 600).to_s
-      unsigned = URI.encode_www_form(data)
+      data["ba_iat"] = (Time.now.to_f * 1000).to_i.to_s
+      pairs = oauth_query_pairs(data)
+      signed_names = (pairs.map(&:first) + ["ba_param"]).uniq.sort
+      signed_names.each { |name| pairs << ["ba_param", name] }
+      unsigned = oauth_canonical_query(pairs)
       signature = Crypto.hmac_signature(unsigned, ctx.context.secret, encoding: :base64url)
       "#{unsigned}&#{URI.encode_www_form("sig" => signature)}"
     end
 
     def oauth_verified_query!(ctx, oauth_query)
       raise APIError.new("BAD_REQUEST", message: "missing oauth query") if oauth_query.to_s.empty?
+      raise APIError.new("BAD_REQUEST", message: "invalid oauth query") if oauth_query.to_s.include?("#")
 
       pairs = URI.decode_www_form(oauth_query.to_s)
-      signature = pairs.reverse_each.find { |key, _value| key == "sig" }&.last
-      unsigned_pairs = pairs.filter_map { |key, value| [key, value] unless key == "sig" }
-      unsigned = URI.encode_www_form(unsigned_pairs)
-      exp = unsigned_pairs.reverse_each.find { |key, _value| key == "exp" }&.last.to_i
-      unless signature && exp >= Time.now.to_i && Crypto.verify_hmac_signature(unsigned, signature, ctx.context.secret, encoding: :base64url)
+      signatures = oauth_pairs_matching(pairs, "sig").map(&:last)
+      unsigned_pairs = oauth_pairs_excluding(pairs, "sig")
+      signed_names = oauth_pairs_matching(unsigned_pairs, "ba_param").map(&:last)
+      payload_pairs = oauth_pairs_excluding(unsigned_pairs, "ba_param")
+      exp_values = oauth_pairs_matching(payload_pairs, "exp").map(&:last)
+      duplicate_reserved_names = payload_pairs.group_by(&:first).any? do |key, entries|
+        %w[exp ba_iat ba_pl].include?(key) && entries.length != 1
+      end
+      names_valid = signed_names.any? && signed_names.uniq.length == signed_names.length &&
+        signed_names.sort == (payload_pairs.map(&:first) + ["ba_param"]).uniq.sort &&
+        payload_pairs.all? { |key, _value| signed_names.include?(key) }
+      unsigned = oauth_canonical_query(unsigned_pairs)
+      exp = exp_values.first.to_i
+      unless signatures.length == 1 && exp_values.length == 1 && !duplicate_reserved_names && names_valid && exp >= Time.now.to_i && Crypto.verify_hmac_signature(unsigned, signatures.first, ctx.context.secret, encoding: :base64url)
         raise APIError.new("BAD_REQUEST", message: "invalid oauth query")
       end
 
-      unsigned_pairs.each_with_object({}) do |(key, value), result|
-        next if key == "exp"
+      payload_pairs.each_with_object({}) do |(key, value), result|
+        next if key == "exp" || key == "ba_iat"
 
-        result[key] = if result.key?(key)
-          Array(result[key]) << value
-        else
-          value
-        end
+        result[key] = result.key?(key) ? Array(result[key]) << value : value
       end
+    rescue ArgumentError
+      raise APIError.new("BAD_REQUEST", message: "invalid oauth query")
+    end
+
+    def oauth_query_pairs(data)
+      data.flat_map do |key, value|
+        Array(value).map { |entry| [key.to_s, entry.to_s] }
+      end
+    end
+
+    def oauth_pairs_matching(pairs, name)
+      pairs.each_with_object([]) { |pair, result| result << pair if pair.first == name }
+    end
+
+    def oauth_pairs_excluding(pairs, name)
+      pairs.each_with_object([]) { |pair, result| result << pair unless pair.first == name }
+    end
+
+    def oauth_canonical_query(pairs)
+      URI.encode_www_form(pairs.sort_by { |key, value| [key, value] })
+    end
+
+    # A pre-gate marker proves only that this authorization request may resume
+    # once. It is deliberately not used to skip post_login; the live callback
+    # still decides whether the session has completed the gate.
+    def oauth_store_post_login_marker(ctx, query, session)
+      raise APIError.new("INTERNAL_SERVER_ERROR", message: "post-login session missing") unless session
+
+      marker = Crypto.random_string(32)
+      data = OAuthProtocol.stringify_keys(query)
+      %w[sig ba_param ba_iat exp ba_pl].each { |key| data.delete(key) }
+      session_id = OAuthProtocol.stringify_keys(session).dig("session", "id")
+      ctx.context.internal_adapter.create_verification_value(
+        identifier: "oauth_post_login:#{marker}",
+        value: JSON.generate(
+          session_id: session_id,
+          client_id: data["client_id"],
+          request: oauth_canonical_query(oauth_query_pairs(data))
+        ),
+        expiresAt: Time.now + 600
+      )
+      marker
+    end
+
+    def oauth_consume_post_login_marker!(ctx, query, session)
+      marker = query.delete("ba_pl").to_s
+      verification = ctx.context.internal_adapter.consume_verification_value("oauth_post_login:#{marker}") unless marker.empty?
+      data = verification && JSON.parse(verification.fetch("value"), symbolize_names: true)
+      session_id = OAuthProtocol.stringify_keys(session || {}).dig("session", "id")
+      request = oauth_canonical_query(oauth_query_pairs(query))
+      unless data.is_a?(Hash) && data[:session_id].to_s == session_id.to_s && data[:client_id].to_s == query["client_id"].to_s && data[:request] == request
+        raise APIError.new("BAD_REQUEST", message: "invalid post-login continuation")
+      end
+    rescue JSON::ParserError, KeyError, TypeError
+      raise APIError.new("BAD_REQUEST", message: "invalid post-login continuation")
+    end
+
+    def oauth_client_allows_grant?(client, grant)
+      grants = OAuthProtocol.stringify_keys(client)["grantTypes"]
+      grants = OAuthProtocol.parse_scopes(grants)
+      grants = [OAuthProtocol::AUTH_CODE_GRANT] if grants.empty?
+      return true if grant == OAuthProtocol::REFRESH_GRANT && grants.include?(OAuthProtocol::AUTH_CODE_GRANT)
+
+      grants.include?(grant)
+    end
+
+    def oauth_provider_allows_grant?(config, grant)
+      OAuthProtocol.parse_scopes(config[:grant_types]).include?(grant)
+    end
+
+    def oauth_dispatch_authorize(ctx, config, query)
+      endpoint = config.fetch(:endpoints).fetch(:oauth2_authorize)
+      resumed = Endpoint::Context.new(
+        path: endpoint.path,
+        method: "GET",
+        query: query,
+        body: {},
+        params: {},
+        headers: ctx.headers,
+        context: ctx.context,
+        request: ctx.request
+      )
+      result = API.new(ctx.context, config.fetch(:endpoints)).execute(endpoint, resumed)
+      error = result.response
+      location = result.headers["location"]
+      raise error if error.is_a?(APIError) && !location
+
+      result
     end
 
     def oauth_delete_prompt!(query, prompt)
@@ -189,15 +299,6 @@ module BetterAuth
       else
         query["prompt"] = OAuthProtocol.scope_string(prompts)
       end
-    end
-
-    def oauth_redirect_location
-      yield
-    rescue APIError => error
-      location = error.headers["location"]
-      return location if location
-
-      raise
     end
 
     def oauth_authorize_error_redirect(ctx, query, error, description)

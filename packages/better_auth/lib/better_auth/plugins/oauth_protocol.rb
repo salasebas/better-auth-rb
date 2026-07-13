@@ -60,6 +60,7 @@ module BetterAuth
       end
 
       def validate_redirect_uri!(client, redirect_uri)
+        validate_safe_url!(redirect_uri, field: "redirect_uri")
         redirects = client_redirect_uris(client)
         return if redirects.include?(redirect_uri.to_s)
         return if loopback_redirect_match?(redirects, redirect_uri)
