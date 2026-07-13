@@ -212,13 +212,15 @@ class BetterAuthPluginsOrganizationTest < Minitest::Test
     first = auth.api.create_invitation(headers: {"cookie" => owner_cookie}, body: {organizationId: organization.fetch("id"), email: "reinvitee@example.com", role: "member"})
     second = auth.api.create_invitation(headers: {"cookie" => owner_cookie}, body: {organizationId: organization.fetch("id"), email: "REINVITEE@example.com", role: "admin"})
 
-    assert_equal "canceled", auth.api.get_invitation(query: {invitationId: first.fetch("id")}).fetch("status")
+    persisted_first = auth.context.adapter.find_one(model: "invitation", where: [{field: "id", value: first.fetch("id")}])
+    assert_equal "canceled", persisted_first.fetch("status")
     assert_equal "pending", second.fetch("status")
     assert_equal "admin", second.fetch("role")
 
     all_statuses = auth.api.list_invitations(headers: {"cookie" => owner_cookie}, query: {organizationId: organization.fetch("id")}).map { |entry| entry.fetch("status") }
     assert_equal ["canceled", "pending"], all_statuses.sort
 
+    verify_email!(auth, invitee_cookie)
     user_invitations = auth.api.list_user_invitations(headers: {"cookie" => invitee_cookie})
     assert_equal [second.fetch("id")], user_invitations.map { |entry| entry.fetch("id") }
 
@@ -376,7 +378,8 @@ class BetterAuthPluginsOrganizationTest < Minitest::Test
     end
     assert_equal 403, blocked.status_code
     assert_equal BetterAuth::Plugins::ORGANIZATION_ERROR_CODES.fetch("ORGANIZATION_MEMBERSHIP_LIMIT_REACHED"), blocked.message
-    assert_equal "pending", auth.api.get_invitation(query: {invitationId: invitation.fetch("id")}).fetch("status")
+    persisted_invitation = auth.context.adapter.find_one(model: "invitation", where: [{field: "id", value: invitation.fetch("id")}])
+    assert_equal "pending", persisted_invitation.fetch("status")
 
     members = auth.api.list_members(headers: {"cookie" => owner_cookie}, query: {organizationId: organization.fetch("id")})
     assert_equal 1, members.fetch(:total)
@@ -445,11 +448,102 @@ class BetterAuthPluginsOrganizationTest < Minitest::Test
     not_member = assert_raises(BetterAuth::APIError) do
       auth.api.set_active_team(headers: {"cookie" => other_cookie}, body: {teamId: team.fetch("id")})
     end
-    assert_equal 403, not_member.status_code
+    assert_equal 400, not_member.status_code
 
     cleared = auth.api.set_active_team(headers: {"cookie" => owner_cookie}, body: {teamId: nil}, return_headers: true)
     cleared_cookie = [owner_cookie, cookie_header(cleared.fetch(:headers).fetch("set-cookie"))].join("; ")
     assert_nil auth.api.get_session(headers: {"cookie" => cleared_cookie}).fetch(:session)["activeTeamId"]
+  end
+
+  def test_invitation_team_ids_must_be_unambiguous_and_owned_by_the_organization
+    auth = build_auth
+    owner_cookie = sign_up_cookie(auth, email: "team-scope-owner@example.com")
+    first = auth.api.create_organization(headers: {"cookie" => owner_cookie}, body: {name: "First Team Scope", slug: "first-team-scope"})
+    second = auth.api.create_organization(headers: {"cookie" => owner_cookie}, body: {name: "Second Team Scope", slug: "second-team-scope"})
+    second_team = auth.api.list_organization_teams(headers: {"cookie" => owner_cookie}, query: {organizationId: second.fetch("id")}).first
+
+    comma = assert_raises(BetterAuth::APIError) do
+      auth.api.create_invitation(headers: {"cookie" => owner_cookie}, body: {organizationId: first.fetch("id"), email: "comma@example.com", role: "member", teamId: "#{second_team.fetch("id")},other"})
+    end
+    assert_equal 400, comma.status_code
+    assert_equal BetterAuth::Plugins::ORGANIZATION_ERROR_CODES.fetch("INVALID_TEAM_ID"), comma.message
+
+    cross_organization = assert_raises(BetterAuth::APIError) do
+      auth.api.create_invitation(headers: {"cookie" => owner_cookie}, body: {organizationId: first.fetch("id"), email: "cross-team@example.com", role: "member", teamId: second_team.fetch("id")})
+    end
+    assert_equal 400, cross_organization.status_code
+    assert_equal BetterAuth::Plugins::ORGANIZATION_ERROR_CODES.fetch("TEAM_NOT_FOUND"), cross_organization.message
+  end
+
+  def test_set_active_team_never_switches_the_active_organization
+    auth = build_auth
+    owner_cookie = sign_up_cookie(auth, email: "active-team-owner@example.com")
+    first = auth.api.create_organization(headers: {"cookie" => owner_cookie}, body: {name: "Active First", slug: "active-first"})
+    second = auth.api.create_organization(headers: {"cookie" => owner_cookie}, body: {name: "Active Second", slug: "active-second"})
+    second_team = auth.api.list_organization_teams(headers: {"cookie" => owner_cookie}, query: {organizationId: second.fetch("id")}).first
+    auth.api.set_active_organization(headers: {"cookie" => owner_cookie}, body: {organizationId: first.fetch("id")})
+
+    blocked = assert_raises(BetterAuth::APIError) do
+      auth.api.set_active_team(headers: {"cookie" => owner_cookie}, body: {teamId: second_team.fetch("id")})
+    end
+
+    assert_equal 400, blocked.status_code
+    session = auth.api.get_session(headers: {"cookie" => owner_cookie}).fetch(:session)
+    assert_equal first.fetch("id"), session.fetch("activeOrganizationId")
+    assert_nil session["activeTeamId"]
+  end
+
+  def test_accept_invitation_rolls_back_claim_when_stored_team_crosses_organizations
+    auth = build_auth
+    owner_cookie = sign_up_cookie(auth, email: "rollback-owner@example.com")
+    invitee_cookie = sign_up_cookie(auth, email: "rollback-invitee@example.com")
+    first = auth.api.create_organization(headers: {"cookie" => owner_cookie}, body: {name: "Rollback First", slug: "rollback-first"})
+    second = auth.api.create_organization(headers: {"cookie" => owner_cookie}, body: {name: "Rollback Second", slug: "rollback-second"})
+    second_team = auth.api.list_organization_teams(headers: {"cookie" => owner_cookie}, query: {organizationId: second.fetch("id")}).first
+    invitation = auth.api.create_invitation(headers: {"cookie" => owner_cookie}, body: {organizationId: first.fetch("id"), email: "rollback-invitee@example.com", role: "member"})
+    auth.context.adapter.update(model: "invitation", where: [{field: "id", value: invitation.fetch("id")}], update: {teamId: second_team.fetch("id")})
+
+    blocked = assert_raises(BetterAuth::APIError) do
+      auth.api.accept_invitation(headers: {"cookie" => invitee_cookie}, body: {invitationId: invitation.fetch("id")})
+    end
+
+    assert_equal BetterAuth::Plugins::ORGANIZATION_ERROR_CODES.fetch("TEAM_NOT_FOUND"), blocked.message
+    persisted = auth.context.adapter.find_one(model: "invitation", where: [{field: "id", value: invitation.fetch("id")}])
+    assert_equal "pending", persisted.fetch("status")
+    invitee = auth.api.get_session(headers: {"cookie" => invitee_cookie}).fetch(:user)
+    assert_nil auth.context.adapter.find_one(model: "member", where: [{field: "organizationId", value: first.fetch("id")}, {field: "userId", value: invitee.fetch("id")}])
+  end
+
+  def test_removing_member_scopes_team_cascade_to_the_members_organization
+    auth = build_auth
+    owner_cookie = sign_up_cookie(auth, email: "cascade-owner@example.com")
+    member_cookie = sign_up_cookie(auth, email: "cascade-member@example.com")
+    member_user = auth.api.get_session(headers: {"cookie" => member_cookie}).fetch(:user)
+    first = auth.api.create_organization(headers: {"cookie" => owner_cookie}, body: {name: "Cascade First", slug: "cascade-first"})
+    second = auth.api.create_organization(headers: {"cookie" => owner_cookie}, body: {name: "Cascade Second", slug: "cascade-second"})
+    first_team = auth.api.list_organization_teams(headers: {"cookie" => owner_cookie}, query: {organizationId: first.fetch("id")}).first
+    second_team = auth.api.list_organization_teams(headers: {"cookie" => owner_cookie}, query: {organizationId: second.fetch("id")}).first
+    first_member = auth.api.add_member(headers: {"cookie" => owner_cookie}, body: {organizationId: first.fetch("id"), userId: member_user.fetch("id"), teamId: first_team.fetch("id")})
+    auth.api.add_member(headers: {"cookie" => owner_cookie}, body: {organizationId: second.fetch("id"), userId: member_user.fetch("id"), teamId: second_team.fetch("id")})
+
+    auth.api.remove_member(headers: {"cookie" => owner_cookie}, body: {memberId: first_member.fetch("id")})
+
+    assert_nil auth.context.adapter.find_one(model: "teamMember", where: [{field: "teamId", value: first_team.fetch("id")}, {field: "userId", value: member_user.fetch("id")}])
+    assert auth.context.adapter.find_one(model: "teamMember", where: [{field: "teamId", value: second_team.fetch("id")}, {field: "userId", value: member_user.fetch("id")}])
+  end
+
+  def test_removing_team_preserves_pending_invitation_as_organization_level
+    auth = build_auth
+    owner_cookie = sign_up_cookie(auth, email: "preserve-owner@example.com")
+    organization = auth.api.create_organization(headers: {"cookie" => owner_cookie}, body: {name: "Preserve Invite", slug: "preserve-invite"})
+    team = auth.api.create_team(headers: {"cookie" => owner_cookie}, body: {organizationId: organization.fetch("id"), name: "Temporary"})
+    invitation = auth.api.create_invitation(headers: {"cookie" => owner_cookie}, body: {organizationId: organization.fetch("id"), email: "preserved@example.com", role: "member", teamId: team.fetch("id")})
+
+    auth.api.remove_team(headers: {"cookie" => owner_cookie}, body: {teamId: team.fetch("id")})
+
+    persisted = auth.context.adapter.find_one(model: "invitation", where: [{field: "id", value: invitation.fetch("id")}])
+    assert_equal "pending", persisted.fetch("status")
+    assert_nil persisted["teamId"]
   end
 
   def test_team_update_delete_and_membership_hooks_fire
@@ -714,6 +808,11 @@ class BetterAuthPluginsOrganizationTest < Minitest::Test
       as_response: true
     )
     cookie_header(headers.fetch("set-cookie"))
+  end
+
+  def verify_email!(auth, cookie)
+    user = auth.api.get_session(headers: {"cookie" => cookie}).fetch(:user)
+    auth.context.internal_adapter.update_user(user.fetch("id"), emailVerified: true)
   end
 
   def cookie_header(set_cookie)

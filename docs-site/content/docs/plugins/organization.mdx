@@ -605,7 +605,12 @@ Make sure to call `auth.api.accept_invitation` after the user is logged in.
 
 #### Email Verification Requirement
 
-If the `require_email_verification_on_invitation` option is enabled in your organization configuration, users must verify their email address before they can accept invitations. This adds an extra security layer to ensure that only verified users can join your organization.
+Accept, reject, and get-by-ID always require the signed-in user's email to
+match the invitation recipient. When invitation IDs use the default opaque ID
+generator, matching is sufficient by default. Predictable or custom ID
+generation also requires the recipient email to be verified. Set
+`require_email_verification_on_invitation` explicitly to `true` or `false` to
+override that ID-sensitive default.
 
 ```ruby title="config/auth.rb"
 require "better_auth"
@@ -652,15 +657,19 @@ If this user has received an invitation, but wants to decline it, this method wi
 </APIMethod>
 
 <Callout type="info">
-  Like accepting invitations, rejecting invitations also requires email
-  verification when the `require_email_verification_on_invitation` option is
-  enabled. Users with unverified emails will receive an error when attempting to
-  reject invitations.
+  Invitation acceptance transactionally claims the pending invitation, validates
+  its role and capacity limits, and creates the organization and team memberships;
+  those changes succeed or roll back together. Rejection only accepts a pending
+  invitation owned by the recipient after applying any email-verification
+  requirement, then updates its state.
 </Callout>
 
 ### Get Invitation
 
 To get an invitation you can use `auth.api.get_invitation` or the HTTP endpoint. You need to provide the invitation id as a query parameter.
+
+The caller must be authenticated as the invitation recipient. Expired or
+non-pending invitations are not returned.
 
 <APIMethod path="/organization/get-invitation" method="GET" requireSession>
   ```
@@ -690,27 +699,15 @@ To list all invitations for a given organization you can use the `listInvitation
 
 ### List user invitations
 
-To list all invitations for a given user you can use the `listUserInvitations` function available through the Ruby API or HTTP endpoint.
+To list invitations for the current user, use `listUserInvitations` through the
+Ruby API or HTTP endpoint. The session email must be verified before invitations
+targeted at that email can be enumerated.
 
 ```ruby title="server.rb"
 invitations = auth.api.list_user_invitations(
   headers: {"cookie" => session_cookie}
 )
 ```
-
-On the server, you can pass the user ID as a query parameter.
-
-```ruby title="server.rb"
-invitations = auth.api.list_user_invitations(
-  headers: {"cookie" => admin_cookie},
-  query: {userId: "user_123"}
-)
-```
-
-<Callout type="warn">
-  The `email` query parameter is only available on the server to query for
-  invitations for a specific user.
-</Callout>
 
 ## Members
 
@@ -1382,6 +1379,10 @@ Delete a team from an organization:
 
 Sets the given team as the current active team. If `teamId` is `null` the current active team is unset.
 
+The team must belong to the session's active organization and the user must be
+a member of it. Selecting a team never changes `activeOrganizationId`; switch
+organizations explicitly before selecting a team in another organization.
+
 <APIMethod path="/organization/set-active-team" method="POST" requireSession>
   ```
   type setActiveTeam = {
@@ -1512,6 +1513,12 @@ auth.api.create_invitation(
 ```
 
 The invited member will be added to the specified team upon accepting the invitation.
+
+Every supplied team ID must belong to the invitation's organization. Team IDs
+containing commas are rejected because invitations store multiple team IDs as a
+comma-delimited value. If a team is removed while invitations are pending, that
+team is removed from their assignments; invitations with no remaining teams
+remain valid as organization-level invitations.
 
 ### Database Schema
 

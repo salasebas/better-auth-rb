@@ -32,6 +32,7 @@ class BetterAuthPluginsDeviceAuthorizationTest < Minitest::Test
     assert_equal "pending", verified[:status]
 
     cookie = sign_up_cookie(auth)
+    auth.api.device_verify(headers: {"cookie" => cookie}, query: {user_code: issued[:user_code]})
     approved = auth.api.device_approve(headers: {"cookie" => cookie}, body: {user_code: "ABCD-EFGH"})
     assert_equal({success: true}, approved)
     record = auth.context.adapter.find_one(model: "deviceCode", where: [{field: "deviceCode", value: issued[:device_code]}])
@@ -53,6 +54,7 @@ class BetterAuthPluginsDeviceAuthorizationTest < Minitest::Test
     auth = build_auth
     issued = auth.api.device_code(body: {client_id: "cli", scope: "openid"})
     cookie = sign_up_cookie(auth, email: "device-race@example.com")
+    auth.api.device_verify(headers: {"cookie" => cookie}, query: {user_code: issued[:user_code]})
     auth.api.device_approve(headers: {"cookie" => cookie}, body: {user_code: issued[:user_code]})
     record = auth.context.adapter.find_one(model: "deviceCode", where: [{field: "deviceCode", value: issued[:device_code]}])
     auth.context.adapter.update(model: "deviceCode", where: [{field: "id", value: record["id"]}], update: {"pollingInterval" => 0})
@@ -181,6 +183,7 @@ class BetterAuthPluginsDeviceAuthorizationTest < Minitest::Test
     first_cookie = sign_up_cookie(auth, email: "device-first@example.com")
     issued = auth.api.device_code(body: {client_id: "cli"})
 
+    auth.api.device_verify(headers: {"cookie" => first_cookie}, query: {user_code: issued[:user_code]})
     assert_equal({success: true}, auth.api.device_approve(headers: {"cookie" => first_cookie}, body: {userCode: issued[:user_code]}))
 
     processed = assert_raises(BetterAuth::APIError) do
@@ -213,6 +216,48 @@ class BetterAuthPluginsDeviceAuthorizationTest < Minitest::Test
     assert_equal "You are not authorized to deny this device authorization", forbidden.message
   end
 
+  def test_device_decision_requires_get_verification_to_claim_code
+    auth = build_auth
+    cookie = sign_up_cookie(auth, email: "device-claim@example.com")
+    issued = auth.api.device_code(body: {client_id: "cli"})
+
+    unclaimed = assert_raises(BetterAuth::APIError) do
+      auth.api.device_approve(headers: {"cookie" => cookie}, body: {userCode: issued[:user_code]})
+    end
+    assert_equal 400, unclaimed.status_code
+    assert_equal BetterAuth::Plugins::DEVICE_AUTHORIZATION_ERROR_CODES.fetch("DEVICE_CODE_NOT_CLAIMED"), unclaimed.message
+
+    auth.api.device_verify(headers: {"cookie" => cookie}, query: {user_code: issued[:user_code]})
+    assert_equal({success: true}, auth.api.device_approve(headers: {"cookie" => cookie}, body: {userCode: issued[:user_code]}))
+  end
+
+  def test_first_verifying_session_owns_device_decision
+    auth = build_auth
+    first_cookie = sign_up_cookie(auth, email: "device-owner@example.com")
+    second_cookie = sign_up_cookie(auth, email: "device-other@example.com")
+    issued = auth.api.device_code(body: {client_id: "cli"})
+
+    auth.api.device_verify(headers: {"cookie" => first_cookie}, query: {user_code: issued[:user_code]})
+    auth.api.device_verify(headers: {"cookie" => second_cookie}, query: {user_code: issued[:user_code]})
+    forbidden = assert_raises(BetterAuth::APIError) do
+      auth.api.device_deny(headers: {"cookie" => second_cookie}, body: {userCode: issued[:user_code]})
+    end
+
+    assert_equal 403, forbidden.status_code
+    assert_equal({success: true}, auth.api.device_deny(headers: {"cookie" => first_cookie}, body: {userCode: issued[:user_code]}))
+  end
+
+  def test_device_code_can_be_prebound_to_a_user_id
+    auth = build_auth
+    cookie = sign_up_cookie(auth, email: "device-prebound@example.com")
+    user = auth.api.get_session(headers: {"cookie" => cookie}).fetch(:user)
+    issued = auth.api.device_code(body: {client_id: "cli", user_id: user.fetch("id")})
+
+    record = auth.context.adapter.find_one(model: "deviceCode", where: [{field: "deviceCode", value: issued[:device_code]}])
+    assert_equal user.fetch("id"), record.fetch("userId")
+    assert_equal({success: true}, auth.api.device_approve(headers: {"cookie" => cookie}, body: {userCode: issued[:user_code]}))
+  end
+
   def test_device_token_exchange_sets_new_session_for_hooks_without_session_cookie
     auth = BetterAuth.auth(
       base_url: "http://localhost:3000",
@@ -226,6 +271,7 @@ class BetterAuthPluginsDeviceAuthorizationTest < Minitest::Test
     )
     cookie = sign_up_cookie(auth, email: "device-hook@example.com")
     issued = auth.api.device_code(body: {client_id: "cli", scope: "read write"})
+    auth.api.device_verify(headers: {"cookie" => cookie}, query: {user_code: issued[:user_code]})
     auth.api.device_approve(headers: {"cookie" => cookie}, body: {userCode: issued[:user_code]})
 
     status, headers, body = auth.api.device_token(
@@ -261,6 +307,7 @@ class BetterAuthPluginsDeviceAuthorizationTest < Minitest::Test
     )
     cookie = sign_up_cookie(auth, email: "device-secondary@example.com")
     issued = auth.api.device_code(body: {client_id: "cli", scope: "openid profile"})
+    auth.api.device_verify(headers: {"cookie" => cookie}, query: {user_code: issued[:user_code]})
     auth.api.device_approve(headers: {"cookie" => cookie}, body: {userCode: issued[:user_code]})
     record = auth.context.adapter.find_one(model: "deviceCode", where: [{field: "deviceCode", value: issued[:device_code]}])
     auth.context.adapter.update(model: "deviceCode", where: [{field: "id", value: record["id"]}], update: {"lastPolledAt" => Time.now - 6})

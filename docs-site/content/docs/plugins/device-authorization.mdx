@@ -99,6 +99,10 @@ To initiate device authorization, call `device.code` with the client ID:
        */
       client_id: string = "cli"
       /**
+       * Optional user ID to pre-bind server-side.
+       */
+      user_id?: string = "user-id"
+      /**
        * Requested scope.
        */
       scope?: string = "openid profile"
@@ -166,7 +170,7 @@ end
 The user authorization flow requires two steps:
 
 1. **Code Verification**: Check if the entered user code is valid
-2. **Authorization**: User must be authenticated to approve/deny the device
+2. **Authorization**: The same authenticated user approves or denies the device
 
 <Callout type="warn">
   Users must be authenticated before they can approve or deny device authorization requests. If not authenticated, redirect them to the login page with a return URL.
@@ -184,7 +188,10 @@ class DeviceVerificationPage
     request = Rack::Request.new(env)
     user_code = request.params["user_code"]
 
-    verification = @auth.api.device_verify(query: {user_code: user_code})
+    verification = @auth.api.device_verify(
+      headers: {"cookie" => request.env.fetch("HTTP_COOKIE", "")},
+      query: {user_code: user_code}
+    )
 
     [200, {"content-type" => "text/plain"}, [
       "Device request is #{verification[:status]}"
@@ -198,6 +205,13 @@ end
 ### Approving or Denying Device
 
 Users must be authenticated to approve or deny device authorization requests:
+
+An authenticated `GET /device` atomically claims an unbound pending code for
+that user. Approval and denial require this claim and reject a different user,
+even if that user knows the code. Render the verification page with the user's
+session cookie before submitting either decision. A trusted server may instead
+pre-bind the code by sending `user_id` when requesting it; an empty `user_id` is
+treated as omitted.
 
 #### Approve Device
 

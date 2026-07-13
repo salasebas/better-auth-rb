@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require_relative "../../test_helper"
+require "better_auth/plugins/organization"
 
 class BetterAuthPluginsOrganizationMembersTest < Minitest::Test
   include BetterAuthTestHelpers
@@ -18,8 +19,11 @@ class BetterAuthPluginsOrganizationMembersTest < Minitest::Test
 
     rejected = auth.api.reject_invitation(headers: {"cookie" => invitee_cookie}, body: {invitationId: invitation.fetch("id")})
     assert_equal "rejected", rejected.fetch("status")
+    invitee = auth.api.get_session(headers: {"cookie" => invitee_cookie}).fetch(:user)
+    auth.context.internal_adapter.update_user(invitee.fetch("id"), emailVerified: true)
     assert_empty auth.api.list_user_invitations(headers: {"cookie" => invitee_cookie})
-    assert_equal "rejected", auth.api.get_invitation(query: {invitationId: invitation.fetch("id")}).fetch("status")
+    persisted = auth.context.adapter.find_one(model: "invitation", where: [{field: "id", value: invitation.fetch("id")}])
+    assert_equal "rejected", persisted.fetch("status")
   end
 
   def test_invitation_accept_reject_and_cancel_hooks_fire
@@ -77,6 +81,125 @@ class BetterAuthPluginsOrganizationMembersTest < Minitest::Test
     end
     assert_equal 403, blocked.status_code
     assert_equal BetterAuth::Plugins::ORGANIZATION_ERROR_CODES.fetch("EMAIL_VERIFICATION_REQUIRED_BEFORE_ACCEPTING_OR_REJECTING_INVITATION"), blocked.message
+  end
+
+  def test_predictable_invitation_ids_require_verified_recipient_ownership_by_default
+    auth = build_organization_auth(advanced: {database: {generate_id: "serial"}})
+    owner_cookie = sign_up_cookie(auth, email: "predictable-owner@example.com")
+    attacker_cookie = sign_up_cookie(auth, email: "predictable-target@example.com")
+    organization = auth.api.create_organization(headers: {"cookie" => owner_cookie}, body: {name: "Predictable", slug: "predictable"})
+    invitation = auth.api.create_invitation(
+      headers: {"cookie" => owner_cookie},
+      body: {organizationId: organization.fetch("id"), email: "predictable-target@example.com", role: "member"}
+    )
+
+    [:accept_invitation, :reject_invitation].each do |action|
+      blocked = assert_raises(BetterAuth::APIError) do
+        auth.api.public_send(action, headers: {"cookie" => attacker_cookie}, body: {invitationId: invitation.fetch("id")})
+      end
+      assert_equal 403, blocked.status_code
+      assert_equal BetterAuth::Plugins::ORGANIZATION_ERROR_CODES.fetch("EMAIL_VERIFICATION_REQUIRED_BEFORE_ACCEPTING_OR_REJECTING_INVITATION"), blocked.message
+    end
+
+    blocked_get = assert_raises(BetterAuth::APIError) do
+      auth.api.get_invitation(headers: {"cookie" => attacker_cookie}, query: {invitationId: invitation.fetch("id")})
+    end
+    assert_equal 403, blocked_get.status_code
+    assert_equal BetterAuth::Plugins::ORGANIZATION_ERROR_CODES.fetch("EMAIL_VERIFICATION_REQUIRED_FOR_INVITATION"), blocked_get.message
+
+    blocked_list = assert_raises(BetterAuth::APIError) do
+      auth.api.list_user_invitations(headers: {"cookie" => attacker_cookie})
+    end
+    assert_equal 403, blocked_list.status_code
+    assert_equal "pending", auth.context.adapter.find_one(model: "invitation", where: [{field: "id", value: invitation.fetch("id")}]).fetch("status")
+  end
+
+  def test_explicit_invitation_verification_override_preserves_predictable_id_behavior
+    auth = build_organization_auth(
+      advanced: {database: {generate_id: "serial"}},
+      plugins: [BetterAuth::Plugins.organization(require_email_verification_on_invitation: false)]
+    )
+    owner_cookie = sign_up_cookie(auth, email: "override-owner@example.com")
+    invitee_cookie = sign_up_cookie(auth, email: "override-invitee@example.com")
+    organization = auth.api.create_organization(headers: {"cookie" => owner_cookie}, body: {name: "Override", slug: "override"})
+    invitation = auth.api.create_invitation(headers: {"cookie" => owner_cookie}, body: {organizationId: organization.fetch("id"), email: "override-invitee@example.com", role: "member"})
+
+    accepted = auth.api.accept_invitation(headers: {"cookie" => invitee_cookie}, body: {invitationId: invitation.fetch("id")})
+
+    assert_equal "accepted", accepted.fetch(:invitation).fetch("status")
+  end
+
+  def test_get_invitation_requires_the_authenticated_recipient
+    auth = build_organization_auth
+    owner_cookie = sign_up_cookie(auth, email: "get-owner@example.com")
+    invitee_cookie = sign_up_cookie(auth, email: "get-invitee@example.com")
+    other_cookie = sign_up_cookie(auth, email: "get-other@example.com")
+    organization = auth.api.create_organization(headers: {"cookie" => owner_cookie}, body: {name: "Get Invite", slug: "get-invite"})
+    invitation = auth.api.create_invitation(headers: {"cookie" => owner_cookie}, body: {organizationId: organization.fetch("id"), email: "get-invitee@example.com", role: "member"})
+
+    assert_raises(BetterAuth::APIError) { auth.api.get_invitation(query: {id: invitation.fetch("id")}) }
+    wrong = assert_raises(BetterAuth::APIError) do
+      auth.api.get_invitation(headers: {"cookie" => other_cookie}, query: {id: invitation.fetch("id")})
+    end
+    assert_equal 403, wrong.status_code
+
+    result = auth.api.get_invitation(headers: {"cookie" => invitee_cookie}, query: {id: invitation.fetch("id")})
+    assert_equal "Get Invite", result.fetch(:organizationName)
+    assert_equal "get-owner@example.com", result.fetch(:inviterEmail)
+  end
+
+  def test_accept_invitation_revalidates_dynamic_role_inside_transaction
+    auth = build_organization_auth
+    owner_cookie = sign_up_cookie(auth, email: "dynamic-invite-owner@example.com")
+    invitee_cookie = sign_up_cookie(auth, email: "dynamic-invitee@example.com")
+    invitee = auth.api.get_session(headers: {"cookie" => invitee_cookie}).fetch(:user)
+    organization = auth.api.create_organization(headers: {"cookie" => owner_cookie}, body: {name: "Dynamic Invite", slug: "dynamic-invite"})
+    auth.api.create_org_role(
+      headers: {"cookie" => owner_cookie},
+      body: {organizationId: organization.fetch("id"), role: "auditor", permission: {organization: []}}
+    )
+    invitation = auth.api.create_invitation(headers: {"cookie" => owner_cookie}, body: {organizationId: organization.fetch("id"), email: "dynamic-invitee@example.com", role: "auditor"})
+    auth.api.delete_org_role(headers: {"cookie" => owner_cookie}, body: {organizationId: organization.fetch("id"), role: "auditor"})
+
+    blocked = assert_raises(BetterAuth::APIError) do
+      auth.api.accept_invitation(headers: {"cookie" => invitee_cookie}, body: {invitationId: invitation.fetch("id")})
+    end
+
+    assert_equal BetterAuth::Plugins::ORGANIZATION_ERROR_CODES.fetch("ROLE_NOT_FOUND"), blocked.message
+    persisted = auth.context.adapter.find_one(model: "invitation", where: [{field: "id", value: invitation.fetch("id")}])
+    assert_equal "pending", persisted.fetch("status")
+    assert_nil auth.context.adapter.find_one(model: "member", where: [{field: "organizationId", value: organization.fetch("id")}, {field: "userId", value: invitee.fetch("id")}])
+  end
+
+  def test_concurrent_member_adds_cannot_exceed_membership_limit
+    auth = build_organization_auth(plugins: [BetterAuth::Plugins.organization(membership_limit: 2)])
+    owner_cookie = sign_up_cookie(auth, email: "capacity-owner@example.com")
+    first_cookie = sign_up_cookie(auth, email: "capacity-first@example.com")
+    second_cookie = sign_up_cookie(auth, email: "capacity-second@example.com")
+    users = [first_cookie, second_cookie].map { |cookie| auth.api.get_session(headers: {"cookie" => cookie}).fetch(:user) }
+    organization = auth.api.create_organization(headers: {"cookie" => owner_cookie}, body: {name: "Capacity", slug: "capacity"})
+    ready = Queue.new
+    start = Queue.new
+    results = Queue.new
+
+    threads = users.map do |user|
+      Thread.new do
+        ready << true
+        start.pop
+        results << [:success, auth.api.add_member(headers: {"cookie" => owner_cookie}, body: {organizationId: organization.fetch("id"), userId: user.fetch("id"), role: "member"})]
+      rescue BetterAuth::APIError => error
+        results << [:error, error]
+      end
+    end
+    users.length.times { ready.pop }
+    users.length.times { start << true }
+    threads.each(&:join)
+
+    outcomes = users.length.times.map { results.pop }
+    assert_equal 1, outcomes.count { |kind, _| kind == :success }
+    assert_equal 1, outcomes.count { |kind, error| kind == :error && error.message == BetterAuth::Plugins::ORGANIZATION_ERROR_CODES.fetch("ORGANIZATION_MEMBERSHIP_LIMIT_REACHED") }
+    members = auth.api.list_members(headers: {"cookie" => owner_cookie}, query: {organizationId: organization.fetch("id")})
+    assert_equal 2, members.fetch(:total)
   end
 
   def test_invite_rejects_existing_member_and_invalid_role

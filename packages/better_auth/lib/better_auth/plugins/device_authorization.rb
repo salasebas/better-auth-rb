@@ -15,6 +15,7 @@ module BetterAuth
       "ACCESS_DENIED" => "Access denied",
       "INVALID_USER_CODE" => "Invalid user code",
       "DEVICE_CODE_ALREADY_PROCESSED" => "Device code already processed",
+      "DEVICE_CODE_NOT_CLAIMED" => "Device code has not been claimed by a verifying session; call `GET /device` with the `user_code` while signed in before approving or denying",
       "POLLING_TOO_FREQUENTLY" => "Polling too frequently",
       "USER_NOT_FOUND" => "User not found",
       "FAILED_TO_CREATE_SESSION" => "Failed to create session",
@@ -58,6 +59,7 @@ module BetterAuth
               OpenAPI.object_schema(
                 {
                   client_id: {type: "string", description: "OAuth client ID"},
+                  user_id: {type: "string", description: "Optional user ID to pre-bind to the device code"},
                   scope: {type: "string", description: "Requested scopes"}
                 }
               )
@@ -85,6 +87,7 @@ module BetterAuth
           data: {
             "deviceCode" => device_code,
             "userCode" => user_code,
+            "userId" => body["user_id"].to_s.empty? ? nil : body["user_id"],
             "expiresAt" => Time.now + expires_in,
             "status" => "pending",
             "pollingInterval" => interval * 1000,
@@ -214,6 +217,21 @@ module BetterAuth
         record = OAuthProtocol.stringify_keys(record)
         raise device_authorization_error("BAD_REQUEST", "expired_token", DEVICE_AUTHORIZATION_ERROR_CODES["EXPIRED_USER_CODE"]) if device_authorization_time(record["expiresAt"]) <= Time.now
 
+        session = Routes.current_session(ctx, allow_nil: true)
+        if session && !record["userId"] && record["status"] == "pending"
+          claimed = ctx.context.adapter.increment_one(
+            model: "deviceCode",
+            where: [
+              {field: "id", value: record["id"]},
+              {field: "status", value: "pending"},
+              {field: "userId", value: nil}
+            ],
+            increment: {},
+            set: {"userId" => session[:user]["id"]}
+          )
+          record = OAuthProtocol.stringify_keys(claimed) if claimed
+        end
+
         ctx.json({user_code: code, status: record["status"]})
       end
     end
@@ -285,7 +303,10 @@ module BetterAuth
       record = OAuthProtocol.stringify_keys(record)
       raise device_authorization_error("BAD_REQUEST", "expired_token", DEVICE_AUTHORIZATION_ERROR_CODES["EXPIRED_USER_CODE"]) if device_authorization_time(record["expiresAt"]) <= Time.now
       raise device_authorization_error("BAD_REQUEST", "invalid_request", DEVICE_AUTHORIZATION_ERROR_CODES["DEVICE_CODE_ALREADY_PROCESSED"]) unless record["status"] == "pending"
-      if record["userId"] && record["userId"] != session[:user]["id"]
+      unless record["userId"]
+        raise device_authorization_error("BAD_REQUEST", "invalid_request", DEVICE_AUTHORIZATION_ERROR_CODES["DEVICE_CODE_NOT_CLAIMED"])
+      end
+      if record["userId"] != session[:user]["id"]
         raise device_authorization_error("FORBIDDEN", "access_denied", "You are not authorized to #{action} this device authorization")
       end
 
@@ -294,10 +315,10 @@ module BetterAuth
         where: [
           {field: "id", value: record["id"]},
           {field: "status", value: "pending"},
-          {field: "userId", value: record["userId"]}
+          {field: "userId", value: session[:user]["id"]}
         ],
         increment: {},
-        set: {"status" => status, "userId" => record["userId"] || session[:user]["id"]}
+        set: {"status" => status, "userId" => session[:user]["id"]}
       )
       raise device_authorization_error("BAD_REQUEST", "invalid_request", DEVICE_AUTHORIZATION_ERROR_CODES["DEVICE_CODE_ALREADY_PROCESSED"]) unless updated
       ctx.json({success: true})

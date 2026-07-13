@@ -278,7 +278,10 @@ class BetterAuthPluginsOrganizationOrgCrudTest < Minitest::Test
         BetterAuth::Plugins.organization(
           organization_hooks: {
             before_delete_organization: ->(data, _ctx) { calls << [:before, data[:organization].fetch("slug"), data[:user].fetch("email")] },
-            after_delete_organization: ->(data, _ctx) { calls << [:after, data[:organization].fetch("slug"), data[:user].fetch("email")] }
+            after_delete_organization: lambda { |data, ctx|
+              persisted = ctx.context.adapter.find_one(model: "organization", where: [{field: "id", value: data[:organization].fetch("id")}])
+              calls << [:after, data[:organization].fetch("slug"), persisted.nil?]
+            }
           }
         )
       ]
@@ -290,7 +293,7 @@ class BetterAuthPluginsOrganizationOrgCrudTest < Minitest::Test
 
     assert_equal [
       [:before, "delete-hooks", "delete-hooks@example.com"],
-      [:after, "delete-hooks", "delete-hooks@example.com"]
+      [:after, "delete-hooks", true]
     ], calls
   end
 

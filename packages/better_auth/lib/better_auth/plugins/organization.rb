@@ -21,6 +21,7 @@ module BetterAuth
       "YOU_ARE_NOT_ALLOWED_TO_CREATE_A_NEW_TEAM" => "You are not allowed to create a new team",
       "TEAM_ALREADY_EXISTS" => "Team already exists",
       "TEAM_NOT_FOUND" => "Team not found",
+      "INVALID_TEAM_ID" => "Team IDs cannot contain commas",
       "YOU_CANNOT_LEAVE_THE_ORGANIZATION_AS_THE_ONLY_OWNER" => "You cannot leave the organization as the only owner",
       "YOU_CANNOT_LEAVE_THE_ORGANIZATION_WITHOUT_AN_OWNER" => "You cannot leave the organization without an owner",
       "YOU_ARE_NOT_ALLOWED_TO_DELETE_THIS_MEMBER" => "You are not allowed to delete this member",
@@ -29,6 +30,7 @@ module BetterAuth
       "INVITATION_NOT_FOUND" => "Invitation not found",
       "YOU_ARE_NOT_THE_RECIPIENT_OF_THE_INVITATION" => "You are not the recipient of the invitation",
       "EMAIL_VERIFICATION_REQUIRED_BEFORE_ACCEPTING_OR_REJECTING_INVITATION" => "Email verification required before accepting or rejecting invitation",
+      "EMAIL_VERIFICATION_REQUIRED_FOR_INVITATION" => "Email verification required to view or list invitations for the session email",
       "YOU_ARE_NOT_ALLOWED_TO_CANCEL_THIS_INVITATION" => "You are not allowed to cancel this invitation",
       "INVITER_IS_NO_LONGER_A_MEMBER_OF_THE_ORGANIZATION" => "Inviter is no longer a member of the organization",
       "YOU_ARE_NOT_ALLOWED_TO_INVITE_USER_WITH_THIS_ROLE" => "You are not allowed to invite a user with this role",
@@ -89,7 +91,7 @@ module BetterAuth
         cancel_invitation: organization_cancel_invitation_endpoint(config),
         accept_invitation: organization_accept_invitation_endpoint(config),
         reject_invitation: organization_reject_invitation_endpoint(config),
-        get_invitation: organization_get_invitation_endpoint,
+        get_invitation: organization_get_invitation_endpoint(config),
         list_invitations: organization_list_invitations_endpoint(config),
         list_user_invitations: organization_list_user_invitations_endpoint,
         add_member: organization_add_member_endpoint(config),
@@ -260,17 +262,19 @@ module BetterAuth
         organization = organization_by_id(ctx, body[:organization_id]) || organization_by_slug(ctx, body[:organization_slug])
         raise APIError.new("BAD_REQUEST", message: ORGANIZATION_ERROR_CODES.fetch("ORGANIZATION_NOT_FOUND")) unless organization
         require_org_permission!(ctx, config, session, organization["id"], {organization: ["delete"]}, ORGANIZATION_ERROR_CODES.fetch("YOU_ARE_NOT_ALLOWED_TO_DELETE_THIS_ORGANIZATION"))
-        clear_active_organization_session(ctx, session, organization["id"])
         run_org_hook(config, :before_delete_organization, {organization: organization_wire(ctx, organization), user: session[:user]}, ctx)
-        if org_truthy?(config.dig(:teams, :enabled))
-          team_ids = ctx.context.adapter.find_many(model: "team", where: [{field: "organizationId", value: organization["id"]}]).map { |team| team["id"] }
-          ctx.context.adapter.delete_many(model: "teamMember", where: [{field: "teamId", value: team_ids, operator: "in"}]) if team_ids.any?
-          ctx.context.adapter.delete_many(model: "team", where: [{field: "organizationId", value: organization["id"]}])
+        organization_transaction(ctx) do |adapter|
+          if org_truthy?(config.dig(:teams, :enabled))
+            team_ids = adapter.find_many(model: "team", where: [{field: "organizationId", value: organization["id"]}]).map { |team| team["id"] }
+            adapter.delete_many(model: "teamMember", where: [{field: "teamId", value: team_ids, operator: "in"}]) if team_ids.any?
+            adapter.delete_many(model: "team", where: [{field: "organizationId", value: organization["id"]}])
+          end
+          adapter.delete_many(model: "invitation", where: [{field: "organizationId", value: organization["id"]}])
+          adapter.delete_many(model: "member", where: [{field: "organizationId", value: organization["id"]}])
+          adapter.delete_many(model: "organizationRole", where: [{field: "organizationId", value: organization["id"]}]) if org_truthy?(config.dig(:dynamic_access_control, :enabled))
+          adapter.delete(model: "organization", where: [{field: "id", value: organization["id"]}])
         end
-        ctx.context.adapter.delete_many(model: "invitation", where: [{field: "organizationId", value: organization["id"]}])
-        ctx.context.adapter.delete_many(model: "member", where: [{field: "organizationId", value: organization["id"]}])
-        ctx.context.adapter.delete_many(model: "organizationRole", where: [{field: "organizationId", value: organization["id"]}]) if org_truthy?(config.dig(:dynamic_access_control, :enabled))
-        ctx.context.adapter.delete(model: "organization", where: [{field: "id", value: organization["id"]}])
+        clear_active_organization_session(ctx, session, organization["id"])
         run_org_hook(config, :after_delete_organization, {organization: organization_wire(ctx, organization), user: session[:user]}, ctx)
         ctx.json({status: true})
       end
@@ -339,21 +343,8 @@ module BetterAuth
         end
         existing_member = find_member_by_email(ctx, organization["id"], email)
         raise APIError.new("CONFLICT", message: ORGANIZATION_ERROR_CODES.fetch("USER_IS_ALREADY_A_MEMBER_OF_THIS_ORGANIZATION")) if existing_member
-        pending = ctx.context.adapter.find_many(model: "invitation", where: [{field: "organizationId", value: organization["id"]}, {field: "email", value: email}, {field: "status", value: "pending"}])
-        if pending.any?
-          if config[:cancel_pending_invitations_on_re_invite]
-            pending.each { |entry| ctx.context.adapter.update(model: "invitation", where: [{field: "id", value: entry["id"]}], update: {status: "canceled"}) }
-          else
-            raise APIError.new("CONFLICT", message: ORGANIZATION_ERROR_CODES.fetch("USER_IS_ALREADY_INVITED_TO_THIS_ORGANIZATION"))
-          end
-        end
-        pending_count = ctx.context.adapter.count(model: "invitation", where: [{field: "organizationId", value: organization["id"]}, {field: "status", value: "pending"}])
-        limit = config[:invitation_limit]
-        if limit && pending_count >= limit.to_i
-          raise APIError.new("FORBIDDEN", message: ORGANIZATION_ERROR_CODES.fetch("INVITATION_LIMIT_REACHED"))
-        end
         team_ids = organization_team_ids(body[:team_id] || body[:team_ids])
-        ensure_team_member_capacity!(ctx, config, team_ids)
+        validate_invitation_team_ids!(ctx, config, organization["id"], body[:team_id] || body[:team_ids], team_ids)
         invitation_data = {
           organizationId: organization["id"],
           email: email,
@@ -365,11 +356,25 @@ module BetterAuth
           createdAt: Time.now
         }.merge(additional_input(body, :organization_id, :organization_slug, :email, :role, :team_id, :team_ids))
         merge_hook_data!(invitation_data, run_org_hook(config, :before_create_invitation, {invitation: invitation_data, inviter: session[:user], organization: organization_wire(ctx, organization)}, ctx))
-        invitation = ctx.context.adapter.create(
-          model: "invitation",
-          data: invitation_data,
-          force_allow_id: true
-        )
+        invitation = organization_transaction(ctx) do |adapter|
+          lock_organization_capacity!(adapter, organization)
+          pending = adapter.find_many(model: "invitation", where: [{field: "organizationId", value: organization["id"]}, {field: "email", value: email}, {field: "status", value: "pending"}])
+          if pending.any?
+            if config[:cancel_pending_invitations_on_re_invite]
+              pending.each { |entry| adapter.update(model: "invitation", where: [{field: "id", value: entry["id"]}], update: {status: "canceled"}) }
+            else
+              raise APIError.new("CONFLICT", message: ORGANIZATION_ERROR_CODES.fetch("USER_IS_ALREADY_INVITED_TO_THIS_ORGANIZATION"))
+            end
+          end
+          pending_count = adapter.count(model: "invitation", where: [{field: "organizationId", value: organization["id"]}, {field: "status", value: "pending"}])
+          limit = config[:invitation_limit]
+          if limit && pending_count >= limit.to_i
+            raise APIError.new("FORBIDDEN", message: ORGANIZATION_ERROR_CODES.fetch("INVITATION_LIMIT_REACHED"))
+          end
+          validate_stored_invitation_teams!(adapter, organization["id"], team_ids)
+          ensure_team_member_capacity!(ctx, config, team_ids, adapter: adapter)
+          adapter.create(model: "invitation", data: invitation_data, force_allow_id: true)
+        end
         sender = config[:send_invitation_email]
         sender.call({id: invitation["id"], role: role, email: email, organization: organization_wire(ctx, organization), invitation: invitation_wire(ctx, invitation), inviter: require_member!(ctx, session[:user]["id"], organization["id"])}, ctx.request) if sender.respond_to?(:call)
         run_org_hook(config, :after_create_invitation, {invitation: invitation_wire(ctx, invitation), inviter: session[:user], organization: organization_wire(ctx, organization)}, ctx)
@@ -382,24 +387,39 @@ module BetterAuth
         session = Routes.current_session(ctx)
         body = normalize_hash(ctx.body)
         invitation = invitation_by_id(ctx, body[:invitation_id] || body[:id])
-        raise APIError.new("BAD_REQUEST", message: ORGANIZATION_ERROR_CODES.fetch("INVITATION_NOT_FOUND")) unless invitation
-        raise APIError.new("FORBIDDEN", message: ORGANIZATION_ERROR_CODES.fetch("YOU_ARE_NOT_THE_RECIPIENT_OF_THE_INVITATION")) unless invitation["email"].to_s.downcase == session[:user]["email"].to_s.downcase
-        raise APIError.new("BAD_REQUEST", message: ORGANIZATION_ERROR_CODES.fetch("INVITATION_NOT_FOUND")) unless invitation["status"] == "pending"
-        raise APIError.new("BAD_REQUEST", message: ORGANIZATION_ERROR_CODES.fetch("INVITATION_NOT_FOUND")) if invitation["expiresAt"] && Time.parse(invitation["expiresAt"].to_s) < Time.now
-        if config[:require_email_verification_on_invitation] && !session[:user]["emailVerified"]
-          raise APIError.new("FORBIDDEN", message: ORGANIZATION_ERROR_CODES.fetch("EMAIL_VERIFICATION_REQUIRED_BEFORE_ACCEPTING_OR_REJECTING_INVITATION"))
-        end
+        require_pending_invitation!(invitation)
+        require_invitation_recipient!(invitation, session)
+        require_verified_invitation_recipient!(ctx, config, session, "EMAIL_VERIFICATION_REQUIRED_BEFORE_ACCEPTING_OR_REJECTING_INVITATION")
         organization = organization_by_id(ctx, invitation["organizationId"])
         raise APIError.new("BAD_REQUEST", message: ORGANIZATION_ERROR_CODES.fetch("ORGANIZATION_NOT_FOUND")) unless organization
 
-        ensure_organization_member_capacity!(ctx, config, session[:user], organization)
-        ensure_team_member_capacity!(ctx, config, organization_team_ids(invitation["teamId"]))
         run_org_hook(config, :before_accept_invitation, {invitation: invitation_wire(ctx, invitation), user: session[:user], organization: organization_wire(ctx, organization)}, ctx)
-        member = ctx.context.adapter.create(model: "member", data: {organizationId: invitation["organizationId"], userId: session[:user]["id"], role: invitation["role"], createdAt: Time.now})
-        organization_team_ids(invitation["teamId"]).each do |team_id|
-          ctx.context.adapter.create(model: "teamMember", data: {teamId: team_id, userId: session[:user]["id"], createdAt: Time.now})
+        member = nil
+        updated = nil
+        organization_transaction(ctx) do |adapter|
+          lock_organization_capacity!(adapter, organization)
+          accepted = adapter.increment_one(
+            model: "invitation",
+            where: [{field: "id", value: invitation["id"]}, {field: "status", value: "pending"}],
+            increment: {},
+            set: {status: "accepted"}
+          )
+          raise APIError.new("BAD_REQUEST", message: ORGANIZATION_ERROR_CODES.fetch("INVITATION_NOT_FOUND")) unless accepted
+
+          validate_organization_roles!(ctx, config, invitation["organizationId"], normalized_role_names(invitation["role"]), adapter: adapter)
+          ensure_organization_member_capacity!(ctx, config, session[:user], organization, adapter: adapter)
+          team_ids = organization_team_ids(invitation["teamId"])
+          validate_stored_invitation_teams!(adapter, invitation["organizationId"], team_ids)
+          ensure_team_member_capacity!(ctx, config, team_ids, adapter: adapter, lock: true)
+          if adapter.find_one(model: "member", where: [{field: "userId", value: session[:user]["id"]}, {field: "organizationId", value: invitation["organizationId"]}])
+            raise APIError.new("CONFLICT", message: ORGANIZATION_ERROR_CODES.fetch("USER_IS_ALREADY_A_MEMBER_OF_THIS_ORGANIZATION"))
+          end
+          member = adapter.create(model: "member", data: {organizationId: invitation["organizationId"], userId: session[:user]["id"], role: invitation["role"], createdAt: Time.now})
+          team_ids.each do |team_id|
+            adapter.create(model: "teamMember", data: {teamId: team_id, userId: session[:user]["id"], createdAt: Time.now})
+          end
+          updated = accepted
         end
-        updated = ctx.context.adapter.update(model: "invitation", where: [{field: "id", value: invitation["id"]}], update: {status: "accepted"})
         run_org_hook(config, :after_accept_invitation, {invitation: invitation_wire(ctx, updated), member: member_wire(ctx, member), user: session[:user], organization: organization_wire(ctx, organization)}, ctx)
         ctx.json({invitation: invitation_wire(ctx, updated), member: member_wire(ctx, member)})
       end
@@ -409,8 +429,9 @@ module BetterAuth
       Endpoint.new(path: "/organization/reject-invitation", method: "POST", metadata: organization_openapi("rejectOrganizationInvitation", "Reject an organization invitation", response: organization_ref_schema("Invitation"))) do |ctx|
         session = Routes.current_session(ctx)
         invitation = invitation_by_id(ctx, normalize_hash(ctx.body)[:invitation_id])
-        raise APIError.new("BAD_REQUEST", message: ORGANIZATION_ERROR_CODES.fetch("INVITATION_NOT_FOUND")) unless invitation
-        raise APIError.new("FORBIDDEN", message: ORGANIZATION_ERROR_CODES.fetch("YOU_ARE_NOT_THE_RECIPIENT_OF_THE_INVITATION")) unless invitation["email"].to_s.downcase == session[:user]["email"].to_s.downcase
+        require_pending_invitation!(invitation, check_expiration: false)
+        require_invitation_recipient!(invitation, session)
+        require_verified_invitation_recipient!(ctx, config, session, "EMAIL_VERIFICATION_REQUIRED_BEFORE_ACCEPTING_OR_REJECTING_INVITATION")
         organization = organization_by_id(ctx, invitation["organizationId"])
         raise APIError.new("BAD_REQUEST", message: ORGANIZATION_ERROR_CODES.fetch("ORGANIZATION_NOT_FOUND")) unless organization
         run_org_hook(config, :before_reject_invitation, {invitation: invitation_wire(ctx, invitation), user: session[:user], organization: organization_wire(ctx, organization)}, ctx)
@@ -435,11 +456,19 @@ module BetterAuth
       end
     end
 
-    def organization_get_invitation_endpoint
+    def organization_get_invitation_endpoint(config)
       Endpoint.new(path: "/organization/get-invitation", method: "GET", metadata: organization_openapi("getOrganizationInvitation", "Get an organization invitation", response: organization_ref_schema("Invitation"))) do |ctx|
+        session = Routes.current_session(ctx)
         invitation = invitation_by_id(ctx, normalize_hash(ctx.query)[:id] || normalize_hash(ctx.query)[:invitation_id])
-        raise APIError.new("BAD_REQUEST", message: ORGANIZATION_ERROR_CODES.fetch("INVITATION_NOT_FOUND")) unless invitation
-        ctx.json(invitation_wire(ctx, invitation))
+        require_pending_invitation!(invitation)
+        require_invitation_recipient!(invitation, session)
+        require_verified_invitation_recipient!(ctx, config, session, "EMAIL_VERIFICATION_REQUIRED_FOR_INVITATION")
+        organization = organization_by_id(ctx, invitation["organizationId"])
+        raise APIError.new("BAD_REQUEST", message: ORGANIZATION_ERROR_CODES.fetch("ORGANIZATION_NOT_FOUND")) unless organization
+        inviter = require_member(ctx, invitation["inviterId"], invitation["organizationId"])
+        raise APIError.new("BAD_REQUEST", message: ORGANIZATION_ERROR_CODES.fetch("INVITER_IS_NO_LONGER_A_MEMBER_OF_THE_ORGANIZATION")) unless inviter
+        inviter_user = ctx.context.internal_adapter.find_user_by_id(invitation["inviterId"])
+        ctx.json(invitation_wire(ctx, invitation).merge(organizationName: organization["name"], organizationSlug: organization["slug"], inviterEmail: inviter_user && inviter_user["email"]))
       end
     end
 
@@ -457,6 +486,9 @@ module BetterAuth
     def organization_list_user_invitations_endpoint
       Endpoint.new(path: "/organization/list-user-invitations", method: "GET", metadata: organization_openapi("listUserInvitations", "List user invitations", response: organization_array_schema("Invitation"))) do |ctx|
         session = Routes.current_session(ctx)
+        unless session[:user]["emailVerified"]
+          raise APIError.new("FORBIDDEN", message: ORGANIZATION_ERROR_CODES.fetch("EMAIL_VERIFICATION_REQUIRED_FOR_INVITATION"))
+        end
         invitations = ctx.context.adapter.find_many(model: "invitation", where: [{field: "email", value: session[:user]["email"].to_s.downcase}, {field: "status", value: "pending"}])
         ctx.json(invitations.map { |entry| invitation_wire(ctx, entry) })
       end
@@ -493,12 +525,20 @@ module BetterAuth
           end
         end
 
-        ensure_organization_member_capacity!(ctx, config, user, organization)
-        ensure_team_member_capacity!(ctx, config, [team_id]) if team_id
         member_data = {organizationId: organization_id, userId: user_id, role: parse_roles(body[:role] || "member"), createdAt: Time.now}.merge(additional_input(body, :organization_id, :user_id, :role, :team_id))
         merge_hook_data!(member_data, run_org_hook(config, :before_add_member, {member: member_data, user: user, organization: organization_wire(ctx, organization)}, ctx))
-        member = ctx.context.adapter.create(model: "member", data: member_data)
-        ctx.context.adapter.create(model: "teamMember", data: {teamId: team_id, userId: user_id, createdAt: Time.now}) if team_id
+        member = organization_transaction(ctx) do |adapter|
+          lock_organization_capacity!(adapter, organization)
+          validate_organization_roles!(ctx, config, organization_id, normalized_role_names(member_data[:role]), adapter: adapter)
+          ensure_organization_member_capacity!(ctx, config, user, organization, adapter: adapter)
+          ensure_team_member_capacity!(ctx, config, [team_id], adapter: adapter, lock: true) if team_id
+          if adapter.find_one(model: "member", where: [{field: "userId", value: user_id}, {field: "organizationId", value: organization_id}])
+            raise APIError.new("CONFLICT", message: ORGANIZATION_ERROR_CODES.fetch("USER_IS_ALREADY_A_MEMBER_OF_THIS_ORGANIZATION"))
+          end
+          created = adapter.create(model: "member", data: member_data)
+          adapter.create(model: "teamMember", data: {teamId: team_id, userId: user_id, createdAt: Time.now}) if team_id
+          created
+        end
         run_org_hook(config, :after_add_member, {member: member_wire(ctx, member), user: user, organization: organization_wire(ctx, organization)}, ctx)
         ctx.json(member_wire(ctx, member))
       end
@@ -511,12 +551,18 @@ module BetterAuth
         member = member_by_id(ctx, body[:member_id]) || require_member(ctx, body[:user_id], body[:organization_id])
         raise APIError.new("BAD_REQUEST", message: ORGANIZATION_ERROR_CODES.fetch("MEMBER_NOT_FOUND")) unless member
         require_org_permission!(ctx, config, session, member["organizationId"], {member: ["delete"]}, ORGANIZATION_ERROR_CODES.fetch("YOU_ARE_NOT_ALLOWED_TO_DELETE_THIS_MEMBER"))
-        ensure_not_last_owner!(ctx, member)
         organization = organization_by_id(ctx, member["organizationId"])
         user = ctx.context.internal_adapter.find_user_by_id(member["userId"])
         run_org_hook(config, :before_remove_member, {member: member_wire(ctx, member), user: user, organization: organization_wire(ctx, organization)}, ctx)
-        ctx.context.adapter.delete(model: "member", where: [{field: "id", value: member["id"]}])
-        ctx.context.adapter.delete_many(model: "teamMember", where: [{field: "userId", value: member["userId"]}]) if org_truthy?(config.dig(:teams, :enabled))
+        organization_transaction(ctx) do |adapter|
+          lock_organization_capacity!(adapter, organization)
+          ensure_not_last_owner!(ctx, member, adapter: adapter)
+          adapter.delete(model: "member", where: [{field: "id", value: member["id"]}])
+          if org_truthy?(config.dig(:teams, :enabled))
+            team_ids = adapter.find_many(model: "team", where: [{field: "organizationId", value: member["organizationId"]}]).map { |team| team["id"] }
+            adapter.delete_many(model: "teamMember", where: [{field: "userId", value: member["userId"]}, {field: "teamId", value: team_ids, operator: "in"}]) if team_ids.any?
+          end
+        end
         run_org_hook(config, :after_remove_member, {member: member_wire(ctx, member), user: user, organization: organization_wire(ctx, organization)}, ctx)
         ctx.json({status: true})
       end
@@ -608,9 +654,16 @@ module BetterAuth
         session = Routes.current_session(ctx)
         organization_id = normalize_hash(ctx.body)[:organization_id]
         member = require_member!(ctx, session[:user]["id"], organization_id)
-        ensure_not_last_owner!(ctx, member)
-        ctx.context.adapter.delete(model: "member", where: [{field: "id", value: member["id"]}])
-        ctx.context.adapter.delete_many(model: "teamMember", where: [{field: "userId", value: session[:user]["id"]}]) if org_truthy?(config.dig(:teams, :enabled))
+        organization = organization_by_id(ctx, organization_id)
+        organization_transaction(ctx) do |adapter|
+          lock_organization_capacity!(adapter, organization)
+          ensure_not_last_owner!(ctx, member, adapter: adapter)
+          adapter.delete(model: "member", where: [{field: "id", value: member["id"]}])
+          if org_truthy?(config.dig(:teams, :enabled))
+            team_ids = adapter.find_many(model: "team", where: [{field: "organizationId", value: organization_id}]).map { |team| team["id"] }
+            adapter.delete_many(model: "teamMember", where: [{field: "userId", value: session[:user]["id"]}, {field: "teamId", value: team_ids, operator: "in"}]) if team_ids.any?
+          end
+        end
         clear_active_organization_session(ctx, session, organization_id)
         ctx.json({status: true})
       end
@@ -646,14 +699,18 @@ module BetterAuth
         organization_id = body[:organization_id] || session[:session]["activeOrganizationId"]
         require_org_permission!(ctx, config, session, organization_id, {team: ["create"]}, ORGANIZATION_ERROR_CODES.fetch("YOU_ARE_NOT_ALLOWED_TO_CREATE_TEAMS_IN_THIS_ORGANIZATION"))
         organization = organization_by_id(ctx, organization_id)
-        max_teams = config.dig(:teams, :maximum_teams)
-        if max_teams && ctx.context.adapter.count(model: "team", where: [{field: "organizationId", value: organization_id}]) >= max_teams.to_i
-          raise APIError.new("FORBIDDEN", message: ORGANIZATION_ERROR_CODES.fetch("YOU_HAVE_REACHED_THE_MAXIMUM_NUMBER_OF_TEAMS"))
-        end
         team_data = {organizationId: organization_id, name: body[:name].to_s, createdAt: Time.now}.merge(additional_input(body, :organization_id, :name))
         merge_hook_data!(team_data, run_org_hook(config, :before_create_team, {team: team_data, user: session[:user], organization: organization_wire(ctx, organization)}, ctx))
-        team = ctx.context.adapter.create(model: "team", data: team_data, force_allow_id: true)
-        ctx.context.adapter.create(model: "teamMember", data: {teamId: team["id"], userId: session[:user]["id"], createdAt: Time.now})
+        team = organization_transaction(ctx) do |adapter|
+          lock_organization_capacity!(adapter, organization)
+          max_teams = config.dig(:teams, :maximum_teams)
+          if max_teams && adapter.count(model: "team", where: [{field: "organizationId", value: organization_id}]) >= max_teams.to_i
+            raise APIError.new("FORBIDDEN", message: ORGANIZATION_ERROR_CODES.fetch("YOU_HAVE_REACHED_THE_MAXIMUM_NUMBER_OF_TEAMS"))
+          end
+          created = adapter.create(model: "team", data: team_data, force_allow_id: true)
+          adapter.create(model: "teamMember", data: {teamId: created["id"], userId: session[:user]["id"], createdAt: Time.now})
+          created
+        end
         run_org_hook(config, :after_create_team, {team: team_wire(ctx, team), user: session[:user], organization: organization_wire(ctx, organization)}, ctx)
         ctx.json(team_wire(ctx, team))
       end
@@ -691,14 +748,25 @@ module BetterAuth
         team = team_by_id(ctx, normalize_hash(ctx.body)[:team_id])
         raise APIError.new("BAD_REQUEST", message: ORGANIZATION_ERROR_CODES.fetch("TEAM_NOT_FOUND")) unless team
         require_org_permission!(ctx, config, session, team["organizationId"], {team: ["delete"]}, ORGANIZATION_ERROR_CODES.fetch("YOU_ARE_NOT_ALLOWED_TO_DELETE_THIS_TEAM"))
-        teams = ctx.context.adapter.find_many(model: "team", where: [{field: "organizationId", value: team["organizationId"]}])
-        if teams.length <= 1 && config.dig(:teams, :allow_removing_all_teams) != true
-          raise APIError.new("BAD_REQUEST", message: ORGANIZATION_ERROR_CODES.fetch("UNABLE_TO_REMOVE_LAST_TEAM"))
-        end
         organization = organization_by_id(ctx, team["organizationId"])
         run_org_hook(config, :before_delete_team, {team: team_wire(ctx, team), user: session[:user], organization: organization_wire(ctx, organization)}, ctx)
-        ctx.context.adapter.delete_many(model: "teamMember", where: [{field: "teamId", value: team["id"]}])
-        ctx.context.adapter.delete(model: "team", where: [{field: "id", value: team["id"]}])
+        organization_transaction(ctx) do |adapter|
+          lock_organization_capacity!(adapter, organization)
+          teams = adapter.find_many(model: "team", where: [{field: "organizationId", value: team["organizationId"]}])
+          if teams.length <= 1 && config.dig(:teams, :allow_removing_all_teams) != true
+            raise APIError.new("BAD_REQUEST", message: ORGANIZATION_ERROR_CODES.fetch("UNABLE_TO_REMOVE_LAST_TEAM"))
+          end
+          adapter.delete_many(model: "teamMember", where: [{field: "teamId", value: team["id"]}])
+          adapter.delete(model: "team", where: [{field: "id", value: team["id"]}])
+          pending = adapter.find_many(model: "invitation", where: [{field: "organizationId", value: team["organizationId"]}, {field: "status", value: "pending"}])
+          pending.each do |invitation|
+            team_ids = organization_team_ids(invitation["teamId"])
+            next unless team_ids.include?(team["id"])
+
+            remaining = team_ids.reject { |team_id| team_id == team["id"] }
+            adapter.update(model: "invitation", where: [{field: "id", value: invitation["id"]}], update: {teamId: remaining.any? ? remaining.join(",") : nil})
+          end
+        end
         run_org_hook(config, :after_delete_team, {team: team_wire(ctx, team), user: session[:user], organization: organization_wire(ctx, organization)}, ctx)
         ctx.json({status: true})
       end
@@ -715,9 +783,14 @@ module BetterAuth
         end
         team = team_by_id(ctx, body[:team_id])
         raise APIError.new("BAD_REQUEST", message: ORGANIZATION_ERROR_CODES.fetch("TEAM_NOT_FOUND")) unless team
+        active_organization_id = session[:session]["activeOrganizationId"]
+        raise APIError.new("BAD_REQUEST", message: ORGANIZATION_ERROR_CODES.fetch("NO_ACTIVE_ORGANIZATION")) unless active_organization_id
+        unless team["organizationId"] == active_organization_id
+          raise APIError.new("BAD_REQUEST", message: ORGANIZATION_ERROR_CODES.fetch("TEAM_NOT_FOUND"))
+        end
         require_team_member!(ctx, session[:user]["id"], team["id"])
-        updated_session = ctx.context.internal_adapter.update_session(session[:session]["token"], {activeOrganizationId: team["organizationId"], activeTeamId: team["id"]})
-        Cookies.set_session_cookie(ctx, {session: updated_session || session[:session].merge("activeOrganizationId" => team["organizationId"], "activeTeamId" => team["id"]), user: session[:user]})
+        updated_session = ctx.context.internal_adapter.update_session(session[:session]["token"], {activeTeamId: team["id"]})
+        Cookies.set_session_cookie(ctx, {session: updated_session || session[:session].merge("activeTeamId" => team["id"]), user: session[:user]})
         ctx.json(team_wire(ctx, team))
       end
     end
@@ -751,16 +824,17 @@ module BetterAuth
         require_org_permission!(ctx, config, session, team["organizationId"], {team: ["update"]}, ORGANIZATION_ERROR_CODES.fetch("YOU_ARE_NOT_ALLOWED_TO_CREATE_A_NEW_TEAM_MEMBER"))
         user_id = body[:user_id].to_s
         require_member!(ctx, user_id, team["organizationId"])
-        max_members = config.dig(:teams, :maximum_members_per_team)
-        if max_members && ctx.context.adapter.count(model: "teamMember", where: [{field: "teamId", value: team["id"]}]) >= max_members.to_i
-          raise APIError.new("FORBIDDEN", message: ORGANIZATION_ERROR_CODES.fetch("TEAM_MEMBER_LIMIT_REACHED"))
-        end
         user = ctx.context.internal_adapter.find_user_by_id(user_id)
         organization = organization_by_id(ctx, team["organizationId"])
         member_data = {teamId: team["id"], userId: user_id, createdAt: Time.now}
         run_org_hook(config, :before_add_team_member, {team_member: member_data, team: team_wire(ctx, team), user: user, organization: organization_wire(ctx, organization)}, ctx)
-        member = ctx.context.adapter.find_one(model: "teamMember", where: [{field: "teamId", value: team["id"]}, {field: "userId", value: user_id}]) ||
-          ctx.context.adapter.create(model: "teamMember", data: member_data)
+        member = organization_transaction(ctx) do |adapter|
+          existing = adapter.find_one(model: "teamMember", where: [{field: "teamId", value: team["id"]}, {field: "userId", value: user_id}])
+          next existing if existing
+
+          ensure_team_member_capacity!(ctx, config, [team["id"]], adapter: adapter, lock: true)
+          adapter.create(model: "teamMember", data: member_data)
+        end
         run_org_hook(config, :after_add_team_member, {team_member: team_member_wire(ctx, member), team: team_wire(ctx, team), user: user, organization: organization_wire(ctx, organization)}, ctx)
         ctx.json(team_member_wire(ctx, member))
       end
@@ -1033,13 +1107,13 @@ module BetterAuth
       Array(roles).flat_map { |role| role.to_s.split(",") }.map(&:strip).reject(&:empty?)
     end
 
-    def validate_organization_roles!(ctx, config, organization_id, role_names)
+    def validate_organization_roles!(ctx, config, organization_id, role_names, adapter: ctx.context.adapter)
       valid_static_roles = (organization_default_roles(config).keys + organization_roles(config).keys).uniq
       unknown_roles = role_names.reject { |role| valid_static_roles.include?(role) }.uniq
       return if unknown_roles.empty?
 
       if org_truthy?(config.dig(:dynamic_access_control, :enabled))
-        found_roles = ctx.context.adapter.find_many(
+        found_roles = adapter.find_many(
           model: "organizationRole",
           where: [{field: "organizationId", value: organization_id}, {field: "role", value: unknown_roles, operator: "in"}]
         ).map { |role| role["role"] }
@@ -1192,9 +1266,9 @@ module BetterAuth
       [requested, default].min
     end
 
-    def ensure_organization_member_capacity!(ctx, config, user, organization)
+    def ensure_organization_member_capacity!(ctx, config, user, organization, adapter: ctx.context.adapter)
       limit = organization_membership_capacity_limit(ctx, config, user, organization)
-      count = ctx.context.adapter.count(model: "member", where: [{field: "organizationId", value: organization["id"]}])
+      count = adapter.count(model: "member", where: [{field: "organizationId", value: organization["id"]}])
       return if count < limit
 
       raise APIError.new("FORBIDDEN", message: ORGANIZATION_ERROR_CODES.fetch("ORGANIZATION_MEMBERSHIP_LIMIT_REACHED"))
@@ -1222,12 +1296,14 @@ module BetterAuth
       end
     end
 
-    def ensure_team_member_capacity!(ctx, config, team_ids)
+    def ensure_team_member_capacity!(ctx, config, team_ids, adapter: ctx.context.adapter, lock: false)
       max_members = config.dig(:teams, :maximum_members_per_team)
       return unless max_members && team_ids.any?
 
       team_ids.each do |team_id|
-        count = ctx.context.adapter.count(model: "teamMember", where: [{field: "teamId", value: team_id}])
+        team = adapter.find_one(model: "team", where: [{field: "id", value: team_id}])
+        lock_team_capacity!(adapter, team) if lock && team
+        count = adapter.count(model: "teamMember", where: [{field: "teamId", value: team_id}])
         if count >= max_members.to_i
           raise APIError.new("FORBIDDEN", message: ORGANIZATION_ERROR_CODES.fetch("TEAM_MEMBER_LIMIT_REACHED"))
         end
@@ -1263,11 +1339,11 @@ module BetterAuth
       role.merge("permission" => parse_permission(role["permission"]))
     end
 
-    def ensure_not_last_owner!(ctx, member)
+    def ensure_not_last_owner!(ctx, member, adapter: ctx.context.adapter)
       return unless member["role"].to_s.split(",").include?("owner")
 
       owner_count = 0
-      organization_each_adapter_record(ctx.context.adapter, "member", where: [{field: "organizationId", value: member["organizationId"]}]) do |entry|
+      organization_each_adapter_record(adapter, "member", where: [{field: "organizationId", value: member["organizationId"]}]) do |entry|
         owner_count += 1 if entry["role"].to_s.split(",").include?("owner")
       end
       raise APIError.new("BAD_REQUEST", message: ORGANIZATION_ERROR_CODES.fetch("YOU_CANNOT_LEAVE_THE_ORGANIZATION_AS_THE_ONLY_OWNER")) if owner_count <= 1
@@ -1392,6 +1468,80 @@ module BetterAuth
 
     def organization_team_ids(value)
       Array(value).flat_map { |entry| entry.to_s.split(",") }.map(&:strip).reject(&:empty?)
+    end
+
+    def validate_invitation_team_ids!(ctx, config, organization_id, raw_value, team_ids)
+      return if raw_value.nil?
+      unless org_truthy?(config.dig(:teams, :enabled))
+        raise APIError.new("BAD_REQUEST", message: "Teams are not enabled")
+      end
+      if Array(raw_value).any? { |team_id| team_id.to_s.include?(",") }
+        raise APIError.new("BAD_REQUEST", message: ORGANIZATION_ERROR_CODES.fetch("INVALID_TEAM_ID"))
+      end
+      team_ids.each do |team_id|
+        team = team_by_id(ctx, team_id)
+        unless team && team["organizationId"] == organization_id
+          raise APIError.new("BAD_REQUEST", message: ORGANIZATION_ERROR_CODES.fetch("TEAM_NOT_FOUND"))
+        end
+      end
+    end
+
+    def require_pending_invitation!(invitation, check_expiration: true)
+      expired = invitation && invitation["expiresAt"] && organization_time(invitation["expiresAt"]) < Time.now
+      valid = invitation && invitation["status"] == "pending"
+      valid &&= !expired if check_expiration
+      unless valid
+        raise APIError.new("BAD_REQUEST", message: ORGANIZATION_ERROR_CODES.fetch("INVITATION_NOT_FOUND"))
+      end
+      invitation
+    end
+
+    def require_invitation_recipient!(invitation, session)
+      return if invitation["email"].to_s.downcase == session[:user]["email"].to_s.downcase
+
+      raise APIError.new("FORBIDDEN", message: ORGANIZATION_ERROR_CODES.fetch("YOU_ARE_NOT_THE_RECIPIENT_OF_THE_INVITATION"))
+    end
+
+    def require_verified_invitation_recipient!(ctx, config, session, error_code)
+      return unless require_verified_email_for_invitation_id_action?(ctx, config)
+      return if session[:user]["emailVerified"]
+
+      raise APIError.new("FORBIDDEN", message: ORGANIZATION_ERROR_CODES.fetch(error_code))
+    end
+
+    def require_verified_email_for_invitation_id_action?(ctx, config)
+      return org_truthy?(config[:require_email_verification_on_invitation]) if config.key?(:require_email_verification_on_invitation)
+
+      generator = ctx.context.options.advanced.dig(:database, :generate_id)
+      !generator.nil? && generator != "uuid"
+    end
+
+    def organization_time(value)
+      value.is_a?(Time) ? value : Time.parse(value.to_s)
+    end
+
+    def organization_transaction(ctx)
+      adapter = ctx.context.adapter
+      if adapter.method(:transaction).owner == BetterAuth::Adapters::Base
+        raise BetterAuth::Error, "Organization mutations require an adapter with real transaction support"
+      end
+
+      adapter.transaction { |transaction_adapter| yield(transaction_adapter || adapter) }
+    end
+
+    def lock_organization_capacity!(adapter, organization)
+      adapter.update(model: "organization", where: [{field: "id", value: organization["id"]}], update: {name: organization["name"]})
+    end
+
+    def lock_team_capacity!(adapter, team)
+      adapter.update(model: "team", where: [{field: "id", value: team["id"]}], update: {name: team["name"]})
+    end
+
+    def validate_stored_invitation_teams!(adapter, organization_id, team_ids)
+      team_ids.each do |team_id|
+        team = adapter.find_one(model: "team", where: [{field: "id", value: team_id}, {field: "organizationId", value: organization_id}])
+        raise APIError.new("BAD_REQUEST", message: ORGANIZATION_ERROR_CODES.fetch("TEAM_NOT_FOUND")) unless team
+      end
     end
 
     def additional_input(hash, *exclude)

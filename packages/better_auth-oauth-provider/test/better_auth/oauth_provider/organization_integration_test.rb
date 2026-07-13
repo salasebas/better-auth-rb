@@ -132,7 +132,8 @@ class OAuthProviderOrganizationIntegrationTest < Minitest::Test
     select_uri = URI.parse(headers.fetch("location"))
     assert_equal "/select-organization", select_uri.path
 
-    team_cookie = set_active_team_cookie(auth, cookie, team.fetch("id"))
+    organization_cookie = set_active_organization_cookie(auth, cookie, organization.fetch("id"))
+    team_cookie = set_active_team_cookie(auth, organization_cookie, team.fetch("id"))
     session = auth.api.get_session(headers: {"cookie" => team_cookie})
     assert_equal organization.fetch("id"), session.fetch(:session).fetch("activeOrganizationId")
     assert_equal team.fetch("id"), session.fetch(:session).fetch("activeTeamId")
