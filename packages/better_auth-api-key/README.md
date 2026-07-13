@@ -64,10 +64,10 @@ purge secondary-only keys.
 The scheduled expired-key cleanup throttle is per Ruby process. It is not
 coordinated across web workers, hosts, or background job runners.
 
-When `defer_updates` is combined with `advanced.background_tasks.handler`, usage
-updates such as request counts, remaining limits, refill state, and scheduled
-cleanup can be reordered under concurrency. Use database transactions or
-deployment-level coordination if strict counters are required.
+`defer_updates` can defer explicit API-key updates and cleanup when a background
+task handler is configured. Verification counter claims remain synchronous;
+database-backed claims use guarded atomic operations, while pure secondary-only
+claims retain the best-effort limitation described below.
 
 ## Configuration
 
@@ -119,7 +119,21 @@ BetterAuth::Plugins.api_key([
 
 Organization-owned keys require `BetterAuth::Plugins.organization` and use organization permissions for `apiKey` actions: `create`, `read`, `update`, and `delete`.
 
-Secondary-storage mode uses upstream storage keys such as `api-key:<hash>`, `api-key:by-id:<id>`, and `api-key:by-ref:<referenceId>`. When `fallback_to_database: true` is enabled, the reference list is treated as a cache and invalidated on writes/deletes so concurrent writers cannot lose IDs; listing falls back to the database source of truth.
+Secondary-storage mode uses upstream storage keys such as `api-key:<hash>`, `api-key:by-id:<id>`, and `api-key:by-ref:<referenceId>`. With `fallback_to_database: true`, the database is authoritative: verification re-reads the row after a cache hit, and a missing authoritative row invalidates the cache and can never authorize. A cache entry may remain stale, or be briefly re-created from a row, during the unavoidable cross-store window after a database update and before its cache write; that does not weaken verification because authorization always requires the authoritative row. Generic custom storage gets an in-process lock for reference-list updates only; RedisStorage uses atomic cross-process JSON-list scripts.
+
+Verification rate-limit failures return HTTP `429` with error code
+`RATE_LIMITED` and `details.tryAgainIn` (authentication failures remain `401`).
+An exhausted non-refillable key remains an inert authoritative row and returns
+`USAGE_EXCEEDED`; Ruby deliberately avoids eager deletion during verification
+because deletion cannot be made cross-process atomic with the winning counter
+update. Cleanup routes/jobs can remove such rows separately.
+Database-backed keys, including `secondary-storage` with
+`fallback_to_database: true`, consume remaining and rate-limit counters with
+guarded atomic updates; concurrent requests cannot drive `remaining` below zero
+or exceed the configured window. Pure secondary-storage deployments do not have
+a guarded JSON-record counter primitive and are therefore best-effort under
+cross-process concurrency. Use `fallback_to_database` when strict enforcement
+is required.
 
 ## Storage layout
 

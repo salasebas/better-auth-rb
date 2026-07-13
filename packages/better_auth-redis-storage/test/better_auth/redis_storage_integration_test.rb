@@ -72,6 +72,39 @@ class RedisStorageIntegrationTest < Minitest::Test
     first&.clear
   end
 
+  def test_real_redis_json_list_operations_retain_concurrent_ids
+    threads = 20.times.map do |index|
+      Thread.new { @storage.json_list_add("api-key:by-ref:integration", "id-#{index}") }
+    end
+    threads.each(&:join)
+
+    assert_equal (0...20).map { |index| "id-#{index}" }.sort, JSON.parse(@storage.get("api-key:by-ref:integration")).sort
+
+    @storage.json_list_remove("api-key:by-ref:integration", "id-0")
+    refute_includes JSON.parse(@storage.get("api-key:by-ref:integration")), "id-0"
+  end
+
+  def test_real_redis_json_list_operations_reset_corrupt_objects
+    key = "api-key:by-ref:corrupt"
+    @client.set("#{@storage.key_prefix}#{key}", '{"id":"not-an-array"}')
+
+    @storage.json_list_add(key, "one")
+    assert_equal ["one"], JSON.parse(@storage.get(key))
+
+    @client.set("#{@storage.key_prefix}#{key}", '{"1":"one","3":"three"}')
+    @storage.json_list_remove(key, "one")
+    assert_nil @storage.get(key)
+  end
+
+  def test_real_redis_json_list_operations_preserve_arrays_with_json_whitespace
+    key = "api-key:by-ref:whitespace"
+    @client.set("#{@storage.key_prefix}#{key}", "  [\"kept\"]\n")
+
+    @storage.json_list_add(key, "new")
+
+    assert_equal ["kept", "new"], JSON.parse(@storage.get(key))
+  end
+
   def test_real_redis_expires_direct_ttl_values
     @storage.set("short", "one", 1)
 

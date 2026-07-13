@@ -117,6 +117,8 @@ storage.get(key)
 storage.get_and_delete(key)
 storage.increment(key, ttl)
 storage.set_if_absent(key, value, ttl = nil)
+storage.json_list_add(key, id)
+storage.json_list_remove(key, id)
 storage.set(key, value, ttl = nil)
 storage.delete(key)
 storage.list_keys
@@ -130,6 +132,9 @@ created, so subsequent traffic never extends the fixed window.
 `set_if_absent` uses Redis `SET NX` (with `EX` when a TTL is supplied) for
 cross-process first-writer-wins reservations. `getAndDelete`, `setIfAbsent`,
 and `listKeys` are available as camelCase aliases for upstream parity.
+`json_list_add` and `json_list_remove` atomically update JSON-array reference
+indexes through Redis Lua scripts; they are intended for API-key secondary
+storage and preserve IDs under concurrent writers.
 
 `list_keys` returns every matching logical key but Redis does not guarantee key
 order for `KEYS` or `SCAN`. The SCAN path removes duplicate cursor results while

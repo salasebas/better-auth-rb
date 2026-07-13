@@ -12,7 +12,8 @@ module BetterAuth
           BetterAuth::Endpoint.new(path: "/api-key/update", method: "POST", metadata: Routes.openapi_for(:update_api_key)) do |ctx|
             body = BetterAuth::Plugins.api_key_normalize_body(ctx.body)
             resolved_config = BetterAuth::Plugins.api_key_resolve_config(ctx.context, config, body[:config_id])
-            session = BetterAuth::Routes.current_session(ctx, allow_nil: true)
+            # Updates must not authorize from a stale cookie-cache session.
+            session = BetterAuth::Routes.current_session(ctx, allow_nil: true, sensitive: true)
             if !session && BetterAuth::Plugins.api_key_auth_required?(ctx)
               raise BetterAuth::APIError.new("UNAUTHORIZED", message: BetterAuth::Plugins::API_KEY_ERROR_CODES["UNAUTHORIZED_SESSION"])
             end

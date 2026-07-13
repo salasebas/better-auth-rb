@@ -183,6 +183,39 @@ class RedisStorageTest < Minitest::Test
     assert_equal 60, @client.expirations.fetch("better-auth:rate")
   end
 
+  def test_json_list_add_and_remove_are_atomic
+    @storage.json_list_add("api-key:by-ref:user", "one")
+    @storage.json_list_add("api-key:by-ref:user", "two")
+    @storage.json_list_add("api-key:by-ref:user", "one")
+
+    assert_equal ["one", "two"], JSON.parse(@storage.get("api-key:by-ref:user"))
+
+    @storage.json_list_remove("api-key:by-ref:user", "one")
+
+    assert_equal ["two"], JSON.parse(@storage.get("api-key:by-ref:user"))
+  end
+
+  def test_json_list_operations_reset_corrupt_objects
+    key = "better-auth:api-key:by-ref:corrupt"
+    @client.set(key, '{"id":"not-an-array"}')
+
+    @storage.json_list_add("api-key:by-ref:corrupt", "one")
+    assert_equal ["one"], JSON.parse(@storage.get("api-key:by-ref:corrupt"))
+
+    @client.set(key, '{"1":"one","3":"three"}')
+    @storage.json_list_remove("api-key:by-ref:corrupt", "one")
+    assert_nil @storage.get("api-key:by-ref:corrupt")
+  end
+
+  def test_concurrent_json_list_adds_retain_all_ids
+    threads = 20.times.map do |index|
+      Thread.new { @storage.json_list_add("api-key:by-ref:concurrent", "id-#{index}") }
+    end
+    threads.each(&:join)
+
+    assert_equal (0...20).map { |index| "id-#{index}" }.sort, JSON.parse(@storage.get("api-key:by-ref:concurrent")).sort
+  end
+
   def test_nil_logical_key_raises
     assert_raises(ArgumentError) { @storage.get(nil) }
     assert_raises(ArgumentError) { @storage.set(nil, "v") }
@@ -577,6 +610,7 @@ class RedisStorageTest < Minitest::Test
       @call_calls = []
       @eval_calls = []
       @expirations = {}
+      @script_mutex = Mutex.new
     end
 
     def get(key)
@@ -615,15 +649,35 @@ class RedisStorageTest < Minitest::Test
     end
 
     def eval(script, keys: nil, argv: nil, **)
-      eval_calls << [script, keys, argv]
-      key = keys.fetch(0)
-      if script.include?('redis.call("INCR"')
-        value = data.fetch(key, 0).to_i + 1
-        data[key] = value
-        expirations[key] = argv.fetch(0).to_i if value == 1
-        value
-      else
-        data.delete(key)
+      @script_mutex.synchronize do
+        eval_calls << [script, keys, argv]
+        key = keys.fetch(0)
+        if script.include?('redis.call("INCR"')
+          value = data.fetch(key, 0).to_i + 1
+          data[key] = value
+          expirations[key] = argv.fetch(0).to_i if value == 1
+          value
+        elsif script.include?("cjson.decode")
+          values = begin
+            parsed = JSON.parse(data[key].to_s)
+            parsed.is_a?(Array) ? parsed : []
+          rescue JSON::ParserError
+            []
+          end
+          id = argv.fetch(0).to_s
+          if script.include?("table.insert(values, id)")
+            unless values.map(&:to_s).include?(id)
+              values << id
+              data[key] = JSON.generate(values)
+            end
+          else
+            values = values.reject { |value| value.to_s == id }
+            values.empty? ? data.delete(key) : data[key] = JSON.generate(values)
+          end
+          1
+        else
+          data.delete(key)
+        end
       end
     end
 

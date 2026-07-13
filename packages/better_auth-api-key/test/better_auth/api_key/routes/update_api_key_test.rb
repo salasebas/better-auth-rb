@@ -94,6 +94,30 @@ class BetterAuthAPIKeyUpdateRouteTest < Minitest::Test
     assert_equal({"repo" => ["read"]}, updated[:permissions])
   end
 
+  def test_update_route_rejects_revoked_cookie_cache_session
+    auth = build_api_key_auth(
+      default_key_length: 12,
+      session: {cookie_cache: {enabled: true, strategy: "jwe", max_age: 300}},
+      secondary_storage: MemoryStorage.new
+    )
+    cookie = sign_up_cookie(auth, email: "update-route-revoked-cookie@example.com")
+    session = auth.api.get_session(headers: {"cookie" => cookie})
+    user_id = session[:user]["id"]
+    created = auth.api.create_api_key(body: {userId: user_id, name: "before"})
+    auth.context.internal_adapter.delete_session(session[:session]["token"])
+
+    status, body = rack_json_response(
+      auth,
+      "POST",
+      "/api-key/update",
+      body: {keyId: created[:id], name: "after"},
+      cookie: cookie
+    )
+
+    assert_equal 401, status
+    assert_equal BetterAuth::APIKey::ERROR_CODES.fetch("UNAUTHORIZED_SESSION"), body.fetch("message")
+  end
+
   def test_update_route_rejects_when_update_cannot_persist
     auth = build_api_key_auth(default_key_length: 12)
     cookie = sign_up_cookie(auth, email: "update-route-failed-persist-key@example.com")
@@ -135,5 +159,19 @@ class BetterAuthAPIKeyUpdateRouteTest < Minitest::Test
     assert_equal BetterAuth::APIKey::ERROR_CODES.fetch("REFILL_AMOUNT_AND_INTERVAL_REQUIRED"), refill_error.message
     assert_equal BetterAuth::APIKey::ERROR_CODES.fetch("EXPIRES_IN_IS_TOO_SMALL"), small_expiration.message
     assert_equal BetterAuth::APIKey::ERROR_CODES.fetch("EXPIRES_IN_IS_TOO_LARGE"), large_expiration.message
+  end
+
+  def test_update_route_rejects_non_positive_refill_amount
+    auth = build_api_key_auth(default_key_length: 12)
+    cookie = sign_up_cookie(auth, email: "update-route-invalid-refill-key@example.com")
+    user_id = auth.api.get_session(headers: {"cookie" => cookie})[:user]["id"]
+    created = auth.api.create_api_key(body: {userId: user_id})
+
+    error = assert_raises(BetterAuth::APIError) do
+      auth.api.update_api_key(body: {userId: user_id, keyId: created[:id], refillAmount: 0, refillInterval: 1000})
+    end
+
+    assert_equal "BAD_REQUEST", error.status
+    assert_equal BetterAuth::APIKey::ERROR_CODES.fetch("INVALID_REMAINING"), error.message
   end
 end

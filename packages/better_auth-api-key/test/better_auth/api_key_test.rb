@@ -1543,6 +1543,19 @@ class BetterAuthPluginsAPIKeyTest < Minitest::Test
     assert_includes storage.get_calls, "api-key:by-id:#{created[:id]}"
   end
 
+  def test_secondary_storage_fallback_verify_re_reads_authoritative_database_state
+    storage = MemoryStorage.new
+    auth = build_auth(storage: "secondary-storage", secondary_storage: storage, fallback_to_database: true, default_key_length: 12, rate_limit: {enabled: false})
+    cookie = sign_up_cookie(auth, email: "fallback-authoritative-state-key@example.com")
+    created = auth.api.create_api_key(headers: {"cookie" => cookie}, body: {})
+
+    auth.context.adapter.update(model: "apikey", where: [{field: "id", value: created[:id]}], update: {enabled: false})
+    result = auth.api.verify_api_key(body: {key: created[:key]})
+
+    assert_equal false, result[:valid]
+    assert_equal "KEY_DISABLED", result[:error][:code]
+  end
+
   # Upstream: reference/upstream-src/1.6.9/repository/packages/api-key/src/api-key.test.ts:2898
   def test_secondary_storage_fallback_verify_persists_quota_updates_to_database
     storage = MemoryStorage.new

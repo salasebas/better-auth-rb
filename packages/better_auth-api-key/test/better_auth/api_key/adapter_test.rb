@@ -100,6 +100,17 @@ class BetterAuthAPIKeyAdapterTest < Minitest::Test
     assert_equal ["first", "second"], BetterAuth::APIKey::Adapter.safe_parse_id_list(["first", "second"])
   end
 
+  def test_reference_list_helpers_serialize_concurrent_custom_storage_writers_in_process
+    storage = APIKeyTestSupport::MemoryStorage.new
+    reference_key = BetterAuth::APIKey::Adapter.storage_key_by_reference("concurrent-user")
+    threads = 20.times.map do |index|
+      Thread.new { BetterAuth::APIKey::Adapter.ref_list_add(storage, reference_key, "id-#{index}") }
+    end
+    threads.each(&:join)
+
+    assert_equal (0...20).map { |index| "id-#{index}" }.sort, JSON.parse(storage.get(reference_key)).sort
+  end
+
   def test_populate_reference_batches_fallback_cache_writes_when_supported
     storage = BatchTrackingStorage.new
     auth = build_api_key_auth(storage: "secondary-storage", secondary_storage: storage, fallback_to_database: true, default_key_length: 12)

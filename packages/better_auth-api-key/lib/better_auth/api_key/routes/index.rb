@@ -98,6 +98,14 @@ module BetterAuth
       end
 
       def verify_api_key_openapi
+        response_schema = BetterAuth::OpenAPI.object_schema(
+          {
+            valid: {type: "boolean"},
+            error: {type: ["object", "null"], additionalProperties: true},
+            key: api_key_record_schema(include_secret: false).merge(type: ["object", "null"])
+          },
+          required: ["valid", "error", "key"]
+        )
         {
           openapi: {
             description: "Verify and rate-limit an API key",
@@ -114,15 +122,10 @@ module BetterAuth
             responses: {
               "200" => BetterAuth::OpenAPI.json_response(
                 "API key verification result",
-                BetterAuth::OpenAPI.object_schema(
-                  {
-                    valid: {type: "boolean"},
-                    error: {type: ["object", "null"], additionalProperties: true},
-                    key: api_key_record_schema(include_secret: false).merge(type: ["object", "null"])
-                  },
-                  required: ["valid", "error", "key"]
-                )
-              )
+                response_schema
+              ),
+              "401" => BetterAuth::OpenAPI.json_response("API key authentication failed", response_schema),
+              "429" => BetterAuth::OpenAPI.json_response("API key usage or rate limit exceeded", response_schema)
             }
           }
         }

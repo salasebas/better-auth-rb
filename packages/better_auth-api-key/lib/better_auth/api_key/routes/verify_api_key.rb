@@ -20,7 +20,7 @@ module BetterAuth
             key = body[:key]
             if key.to_s.empty?
               raise BetterAuth::APIError.new(
-                "FORBIDDEN",
+                "UNAUTHORIZED",
                 message: BetterAuth::Plugins::API_KEY_ERROR_CODES["INVALID_API_KEY"],
                 code: "INVALID_API_KEY"
               )
@@ -30,7 +30,11 @@ module BetterAuth
             validation_config ||= resolved_config
             validator = validation_config[:custom_api_key_validator]
             if validator.respond_to?(:call) && !validator.call({ctx: ctx, key: key})
-              ctx.json({valid: false, error: {message: BetterAuth::Plugins::API_KEY_ERROR_CODES["INVALID_API_KEY"], code: "KEY_NOT_FOUND"}, key: nil})
+              raise BetterAuth::APIError.new(
+                "UNAUTHORIZED",
+                message: BetterAuth::Plugins::API_KEY_ERROR_CODES["INVALID_API_KEY"],
+                code: "KEY_NOT_FOUND"
+              )
             else
               record = BetterAuth::Plugins.api_key_validate!(ctx, key, validation_config, permissions: body[:permissions])
               record_config = BetterAuth::Plugins.api_key_resolve_config(ctx.context, config, BetterAuth::Plugins.api_key_record_config_id(record))
@@ -39,7 +43,13 @@ module BetterAuth
             end
           rescue BetterAuth::APIError => error
             ctx.context.logger.error("Failed to validate API key: #{error.message}") if ctx.context.logger.respond_to?(:error)
-            ctx.json({valid: false, error: BetterAuth::Plugins.api_key_error_payload(error), key: nil})
+            payload = BetterAuth::Plugins.api_key_error_payload(error)
+            payload[:code] = error.code if error.code == "KEY_NOT_FOUND"
+            ctx.json(
+              {valid: false, error: payload, key: nil},
+              status: error.status_code,
+              headers: error.headers
+            )
           rescue => error
             ctx.context.logger.error("Failed to validate API key: #{error.message}") if ctx.context.logger.respond_to?(:error)
             ctx.json({valid: false, error: {message: BetterAuth::Plugins::API_KEY_ERROR_CODES["INVALID_API_KEY"], code: "INVALID_API_KEY"}, key: nil})

@@ -12,7 +12,10 @@ module BetterAuth
           BetterAuth::Endpoint.new(path: "/api-key/create", method: "POST", metadata: Routes.openapi_for(:create_api_key)) do |ctx|
             body = BetterAuth::Plugins.api_key_normalize_body(ctx.body)
             resolved_config = BetterAuth::Plugins.api_key_resolve_config(ctx.context, config, body[:config_id])
-            session = BetterAuth::Routes.current_session(ctx, allow_nil: true)
+            # API-key ownership and authorization are sensitive operations. A
+            # cookie-cache snapshot may outlive a revoked session, so force an
+            # authoritative session read whenever stateful storage is active.
+            session = BetterAuth::Routes.current_session(ctx, allow_nil: true, sensitive: true)
             if !session && BetterAuth::Plugins.api_key_auth_required?(ctx)
               raise BetterAuth::APIError.new("UNAUTHORIZED", message: BetterAuth::Plugins::API_KEY_ERROR_CODES["UNAUTHORIZED_SESSION"])
             end

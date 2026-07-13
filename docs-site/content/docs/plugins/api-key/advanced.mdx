@@ -385,7 +385,14 @@ Check secondary storage first, then fallback to database if not found.
 **Write behavior:**
 
 * Writes to **both** database and secondary storage
-* Ensures consistency between both storage layers
+* The database is authoritative for verification. Cache refresh follows a
+  successful guarded database write, but the cross-store window before that
+  cache write can leave a stale entry or briefly re-create one. Verification
+  always re-reads the database; a missing authoritative row invalidates the
+  cache and can never authorize.
+* Generic custom storage serializes reference-list updates within one Ruby
+  process only. Redis-backed storage uses atomic JSON-list operations for
+  cross-process writers.
 
 ```ruby title="config/auth.rb"
 BetterAuth::Plugins.api_key(
@@ -461,6 +468,16 @@ The rate limiting system uses a sliding window approach:
 3. **Window Reset**: If the time since the last request exceeds the `timeWindow`, the window resets: `requestCount` is reset to 1 and `lastRequest` is updated to the current time.
 4. **Rate Limit Exceeded**: When a request is rejected due to rate limiting, the error response includes a `tryAgainIn` value (in milliseconds) indicating how long to wait before the window resets.
 
+Rate-limit rejections use HTTP status `429` and error code `RATE_LIMITED`.
+Authentication failures (missing, disabled, or expired keys) continue to use
+HTTP `401`.
+
+Database-backed counters use guarded atomic updates, so concurrent requests
+cannot exceed `rateLimitMax` or drive `remaining` below zero. Pure
+`secondary-storage` mode has no guarded JSON-record counter primitive and is
+best-effort across processes; use `fallback_to_database: true` for strict
+enforcement.
+
 **Disabling Rate Limiting**:
 
 * **Globally**: Set `rateLimit.enabled: false` in plugin options
@@ -477,7 +494,11 @@ The remaining count is the number of requests left before the API key is disable
 
 #### Remaining:
 
-Whenever an API key is used, the `remaining` count is updated. If the `remaining` count is `null`, then there is no cap to key usage. Otherwise, the `remaining` count is decremented by 1. If the `remaining` count is 0, then the API key is disabled & removed.
+Whenever an API key is used, the `remaining` count is updated. If the `remaining` count is `null`, then there is no cap to key usage. Otherwise, the `remaining` count is decremented by 1. Guarded database updates prevent it from becoming negative; an exhausted key is rejected with HTTP `429`.
+
+Ruby keeps an exhausted non-refillable row inert during verification instead of
+eagerly deleting it: a cross-process atomic delete-plus-counter operation is
+not available. Cleanup routes or jobs may remove exhausted rows separately.
 
 #### refillInterval & refillAmount:
 

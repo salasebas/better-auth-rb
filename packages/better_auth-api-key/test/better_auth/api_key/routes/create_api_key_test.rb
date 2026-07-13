@@ -83,6 +83,35 @@ class BetterAuthAPIKeyCreateRouteTest < Minitest::Test
     assert_equal 1000, refill[:refillInterval]
   end
 
+  def test_create_route_rejects_non_positive_refill_amount
+    auth = build_api_key_auth(default_key_length: 12)
+    cookie = sign_up_cookie(auth, email: "create-route-invalid-refill-key@example.com")
+    user_id = auth.api.get_session(headers: {"cookie" => cookie})[:user]["id"]
+
+    error = assert_raises(BetterAuth::APIError) do
+      auth.api.create_api_key(body: {userId: user_id, refillAmount: 0, refillInterval: 1000})
+    end
+
+    assert_equal "BAD_REQUEST", error.status
+    assert_equal BetterAuth::APIKey::ERROR_CODES.fetch("INVALID_REMAINING"), error.message
+  end
+
+  def test_create_route_rejects_revoked_cookie_cache_session
+    auth = build_api_key_auth(
+      default_key_length: 12,
+      session: {cookie_cache: {enabled: true, strategy: "jwe", max_age: 300}},
+      secondary_storage: MemoryStorage.new
+    )
+    cookie = sign_up_cookie(auth, email: "create-route-revoked-cookie@example.com")
+    session = auth.api.get_session(headers: {"cookie" => cookie})
+    auth.context.internal_adapter.delete_session(session[:session]["token"])
+
+    status, body = rack_json_response(auth, "POST", "/api-key/create", body: {}, cookie: cookie)
+
+    assert_equal 401, status
+    assert_equal BetterAuth::APIKey::ERROR_CODES.fetch("UNAUTHORIZED_SESSION"), body.fetch("message")
+  end
+
   def test_create_route_deletes_expired_database_keys_like_upstream
     BetterAuth::APIKey::Routes.instance_variable_set(:@last_expired_check, nil)
     auth = build_api_key_auth(default_key_length: 12)

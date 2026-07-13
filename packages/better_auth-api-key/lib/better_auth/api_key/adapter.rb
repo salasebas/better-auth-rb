@@ -10,6 +10,8 @@ module BetterAuth
       HASH_STORAGE_PREFIX = "api-key:"
       ID_STORAGE_PREFIX = "api-key:by-id:"
       REFERENCE_STORAGE_PREFIX = "api-key:by-ref:"
+      REFERENCE_LOCKS_GUARD = Mutex.new
+      REFERENCE_LOCK_STRIPE_COUNT = 256
 
       module_function
 
@@ -197,14 +199,40 @@ module BetterAuth
       end
 
       def ref_list_add(storage_instance, reference_key, id)
-        ids = safe_parse_id_list(storage_instance.get(reference_key))
-        ids << id unless ids.include?(id)
-        storage_instance.set(reference_key, JSON.generate(ids))
+        if storage_instance.respond_to?(:json_list_add)
+          storage_instance.json_list_add(reference_key, id)
+          return
+        end
+
+        with_reference_lock(reference_key) do
+          ids = safe_parse_id_list(storage_instance.get(reference_key))
+          ids << id unless ids.include?(id)
+          storage_instance.set(reference_key, JSON.generate(ids))
+        end
       end
 
       def ref_list_remove(storage_instance, reference_key, id)
-        ids = safe_parse_id_list(storage_instance.get(reference_key)).reject { |existing| existing == id }
-        ids.empty? ? storage_instance.delete(reference_key) : storage_instance.set(reference_key, JSON.generate(ids))
+        if storage_instance.respond_to?(:json_list_remove)
+          storage_instance.json_list_remove(reference_key, id)
+          return
+        end
+
+        with_reference_lock(reference_key) do
+          ids = safe_parse_id_list(storage_instance.get(reference_key)).reject { |existing| existing == id }
+          ids.empty? ? storage_instance.delete(reference_key) : storage_instance.set(reference_key, JSON.generate(ids))
+        end
+      end
+
+      # Custom secondary-storage implementations expose only get/set/delete,
+      # so serialize reference-list read/modify/write operations within this
+      # Ruby process. This lock is deliberately not treated as distributed
+      # safety; RedisStorage uses its atomic JSON-list scripts above.
+      def with_reference_lock(reference_key)
+        lock = REFERENCE_LOCKS_GUARD.synchronize do
+          @reference_lock_stripes ||= Array.new(REFERENCE_LOCK_STRIPE_COUNT) { Mutex.new }
+          @reference_lock_stripes[reference_key.hash % REFERENCE_LOCK_STRIPE_COUNT]
+        end
+        lock.synchronize { yield }
       end
 
       def safe_parse_id_list(raw)

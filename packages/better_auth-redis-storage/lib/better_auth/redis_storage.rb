@@ -23,6 +23,61 @@ module BetterAuth
       end
       return value
     LUA
+    JSON_LIST_ADD_SCRIPT = <<~LUA
+      local raw = redis.call("GET", KEYS[1])
+      local values = {}
+      if raw then
+        local ok, decoded = pcall(cjson.decode, raw)
+        local valid = ok and type(decoded) == "table" and string.match(raw, "^%s*%[") ~= nil and string.match(raw, "%]%s*$") ~= nil
+        if valid then
+          local count = 0
+          for key, _ in pairs(decoded) do
+            if type(key) ~= "number" or key < 1 or key % 1 ~= 0 then valid = false break end
+            count = count + 1
+          end
+          if valid then
+            for index = 1, count do
+              if decoded[index] == nil then valid = false break end
+            end
+          end
+        end
+        if valid then values = decoded end
+      end
+      local id = ARGV[1]
+      for _, value in ipairs(values) do
+        if tostring(value) == id then return 0 end
+      end
+      table.insert(values, id)
+      redis.call("SET", KEYS[1], cjson.encode(values))
+      return 1
+    LUA
+    JSON_LIST_REMOVE_SCRIPT = <<~LUA
+      local raw = redis.call("GET", KEYS[1])
+      if not raw then return 0 end
+      local ok, decoded = pcall(cjson.decode, raw)
+      local valid = ok and type(decoded) == "table" and string.match(raw, "^%s*%[") ~= nil and string.match(raw, "%]%s*$") ~= nil
+      if valid then
+        local count = 0
+        for key, _ in pairs(decoded) do
+          if type(key) ~= "number" or key < 1 or key % 1 ~= 0 then valid = false break end
+          count = count + 1
+        end
+        if valid then
+          for index = 1, count do
+            if decoded[index] == nil then valid = false break end
+          end
+        end
+      end
+      if not valid then redis.call("DEL", KEYS[1]) return 0 end
+      local id = ARGV[1]
+      local values = {}
+      local removed = 0
+      for _, value in ipairs(decoded) do
+        if tostring(value) == id then removed = 1 else table.insert(values, value) end
+      end
+      if #values == 0 then redis.call("DEL", KEYS[1]) else redis.call("SET", KEYS[1], cjson.encode(values)) end
+      return removed
+    LUA
 
     attr_reader :client, :key_prefix, :scan_count, :atomic_clear
 
@@ -101,6 +156,18 @@ module BetterAuth
       raise ArgumentError, "ttl must be a positive number of seconds" unless seconds
 
       Integer(eval_script(INCREMENT_SCRIPT, keys: [prefix_key(key)], argv: [seconds]))
+    end
+
+    # Atomically mutate a JSON array stored at +key+. These operations keep
+    # API-key reference indexes from losing IDs under concurrent writers.
+    def json_list_add(key, id)
+      eval_script(JSON_LIST_ADD_SCRIPT, keys: [prefix_key(key)], argv: [id.to_s])
+      nil
+    end
+
+    def json_list_remove(key, id)
+      eval_script(JSON_LIST_REMOVE_SCRIPT, keys: [prefix_key(key)], argv: [id.to_s])
+      nil
     end
 
     def set(key, value, ttl = nil)
