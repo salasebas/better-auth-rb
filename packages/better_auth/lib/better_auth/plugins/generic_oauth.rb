@@ -511,7 +511,7 @@ module BetterAuth
         end
         return parsed
       else
-        verification = ctx.context.internal_adapter.find_verification_value(state)
+        verification = ctx.context.internal_adapter.consume_verification_value(state)
         if verification
           cookie = ctx.context.create_auth_cookie("state")
           cookie_state = ctx.get_signed_cookie(cookie.name, ctx.context.secret)
@@ -524,7 +524,6 @@ module BetterAuth
           end
 
           parsed = JSON.parse(verification.fetch("value"))
-          ctx.context.internal_adapter.delete_verification_value(verification.fetch("id"))
           Cookies.expire_cookie(ctx, cookie) if ctx.request || cookie_state
           return parsed
         end

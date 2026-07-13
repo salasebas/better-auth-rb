@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require "base64"
+require "json"
 require "jwt"
 require "openssl"
 require "time"
@@ -417,9 +418,10 @@ module BetterAuth
         seconds && seconds <= Time.now.to_i
       end
 
-      def store_code(store, code:, client_id:, redirect_uri:, session:, scopes:, code_challenge: nil, code_challenge_method: nil, nonce: nil, reference_id: nil, auth_time: nil, expires_in: 600, store_tokens: "hashed")
+      def store_code(internal_adapter, code:, client_id:, redirect_uri:, session:, scopes:, code_challenge: nil, code_challenge_method: nil, nonce: nil, reference_id: nil, auth_time: nil, expires_in: 600, store_tokens: "hashed")
         stored_code = get_stored_token(store_tokens, code, "authorization_code")
-        store[:codes][stored_code] = {
+        expires_at = Time.now + expires_in.to_i
+        data = {
           client_id: client_id,
           redirect_uri: redirect_uri,
           session: session,
@@ -429,15 +431,19 @@ module BetterAuth
           nonce: nonce,
           reference_id: reference_id,
           auth_time: auth_time || session_auth_time(session),
-          expires_at: Time.now + expires_in.to_i
+          expires_at: expires_at.iso8601(6)
         }
+        internal_adapter.create_verification_value(identifier: stored_code, value: JSON.generate(data), expiresAt: expires_at)
       end
 
-      def consume_code!(store, code, client_id:, redirect_uri:, code_verifier: nil, store_tokens: "hashed")
+      def consume_code!(internal_adapter, code, client_id:, redirect_uri:, code_verifier: nil, store_tokens: "hashed")
         stored_code = get_stored_token(store_tokens, code.to_s, "authorization_code")
-        data = store[:codes].delete(stored_code) || store[:codes].delete(code.to_s)
-        raise APIError.new("BAD_REQUEST", message: "invalid_grant") unless data
-        raise APIError.new("BAD_REQUEST", message: "invalid_grant") if data[:expires_at] <= Time.now
+        verification = internal_adapter.consume_verification_value(stored_code)
+        verification ||= internal_adapter.consume_verification_value(code.to_s) if stored_code != code.to_s
+        data = verification && JSON.parse(verification.fetch("value"), symbolize_names: true)
+        unless data.is_a?(Hash) && !data[:client_id].to_s.empty? && !data[:redirect_uri].to_s.empty? && data[:session].is_a?(Hash) && data[:scopes].is_a?(Array)
+          raise APIError.new("BAD_REQUEST", message: "invalid_grant")
+        end
         raise APIError.new("BAD_REQUEST", message: "invalid_grant") unless data[:client_id] == client_id.to_s
         raise APIError.new("BAD_REQUEST", message: "invalid_grant") unless data[:redirect_uri] == redirect_uri.to_s
         if data[:code_challenge]
@@ -447,6 +453,8 @@ module BetterAuth
         end
 
         data
+      rescue JSON::ParserError, KeyError, TypeError
+        raise APIError.new("BAD_REQUEST", message: "invalid_grant")
       end
 
       def verify_pkce!(code_data, verifier)
@@ -1057,7 +1065,6 @@ module BetterAuth
 
       def stores
         {
-          codes: {},
           tokens: {},
           refresh_tokens: {},
           consents: {}

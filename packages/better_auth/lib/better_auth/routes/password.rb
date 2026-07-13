@@ -152,8 +152,8 @@ module BetterAuth
         password = body["newPassword"] || body["new_password"]
         validate_password_length!(password, ctx.context.options.email_and_password)
 
-        verification = ctx.context.internal_adapter.find_verification_value("reset-password:#{token}")
-        raise APIError.new("BAD_REQUEST", message: BASE_ERROR_CODES["INVALID_TOKEN"]) unless verification && !expired_time?(verification["expiresAt"])
+        verification = ctx.context.internal_adapter.consume_verification_value("reset-password:#{token}")
+        raise APIError.new("BAD_REQUEST", message: BASE_ERROR_CODES["INVALID_TOKEN"]) unless verification
 
         user_id = verification["value"]
         hashed = hash_password(ctx, password)
@@ -163,8 +163,6 @@ module BetterAuth
         else
           ctx.context.internal_adapter.create_account(userId: user_id, providerId: "credential", accountId: user_id, password: hashed)
         end
-        ctx.context.internal_adapter.delete_verification_value(verification["id"])
-
         if (callback = ctx.context.options.email_and_password[:on_password_reset])
           user = ctx.context.internal_adapter.find_user_by_id(user_id)
           callback.call({user: user}, ctx.request) if user

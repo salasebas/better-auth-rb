@@ -26,6 +26,33 @@ class BetterAuthPluginsOneTimeTokenTest < Minitest::Test
     assert_equal "Invalid token", reused.message
   end
 
+  def test_concurrent_one_time_token_redemption_has_exactly_one_winner
+    auth = build_auth(plugins: [BetterAuth::Plugins.one_time_token(disable_set_session_cookie: true)])
+    cookie = sign_up_cookie(auth, email: "concurrent-ott@example.com")
+    token = auth.api.generate_one_time_token(headers: {"cookie" => cookie})[:token]
+    ready = Queue.new
+    start = Queue.new
+    results = Queue.new
+
+    threads = 8.times.map do
+      Thread.new do
+        ready << true
+        start.pop
+        result = auth.api.verify_one_time_token(body: {token: token})
+        results << [:success, result]
+      rescue BetterAuth::APIError => error
+        results << [:error, error]
+      end
+    end
+    8.times { ready.pop }
+    8.times { start << true }
+    threads.each(&:join)
+
+    outcomes = 8.times.map { results.pop }
+    assert_equal 1, outcomes.count { |kind, _| kind == :success }
+    assert_equal 7, outcomes.count { |kind, value| kind == :error && value.message == "Invalid token" }
+  end
+
   def test_expired_token_and_expired_session_are_rejected
     expired = build_auth(plugins: [BetterAuth::Plugins.one_time_token(expires_in: -1)])
     expired_cookie = sign_up_cookie(expired, email: "expired-ott@example.com")
@@ -35,7 +62,7 @@ class BetterAuthPluginsOneTimeTokenTest < Minitest::Test
       expired.api.verify_one_time_token(body: {token: token})
     end
     assert_equal 400, token_error.status_code
-    assert_equal "Token expired", token_error.message
+    assert_equal "Invalid token", token_error.message
 
     session_expired = build_auth(plugins: [BetterAuth::Plugins.one_time_token(expires_in: 3)])
     session_cookie = sign_up_cookie(session_expired, email: "session-expired-ott@example.com")

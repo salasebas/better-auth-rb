@@ -1467,15 +1467,26 @@ class BetterAuthPluginsSSOSAMLTest < Minitest::Test
     end
 
     response = Base64.strict_encode64(JSON.generate({ignored: true}))
-    auth.api.acs_endpoint(params: {providerId: "saml-one"}, body: {SAMLResponse: response})
+    session_count = auth.context.adapter.find_many(model: "session").length
+    ready = Queue.new
+    start = Queue.new
+    results = Queue.new
+    threads = %w[saml-one saml-two].map do |provider_id|
+      Thread.new do
+        ready << true
+        start.pop
+        results << auth.api.acs_endpoint(params: {providerId: provider_id}, body: {SAMLResponse: response}, as_response: true)
+      end
+    end
+    2.times { ready.pop }
+    2.times { start << true }
+    threads.each(&:join)
 
-    replay_status, replay_headers, _replay_body = auth.api.acs_endpoint(
-      params: {providerId: "saml-two"},
-      body: {SAMLResponse: response},
-      as_response: true
-    )
-    assert_equal 302, replay_status
-    assert_equal "/?error=replay_detected&error_description=SAML+assertion+has+already+been+used", replay_headers.fetch("location")
+    responses = 2.times.map { results.pop }
+    locations = responses.map { |_, headers, _| headers.fetch("location") }
+    assert_equal 1, locations.count { |location| location.include?("error=replay_detected") }
+    assert_equal 1, locations.count { |location| !location.include?("error=") }
+    assert_equal session_count + 1, auth.context.adapter.find_many(model: "session").length
     assert auth.context.internal_adapter.find_verification_value("saml-used-assertion:assertion-global")
   end
 

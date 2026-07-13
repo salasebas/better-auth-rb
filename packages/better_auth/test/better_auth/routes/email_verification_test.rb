@@ -573,6 +573,7 @@ class BetterAuthRoutesEmailVerificationTest < Minitest::Test
   class StringStorage
     def initialize
       @store = {}
+      @mutex = Mutex.new
     end
 
     def set(key, value, _ttl = nil)
@@ -585,6 +586,10 @@ class BetterAuthRoutesEmailVerificationTest < Minitest::Test
 
     def delete(key)
       @store.delete(key)
+    end
+
+    def get_and_delete(key)
+      @mutex.synchronize { @store.delete(key) }
     end
   end
 end

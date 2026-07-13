@@ -29,6 +29,32 @@ class BetterAuthPluginsEmailOTPTest < Minitest::Test
     assert_equal true, auth.context.internal_adapter.find_user_by_email("verify@example.com")[:user]["emailVerified"]
   end
 
+  def test_concurrent_email_otp_sign_in_has_exactly_one_winner
+    sent = []
+    auth = build_auth(plugins: [BetterAuth::Plugins.email_otp(send_verification_otp: ->(data, _ctx = nil) { sent << data })])
+    auth.api.sign_up_email(body: {email: "email-otp-race@example.com", password: "password123", name: "Race"})
+    auth.api.send_verification_otp(body: {email: "email-otp-race@example.com", type: "sign-in"})
+    ready = Queue.new
+    start = Queue.new
+    results = Queue.new
+    threads = 6.times.map do
+      Thread.new do
+        ready << true
+        start.pop
+        results << [:success, auth.api.sign_in_email_otp(body: {email: "email-otp-race@example.com", otp: sent.last[:otp]})]
+      rescue BetterAuth::APIError => error
+        results << [:error, error]
+      end
+    end
+    6.times { ready.pop }
+    6.times { start << true }
+    threads.each(&:join)
+
+    outcomes = 6.times.map { results.pop }
+    assert_equal 1, outcomes.count { |kind, _| kind == :success }
+    assert_equal 5, outcomes.count { |kind, error| kind == :error && error.message == BetterAuth::Plugins::EMAIL_OTP_ERROR_CODES["INVALID_OTP"] }
+  end
+
   def test_sign_in_with_email_otp_creates_session_and_can_sign_up_new_users
     sent = []
     auth = build_auth(

@@ -145,6 +145,7 @@ module BetterAuthPasskeyTestSupport
     def initialize
       @data = {}
       @ttls = {}
+      @mutex = Mutex.new
     end
 
     def get(key)
@@ -160,6 +161,14 @@ module BetterAuthPasskeyTestSupport
     def delete(key)
       data.delete(key)
       ttls.delete(key)
+    end
+
+    def get_and_delete(key)
+      @mutex.synchronize do
+        value = data.delete(key)
+        ttls.delete(key)
+        value
+      end
     end
   end
 

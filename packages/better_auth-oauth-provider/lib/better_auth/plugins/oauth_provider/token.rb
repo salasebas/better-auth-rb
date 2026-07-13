@@ -22,7 +22,7 @@ module BetterAuth
         response = case body["grant_type"]
         when OAuthProtocol::AUTH_CODE_GRANT
           code = OAuthProtocol.consume_code!(
-            config[:store],
+            ctx.context.internal_adapter,
             body["code"],
             client_id: client_id,
             redirect_uri: body["redirect_uri"],

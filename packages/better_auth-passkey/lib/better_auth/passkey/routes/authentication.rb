@@ -24,7 +24,7 @@ module BetterAuth
             }
             get_options[:allow] = passkeys.map { |passkey| Credentials.credential_id(passkey) } if passkeys.any?
             options = WebAuthn::Credential.options_for_get(**get_options)
-            Challenges.store_challenge(ctx, config, options.challenge, session ? session.fetch(:user).fetch("id") : "")
+            Challenges.store_challenge(ctx, config, options.challenge, session ? session.fetch(:user).fetch("id") : "", ceremony: "authentication")
             payload = options.as_json.merge(userVerification: "preferred")
             payload.delete(:extensions) if payload[:extensions].nil? || payload[:extensions] == {}
             payload.delete("extensions") if payload["extensions"].nil? || payload["extensions"] == {}
@@ -48,7 +48,7 @@ module BetterAuth
             verification_token = Challenges.challenge_token(ctx, config)
             raise APIError.new("BAD_REQUEST", message: ErrorCodes::PASSKEY_ERROR_CODES.fetch("CHALLENGE_NOT_FOUND")) unless verification_token
 
-            challenge = Challenges.find_challenge(ctx, verification_token)
+            challenge = Challenges.find_challenge(ctx, verification_token, ceremony: "authentication")
             raise APIError.new("BAD_REQUEST", message: ErrorCodes::PASSKEY_ERROR_CODES.fetch("CHALLENGE_NOT_FOUND")) unless challenge
 
             begin
@@ -75,10 +75,14 @@ module BetterAuth
                 verification: credential,
                 client_data: response
               })
-              updated_passkey = ctx.context.adapter.update(
+              previous_counter = passkey.fetch("counter").to_i
+              updated_passkey = ctx.context.adapter.increment_one(
                 model: "passkey",
-                where: [{field: "id", value: passkey.fetch("id")}],
-                update: {counter: credential.sign_count.to_i}
+                where: [
+                  {field: "id", value: passkey.fetch("id")},
+                  {field: "counter", value: previous_counter}
+                ],
+                increment: {counter: credential.sign_count.to_i - previous_counter}
               )
               unless updated_passkey
                 raise APIError.new("BAD_REQUEST", message: ErrorCodes::PASSKEY_ERROR_CODES.fetch("AUTHENTICATION_FAILED"))
@@ -91,17 +95,13 @@ module BetterAuth
               raise APIError.new("INTERNAL_SERVER_ERROR", message: ErrorCodes::PASSKEY_ERROR_CODES.fetch("UNABLE_TO_CREATE_SESSION")) unless session
 
               Cookies.set_session_cookie(ctx, {session: session, user: user})
-              ctx.context.internal_adapter.delete_verification_by_identifier(verification_token)
               ctx.json({session: session, user: user})
             rescue WebAuthn::Error, ArgumentError => error
-              ctx.context.internal_adapter.delete_verification_by_identifier(verification_token)
               ctx.context.logger&.error("Failed to verify authentication", error)
               raise APIError.new("BAD_REQUEST", message: ErrorCodes::PASSKEY_ERROR_CODES.fetch("AUTHENTICATION_FAILED"))
             rescue APIError
-              ctx.context.internal_adapter.delete_verification_by_identifier(verification_token)
               raise
             rescue => error
-              ctx.context.internal_adapter.delete_verification_by_identifier(verification_token)
               ctx.context.logger&.error("Failed to verify authentication", error)
               raise APIError.new("BAD_REQUEST", message: ErrorCodes::PASSKEY_ERROR_CODES.fetch("AUTHENTICATION_FAILED"))
             end

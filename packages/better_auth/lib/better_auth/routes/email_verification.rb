@@ -106,7 +106,7 @@ module BetterAuth
           session = current_session(ctx, allow_nil: true)
           return redirect_or_error(ctx, callback_url, "invalid_user") if session && session[:user]["email"] != email
 
-          consume_change_email_token!(ctx, change_email_token_identifier)
+          consume_change_email_token!(ctx, change_email_token_identifier, callback_url)
           request_type = payload["requestType"] || payload["request_type"]
           case request_type
           when "change-email-confirmation"
@@ -207,10 +207,13 @@ module BetterAuth
       identifier
     end
 
-    def self.consume_change_email_token!(ctx, identifier)
+    def self.consume_change_email_token!(ctx, identifier, callback_url)
       return unless identifier
 
-      ctx.context.internal_adapter.delete_verification_by_identifier(identifier)
+      verification = ctx.context.internal_adapter.consume_verification_value(identifier)
+      unless verification
+        redirect_or_error(ctx, callback_url, BASE_ERROR_CODES["TOKEN_ALREADY_USED"], code: "TOKEN_ALREADY_USED")
+      end
     end
 
     def self.change_email_token_identifier(token)

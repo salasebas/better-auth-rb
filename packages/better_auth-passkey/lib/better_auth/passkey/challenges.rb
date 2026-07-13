@@ -15,7 +15,7 @@ module BetterAuth
         body.merge(query)[:context]
       end
 
-      def store_challenge(ctx, config, challenge, user_id)
+      def store_challenge(ctx, config, challenge, user_id, ceremony: nil)
         user_data = user_id.is_a?(Hash) ? user_id : {id: user_id}
         verification_token = Crypto.random_string(32)
         cookie = challenge_cookie(ctx, config)
@@ -25,17 +25,21 @@ module BetterAuth
           value: JSON.generate({
             expectedChallenge: challenge,
             userData: user_data,
-            context: challenge_context(ctx)
+            context: challenge_context(ctx),
+            type: ceremony
           }),
           expiresAt: Time.now + CHALLENGE_MAX_AGE
         )
       end
 
-      def find_challenge(ctx, verification_token)
-        verification = ctx.context.internal_adapter.find_verification_value(verification_token)
-        return nil if verification.nil? || BetterAuth::Routes.expired_time?(verification["expiresAt"] || verification[:expiresAt])
+      def find_challenge(ctx, verification_token, ceremony: nil)
+        verification = ctx.context.internal_adapter.consume_verification_value(verification_token)
+        return nil unless verification
 
-        JSON.parse(verification.fetch("value") { verification.fetch(:value) })
+        challenge = JSON.parse(verification.fetch("value") { verification.fetch(:value) })
+        return nil if ceremony && challenge["type"] && challenge["type"] != ceremony
+
+        challenge
       rescue JSON::ParserError
         nil
       end

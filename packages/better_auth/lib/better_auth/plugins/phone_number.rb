@@ -110,7 +110,7 @@ module BetterAuth
 
         if config[:require_verification] && !found["phoneNumberVerified"]
           code = phone_number_generate_code(config)
-          phone_number_store_code(ctx, config, phone_number, code)
+          phone_number_store_code(ctx, config, phone_number, code) unless config[:verify_otp].respond_to?(:call)
           phone_number_deliver_otp(config, {phone_number: phone_number, code: code}, ctx)
           raise APIError.new("UNAUTHORIZED", message: PHONE_NUMBER_ERROR_CODES["PHONE_NUMBER_NOT_VERIFIED"])
         end
@@ -170,7 +170,7 @@ module BetterAuth
         phone_number = body[:phone_number].to_s
         validate_phone_number!(config, phone_number)
         code = phone_number_generate_code(config)
-        phone_number_store_code(ctx, config, phone_number, code)
+        phone_number_store_code(ctx, config, phone_number, code) unless config[:verify_otp].respond_to?(:call)
         phone_number_deliver_otp(config, {phone_number: phone_number, code: code}, ctx)
         ctx.json({message: "code sent"})
       end
@@ -280,7 +280,7 @@ module BetterAuth
         phone_number = body[:phone_number].to_s
         user = ctx.context.adapter.find_one(model: "user", where: [{field: "phoneNumber", value: phone_number}])
         code = phone_number_generate_code(config)
-        phone_number_store_code(ctx, config, "#{phone_number}-request-password-reset", code)
+        phone_number_store_code(ctx, config, "#{phone_number}-request-password-reset", code) unless config[:verify_otp].respond_to?(:call)
 
         if user && config[:send_password_reset_otp].respond_to?(:call)
           config[:send_password_reset_otp].call({phone_number: phone_number, code: code}, ctx)
@@ -319,13 +319,12 @@ module BetterAuth
         otp = body[:otp].to_s
         new_password = body[:new_password]
 
-        verification = phone_number_verify_code!(ctx, config, "#{phone_number}-request-password-reset", otp, consume: false)
         user = ctx.context.adapter.find_one(model: "user", where: [{field: "phoneNumber", value: phone_number}])
         raise APIError.new("BAD_REQUEST", message: PHONE_NUMBER_ERROR_CODES["UNEXPECTED_ERROR"]) unless user
 
         Routes.validate_password_length!(new_password, ctx.context.options.email_and_password)
+        phone_number_verify_code!(ctx, config, "#{phone_number}-request-password-reset", otp)
         ctx.context.internal_adapter.update_password(user["id"], Routes.hash_password(ctx, new_password))
-        ctx.context.internal_adapter.delete_verification_value(verification["id"])
         ctx.context.internal_adapter.delete_sessions(user["id"]) if ctx.context.options.email_and_password[:revoke_sessions_on_password_reset]
         ctx.json({status: true})
       end
@@ -367,43 +366,52 @@ module BetterAuth
     def phone_number_verify_code!(ctx, config, identifier, code, consume: true)
       verifier = config[:verify_otp]
       if verifier.respond_to?(:call)
+        # Custom verify_otp owns single-use and expiry state completely.
         valid = verifier.call({phone_number: identifier.delete_suffix("-request-password-reset"), code: code}, ctx)
         raise APIError.new("BAD_REQUEST", message: PHONE_NUMBER_ERROR_CODES["INVALID_OTP"]) unless valid
 
-        verification = ctx.context.internal_adapter.find_verification_value(identifier)
-        ctx.context.internal_adapter.delete_verification_value(verification["id"]) if consume && verification
-        return verification || true
+        return true
       end
 
-      verification = ctx.context.internal_adapter.find_verification_value(identifier)
-      raise APIError.new("BAD_REQUEST", message: PHONE_NUMBER_ERROR_CODES["OTP_NOT_FOUND"]) unless verification
+      existing = ctx.context.internal_adapter.find_verification_value(identifier)
+      raise APIError.new("BAD_REQUEST", message: PHONE_NUMBER_ERROR_CODES["OTP_NOT_FOUND"]) unless existing
 
-      if Routes.expired_time?(verification["expiresAt"])
+      if Routes.expired_time?(existing["expiresAt"])
+        ctx.context.internal_adapter.delete_verification_by_identifier(identifier)
         raise APIError.new("BAD_REQUEST", message: PHONE_NUMBER_ERROR_CODES["OTP_EXPIRED"])
       end
+
+      _, existing_attempts = phone_number_split_code(existing["value"])
+      if existing_attempts.to_i >= config[:allowed_attempts].to_i
+        ctx.context.internal_adapter.delete_verification_by_identifier(identifier)
+        raise APIError.new("FORBIDDEN", message: PHONE_NUMBER_ERROR_CODES["TOO_MANY_ATTEMPTS"])
+      end
+
+      verification = ctx.context.internal_adapter.consume_verification_value(identifier)
+      raise APIError.new("BAD_REQUEST", message: PHONE_NUMBER_ERROR_CODES["INVALID_OTP"]) unless verification
 
       stored_code, attempts = phone_number_split_code(verification["value"])
       attempts_count = attempts.to_i
       if attempts_count >= config[:allowed_attempts].to_i
-        ctx.context.internal_adapter.delete_verification_value(verification["id"])
         raise APIError.new("FORBIDDEN", message: PHONE_NUMBER_ERROR_CODES["TOO_MANY_ATTEMPTS"])
       end
 
       unless stored_code == code
-        ctx.context.internal_adapter.update_verification_value(verification["id"], value: "#{stored_code}:#{attempts_count + 1}")
+        ctx.context.internal_adapter.create_verification_value(identifier: identifier, value: "#{stored_code}:#{attempts_count + 1}", expiresAt: verification["expiresAt"])
         raise APIError.new("BAD_REQUEST", message: PHONE_NUMBER_ERROR_CODES["INVALID_OTP"])
       end
 
-      ctx.context.internal_adapter.delete_verification_value(verification["id"]) if consume
+      ctx.context.internal_adapter.create_verification_value(identifier: identifier, value: verification["value"], expiresAt: verification["expiresAt"]) unless consume
       verification
     end
 
     def phone_number_store_code(ctx, config, identifier, code)
       ctx.context.internal_adapter.delete_verification_by_identifier(identifier)
+      expires_at = Time.now + config[:expires_in].to_i
       ctx.context.internal_adapter.create_verification_value(
         identifier: identifier,
         value: "#{code}:0",
-        expiresAt: Time.now + config[:expires_in].to_i
+        expiresAt: expires_at
       )
     end
 

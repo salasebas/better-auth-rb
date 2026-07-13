@@ -91,28 +91,22 @@ module BetterAuth
       in_response_to = sso_extract_saml_in_response_to(raw_response)
       if in_response_to && !in_response_to.empty?
         identifier = "#{SSO_SAML_AUTHN_REQUEST_KEY_PREFIX}#{in_response_to}"
-        verification = ctx.context.internal_adapter.find_verification_value(identifier)
+        verification = ctx.context.internal_adapter.consume_verification_value(identifier)
         record = sso_parse_saml_authn_request_record(verification&.fetch("value", nil))
-        if !record || record["expiresAt"].to_i < (Time.now.to_f * 1000).to_i
+        unless record
           return sso_redirect(ctx, sso_append_error(state["callbackURL"] || "/", "invalid_saml_response", "Unknown or expired request ID"))
         end
 
         if record["providerId"] != provider.fetch("providerId")
-          ctx.context.internal_adapter.delete_verification_by_identifier(identifier)
           return sso_redirect(ctx, sso_append_error(state["callbackURL"] || "/", "invalid_saml_response", "Provider mismatch"))
         end
 
-        return {identifier: identifier}
+        return true
       elsif config.dig(:saml, :allow_idp_initiated) == false
         return sso_redirect(ctx, sso_append_error(state["callbackURL"] || "/", "unsolicited_response", "IdP-initiated SSO not allowed"))
       end
 
       nil
-    end
-
-    def sso_consume_saml_in_response_to(ctx, result)
-      identifier = result.is_a?(Hash) ? result[:identifier] : nil
-      ctx.context.internal_adapter.delete_verification_by_identifier(identifier) unless identifier.to_s.empty?
     end
 
     def sso_parse_saml_authn_request_record(value)
@@ -177,22 +171,41 @@ module BetterAuth
     end
 
     def sso_oidc_tokens(ctx, provider, oidc_config, state, plugin_config, raw_state: nil)
-      code_verifier = sso_oidc_code_verifier(ctx, raw_state || state["state"] || state[:state])
+      raw_state_value = raw_state || state["state"] || state[:state]
+      verification = sso_consume_oidc_pkce_verifier(ctx, raw_state_value)
+      code_verifier = verification&.fetch("value", nil)
+      return nil if oidc_config[:pkce] && code_verifier.to_s.empty?
+      restoration_attempted = false
+      restore_once = lambda do
+        next if restoration_attempted
+
+        restoration_attempted = true
+        sso_restore_oidc_pkce_verifier(ctx, raw_state_value, verification)
+      end
+
       token_callback = oidc_config[:get_token]
       if token_callback.respond_to?(:call)
-        return normalize_hash(token_callback.call(
+        raw_tokens = token_callback.call(
           code: ctx.query[:code] || ctx.query["code"],
           codeVerifier: code_verifier,
           redirectURI: sso_oidc_redirect_uri(ctx.context, provider.fetch("providerId")),
           provider: provider,
           context: ctx
-        ))
+        )
+        unless raw_tokens
+          restore_once.call
+          return nil
+        end
+        return normalize_hash(raw_tokens)
       end
 
       token_endpoint = oidc_config[:token_endpoint]
-      return nil if token_endpoint.to_s.empty?
+      if token_endpoint.to_s.empty?
+        restore_once.call
+        return nil
+      end
 
-      sso_exchange_oidc_code(
+      tokens = sso_exchange_oidc_code(
         token_endpoint: token_endpoint,
         code: ctx.query[:code] || ctx.query["code"],
         code_verifier: code_verifier,
@@ -204,7 +217,10 @@ module BetterAuth
         max_body_size: plugin_config[:oidc_http_max_body_size],
         trusted_origin: sso_oidc_trusted_origin_check(ctx)
       )
+      restore_once.call unless tokens
+      tokens
     rescue
+      restore_once&.call if verification
       nil
     end
 
@@ -389,20 +405,28 @@ module BetterAuth
     end
 
     def sso_store_oidc_pkce_verifier(ctx, state, verifier)
-      ctx.context.internal_adapter.create_verification_value(
+      ctx.context.internal_adapter.reserve_verification_value(
         identifier: "#{SSO_OIDC_PKCE_VERIFIER_KEY_PREFIX}#{state}",
         value: verifier,
         expiresAt: Time.now + 600
       )
     end
 
-    def sso_oidc_code_verifier(ctx, state)
+    def sso_consume_oidc_pkce_verifier(ctx, state)
       return nil if state.to_s.empty?
 
       identifier = "#{SSO_OIDC_PKCE_VERIFIER_KEY_PREFIX}#{state}"
-      verification = ctx.context.internal_adapter.find_verification_value(identifier)
-      ctx.context.internal_adapter.delete_verification_by_identifier(identifier) if verification
-      verification&.fetch("value", nil)
+      ctx.context.internal_adapter.consume_verification_value(identifier)
+    end
+
+    def sso_restore_oidc_pkce_verifier(ctx, state, verification)
+      return unless verification && verification["expiresAt"] > Time.now
+
+      ctx.context.internal_adapter.create_verification_value(
+        identifier: "#{SSO_OIDC_PKCE_VERIFIER_KEY_PREFIX}#{state}",
+        value: verification.fetch("value"),
+        expiresAt: verification.fetch("expiresAt")
+      )
     end
 
     def sso_oidc_http_timeout(value)

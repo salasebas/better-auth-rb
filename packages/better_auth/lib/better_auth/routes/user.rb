@@ -351,11 +351,10 @@ module BetterAuth
     end
 
     def self.delete_user_by_token!(ctx, session, token)
-      verification = ctx.context.internal_adapter.find_verification_value("delete-account-#{token}")
-      unless verification && verification["value"] == session[:user]["id"] && !expired_time?(verification["expiresAt"])
+      verification = ctx.context.internal_adapter.consume_verification_value("delete-account-#{token}")
+      unless verification && verification["value"] == session[:user]["id"]
         raise APIError.new("NOT_FOUND", message: BASE_ERROR_CODES["INVALID_TOKEN"])
       end
-      ctx.context.internal_adapter.delete_verification_value(verification["id"])
     end
 
     def self.delete_current_user!(ctx, session)

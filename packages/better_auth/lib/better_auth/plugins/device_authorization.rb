@@ -162,6 +162,18 @@ module BetterAuth
           ctx.context.adapter.delete(model: "deviceCode", where: [{field: "id", value: record["id"]}])
           raise device_authorization_error("BAD_REQUEST", "access_denied", DEVICE_AUTHORIZATION_ERROR_CODES["ACCESS_DENIED"])
         when "approved"
+          claimed = ctx.context.adapter.consume_one(
+            model: "deviceCode",
+            where: [
+              {field: "deviceCode", value: body["device_code"].to_s},
+              {field: "status", value: "approved"}
+            ]
+          )
+          unless claimed && claimed["userId"]
+            raise device_authorization_error("BAD_REQUEST", "invalid_grant", DEVICE_AUTHORIZATION_ERROR_CODES["INVALID_DEVICE_CODE"])
+          end
+
+          record = OAuthProtocol.stringify_keys(claimed)
           user = ctx.context.internal_adapter.find_user_by_id(record["userId"])
           raise device_authorization_error("INTERNAL_SERVER_ERROR", "server_error", DEVICE_AUTHORIZATION_ERROR_CODES["USER_NOT_FOUND"]) unless user
 
@@ -170,7 +182,6 @@ module BetterAuth
 
           session_data = {session: session, user: user}
           ctx.context.set_new_session(session_data) if ctx.context.respond_to?(:set_new_session)
-          ctx.context.adapter.delete(model: "deviceCode", where: [{field: "id", value: record["id"]}])
           ctx.json({
             access_token: session["token"],
             token_type: "Bearer",
@@ -278,11 +289,17 @@ module BetterAuth
         raise device_authorization_error("FORBIDDEN", "access_denied", "You are not authorized to #{action} this device authorization")
       end
 
-      ctx.context.adapter.update(
+      updated = ctx.context.adapter.increment_one(
         model: "deviceCode",
-        where: [{field: "id", value: record["id"]}],
-        update: {"status" => status, "userId" => record["userId"] || session[:user]["id"]}
+        where: [
+          {field: "id", value: record["id"]},
+          {field: "status", value: "pending"},
+          {field: "userId", value: record["userId"]}
+        ],
+        increment: {},
+        set: {"status" => status, "userId" => record["userId"] || session[:user]["id"]}
       )
+      raise device_authorization_error("BAD_REQUEST", "invalid_request", DEVICE_AUTHORIZATION_ERROR_CODES["DEVICE_CODE_ALREADY_PROCESSED"]) unless updated
       ctx.json({success: true})
     end
 

@@ -21,22 +21,24 @@ module BetterAuth
       if raw_response.to_s.bytesize > max_response_size
         raise APIError.new("BAD_REQUEST", message: "SAML response exceeds maximum allowed size (#{max_response_size} bytes)")
       end
-      in_response_to_result = sso_validate_saml_in_response_to(ctx, config, provider, raw_response, state)
-      return in_response_to_result if in_response_to_result.is_a?(Array)
-
       assertion = sso_parse_saml_response(raw_response, config, provider, ctx)
       assertion[:email_verified] = false unless config[:trust_email_verified]
       sso_validate_saml_timestamp!(sso_saml_timestamp_conditions(assertion), config)
       sso_validate_saml_response!(config, assertion, provider, ctx)
-      sso_consume_saml_in_response_to(ctx, in_response_to_result)
+      in_response_to_result = sso_validate_saml_in_response_to(ctx, config, provider, raw_response, state)
+      return in_response_to_result if in_response_to_result.is_a?(Array)
       assertion_id = assertion[:id] || assertion["id"]
       unless assertion_id.to_s.empty?
         replay_key = "#{SSO_SAML_USED_ASSERTION_KEY_PREFIX}#{assertion_id}"
-        if ctx.context.internal_adapter.find_verification_value(replay_key)
+        reserved = ctx.context.internal_adapter.reserve_verification_value(
+          identifier: replay_key,
+          value: "used",
+          expiresAt: sso_saml_assertion_replay_expires_at(assertion, config)
+        )
+        unless reserved
           callback_url = sso_safe_saml_callback_url(ctx, state["callbackURL"] || sso_saml_callback_url(provider) || "/", provider.fetch("providerId"))
           return sso_redirect(ctx, sso_append_error(callback_url, "replay_detected", "SAML assertion has already been used"))
         end
-        ctx.context.internal_adapter.create_verification_value(identifier: replay_key, value: "used", expiresAt: sso_saml_assertion_replay_expires_at(assertion, config))
       end
 
       callback_url = sso_safe_saml_callback_url(ctx, state["callbackURL"] || sso_saml_callback_url(provider) || "/", provider.fetch("providerId"))

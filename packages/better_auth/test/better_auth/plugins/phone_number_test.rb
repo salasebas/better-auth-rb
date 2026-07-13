@@ -404,6 +404,17 @@ class BetterAuthPluginsPhoneNumberTest < Minitest::Test
     assert_equal BetterAuth::Plugins::PHONE_NUMBER_ERROR_CODES["INVALID_OTP"], rejected.message
   end
 
+  def test_custom_verify_otp_owns_state_and_send_does_not_create_internal_verification
+    auth = build_auth(plugins: [BetterAuth::Plugins.phone_number(send_otp: ->(*) {}, send_password_reset_otp: ->(*) {}, verify_otp: ->(*) { true })])
+    phone_number = "+14155550199"
+
+    auth.api.send_phone_number_otp(body: {phoneNumber: phone_number})
+    auth.api.request_password_reset_phone_number(body: {phoneNumber: phone_number})
+
+    assert_nil auth.context.internal_adapter.find_verification_value(phone_number)
+    assert_nil auth.context.internal_adapter.find_verification_value("#{phone_number}-request-password-reset")
+  end
+
   def test_send_otp_requires_configured_delivery_callback
     auth = build_auth(plugins: [BetterAuth::Plugins.phone_number])
 

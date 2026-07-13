@@ -215,21 +215,20 @@ module BetterAuth
       Endpoint.new(path: "/two-factor/verify-otp", method: "POST", metadata: two_factor_openapi("verifyTwoFactorOTP", "Verify a two factor OTP", two_factor_verification_response_schema)) do |ctx|
         body = normalize_hash(ctx.body)
         data = two_factor_verification_context(ctx, config)
-        verification = ctx.context.internal_adapter.find_verification_value("2fa-otp-#{data[:key]}")
+        identifier = "2fa-otp-#{data[:key]}"
+        verification = ctx.context.internal_adapter.consume_verification_value(identifier)
         stored, counter = verification&.fetch("value", nil).to_s.split(":", 2)
-        if !verification || verification["expiresAt"] < Time.now
-          ctx.context.internal_adapter.delete_verification_value(verification["id"]) if verification
+        unless verification
           raise APIError.new("BAD_REQUEST", message: TWO_FACTOR_ERROR_CODES["OTP_HAS_EXPIRED"])
         end
 
         allowed = (config[:otp_options][:allowed_attempts] || 5).to_i
         if counter.to_i >= allowed
-          ctx.context.internal_adapter.delete_verification_value(verification["id"])
           raise APIError.new("BAD_REQUEST", message: TWO_FACTOR_ERROR_CODES["TOO_MANY_ATTEMPTS_REQUEST_NEW_CODE"])
         end
 
         unless two_factor_otp_matches?(ctx, stored, body[:code].to_s, config[:otp_options])
-          ctx.context.internal_adapter.update_verification_value(verification["id"], value: "#{stored}:#{counter.to_i + 1}")
+          ctx.context.internal_adapter.create_verification_value(identifier: identifier, value: "#{stored}:#{counter.to_i + 1}", expiresAt: verification["expiresAt"])
           raise APIError.new("UNAUTHORIZED", message: TWO_FACTOR_ERROR_CODES["INVALID_CODE"])
         end
 
@@ -418,11 +417,15 @@ module BetterAuth
       raise APIError.new("UNAUTHORIZED", message: TWO_FACTOR_ERROR_CODES["INVALID_TWO_FACTOR_COOKIE"]) unless user
 
       valid = lambda do
+        consumed = ctx.context.internal_adapter.consume_verification_value(identifier)
+        unless consumed && consumed["value"] == user["id"]
+          raise APIError.new("UNAUTHORIZED", message: TWO_FACTOR_ERROR_CODES["INVALID_TWO_FACTOR_COOKIE"])
+        end
+
         dont_remember_me = Cookies.dont_remember?(ctx)
         new_session = ctx.context.internal_adapter.create_session(user["id"], dont_remember_me)
         raise APIError.new("INTERNAL_SERVER_ERROR", message: "failed to create session") unless new_session
 
-        ctx.context.internal_adapter.delete_verification_value(verification["id"])
         Cookies.set_session_cookie(ctx, {session: new_session, user: user}, dont_remember_me)
         Cookies.expire_cookie(ctx, cookie)
         if normalize_hash(ctx.body)[:trust_device]
@@ -451,9 +454,10 @@ module BetterAuth
 
       token, identifier = value.split("!", 2)
       expected = Crypto.hmac_signature("#{user_id}!#{identifier}", ctx.context.secret, encoding: :base64url)
-      verification = identifier && ctx.context.internal_adapter.find_verification_value(identifier)
-      if token && identifier && Crypto.constant_time_compare(token, expected) && verification && verification["value"] == user_id && verification["expiresAt"] > Time.now
-        ctx.context.internal_adapter.delete_verification_value(verification["id"])
+      verification = if token && identifier && Crypto.constant_time_compare(token, expected)
+        ctx.context.internal_adapter.consume_verification_value(identifier)
+      end
+      if verification && verification["value"] == user_id
         two_factor_set_trusted_device(ctx, config, user_id)
         true
       else

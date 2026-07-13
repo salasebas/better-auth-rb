@@ -39,7 +39,7 @@ module BetterAuth
       code = Crypto.random_string(32)
       client_reference_id = OAuthProtocol.stringify_keys(client)["referenceId"]
       OAuthProtocol.store_code(
-        config[:store],
+        ctx.context.internal_adapter,
         code: code,
         client_id: query["client_id"],
         redirect_uri: query["redirect_uri"],

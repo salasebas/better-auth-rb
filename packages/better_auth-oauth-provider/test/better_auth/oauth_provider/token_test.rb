@@ -26,6 +26,70 @@ class OAuthProviderTokenTest < Minitest::Test
     assert tokens[:id_token]
   end
 
+  def test_authorization_code_is_persisted_and_consumed_once_across_auth_instances
+    issuer = build_auth(scopes: ["openid"])
+    shared_db = issuer.context.adapter.db
+    database = ->(options) { BetterAuth::Adapters::Memory.new(options, shared_db) }
+    first_redeemer = build_auth(scopes: ["openid"], database: database)
+    second_redeemer = build_auth(scopes: ["openid"], database: database)
+    cookie = sign_up_cookie(issuer, email: "shared-code@example.com")
+    client = create_client(issuer, cookie, scope: "openid", skip_consent: true)
+    code = authorization_code_for(issuer, cookie, client, scope: "openid")
+    body = {
+      grant_type: "authorization_code",
+      code: code,
+      client_id: client[:client_id],
+      client_secret: client[:client_secret],
+      redirect_uri: "https://resource.example/callback",
+      code_verifier: pkce_verifier
+    }
+    ready = Queue.new
+    start = Queue.new
+    results = Queue.new
+
+    threads = [first_redeemer, second_redeemer].map do |auth|
+      Thread.new do
+        ready << true
+        start.pop
+        results << [:success, auth.api.oauth2_token(body: body)]
+      rescue BetterAuth::APIError => error
+        results << [:error, error]
+      end
+    end
+    2.times { ready.pop }
+    2.times { start << true }
+    threads.each(&:join)
+
+    outcomes = 2.times.map { results.pop }
+    assert_equal 1, outcomes.count { |kind, result| kind == :success && result[:access_token] }
+    assert_equal 1, outcomes.count { |kind, error| kind == :error && error.message == "invalid_grant" }
+  end
+
+  def test_malformed_persisted_authorization_code_fails_closed_and_stays_consumed
+    auth = build_auth(scopes: ["openid"])
+    cookie = sign_up_cookie(auth, email: "malformed-code@example.com")
+    client = create_client(auth, cookie, scope: "openid", skip_consent: true)
+    code = authorization_code_for(auth, cookie, client, scope: "openid")
+    identifier = BetterAuth::Plugins::OAuthProtocol.get_stored_token("hashed", code, "authorization_code")
+    verification = auth.context.internal_adapter.find_verification_value(identifier)
+    auth.context.internal_adapter.update_verification_value(verification.fetch("id"), value: "{")
+    body = {
+      grant_type: "authorization_code",
+      code: code,
+      client_id: client[:client_id],
+      client_secret: client[:client_secret],
+      redirect_uri: "https://resource.example/callback",
+      code_verifier: pkce_verifier
+    }
+
+    first = assert_raises(BetterAuth::APIError) { auth.api.oauth2_token(body: body) }
+    second = assert_raises(BetterAuth::APIError) { auth.api.oauth2_token(body: body) }
+
+    assert_equal "invalid_grant", first.message
+    assert_equal "invalid_grant", second.message
+    assert_nil auth.context.internal_adapter.find_verification_value(identifier)
+  end
+
   def test_token_endpoint_enforces_registered_client_auth_method
     auth = build_auth(scopes: ["read"])
     cookie = sign_up_cookie(auth)

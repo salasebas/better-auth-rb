@@ -288,6 +288,82 @@ class BetterAuthSSOOIDCMirrorTest < Minitest::Test
     assert sign_in.fetch(:params).fetch("code_challenge")
   end
 
+  def test_pkce_verifier_is_restored_when_token_callback_returns_nil
+    calls = 0
+    auth = build_auth
+    ctx = Struct.new(:context, :query).new(auth.context, {code: "good-code"})
+    state = "pkce-retry-state"
+    BetterAuth::Plugins.sso_store_oidc_pkce_verifier(ctx, state, "verifier")
+    config = {pkce: true, get_token: ->(**_data) { ((calls += 1) == 1) ? nil : {accessToken: "access-token"} }}
+
+    first = BetterAuth::Plugins.sso_oidc_tokens(ctx, {"providerId" => "pkce-retry"}, config, {}, {}, raw_state: state)
+    second = BetterAuth::Plugins.sso_oidc_tokens(ctx, {"providerId" => "pkce-retry"}, config, {}, {}, raw_state: state)
+
+    assert_nil first
+    assert_equal "access-token", second.fetch(:access_token)
+    assert_equal 2, calls
+  end
+
+  def test_concurrent_pkce_callbacks_have_one_token_exchange_winner
+    calls = 0
+    mutex = Mutex.new
+    auth = build_auth
+    ctx = Struct.new(:context, :query).new(auth.context, {code: "good-code"})
+    state = "pkce-race-state"
+    BetterAuth::Plugins.sso_store_oidc_pkce_verifier(ctx, state, "verifier")
+    config = {
+      pkce: true,
+      get_token: lambda { |**_data|
+        mutex.synchronize { calls += 1 }
+        sleep 0.05
+        {accessToken: "access-token"}
+      }
+    }
+    ready = Queue.new
+    start = Queue.new
+    results = Queue.new
+    threads = 2.times.map do
+      Thread.new do
+        ready << true
+        start.pop
+        results << BetterAuth::Plugins.sso_oidc_tokens(ctx, {"providerId" => "pkce-race"}, config, {}, {}, raw_state: state)
+      end
+    end
+    2.times { ready.pop }
+    2.times { start << true }
+    threads.each(&:join)
+
+    tokens = 2.times.map { results.pop }
+    assert_equal 1, tokens.count(&:nil?)
+    assert_equal 1, tokens.count { |token| token && token[:access_token] == "access-token" }
+    assert_equal 1, calls
+  end
+
+  def test_pkce_restore_is_attempted_once_when_persistence_raises_after_writing
+    auth = build_auth
+    ctx = Struct.new(:context, :query).new(auth.context, {code: "good-code"})
+    state = "pkce-after-persist-state"
+    BetterAuth::Plugins.sso_store_oidc_pkce_verifier(ctx, state, "verifier")
+    original_restore = BetterAuth::Plugins.method(:sso_restore_oidc_pkce_verifier)
+    restore_calls = 0
+    raising_restore = proc do |*args|
+      restore_calls += 1
+      original_restore.call(*args)
+      raise "after persistence"
+    end
+
+    failed = BetterAuth::Plugins.stub(:sso_restore_oidc_pkce_verifier, raising_restore) do
+      BetterAuth::Plugins.sso_oidc_tokens(ctx, {"providerId" => "pkce-hook"}, {pkce: true, get_token: ->(**_data) {}}, {}, {}, raw_state: state)
+    end
+    recovered = BetterAuth::Plugins.sso_oidc_tokens(ctx, {"providerId" => "pkce-hook"}, {pkce: true, get_token: ->(**_data) { {accessToken: "recovered"} }}, {}, {}, raw_state: state)
+    replay = BetterAuth::Plugins.sso_oidc_tokens(ctx, {"providerId" => "pkce-hook"}, {pkce: true, get_token: ->(**_data) { {accessToken: "replay"} }}, {}, {}, raw_state: state)
+
+    assert_nil failed
+    assert_equal 1, restore_calls
+    assert_equal "recovered", recovered.fetch(:access_token)
+    assert_nil replay
+  end
+
   def test_oidc_existing_email_requires_trusted_or_matching_verified_domain
     auth = build_auth
     victim_cookie = sign_up_cookie(auth, "victim@example.com")

@@ -49,6 +49,30 @@ class BetterAuthPluginsSiweTest < Minitest::Test
     assert_equal "UNAUTHORIZED_INVALID_OR_EXPIRED_NONCE", error.status
   end
 
+  def test_concurrent_siwe_verification_has_exactly_one_winner
+    auth = build_auth
+    auth.api.get_siwe_nonce(body: {walletAddress: WALLET, chainId: 1})
+    ready = Queue.new
+    start = Queue.new
+    results = Queue.new
+    threads = 5.times.map do
+      Thread.new do
+        ready << true
+        start.pop
+        results << [:success, auth.api.verify_siwe_message(body: {message: "valid-message", signature: "valid-signature", walletAddress: WALLET, chainId: 1})]
+      rescue BetterAuth::APIError => error
+        results << [:error, error]
+      end
+    end
+    5.times { ready.pop }
+    5.times { start << true }
+    threads.each(&:join)
+
+    outcomes = 5.times.map { results.pop }
+    assert_equal 1, outcomes.count { |kind, _| kind == :success }
+    assert_equal 4, outcomes.count { |kind, error| kind == :error && error.status == "UNAUTHORIZED_INVALID_OR_EXPIRED_NONCE" }
+  end
+
   def test_verify_rejects_missing_nonce_invalid_signature_and_invalid_wallet
     auth = build_auth
 

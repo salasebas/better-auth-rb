@@ -49,6 +49,34 @@ class BetterAuthPluginsDeviceAuthorizationTest < Minitest::Test
     assert_equal "Invalid device code", invalid.message
   end
 
+  def test_concurrent_approved_device_code_exchange_has_exactly_one_winner
+    auth = build_auth
+    issued = auth.api.device_code(body: {client_id: "cli", scope: "openid"})
+    cookie = sign_up_cookie(auth, email: "device-race@example.com")
+    auth.api.device_approve(headers: {"cookie" => cookie}, body: {user_code: issued[:user_code]})
+    record = auth.context.adapter.find_one(model: "deviceCode", where: [{field: "deviceCode", value: issued[:device_code]}])
+    auth.context.adapter.update(model: "deviceCode", where: [{field: "id", value: record["id"]}], update: {"pollingInterval" => 0})
+    ready = Queue.new
+    start = Queue.new
+    results = Queue.new
+    threads = 5.times.map do
+      Thread.new do
+        ready << true
+        start.pop
+        results << [:success, auth.api.device_token(body: {grant_type: BetterAuth::Plugins::OAuthProtocol::DEVICE_CODE_GRANT, device_code: issued[:device_code], client_id: "cli"})]
+      rescue BetterAuth::APIError => error
+        results << [:error, error]
+      end
+    end
+    5.times { ready.pop }
+    5.times { start << true }
+    threads.each(&:join)
+
+    outcomes = 5.times.map { results.pop }
+    assert_equal 1, outcomes.count { |kind, _| kind == :success }
+    assert_equal 4, outcomes.count { |kind, error| kind == :error && error.code == "invalid_grant" }
+  end
+
   def test_client_validation_and_custom_verification_uri
     auth = BetterAuth.auth(
       base_url: "http://localhost:3000",

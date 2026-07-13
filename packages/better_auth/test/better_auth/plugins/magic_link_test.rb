@@ -33,7 +33,7 @@ class BetterAuthPluginsMagicLinkTest < Minitest::Test
 
     reused = auth.api.magic_link_verify(query: {token: sent.first[:token]}, as_response: true)
     assert_equal 302, reused.first
-    assert_includes reused[1].fetch("location"), "error=ATTEMPTS_EXCEEDED"
+    assert_includes reused[1].fetch("location"), "error=INVALID_TOKEN"
   end
 
   def test_magic_link_signs_up_new_user_and_verifies_email
@@ -162,7 +162,7 @@ class BetterAuthPluginsMagicLinkTest < Minitest::Test
     assert auth.context.internal_adapter.find_verification_value(secure_token)
   end
 
-  def test_magic_link_respects_allowed_attempts
+  def test_magic_link_ignores_allowed_attempts_and_consumes_on_first_use
     sent = []
     auth = build_auth(
       plugins: [
@@ -175,17 +175,15 @@ class BetterAuthPluginsMagicLinkTest < Minitest::Test
     auth.api.sign_up_email(body: {email: "attempts@example.com", password: "password123", name: "Attempts"})
     auth.api.sign_in_magic_link(body: {email: "attempts@example.com"})
 
-    3.times do
-      status, _headers, _body = auth.api.magic_link_verify(query: {token: sent.first[:token]}, as_response: true)
-      assert_equal 200, status
-    end
+    status, _headers, _body = auth.api.magic_link_verify(query: {token: sent.first[:token]}, as_response: true)
+    assert_equal 200, status
     exceeded = auth.api.magic_link_verify(query: {token: sent.first[:token], errorCallbackURL: "/error"}, as_response: true)
 
     assert_equal 302, exceeded.first
-    assert_includes exceeded[1].fetch("location"), "error=ATTEMPTS_EXCEEDED"
+    assert_includes exceeded[1].fetch("location"), "error=INVALID_TOKEN"
   end
 
-  def test_magic_link_allows_unlimited_attempts
+  def test_magic_link_ignores_unlimited_attempts
     sent = []
     auth = build_auth(
       plugins: [
@@ -198,10 +196,8 @@ class BetterAuthPluginsMagicLinkTest < Minitest::Test
     auth.api.sign_up_email(body: {email: "infinite@example.com", password: "password123", name: "Infinite"})
     auth.api.sign_in_magic_link(body: {email: "infinite@example.com"})
 
-    4.times do
-      status, _headers, _body = auth.api.magic_link_verify(query: {token: sent.first[:token]}, as_response: true)
-      assert_equal 200, status
-    end
+    assert_equal 200, auth.api.magic_link_verify(query: {token: sent.first[:token]}, as_response: true).first
+    assert_equal 302, auth.api.magic_link_verify(query: {token: sent.first[:token]}, as_response: true).first
   end
 
   def test_magic_link_redirects_for_expired_invalid_and_disabled_signup
@@ -218,7 +214,7 @@ class BetterAuthPluginsMagicLinkTest < Minitest::Test
     expired = expired_auth.api.magic_link_verify(query: {token: sent.first[:token], errorCallbackURL: "/error-page?foo=bar"}, as_response: true)
 
     assert_equal 302, expired.first
-    assert_includes expired[1].fetch("location"), "/error-page?foo=bar&error=EXPIRED_TOKEN"
+    assert_includes expired[1].fetch("location"), "/error-page?foo=bar&error=INVALID_TOKEN"
 
     disabled_sent = []
     disabled = build_auth(
@@ -313,7 +309,7 @@ class BetterAuthPluginsMagicLinkTest < Minitest::Test
     assert_equal true, result[:user]["emailVerified"]
   end
 
-  def test_magic_link_secondary_storage_tracks_attempts_and_deletes_expired_tokens
+  def test_magic_link_secondary_storage_consumes_and_deletes_expired_tokens
     storage = StringStorage.new
     sent = []
     auth = build_auth(
@@ -329,14 +325,11 @@ class BetterAuthPluginsMagicLinkTest < Minitest::Test
     auth.api.sign_in_magic_link(body: {email: "secondary-attempts@example.com"})
     token = sent.last[:token]
 
-    2.times do
-      status, _headers, _body = auth.api.magic_link_verify(query: {token: token}, as_response: true)
-      assert_equal 200, status
-    end
+    assert_equal 200, auth.api.magic_link_verify(query: {token: token}, as_response: true).first
     exceeded = auth.api.magic_link_verify(query: {token: token, errorCallbackURL: "/error"}, as_response: true)
 
     assert_equal 302, exceeded.first
-    assert_includes exceeded[1].fetch("location"), "error=ATTEMPTS_EXCEEDED"
+    assert_includes exceeded[1].fetch("location"), "error=INVALID_TOKEN"
     assert_empty verification_keys(storage)
 
     expired_storage = StringStorage.new
@@ -356,11 +349,11 @@ class BetterAuthPluginsMagicLinkTest < Minitest::Test
     expired = expired_auth.api.magic_link_verify(query: {token: expired_token, errorCallbackURL: "/error"}, as_response: true)
 
     assert_equal 302, expired.first
-    assert_includes expired[1].fetch("location"), "error=EXPIRED_TOKEN"
+    assert_includes expired[1].fetch("location"), "error=INVALID_TOKEN"
     assert_empty verification_keys(expired_storage)
   end
 
-  def test_magic_link_secondary_storage_preparsed_objects_verify_and_track_attempts
+  def test_magic_link_secondary_storage_preparsed_objects_are_single_use
     storage = ObjectStorage.new
     sent = []
     auth = build_auth(
@@ -376,15 +369,13 @@ class BetterAuthPluginsMagicLinkTest < Minitest::Test
     auth.api.sign_in_magic_link(body: {email: "object-magic@example.com"})
     token = sent.last[:token]
 
-    2.times do
-      status, headers, _body = auth.api.magic_link_verify(query: {token: token}, as_response: true)
-      assert_equal 200, status
-      assert_includes headers.fetch("set-cookie"), "better-auth.session_token="
-    end
+    status, headers, _body = auth.api.magic_link_verify(query: {token: token}, as_response: true)
+    assert_equal 200, status
+    assert_includes headers.fetch("set-cookie"), "better-auth.session_token="
     exceeded = auth.api.magic_link_verify(query: {token: token, errorCallbackURL: "/error"}, as_response: true)
 
     assert_equal 302, exceeded.first
-    assert_includes exceeded[1].fetch("location"), "error=ATTEMPTS_EXCEEDED"
+    assert_includes exceeded[1].fetch("location"), "error=INVALID_TOKEN"
     assert_empty verification_keys(storage)
   end
 
@@ -548,6 +539,7 @@ class BetterAuthPluginsMagicLinkTest < Minitest::Test
   class StringStorage
     def initialize
       @store = {}
+      @mutex = Mutex.new
     end
 
     def set(key, value, _ttl = nil)
@@ -562,6 +554,10 @@ class BetterAuthPluginsMagicLinkTest < Minitest::Test
       @store.delete(key)
     end
 
+    def get_and_delete(key)
+      @mutex.synchronize { @store.delete(key) }
+    end
+
     def keys
       @store.keys
     end
@@ -570,6 +566,7 @@ class BetterAuthPluginsMagicLinkTest < Minitest::Test
   class ObjectStorage
     def initialize
       @store = {}
+      @mutex = Mutex.new
     end
 
     def set(key, value, _ttl = nil)
@@ -584,6 +581,10 @@ class BetterAuthPluginsMagicLinkTest < Minitest::Test
 
     def delete(key)
       @store.delete(key)
+    end
+
+    def get_and_delete(key)
+      @mutex.synchronize { @store.delete(key) }
     end
 
     def keys

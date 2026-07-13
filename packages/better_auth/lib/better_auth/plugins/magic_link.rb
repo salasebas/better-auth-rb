@@ -9,6 +9,9 @@ module BetterAuth
 
     def magic_link(options = {})
       config = {store_token: "plain", allowed_attempts: 1}.merge(normalize_hash(options))
+      if options.key?(:allowed_attempts) && options[:allowed_attempts] != 1
+        warn "[better-auth/magic-link] `allowed_attempts` is ignored: tokens are consumed atomically on the first verification call. Any value other than `1` has no effect; remove the option to silence this warning."
+      end
 
       Plugin.new(
         id: "magic-link",
@@ -131,26 +134,12 @@ module BetterAuth
         end
 
         stored_token = store_magic_link_token(token, config)
-        verification = ctx.context.internal_adapter.find_verification_value(stored_token)
+        verification = ctx.context.internal_adapter.consume_verification_value(stored_token)
         redirect_with_error.call("INVALID_TOKEN") unless verification
-
-        if Routes.expired_time?(verification["expiresAt"])
-          ctx.context.internal_adapter.delete_verification_value(verification["id"])
-          redirect_with_error.call("EXPIRED_TOKEN")
-        end
 
         payload = JSON.parse(verification["value"])
         email = payload.fetch("email").to_s.downcase
         name = payload["name"]
-        attempt = payload["attempt"].to_i
-        if magic_link_attempts_exceeded?(attempt, config)
-          ctx.context.internal_adapter.delete_verification_value(verification["id"])
-          redirect_with_error.call("ATTEMPTS_EXCEEDED")
-        end
-        ctx.context.internal_adapter.update_verification_value(
-          verification["id"],
-          value: JSON.generate(payload.merge("attempt" => attempt + 1))
-        )
         found = ctx.context.internal_adapter.find_user_by_email(email)
         user = found && found[:user]
         new_user = false

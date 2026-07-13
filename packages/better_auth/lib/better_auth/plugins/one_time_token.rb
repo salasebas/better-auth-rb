@@ -85,11 +85,8 @@ module BetterAuth
         body = normalize_hash(ctx.body)
         token = body[:token].to_s
         stored_token = one_time_token_stored_value(config, token)
-        verification = ctx.context.internal_adapter.find_verification_value("one-time-token:#{stored_token}")
+        verification = ctx.context.internal_adapter.consume_verification_value("one-time-token:#{stored_token}")
         raise APIError.new("BAD_REQUEST", message: "Invalid token") unless verification
-
-        ctx.context.internal_adapter.delete_verification_value(verification["id"])
-        raise APIError.new("BAD_REQUEST", message: "Token expired") if Routes.expired_time?(verification["expiresAt"])
 
         session = ctx.context.internal_adapter.find_session(verification["value"])
         raise APIError.new("BAD_REQUEST", message: "Session not found") unless session

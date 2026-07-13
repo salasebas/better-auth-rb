@@ -116,15 +116,13 @@ module BetterAuth
         raise APIError.new("BAD_REQUEST", message: "Email is required when anonymous is disabled.") if anonymous == false && email.empty?
         raise APIError.new("BAD_REQUEST", message: "Invalid email address") if !email.empty? && !SIWE_EMAIL_PATTERN.match?(email)
 
-        verification = ctx.context.internal_adapter.find_verification_value(siwe_identifier(wallet_address, chain_id))
-        if !verification || siwe_expired_time?(verification["expiresAt"])
+        verification = ctx.context.internal_adapter.consume_verification_value(siwe_identifier(wallet_address, chain_id))
+        unless verification
           raise APIError.new("UNAUTHORIZED_INVALID_OR_EXPIRED_NONCE", message: "Unauthorized: Invalid or expired nonce")
         end
 
         verified = siwe_verify_message(config, body, wallet_address, chain_id, verification["value"], ctx)
         raise APIError.new("UNAUTHORIZED", message: "Unauthorized: Invalid SIWE signature") unless verified
-
-        ctx.context.internal_adapter.delete_verification_value(verification["id"])
 
         user = siwe_find_user(ctx, wallet_address, chain_id)
         user ||= siwe_create_user(ctx, config, wallet_address, chain_id, email, anonymous)

@@ -7,7 +7,7 @@ class BetterAuthPasskeyChallengesTest < Minitest::Test
   def test_store_challenge_sets_cookie_and_verification_value_with_context
     ctx = fake_ctx(query: {context: "signup-token"})
 
-    BetterAuth::Passkey::Challenges.store_challenge(ctx, config, "challenge-123", {"id" => "user-1", "name" => "User"})
+    BetterAuth::Passkey::Challenges.store_challenge(ctx, config, "challenge-123", {"id" => "user-1", "name" => "User"}, ceremony: "registration")
 
     assert_equal "better-auth-passkey", ctx.cookies.first.fetch(:name)
     verification_token = ctx.cookies.first.fetch(:value)
@@ -19,6 +19,7 @@ class BetterAuthPasskeyChallengesTest < Minitest::Test
     assert_equal "challenge-123", value.fetch("expectedChallenge")
     assert_equal "user-1", value.fetch("userData").fetch("id")
     assert_equal "signup-token", value.fetch("context")
+    assert_equal "registration", value.fetch("type")
   end
 
   def test_find_challenge_returns_nil_for_expired_or_invalid_json
@@ -35,6 +36,23 @@ class BetterAuthPasskeyChallengesTest < Minitest::Test
 
     assert_nil BetterAuth::Passkey::Challenges.find_challenge(expired_ctx, "token-1")
     assert_nil BetterAuth::Passkey::Challenges.find_challenge(invalid_ctx, "token-1")
+  end
+
+  def test_challenge_rejects_cross_ceremony_and_accepts_legacy_missing_type
+    mismatched = fake_ctx
+    mismatched.context.internal_adapter.verifications["token-1"] = {
+      "value" => JSON.generate(expectedChallenge: "challenge", type: "registration"),
+      "expiresAt" => Time.now + 60
+    }
+    assert_nil BetterAuth::Passkey::Challenges.find_challenge(mismatched, "token-1", ceremony: "authentication")
+    assert_nil mismatched.context.internal_adapter.find_verification_value("token-1")
+
+    legacy = fake_ctx
+    legacy.context.internal_adapter.verifications["token-1"] = {
+      "value" => JSON.generate(expectedChallenge: "legacy"),
+      "expiresAt" => Time.now + 60
+    }
+    assert_equal "legacy", BetterAuth::Passkey::Challenges.find_challenge(legacy, "token-1", ceremony: "authentication").fetch("expectedChallenge")
   end
 
   private
@@ -79,6 +97,13 @@ class BetterAuthPasskeyChallengesTest < Minitest::Test
 
     def find_verification_value(identifier)
       @verifications[identifier]
+    end
+
+    def consume_verification_value(identifier)
+      verification = @verifications.delete(identifier)
+      return nil if verification && verification["expiresAt"] && verification["expiresAt"] <= Time.now
+
+      verification
     end
   end
 end

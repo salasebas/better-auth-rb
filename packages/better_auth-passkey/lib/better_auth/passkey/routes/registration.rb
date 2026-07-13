@@ -31,7 +31,7 @@ module BetterAuth
               id: user.fetch("id"),
               name: user["name"] || user["email"] || user["id"],
               displayName: user["displayName"] || user["display_name"]
-            }.compact)
+            }.compact, ceremony: "registration")
             payload = options.as_json.merge(attestation: "none", excludeCredentials: existing.map { |passkey| Credentials.credential_descriptor(passkey, kind: :exclude) })
             payload.delete(:extensions) if payload[:extensions].nil? || payload[:extensions] == {}
             payload.delete("extensions") if payload["extensions"].nil? || payload["extensions"] == {}
@@ -51,12 +51,11 @@ module BetterAuth
             verification_token = Challenges.challenge_token(ctx, config)
             raise APIError.new("BAD_REQUEST", message: ErrorCodes::PASSKEY_ERROR_CODES.fetch("CHALLENGE_NOT_FOUND")) unless verification_token
 
-            challenge = Challenges.find_challenge(ctx, verification_token)
+            challenge = Challenges.find_challenge(ctx, verification_token, ceremony: "registration")
             unless challenge
               raise APIError.new("BAD_REQUEST", message: ErrorCodes::PASSKEY_ERROR_CODES.fetch("CHALLENGE_NOT_FOUND"))
             end
             if session && challenge.fetch("userData").fetch("id") != session.fetch(:user).fetch("id")
-              ctx.context.internal_adapter.delete_verification_by_identifier(verification_token)
               raise APIError.new("UNAUTHORIZED", message: ErrorCodes::PASSKEY_ERROR_CODES.fetch("YOU_ARE_NOT_ALLOWED_TO_REGISTER_THIS_PASSKEY"))
             end
 
@@ -64,7 +63,6 @@ module BetterAuth
               response = Credentials.webauthn_response(body[:response])
               credential_id = Credentials.response_credential_id(response)
               if credential_id && ctx.context.adapter.find_one(model: "passkey", where: [{field: "credentialID", value: credential_id}])
-                ctx.context.internal_adapter.delete_verification_by_identifier(verification_token)
                 raise APIError.new("BAD_REQUEST", message: ErrorCodes::PASSKEY_ERROR_CODES.fetch("PREVIOUSLY_REGISTERED"))
               end
               relying_party = Utils.relying_party(config, ctx, origin: origin)
@@ -73,17 +71,12 @@ module BetterAuth
               authenticator_data = Credentials.authenticator_data(credential)
               target_user_id = Utils.after_registration_verification_user_id(config, ctx, credential, challenge, response, session)
             rescue WebAuthn::Error, ArgumentError => error
-              ctx.context.internal_adapter.delete_verification_by_identifier(verification_token)
               ctx.context.logger&.error("Failed to verify registration", error)
               raise APIError.new("BAD_REQUEST", message: ErrorCodes::PASSKEY_ERROR_CODES.fetch("FAILED_TO_VERIFY_REGISTRATION"))
-            rescue APIError
-              ctx.context.internal_adapter.delete_verification_by_identifier(verification_token)
-              raise
             end
 
             existing_passkey = ctx.context.adapter.find_one(model: "passkey", where: [{field: "credentialID", value: credential.id}])
             if existing_passkey
-              ctx.context.internal_adapter.delete_verification_by_identifier(verification_token)
               raise APIError.new("BAD_REQUEST", message: ErrorCodes::PASSKEY_ERROR_CODES.fetch("PREVIOUSLY_REGISTERED"))
             end
 
@@ -104,19 +97,16 @@ module BetterAuth
                 }
               )
             rescue => error
-              ctx.context.internal_adapter.delete_verification_by_identifier(verification_token)
               if Credentials.duplicate_credential_error?(error)
                 raise APIError.new("BAD_REQUEST", message: ErrorCodes::PASSKEY_ERROR_CODES.fetch("PREVIOUSLY_REGISTERED"))
               end
               ctx.context.logger&.error("Failed to create passkey", error)
               raise APIError.new("INTERNAL_SERVER_ERROR", message: ErrorCodes::PASSKEY_ERROR_CODES.fetch("FAILED_TO_VERIFY_REGISTRATION"))
             end
-            ctx.context.internal_adapter.delete_verification_by_identifier(verification_token)
             ctx.json(Credentials.wire(data))
           rescue APIError
             raise
           rescue => error
-            ctx.context.internal_adapter.delete_verification_by_identifier(verification_token) if verification_token
             ctx.context.logger&.error("Failed to verify registration", error)
             raise APIError.new("INTERNAL_SERVER_ERROR", message: ErrorCodes::PASSKEY_ERROR_CODES.fetch("FAILED_TO_VERIFY_REGISTRATION"))
           end

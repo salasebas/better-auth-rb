@@ -199,7 +199,7 @@ class BetterAuthPasskeyRoutesAuthenticationTest < Minitest::Test
     assertion = client.get(challenge: authentication.fetch(:response).fetch(:challenge), rp_id: "localhost")
 
     error = assert_raises(BetterAuth::APIError) do
-      auth.context.adapter.stub(:update, ->(*) { raise "update failed" }) do
+      auth.context.adapter.stub(:increment_one, ->(*) { raise "update failed" }) do
         auth.api.verify_passkey_authentication(
           headers: {"cookie" => cookie_header(authentication.fetch(:headers).fetch("set-cookie")), "origin" => ORIGIN},
           body: {response: assertion}
@@ -228,7 +228,7 @@ class BetterAuthPasskeyRoutesAuthenticationTest < Minitest::Test
     session_count = auth.context.adapter.find_many(model: "session").length
 
     error = assert_raises(BetterAuth::APIError) do
-      auth.context.adapter.stub(:update, ->(**_kwargs) {}) do
+      auth.context.adapter.stub(:increment_one, ->(**_kwargs) {}) do
         auth.api.verify_passkey_authentication(
           headers: {"cookie" => cookie_header(authentication.fetch(:headers).fetch("set-cookie")), "origin" => ORIGIN},
           body: {response: assertion}
@@ -296,6 +296,40 @@ class BetterAuthPasskeyRoutesAuthenticationTest < Minitest::Test
     assert_equal 400, replay.status_code
     assert_equal BetterAuth::Plugins::PASSKEY_ERROR_CODES.fetch("CHALLENGE_NOT_FOUND"), replay.message
     assert_nil auth.context.adapter.find_one(model: "verification", where: [{field: "id", value: verification.fetch("id")}])
+  end
+
+  def test_concurrent_authentication_challenge_has_exactly_one_winner
+    auth = build_auth
+    cookie = sign_up_cookie(auth, email: "concurrent-authentication-route@example.com")
+    client = WebAuthn::FakeClient.new(ORIGIN)
+    registration = auth.api.generate_passkey_registration_options(headers: {"cookie" => cookie}, return_headers: true)
+    auth.api.verify_passkey_registration(
+      headers: {"cookie" => [cookie, cookie_header(registration.fetch(:headers).fetch("set-cookie"))].join("; "), "origin" => ORIGIN},
+      body: {response: client.create(challenge: registration.fetch(:response).fetch(:challenge), rp_id: "localhost")}
+    )
+    authentication = auth.api.generate_passkey_authentication_options(return_headers: true)
+    assertion = client.get(challenge: authentication.fetch(:response).fetch(:challenge), rp_id: "localhost")
+    headers = {"cookie" => cookie_header(authentication.fetch(:headers).fetch("set-cookie")), "origin" => ORIGIN}
+    ready = Queue.new
+    start = Queue.new
+    results = Queue.new
+
+    threads = 4.times.map do
+      Thread.new do
+        ready << true
+        start.pop
+        results << [:success, auth.api.verify_passkey_authentication(headers: headers, body: {response: assertion})]
+      rescue BetterAuth::APIError => error
+        results << [:error, error]
+      end
+    end
+    4.times { ready.pop }
+    4.times { start << true }
+    threads.each(&:join)
+
+    outcomes = 4.times.map { results.pop }
+    assert_equal 1, outcomes.count { |kind, _| kind == :success }
+    assert_equal 3, outcomes.count { |kind, error| kind == :error && error.message == BetterAuth::Plugins::PASSKEY_ERROR_CODES.fetch("CHALLENGE_NOT_FOUND") }
   end
 
   def test_verify_authentication_invalidates_challenge_after_session_creation_failure
