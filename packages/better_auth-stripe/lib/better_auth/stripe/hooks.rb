@@ -46,9 +46,10 @@ module BetterAuth
           trialEnd: BetterAuth::Stripe::Utils.time(BetterAuth::Stripe::Utils.fetch(stripe_subscription, "trial_end"))
         ).compact
         db_subscription = ctx.context.adapter.update(model: "subscription", where: [{field: "id", value: subscription_id}], update: update)
-        plan.dig(:free_trial, :on_trial_start)&.call(db_subscription) if db_subscription && update[:trialStart]
+        updated_subscription = db_subscription || ctx.context.adapter.find_one(model: "subscription", where: [{field: "id", value: subscription_id}])
+        plan.dig(:free_trial, :on_trial_start)&.call(updated_subscription) if updated_subscription && update[:trialStart]
         callback = config.dig(:subscription, :on_subscription_complete)
-        callback&.call({event: event, subscription: db_subscription, stripeSubscription: stripe_subscription, stripe_subscription: stripe_subscription, plan: plan}, ctx)
+        callback&.call({event: event, subscription: updated_subscription, stripeSubscription: stripe_subscription, stripe_subscription: stripe_subscription, plan: plan}, ctx)
       end
 
       def on_subscription_created(ctx, event)
@@ -125,15 +126,20 @@ module BetterAuth
         update[:plan] = plan[:name].to_s.downcase if plan
         update[:limits] = plan[:limits] if plan&.key?(:limits)
         updated = ctx.context.adapter.update(model: "subscription", where: [{field: "id", value: subscription.fetch("id")}], update: update)
-        if object[:status] == "active" && BetterAuth::Stripe::Utils.stripe_pending_cancel?(object) && !was_pending
-          config.dig(:subscription, :on_subscription_cancel)&.call({event: event, subscription: subscription, stripeSubscription: object, stripe_subscription: object, cancellationDetails: object[:cancellation_details], cancellation_details: object[:cancellation_details]})
+        unless updated
+          ctx.context.logger.warn("Stripe webhook warning: Subscription #{subscription.fetch("id")} update returned no row (likely deleted concurrently), skipping callbacks")
+          return
         end
-        config.dig(:subscription, :on_subscription_update)&.call({event: event, subscription: updated || subscription})
+
+        if object[:status] == "active" && BetterAuth::Stripe::Utils.stripe_pending_cancel?(object) && !was_pending
+          config.dig(:subscription, :on_subscription_cancel)&.call({event: event, subscription: updated, stripeSubscription: object, stripe_subscription: object, cancellationDetails: object[:cancellation_details], cancellation_details: object[:cancellation_details]})
+        end
+        config.dig(:subscription, :on_subscription_update)&.call({event: event, subscription: updated, stripeSubscription: object, stripe_subscription: object})
         if plan && subscription["status"] == "trialing" && object[:status] == "active"
-          plan.dig(:free_trial, :on_trial_end)&.call({subscription: subscription}, ctx)
+          plan.dig(:free_trial, :on_trial_end)&.call({subscription: updated}, ctx)
         end
         if plan && subscription["status"] == "trialing" && object[:status] == "incomplete_expired"
-          plan.dig(:free_trial, :on_trial_expired)&.call(subscription, ctx)
+          plan.dig(:free_trial, :on_trial_expired)&.call(updated, ctx)
         end
       end
 
@@ -145,8 +151,14 @@ module BetterAuth
         subscription = ctx.context.adapter.find_one(model: "subscription", where: [{field: "stripeSubscriptionId", value: object[:id]}])
         return unless subscription
 
-        ctx.context.adapter.update(model: "subscription", where: [{field: "id", value: subscription.fetch("id")}], update: BetterAuth::Stripe::Utils.subscription_state(object, include_status: false, compact: false).merge(status: "canceled", stripeScheduleId: nil))
-        config.dig(:subscription, :on_subscription_deleted)&.call({event: event, subscription: subscription, stripeSubscription: object, stripe_subscription: object})
+        update = BetterAuth::Stripe::Utils.subscription_state(object, include_status: false, compact: false).merge(status: "canceled", stripeScheduleId: nil)
+        updated = ctx.context.adapter.update(model: "subscription", where: [{field: "id", value: subscription.fetch("id")}], update: update)
+        unless updated
+          ctx.context.logger.warn("Stripe webhook warning: Subscription #{subscription.fetch("id")} update returned no row (likely deleted concurrently), skipping callbacks")
+          return
+        end
+
+        config.dig(:subscription, :on_subscription_deleted)&.call({event: event, subscription: updated, stripeSubscription: object, stripe_subscription: object})
       end
 
       def stripe_config(ctx)

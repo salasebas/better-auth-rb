@@ -26,6 +26,7 @@ class BetterAuthStripeSchemaTest < Minitest::Test
 
   def test_conditional_fields_reach_migration_projection
     config = BetterAuth::Configuration.new(
+      base_url: "http://localhost:3000",
       secret: "stripe-schema-secret-with-enough-entropy",
       database: :memory,
       plugins: [BetterAuth::Plugins.stripe(subscription: {enabled: true, plans: []}, organization: {enabled: true})]

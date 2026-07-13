@@ -20,10 +20,20 @@ module BetterAuth
             subscription = ctx.context.adapter.find_one(model: "subscription", where: [{field: "id", value: query[:subscription_id]}])
             raise ctx.redirect(BetterAuth::Plugins.stripe_url(ctx, callback)) if subscription && !BetterAuth::Stripe::Middleware.authorized_subscription?(ctx, session, subscription, "cancel-subscription", config || {})
             if subscription && !BetterAuth::Plugins.stripe_pending_cancel?(subscription) && subscription["stripeCustomerId"]
-              current = BetterAuth::Plugins.stripe_active_subscriptions(config || {}, subscription["stripeCustomerId"]).find { |entry| BetterAuth::Plugins.stripe_fetch(entry, "id") == subscription["stripeSubscriptionId"] }
+              current = begin
+                BetterAuth::Plugins.stripe_client(config || {}).subscriptions.retrieve(subscription["stripeSubscriptionId"])
+              rescue
+                nil
+              end
+              if current&.respond_to?(:key?) && !current.key?("cancel_at") && !current.key?(:cancel_at) && !current.key?("cancel_at_period_end") && !current.key?(:cancel_at_period_end)
+                current = BetterAuth::Plugins.stripe_active_subscriptions(config || {}, subscription["stripeCustomerId"]).find { |entry| BetterAuth::Plugins.stripe_fetch(entry, "id") == subscription["stripeSubscriptionId"] } || current
+              end
               if current && BetterAuth::Plugins.stripe_stripe_pending_cancel?(current)
-                ctx.context.adapter.update(model: "subscription", where: [{field: "id", value: subscription.fetch("id")}], update: BetterAuth::Plugins.stripe_subscription_state(current, include_status: true))
-                BetterAuth::Plugins.stripe_subscription_options(config || {})[:on_subscription_cancel]&.call({subscription: subscription, stripeSubscription: current, stripe_subscription: current, cancellationDetails: BetterAuth::Plugins.stripe_fetch(current, "cancellation_details"), cancellation_details: BetterAuth::Plugins.stripe_fetch(current, "cancellation_details"), event: nil})
+                update = BetterAuth::Plugins.stripe_subscription_state(current, include_status: true)
+                updated = ctx.context.adapter.update(model: "subscription", where: [{field: "id", value: subscription.fetch("id")}], update: update)
+                if updated
+                  BetterAuth::Plugins.stripe_subscription_options(config || {})[:on_subscription_cancel]&.call({subscription: updated, stripeSubscription: current, stripe_subscription: current, cancellationDetails: BetterAuth::Plugins.stripe_fetch(current, "cancellation_details"), cancellation_details: BetterAuth::Plugins.stripe_fetch(current, "cancellation_details"), event: nil})
+                end
               end
             end
             raise ctx.redirect(BetterAuth::Plugins.stripe_url(ctx, callback))

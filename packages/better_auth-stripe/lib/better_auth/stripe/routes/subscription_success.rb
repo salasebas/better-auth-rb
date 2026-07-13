@@ -37,25 +37,33 @@ module BetterAuth
             raise ctx.redirect(BetterAuth::Plugins.stripe_url(ctx, callback)) unless BetterAuth::Stripe::Middleware.authorized_subscription?(ctx, session, subscription, "subscription-success", config || {})
             raise ctx.redirect(BetterAuth::Plugins.stripe_url(ctx, callback)) if BetterAuth::Plugins.stripe_active_or_trialing?(subscription)
 
-            customer_id = subscription["stripeCustomerId"] || session.fetch(:user)["stripeCustomerId"]
-            raise ctx.redirect(BetterAuth::Plugins.stripe_url(ctx, callback)) unless customer_id
+            stripe_subscription_id = BetterAuth::Plugins.stripe_fetch(checkout_session, "subscription")
+            stripe_subscription_id = BetterAuth::Plugins.stripe_id(stripe_subscription_id) unless stripe_subscription_id.is_a?(String)
+            # Never guess by taking the first active subscription for a customer;
+            # Checkout identifies the exact Stripe subscription to synchronize.
+            raise ctx.redirect(BetterAuth::Plugins.stripe_url(ctx, callback)) if stripe_subscription_id.to_s.empty?
+            raise ctx.redirect(BetterAuth::Plugins.stripe_url(ctx, callback)) if BetterAuth::Plugins.stripe_fetch(checkout_session, "payment_status").to_s == "unpaid"
 
-            stripe_subscription = BetterAuth::Plugins.stripe_active_subscriptions(config || {}, customer_id).first
-            if stripe_subscription
-              resolved = BetterAuth::Plugins.stripe_resolve_plan_item(config || {}, stripe_subscription)
-              item = resolved&.fetch(:item, nil)
-              plan = resolved&.fetch(:plan, nil)
-              if item && plan
-                ctx.context.adapter.update(
-                  model: "subscription",
-                  where: [{field: "id", value: subscription.fetch("id")}],
-                  update: BetterAuth::Plugins.stripe_subscription_state(stripe_subscription, include_status: true, compact: false).merge(
-                    plan: plan[:name].to_s.downcase,
-                    seats: BetterAuth::Plugins.stripe_resolve_quantity(stripe_subscription, item, plan),
-                    stripeSubscriptionId: BetterAuth::Plugins.stripe_fetch(stripe_subscription, "id")
-                  )
+            stripe_subscription = begin
+              BetterAuth::Plugins.stripe_client(config || {}).subscriptions.retrieve(stripe_subscription_id)
+            rescue
+              nil
+            end
+            raise ctx.redirect(BetterAuth::Plugins.stripe_url(ctx, callback)) unless stripe_subscription
+
+            resolved = BetterAuth::Plugins.stripe_resolve_plan_item(config || {}, stripe_subscription)
+            item = resolved&.fetch(:item, nil)
+            plan = resolved&.fetch(:plan, nil)
+            if item && plan
+              ctx.context.adapter.update(
+                model: "subscription",
+                where: [{field: "id", value: subscription.fetch("id")}],
+                update: BetterAuth::Plugins.stripe_subscription_state(stripe_subscription, include_status: true, compact: false).merge(
+                  plan: plan[:name].to_s.downcase,
+                  seats: BetterAuth::Plugins.stripe_resolve_quantity(stripe_subscription, item, plan),
+                  stripeSubscriptionId: stripe_subscription_id
                 )
-              end
+              )
             end
             raise ctx.redirect(BetterAuth::Plugins.stripe_url(ctx, callback))
           end

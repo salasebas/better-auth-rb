@@ -15,6 +15,7 @@ module BetterAuth
             BetterAuth::Plugins.stripe_authorize_reference!(ctx, session, reference_id, "restore-subscription", customer_type, BetterAuth::Plugins.stripe_subscription_options(config), explicit: body.key?(:reference_id))
             subscription = BetterAuth::Plugins.stripe_find_subscription_for_action(ctx, reference_id, body[:subscription_id], active_only: false)
             raise BetterAuth::APIError.new("BAD_REQUEST", message: BetterAuth::Stripe::ERROR_CODES.fetch("SUBSCRIPTION_NOT_FOUND")) unless subscription && subscription["stripeCustomerId"]
+            raise BetterAuth::APIError.new("BAD_REQUEST", message: BetterAuth::Stripe::ERROR_CODES.fetch("SUBSCRIPTION_NOT_FOUND")) if subscription["stripeSubscriptionId"].to_s.empty?
             raise BetterAuth::APIError.new("BAD_REQUEST", message: BetterAuth::Stripe::ERROR_CODES.fetch("SUBSCRIPTION_NOT_ACTIVE")) unless BetterAuth::Plugins.stripe_active_or_trialing?(subscription)
 
             if subscription["stripeScheduleId"]
@@ -28,10 +29,20 @@ module BetterAuth
 
             raise BetterAuth::APIError.new("BAD_REQUEST", message: BetterAuth::Stripe::ERROR_CODES.fetch("SUBSCRIPTION_NOT_PENDING_CHANGE")) unless BetterAuth::Plugins.stripe_pending_cancel?(subscription)
 
-            active = BetterAuth::Plugins.stripe_active_subscriptions(config, subscription["stripeCustomerId"]).find do |entry|
-              BetterAuth::Plugins.stripe_fetch(entry, "id") == subscription["stripeSubscriptionId"]
+            active = BetterAuth::Plugins.stripe_retrieve_subscription(config, subscription["stripeSubscriptionId"])
+            if active.nil?
+              ctx.context.adapter.delete(model: "subscription", where: [{field: "id", value: subscription.fetch("id")}])
+              raise BetterAuth::APIError.new("BAD_REQUEST", message: BetterAuth::Stripe::ERROR_CODES.fetch("SUBSCRIPTION_NOT_FOUND"))
             end
-            raise BetterAuth::APIError.new("BAD_REQUEST", message: BetterAuth::Stripe::ERROR_CODES.fetch("SUBSCRIPTION_NOT_FOUND")) unless active
+            # Some Stripe-compatible clients return a sparse object from
+            # retrieve; hydrate it from the paginated list while retaining the
+            # exact requested subscription ID.
+            if active&.respond_to?(:key?) && !active.key?("cancel_at") && !active.key?(:cancel_at) && !active.key?("cancel_at_period_end") && !active.key?(:cancel_at_period_end)
+              active = BetterAuth::Plugins.stripe_active_subscriptions(config, subscription["stripeCustomerId"]).find { |entry| BetterAuth::Plugins.stripe_fetch(entry, "id") == subscription["stripeSubscriptionId"] } || active
+            end
+            unless BetterAuth::Plugins.stripe_active_or_trialing?(active)
+              raise BetterAuth::APIError.new("BAD_REQUEST", message: BetterAuth::Stripe::ERROR_CODES.fetch("SUBSCRIPTION_NOT_FOUND"))
+            end
 
             update_params = if BetterAuth::Plugins.stripe_fetch(active, "cancel_at")
               {cancel_at: ""}

@@ -16,14 +16,13 @@ module BetterAuth
             BetterAuth::Plugins.stripe_authorize_reference!(ctx, session, reference_id, "cancel-subscription", customer_type, BetterAuth::Plugins.stripe_subscription_options(config), explicit: body.key?(:reference_id))
             subscription = BetterAuth::Plugins.stripe_find_subscription_for_action(ctx, reference_id, body[:subscription_id], active_only: true)
             raise BetterAuth::APIError.new("BAD_REQUEST", message: BetterAuth::Stripe::ERROR_CODES.fetch("SUBSCRIPTION_NOT_FOUND")) unless subscription && subscription["stripeCustomerId"]
+            raise BetterAuth::APIError.new("BAD_REQUEST", message: BetterAuth::Stripe::ERROR_CODES.fetch("SUBSCRIPTION_NOT_FOUND")) if subscription["stripeSubscriptionId"].to_s.empty?
 
-            active = BetterAuth::Plugins.stripe_active_subscriptions(config, subscription["stripeCustomerId"])
-            if active.empty?
-              ctx.context.adapter.delete_many(model: "subscription", where: [{field: "referenceId", value: reference_id}])
+            stripe_subscription = BetterAuth::Plugins.stripe_retrieve_subscription(config, subscription["stripeSubscriptionId"])
+            unless stripe_subscription && BetterAuth::Plugins.stripe_active_or_trialing?(stripe_subscription)
+              ctx.context.adapter.delete(model: "subscription", where: [{field: "id", value: subscription.fetch("id")}])
               raise BetterAuth::APIError.new("BAD_REQUEST", message: BetterAuth::Stripe::ERROR_CODES.fetch("SUBSCRIPTION_NOT_FOUND"))
             end
-            stripe_subscription = active.find { |entry| BetterAuth::Plugins.stripe_fetch(entry, "id") == subscription["stripeSubscriptionId"] }
-            raise BetterAuth::APIError.new("BAD_REQUEST", message: BetterAuth::Stripe::ERROR_CODES.fetch("SUBSCRIPTION_NOT_FOUND")) unless stripe_subscription
 
             portal = BetterAuth::Plugins.stripe_client(config).billing_portal.sessions.create(
               customer: subscription["stripeCustomerId"],

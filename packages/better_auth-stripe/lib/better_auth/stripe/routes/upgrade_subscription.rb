@@ -39,15 +39,14 @@ module BetterAuth
             end
 
             active_or_trialing = subscriptions.find { |entry| BetterAuth::Plugins.stripe_active_or_trialing?(entry) }
-            active_stripe_subscriptions = BetterAuth::Plugins.stripe_active_subscriptions(config, customer_id)
-            active_stripe = active_stripe_subscriptions.find do |entry|
-              if subscription_to_update&.fetch("stripeSubscriptionId", nil) || body[:subscription_id]
-                BetterAuth::Plugins.stripe_fetch(entry, "id") == subscription_to_update&.fetch("stripeSubscriptionId", nil) || BetterAuth::Plugins.stripe_fetch(entry, "id") == body[:subscription_id]
-              elsif active_or_trialing && active_or_trialing["stripeSubscriptionId"]
-                BetterAuth::Plugins.stripe_fetch(entry, "id") == active_or_trialing["stripeSubscriptionId"]
-              else
-                false
-              end
+            requested_subscription_id = subscription_to_update&.fetch("stripeSubscriptionId", nil) || body[:subscription_id]
+            active_stripe_subscriptions = requested_subscription_id ? [] : BetterAuth::Plugins.stripe_active_subscriptions(config, customer_id)
+            active_stripe = if requested_subscription_id
+              retrieved = BetterAuth::Plugins.stripe_retrieve_subscription(config, requested_subscription_id)
+              retrieved if retrieved && BetterAuth::Plugins.stripe_active_or_trialing?(retrieved)
+            else
+              target_id = active_or_trialing && active_or_trialing["stripeSubscriptionId"]
+              active_stripe_subscriptions.find { |entry| BetterAuth::Plugins.stripe_fetch(entry, "id") == target_id } if target_id
             end
 
             price_id = BetterAuth::Plugins.stripe_price_id(config, plan, body[:annual])
@@ -99,10 +98,10 @@ module BetterAuth
 
             incomplete = subscriptions.find { |entry| entry["status"] == "incomplete" }
             subscription = active_or_trialing || incomplete
-            if subscription
+            if incomplete && !active_or_trialing
               update = {plan: plan[:name].to_s.downcase, seats: requested_seats}
-              subscription = ctx.context.adapter.update(model: "subscription", where: [{field: "id", value: subscription.fetch("id")}], update: update) || subscription.merge(update.transform_keys { |key| BetterAuth::Schema.storage_key(key) })
-            else
+              subscription = ctx.context.adapter.update(model: "subscription", where: [{field: "id", value: incomplete.fetch("id")}], update: update) || incomplete.merge(update.transform_keys { |key| BetterAuth::Schema.storage_key(key) })
+            elsif !subscription
               subscription = ctx.context.adapter.create(
                 model: "subscription",
                 data: {plan: plan[:name].to_s.downcase, referenceId: reference_id, stripeCustomerId: customer_id, status: "incomplete", seats: requested_seats, limits: plan[:limits]}

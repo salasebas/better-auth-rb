@@ -188,7 +188,7 @@ module BetterAuth
       end
 
       def escape_search(value)
-        value.to_s.gsub("\"", "\\\"")
+        value.to_s.gsub("\\") { "\\\\" }.gsub('"') { '\\"' }
       end
     end
   end

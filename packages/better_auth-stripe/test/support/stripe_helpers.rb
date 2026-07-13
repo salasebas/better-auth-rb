@@ -33,12 +33,15 @@ module BetterAuthStripeTestHelpers
     }
   end
 
-  def sign_up_cookie(auth, email: "billing@example.com")
+  def sign_up_cookie(auth, email: "billing@example.com", email_verified: true)
     _status, headers, _body = auth.api.sign_up_email(
       body: {email: email, password: "password123", name: "Billing User"},
       as_response: true
     )
-    cookie_header(headers.fetch("set-cookie"))
+    cookie = cookie_header(headers.fetch("set-cookie"))
+    user = auth.api.get_session(headers: {"cookie" => cookie})[:user]
+    auth.context.internal_adapter.update_user(user.fetch("id"), emailVerified: email_verified)
+    cookie
   end
 
   def create_user(auth, data = {})
@@ -306,13 +309,15 @@ module BetterAuthStripeTestHelpers
     end
 
     class Subscriptions
-      attr_accessor :list_data, :update_result, :update_error
-      attr_reader :updated, :retrieve_data
+      attr_accessor :list_data, :update_result, :update_error, :retrieve_error, :pages
+      attr_reader :updated, :retrieve_data, :list_calls
 
       def initialize
         @list_data = []
         @retrieve_data = {}
+        @pages = nil
         @updated = []
+        @list_calls = []
       end
 
       def update(id, params = {})
@@ -323,10 +328,15 @@ module BetterAuthStripeTestHelpers
       end
 
       def retrieve(id)
+        raise retrieve_error if retrieve_error
+
         retrieve_data[id] || {"id" => id, "status" => "active"}
       end
 
       def list(**params)
+        list_calls << params
+        return pages.shift if pages && !pages.empty?
+
         data = list_data.select do |subscription|
           params[:customer].nil? || (subscription[:customer] || subscription["customer"]) == params[:customer]
         end

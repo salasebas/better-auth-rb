@@ -95,6 +95,15 @@ module BetterAuth
     def stripe_find_or_create_user_customer(config, user, metadata = nil, ctx = nil)
       customer = stripe_find_user_customer(config, user["email"])
       if customer
+        customer_metadata = stripe_customer_metadata_get(stripe_fetch(customer, "metadata") || {})
+        owner_id = customer_metadata[:userId]
+        owned_by_other = owner_id && owner_id.to_s != user["id"].to_s
+        # Email matches are not proof of ownership. Reuse only after the local
+        # email has been verified and when Stripe metadata does not identify a
+        # different Better Auth user.
+        customer = nil if !user["emailVerified"] || owned_by_other
+      end
+      if customer
         stripe_notify_customer_created(config, customer, user, ctx)
         return customer
       end
@@ -246,8 +255,50 @@ module BetterAuth
     end
 
     def stripe_active_subscriptions(config, customer_id)
-      result = stripe_client(config).subscriptions.list(customer: customer_id)
-      Array(stripe_fetch(result, "data")).select { |entry| stripe_active_or_trialing?(entry) }
+      subscriptions = []
+      stripe_each_subscription(config, customer_id) do |entry|
+        subscriptions << entry if stripe_active_or_trialing?(entry)
+        false
+      end
+      subscriptions
+    end
+
+    # Retrieve one Stripe subscription, treating only Stripe's explicit
+    # resource_missing response as a stale local row. Other API failures are
+    # surfaced to callers so transient/auth/rate-limit errors cannot erase
+    # local billing state.
+    def stripe_retrieve_subscription(config, subscription_id)
+      stripe_client(config).subscriptions.retrieve(subscription_id)
+    rescue BetterAuth::APIError
+      raise
+    rescue => error
+      return nil if error.respond_to?(:code) && error.code.to_s == "resource_missing"
+
+      raise BetterAuth::APIError.new("BAD_REQUEST", message: error.message, code: error.respond_to?(:code) ? error.code : nil)
+    end
+
+    # Iterate all subscriptions for a customer, transparently handling Stripe's
+    # 100-item page limit. Returning a truthy value from the block stops paging.
+    def stripe_each_subscription(config, customer_id, status: nil)
+      client = stripe_client(config)
+      params = {customer: customer_id, limit: 100}
+      params[:status] = status if status
+      loop do
+        result = begin
+          client.subscriptions.list(params)
+        rescue ArgumentError
+          client.subscriptions.list(**params)
+        end
+        data = Array(stripe_fetch(result, "data"))
+        data.each { |entry| return true if yield(entry) }
+        break unless stripe_fetch(result, "has_more")
+
+        last_id = stripe_fetch(data.last || {}, "id")
+        break if last_id.to_s.empty?
+
+        params[:starting_after] = last_id
+      end
+      false
     end
 
     def stripe_active_or_trialing?(subscription)

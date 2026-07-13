@@ -25,8 +25,7 @@ module BetterAuth
             organization = data[:organization] || data["organization"]
             next unless organization && organization["stripeCustomerId"]
 
-            subscriptions = BetterAuth::Stripe::Utils.client(config).subscriptions.list(customer: organization["stripeCustomerId"], status: "all", limit: 100)
-            active = Array(BetterAuth::Stripe::Utils.fetch(subscriptions, "data")).any? do |subscription|
+            active = BetterAuth::Plugins.stripe_each_subscription(config, organization["stripeCustomerId"], status: "all") do |subscription|
               !%w[canceled incomplete incomplete_expired].include?(BetterAuth::Stripe::Utils.fetch(subscription, "status").to_s)
             end
             raise APIError.new("BAD_REQUEST", message: BetterAuth::Stripe::ERROR_CODES.fetch("ORGANIZATION_HAS_ACTIVE_SUBSCRIPTION")) if active
