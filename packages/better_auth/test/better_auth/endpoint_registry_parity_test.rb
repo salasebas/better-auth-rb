@@ -19,7 +19,10 @@ end
 class BetterAuthEndpointRegistryParityTest < Minitest::Test
   REGISTRY_PATH = File.expand_path("../../../../reference/upstream-endpoint-registry.json", __dir__)
   SKIP_PLUGINS = %w[mcp electron oidc-provider].freeze
-  SKIP_PATHS = %w[/forget-password/email-otp].freeze
+  KNOWN_GAPS = [
+    ["oauth-popup", "GET", "/oauth-popup/start"],
+    ["siwe", "POST", "/siwe/get-nonce"]
+  ].freeze
   PASSKEY_METHOD_OVERRIDES = {
     "GET /passkey/generate-authenticate-options" => "POST",
     "GET /passkey/generate-register-options" => "POST"
@@ -65,17 +68,17 @@ class BetterAuthEndpointRegistryParityTest < Minitest::Test
   end
 
   def test_passkey_registration_options_mapping
-    entry = find_entry("/passkey/generate-register-options", "POST")
-    skip "Passkey registration options not in upstream registry scan" unless entry
+    entry = find_entry("/passkey/generate-register-options", "GET")
 
+    refute_nil entry
     assert_registry_entry_present(entry)
     assert_respond_to @auth.api, entry.fetch("ruby_registry_key").to_sym
   end
 
   def test_api_key_create_mapping
     entry = find_entry("/api-key/create", "POST")
-    skip "API key create not in upstream registry scan" unless entry
 
+    refute_nil entry
     assert_equal "create_api_key", entry.fetch("ruby_registry_key")
     assert_registry_entry_present(entry)
   end
@@ -100,8 +103,12 @@ class BetterAuthEndpointRegistryParityTest < Minitest::Test
 
   def supported_entries
     @registry.reject do |entry|
-      skip_plugin?(entry["plugin_id"]) || SKIP_PATHS.include?(entry["path"].to_s)
+      skip_plugin?(entry["plugin_id"]) || known_gap?(entry) || entry["server_only"]
     end
+  end
+
+  def known_gap?(entry)
+    KNOWN_GAPS.include?([entry["plugin_id"].to_s, entry["method"].to_s.upcase, entry["path"].to_s])
   end
 
   def skip_plugin?(plugin_id)

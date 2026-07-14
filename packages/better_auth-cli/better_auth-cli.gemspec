@@ -19,7 +19,7 @@ Gem::Specification.new do |spec|
 
   spec.files = Dir.glob("lib/**/*", File::FNM_DOTMATCH).select { |file| File.file?(file) } +
     Dir.glob("exe/**/*", File::FNM_DOTMATCH).select { |file| File.file?(file) } +
-    ["README.md", "CHANGELOG.md"].select { |file| File.exist?(file) }
+    ["README.md", "CHANGELOG.md", "LICENSE.md"].select { |file| File.exist?(file) }
   spec.bindir = "exe"
   spec.executables = spec.files.grep(%r{\Aexe/}) { |file| File.basename(file) }
   spec.require_paths = ["lib"]

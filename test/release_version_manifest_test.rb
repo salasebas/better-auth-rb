@@ -36,7 +36,7 @@ class ReleaseVersionManifestTest < Minitest::Test
   def test_sync_versions_script_is_registered_as_rake_task
     rakefile = File.read(File.join(ROOT, "Rakefile"))
 
-    assert_includes rakefile, "script/sync_versions.rb"
+    assert_includes rakefile, "scripts/sync_versions.rb"
     assert_match(/task\s+"release:sync_versions"/, rakefile)
   end
 

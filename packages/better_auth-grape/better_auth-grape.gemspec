@@ -1,7 +1,5 @@
 # frozen_string_literal: true
 
-ROOT_LICENSE = File.expand_path("../../LICENSE.md", __dir__)
-
 require_relative "lib/better_auth/grape/version"
 
 Gem::Specification.new do |spec|
@@ -26,7 +24,7 @@ Gem::Specification.new do |spec|
   spec.metadata["bug_tracker_uri"] = "https://github.com/sebasxsala/better-auth-rb/issues"
 
   spec.files = Dir.glob("lib/**/*", File::FNM_DOTMATCH).select { |file| File.file?(file) } +
-    ["README.md", "CHANGELOG.md"].select { |f| File.exist?(f) } + (File.exist?(ROOT_LICENSE) ? [ROOT_LICENSE] : [])
+    ["README.md", "CHANGELOG.md", "LICENSE.md"].select { |f| File.exist?(f) }
   spec.bindir = "exe"
   spec.executables = spec.files.grep(%r{\Aexe/}) { |file| File.basename(file) }
   spec.require_paths = ["lib"]

@@ -94,7 +94,6 @@ class CliRoutingTest < BetterAuthCLITestCase
     spec = Gem::Specification.load(File.expand_path("../../better_auth-cli.gemspec", __dir__))
 
     assert_includes spec.executables, "better-auth"
-    refute_includes spec.executables, "openauth"
   end
 
   private

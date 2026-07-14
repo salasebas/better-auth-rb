@@ -10,12 +10,6 @@ Add this line to your application's Gemfile:
 gem "better_auth-rails"
 ```
 
-### Defensive alias package
-
-`better_auth_rails` is published only as a defensive alias package.
-
-WARNING: This gem is an alias. Use `better_auth-rails`.
-
 And then execute:
 
 ```bash
@@ -30,12 +24,6 @@ Add to your `config/application.rb`:
 
 ```ruby
 require "better_auth/rails"
-```
-
-Compatibility require is also supported:
-
-```ruby
-require "better_auth_rails"
 ```
 
 Or in your Gemfile:

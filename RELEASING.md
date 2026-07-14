@@ -19,14 +19,15 @@ All gems currently share one release version. Edit `.release.yml` once, then:
 rake release:sync_versions
 ```
 
-That updates package `VERSION` constants, OpenAuth alias `spec.version` values, and pinned alias dependencies.
+That updates package `VERSION` constants, literal alias `spec.version` values,
+and pinned alias dependencies.
 
 ## Publish order
 
 1. `better_auth`
 2. Dependent `better_auth-*` packages
 3. `better_auth-mongo-adapter` after `better_auth-mongodb`
-4. `rubyauth` and `openauth*` aliases after their matching `better_auth*` gems are on RubyGems
+4. `rubyauth` after `better_auth` is on RubyGems
 
 Example:
 
@@ -48,7 +49,8 @@ Use package-prefixed tags that match the published version:
 | `better_auth-rails` | `better_auth-rails-vX.Y.Z` |
 | `better_auth-passkey` | `better_auth-passkey-vX.Y.Z` |
 
-The same pattern applies to the rest of the `better_auth-*`, `rubyauth`, and `openauth*` packages.
+The same pattern applies to the rest of the `better_auth-*` packages and
+`rubyauth`.
 
 ## Notes
 

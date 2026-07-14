@@ -17,7 +17,7 @@ RELEASE_GEMSPEC_PATHS = (
 
 STANDARD_PATHS = [
   "Rakefile",
-  "script",
+  "scripts",
   "test",
   "packages/better_auth/Rakefile",
   "packages/better_auth/lib",
@@ -28,9 +28,6 @@ STANDARD_PATHS = [
   "packages/better_auth-grape/Rakefile",
   "packages/better_auth-grape/lib",
   "packages/better_auth-grape/spec",
-  "packages/openauth-cli/Rakefile",
-  "packages/openauth-cli/lib",
-  "packages/openauth-cli/test",
   "packages/better_auth-redis-storage/Rakefile",
   "packages/better_auth-redis-storage/lib",
   "packages/better_auth-redis-storage/test",
@@ -81,6 +78,16 @@ STANDARD_PATHS = [
   "packages/better_auth-hanami/spec"
 ].freeze
 
+WORKSPACE_TEST_PATHS = Dir["test/**/*_test.rb"].sort.reject do |path|
+  path == "test/mysql_plugin_schema_smoke_test.rb"
+end.freeze
+
+desc "Run non-database workspace tests"
+task "test:workspace" do
+  test_requires = WORKSPACE_TEST_PATHS.map { |path| %(require "./#{path}") }.join("; ")
+  sh %(bundle exec ruby -Itest -e '#{test_requires}')
+end
+
 # Default task: run CI across all packages.
 desc "Run CI in all packages"
 task :ci do
@@ -96,13 +103,7 @@ task :ci do
   sh "bundle exec standardrb #{STANDARD_PATHS.join(" ")}"
 
   puts "\n🧪 Running workspace packaging tests..."
-  workspace_test_requires = [
-    "./test/openauth_alias_packages_test",
-    "./test/rubyauth_alias_package_test",
-    "./test/release_version_manifest_test",
-    "./test/workspace_tooling_manifest_test"
-  ].map { |path| %(require "#{path}") }.join("; ")
-  sh %(bundle exec ruby -Itest -e '#{workspace_test_requires}')
+  Rake::Task["test:workspace"].invoke
 
   puts "\n🧪 Running endpoint registry parity test..."
   sh "bundle exec ruby -Ipackages/better_auth/test -Ipackages/better_auth/lib packages/better_auth/test/better_auth/endpoint_registry_parity_test.rb"
@@ -121,11 +122,6 @@ task :ci do
   puts "\n🧪 Running tests in packages/better_auth-grape..."
   cd "packages/better_auth-grape" do
     sh "BUNDLE_GEMFILE=Gemfile bundle exec rake ci"
-  end
-
-  puts "\n🧪 Running tests in packages/openauth-cli..."
-  cd "packages/openauth-cli" do
-    sh "BUNDLE_GEMFILE=Gemfile bundle exec rake"
   end
 
   puts "\n🧪 Running tests in packages/better_auth-redis-storage..."
@@ -164,11 +160,6 @@ task :ci do
 
   puts "\n🧪 Running tests in packages/better_auth-telemetry..."
   cd "packages/better_auth-telemetry" do
-    sh "BUNDLE_GEMFILE=Gemfile bundle exec rake"
-  end
-
-  puts "\n🧪 Running tests in packages/openauth-telemetry..."
-  cd "packages/openauth-telemetry" do
     sh "BUNDLE_GEMFILE=Gemfile bundle exec rake"
   end
 
@@ -275,11 +266,6 @@ task :install do
     sh "BUNDLE_GEMFILE=Gemfile bundle install"
   end
 
-  puts "\n📦 Installing packages/openauth-telemetry dependencies..."
-  cd "packages/openauth-telemetry" do
-    sh "BUNDLE_GEMFILE=Gemfile bundle install"
-  end
-
   puts "\n📦 Installing packages/better_auth-oauth-provider dependencies..."
   cd "packages/better_auth-oauth-provider" do
     sh "BUNDLE_GEMFILE=Gemfile bundle install"
@@ -370,10 +356,6 @@ task :lint do
     sh "BUNDLE_GEMFILE=Gemfile bundle exec standardrb"
   end
 
-  cd "packages/openauth-telemetry" do
-    sh "BUNDLE_GEMFILE=Gemfile bundle exec standardrb"
-  end
-
   cd "packages/better_auth-oauth-provider" do
     sh "BUNDLE_GEMFILE=Gemfile bundle exec standardrb"
   end
@@ -452,10 +434,6 @@ task "lint:fix" do
   end
 
   cd "packages/better_auth-telemetry" do
-    sh "BUNDLE_GEMFILE=Gemfile bundle exec standardrb --fix"
-  end
-
-  cd "packages/openauth-telemetry" do
     sh "BUNDLE_GEMFILE=Gemfile bundle exec standardrb --fix"
   end
 
@@ -561,10 +539,6 @@ task :clean do
     sh "rm -rf Gemfile.lock *.gem coverage/"
   end
 
-  cd "packages/openauth-telemetry" do
-    sh "rm -rf Gemfile.lock *.gem coverage/"
-  end
-
   cd "packages/better_auth-oauth-provider" do
     sh "rm -rf Gemfile.lock *.gem coverage/"
   end
@@ -604,7 +578,7 @@ end
 
 desc "Sync package versions from .release.yml"
 task "release:sync_versions" do
-  sh "ruby script/sync_versions.rb"
+  sh "ruby scripts/sync_versions.rb"
 end
 
 desc "Validate release gem builds without publishing"

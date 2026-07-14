@@ -5,7 +5,6 @@ core:
   - changed-files:
       - any-glob-to-any-file:
           - "packages/better_auth/**"
-          - "packages/openauth/**"
           - "packages/rubyauth/**"
 
 adapters:
@@ -16,11 +15,6 @@ adapters:
           - "packages/better_auth-hanami/**"
           - "packages/better_auth-grape/**"
           - "packages/better_auth-roda/**"
-          - "packages/openauth-rails/**"
-          - "packages/openauth-sinatra/**"
-          - "packages/openauth-hanami/**"
-          - "packages/openauth-grape/**"
-          - "packages/openauth-roda/**"
 
 oauth:
   - changed-files:
@@ -29,57 +23,45 @@ oauth:
           - "packages/better_auth-oidc/**"
           - "packages/better_auth-saml/**"
           - "packages/better_auth-sso/**"
-          - "packages/openauth-oauth-provider/**"
-          - "packages/openauth-oidc/**"
-          - "packages/openauth-saml/**"
-          - "packages/openauth-sso/**"
 
 credentials:
   - changed-files:
       - any-glob-to-any-file:
           - "packages/better_auth-passkey/**"
-          - "packages/openauth-passkey/**"
 
 database:
   - changed-files:
       - any-glob-to-any-file:
           - "packages/better_auth-mongodb/**"
           - "packages/better_auth-mongo-adapter/**"
-          - "packages/openauth-mongodb/**"
           - "test/mysql_plugin_schema_smoke_test.rb"
 
 cache:
   - changed-files:
       - any-glob-to-any-file:
           - "packages/better_auth-redis-storage/**"
-          - "packages/openauth-redis-storage/**"
 
 enterprise:
   - changed-files:
       - any-glob-to-any-file:
           - "packages/better_auth-scim/**"
-          - "packages/openauth-scim/**"
 
 payments:
   - changed-files:
       - any-glob-to-any-file:
           - "packages/better_auth-stripe/**"
-          - "packages/openauth-stripe/**"
 
 devtools:
   - changed-files:
       - any-glob-to-any-file:
           - "packages/better_auth-cli/**"
           - "packages/better_auth-telemetry/**"
-          - "packages/openauth-cli/**"
-          - "packages/openauth-telemetry/**"
-          - "script/**"
+          - "scripts/**"
 
 api-key:
   - changed-files:
       - any-glob-to-any-file:
           - "packages/better_auth-api-key/**"
-          - "packages/openauth-api-key/**"
 
 examples:
   - changed-files:

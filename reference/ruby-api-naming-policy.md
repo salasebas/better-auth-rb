@@ -1,7 +1,7 @@
 # RubyAuth `auth.api` naming policy
 
 RubyAuth exposes server endpoints as `auth.api.*` methods derived from endpoint
-registry keys. This document defines how upstream Better Auth v1.6.9 registry
+registry keys. This document defines how upstream Better Auth v1.6.23 registry
 keys map to Ruby registry keys and how to add new endpoints without duplicate
 aliases.
 

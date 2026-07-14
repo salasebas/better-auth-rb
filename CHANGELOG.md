@@ -3,6 +3,14 @@
 This repository contains independently versioned Ruby packages. Package-specific
 release notes live in each package's `CHANGELOG.md`.
 
+## Unreleased
+
+- Removed the 18 OpenAuth alias packages and the `openauth` executable.
+- Consolidated repository tooling under `scripts/` and removed the one-off
+  documentation generators and root Hanami stub.
+- Added a valid relative `LICENSE.md` to every publishable gem.
+- Removed the defensive `better_auth_rails` alias gem and compatibility require.
+
 ## 2026-05-21
 
 ### 0.10.0 release set

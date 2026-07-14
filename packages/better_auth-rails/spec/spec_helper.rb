@@ -2,7 +2,6 @@
 
 require "bundler/setup"
 require "better_auth/rails"
-require "better_auth_rails"
 
 module BetterAuthRailsMySQLSpecHelpers
   def reset_mysql_schema(connection = ActiveRecord::Base.connection)

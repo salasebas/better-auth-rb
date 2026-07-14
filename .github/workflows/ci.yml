@@ -16,7 +16,7 @@ on:
       - '.standard.yml'
       - 'docker-compose.yml'
       - '.ruby-version'
-      - 'script/**'
+      - 'scripts/**'
       - 'test/**'
       - 'docs-site/**'
       - '.github/workflows/ci.yml'
@@ -32,7 +32,7 @@ on:
       - '.standard.yml'
       - 'docker-compose.yml'
       - '.ruby-version'
-      - 'script/**'
+      - 'scripts/**'
       - 'test/**'
       - 'docs-site/**'
       - '.docs/**'
@@ -82,7 +82,6 @@ jobs:
           - better_auth
           - better_auth-passkey
           - better_auth-cli
-          - openauth-cli
           - better_auth-api-key
           - better_auth-rails
           - better_auth-sinatra
@@ -139,7 +138,7 @@ jobs:
           bundler-cache: true
 
       - name: Run workspace packaging tests
-        run: bundle exec ruby -Itest -e 'require "./test/openauth_alias_packages_test"; require "./test/rubyauth_alias_package_test"; require "./test/release_version_manifest_test"; require "./test/ci_workflow_package_coverage_test"'
+        run: bundle exec rake test:workspace
 
   test-core:
     name: Test better_auth (Core)
@@ -239,25 +238,6 @@ jobs:
         working-directory: packages/better_auth-cli
         run: timeout 180s bundle exec rake test
 
-  test-openauth-cli:
-    name: Test openauth-cli
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Set up Ruby
-        uses: ruby/setup-ruby@v1
-        with:
-          ruby-version: .ruby-version
-          bundler-cache: true
-          working-directory: packages/openauth-cli
-
-
-      - name: Run tests
-        working-directory: packages/openauth-cli
-        run: timeout 180s bundle exec rake test
-
   test-api-key:
     name: Test better_auth-api-key (API Key Plugin)
     runs-on: ubuntu-latest
@@ -348,21 +328,6 @@ jobs:
       - name: Run fast tests
         working-directory: packages/better_auth-hanami
         run: bundle exec rake test
-
-  test-openauth-grape:
-    name: Test openauth-grape (alias smoke)
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Set up Ruby
-        uses: ruby/setup-ruby@v1
-        with:
-          ruby-version: .ruby-version
-          bundler-cache: true
-
-      - name: Run openauth-grape smoke spec
-        run: bundle exec rspec packages/openauth-grape/spec --format progress
 
   test-grape:
     name: Test better_auth-grape (Grape Adapter)
@@ -595,12 +560,10 @@ jobs:
       - test-core
       - test-passkey
       - test-cli
-      - test-openauth-cli
       - test-api-key
       - test-rails
       - test-sinatra
       - test-hanami
-      - test-openauth-grape
       - test-grape
       - test-roda
       - test-oauth-provider

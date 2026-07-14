@@ -16,4 +16,3 @@ ignore:
   - '.git/**/*'
   - '.claude/**/*'
   - '.ruby-lsp/**/*'
-  - 'hanami-app/**/*'

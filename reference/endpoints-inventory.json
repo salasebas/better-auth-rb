@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-06-17T06:02:29Z",
-  "route_count": 219,
+  "generated_at": "2026-07-14T07:49:53Z",
+  "route_count": 220,
   "routes": [
     {
       "path": "/.well-known/oauth-authorization-server",
@@ -19,7 +19,10 @@
       "source": "runtime",
       "method": "GET",
       "ruby_api_method": "get_oauth_server_config",
-      "ruby_api_call": "auth.api.get_oauth_server_config"
+      "ruby_api_call": "auth.api.get_oauth_server_config",
+      "upstream_registry_key": "getOAuthServerConfig",
+      "upstream_api_call": "auth.api.getOAuthServerConfig",
+      "upstream_client_call": null
     },
     {
       "path": "/.well-known/openid-configuration",
@@ -38,7 +41,10 @@
       "source": "runtime",
       "method": "GET",
       "ruby_api_method": "get_openid_config",
-      "ruby_api_call": "auth.api.get_openid_config"
+      "ruby_api_call": "auth.api.get_openid_config",
+      "upstream_registry_key": "getOpenIdConfig",
+      "upstream_api_call": "auth.api.getOpenIdConfig",
+      "upstream_client_call": null
     },
     {
       "path": "/account-info",
@@ -55,6 +61,16 @@
           "name": "accountId",
           "required": false,
           "type": "string"
+        },
+        {
+          "name": "providerId",
+          "required": false,
+          "type": "string"
+        },
+        {
+          "name": "userId",
+          "required": false,
+          "type": "string"
         }
       ],
       "path_params": [],
@@ -67,7 +83,7 @@
       "ruby_api_call": "auth.api.account_info",
       "upstream_registry_key": "accountInfo",
       "upstream_api_call": "auth.api.accountInfo",
-      "upstream_client_call": "accountInfo",
+      "upstream_client_call": null,
       "plugin_id": "core",
       "operation_id": "accountInfo"
     },
@@ -77,7 +93,7 @@
         "POST"
       ],
       "file": "packages/better_auth/lib/better_auth/plugins/admin.rb",
-      "line": 342,
+      "line": 379,
       "endpoint_key": "ban_user",
       "plugin_hint": "admin",
       "body_fields": [
@@ -108,7 +124,7 @@
       "ruby_api_call": "auth.api.ban_user",
       "upstream_registry_key": "banUser",
       "upstream_api_call": "auth.api.banUser",
-      "upstream_client_call": "admin.BanUser",
+      "upstream_client_call": "authClient.admin.banUser",
       "plugin_id": "admin",
       "operation_id": "banUser"
     },
@@ -118,7 +134,7 @@
         "POST"
       ],
       "file": "packages/better_auth/lib/better_auth/plugins/admin.rb",
-      "line": 198,
+      "line": 202,
       "endpoint_key": "create_user",
       "plugin_hint": "admin",
       "body_fields": [
@@ -159,7 +175,7 @@
       "ruby_api_call": "auth.api.create_user",
       "upstream_registry_key": "createUser",
       "upstream_api_call": "auth.api.createUser",
-      "upstream_client_call": "admin.CreateUser",
+      "upstream_client_call": "authClient.admin.createUser",
       "plugin_id": "admin",
       "operation_id": "createUser"
     },
@@ -169,7 +185,7 @@
         "GET"
       ],
       "file": "packages/better_auth/lib/better_auth/plugins/admin.rb",
-      "line": 167,
+      "line": 171,
       "endpoint_key": "get_user",
       "plugin_hint": "admin",
       "body_fields": [],
@@ -200,7 +216,7 @@
       "ruby_api_call": "auth.api.get_user",
       "upstream_registry_key": "getUser",
       "upstream_api_call": "auth.api.getUser",
-      "upstream_client_call": "admin.GetUser",
+      "upstream_client_call": null,
       "plugin_id": "admin",
       "operation_id": "getUser"
     },
@@ -210,7 +226,7 @@
         "POST"
       ],
       "file": "packages/better_auth/lib/better_auth/plugins/admin.rb",
-      "line": 601,
+      "line": 649,
       "endpoint_key": "user_has_permission",
       "plugin_hint": "admin",
       "body_fields": [
@@ -241,7 +257,7 @@
       "ruby_api_call": "auth.api.user_has_permission",
       "upstream_registry_key": "userHasPermission",
       "upstream_api_call": "auth.api.userHasPermission",
-      "upstream_client_call": "admin.HasPermission",
+      "upstream_client_call": "authClient.admin.hasPermission",
       "plugin_id": "admin",
       "operation_id": "hasPermission"
     },
@@ -251,7 +267,7 @@
         "POST"
       ],
       "file": "packages/better_auth/lib/better_auth/plugins/admin.rb",
-      "line": 390,
+      "line": 430,
       "endpoint_key": "impersonate_user",
       "plugin_hint": "admin",
       "body_fields": [
@@ -272,7 +288,7 @@
       "ruby_api_call": "auth.api.impersonate_user",
       "upstream_registry_key": "impersonateUser",
       "upstream_api_call": "auth.api.impersonateUser",
-      "upstream_client_call": "admin.ImpersonateUser",
+      "upstream_client_call": "authClient.admin.impersonateUser",
       "plugin_id": "admin",
       "operation_id": "impersonateUser"
     },
@@ -282,7 +298,7 @@
         "POST"
       ],
       "file": "packages/better_auth/lib/better_auth/plugins/admin.rb",
-      "line": 326,
+      "line": 363,
       "endpoint_key": "list_user_sessions",
       "plugin_hint": "admin",
       "body_fields": [
@@ -303,7 +319,7 @@
       "ruby_api_call": "auth.api.list_user_sessions",
       "upstream_registry_key": "listUserSessions",
       "upstream_api_call": "auth.api.listUserSessions",
-      "upstream_client_call": "admin.ListUserSessions",
+      "upstream_client_call": "authClient.admin.listUserSessions",
       "plugin_id": "admin",
       "operation_id": "adminListUserSessions"
     },
@@ -313,7 +329,7 @@
         "GET"
       ],
       "file": "packages/better_auth/lib/better_auth/plugins/admin.rb",
-      "line": 283,
+      "line": 320,
       "endpoint_key": "list_users",
       "plugin_hint": "admin",
       "body_fields": [],
@@ -379,7 +395,7 @@
       "ruby_api_call": "auth.api.list_users",
       "upstream_registry_key": "listUsers",
       "upstream_api_call": "auth.api.listUsers",
-      "upstream_client_call": "admin.ListUsers",
+      "upstream_client_call": null,
       "plugin_id": "admin",
       "operation_id": "listUsers"
     },
@@ -404,7 +420,7 @@
       "ruby_api_call": "auth.api.admin_create_oauth_client",
       "upstream_registry_key": "adminCreateOAuthClient",
       "upstream_api_call": "auth.api.adminCreateOAuthClient",
-      "upstream_client_call": "admin.Oauth2.CreateClient",
+      "upstream_client_call": null,
       "plugin_id": "oauth-provider",
       "operation_id": null
     },
@@ -429,7 +445,7 @@
       "ruby_api_call": "auth.api.admin_update_oauth_client",
       "upstream_registry_key": "adminUpdateOAuthClient",
       "upstream_api_call": "auth.api.adminUpdateOAuthClient",
-      "upstream_client_call": "admin.Oauth2.UpdateClient",
+      "upstream_client_call": null,
       "plugin_id": "oauth-provider",
       "operation_id": null
     },
@@ -439,7 +455,7 @@
         "POST"
       ],
       "file": "packages/better_auth/lib/better_auth/plugins/admin.rb",
-      "line": 533,
+      "line": 573,
       "endpoint_key": "remove_user",
       "plugin_hint": "admin",
       "body_fields": [
@@ -460,7 +476,7 @@
       "ruby_api_call": "auth.api.remove_user",
       "upstream_registry_key": "removeUser",
       "upstream_api_call": "auth.api.removeUser",
-      "upstream_client_call": "admin.RemoveUser",
+      "upstream_client_call": "authClient.admin.removeUser",
       "plugin_id": "admin",
       "operation_id": "removeUser"
     },
@@ -470,7 +486,7 @@
         "POST"
       ],
       "file": "packages/better_auth/lib/better_auth/plugins/admin.rb",
-      "line": 477,
+      "line": 517,
       "endpoint_key": "revoke_user_session",
       "plugin_hint": "admin",
       "body_fields": [
@@ -491,7 +507,7 @@
       "ruby_api_call": "auth.api.revoke_user_session",
       "upstream_registry_key": "revokeUserSession",
       "upstream_api_call": "auth.api.revokeUserSession",
-      "upstream_client_call": "admin.RevokeUserSession",
+      "upstream_client_call": "authClient.admin.revokeUserSession",
       "plugin_id": "admin",
       "operation_id": "revokeUserSession"
     },
@@ -501,7 +517,7 @@
         "POST"
       ],
       "file": "packages/better_auth/lib/better_auth/plugins/admin.rb",
-      "line": 505,
+      "line": 545,
       "endpoint_key": "revoke_user_sessions",
       "plugin_hint": "admin",
       "body_fields": [
@@ -522,7 +538,7 @@
       "ruby_api_call": "auth.api.revoke_user_sessions",
       "upstream_registry_key": "revokeUserSessions",
       "upstream_api_call": "auth.api.revokeUserSessions",
-      "upstream_client_call": "admin.RevokeUserSessions",
+      "upstream_client_call": "authClient.admin.revokeUserSessions",
       "plugin_id": "admin",
       "operation_id": "revokeUserSessions"
     },
@@ -532,7 +548,7 @@
         "POST"
       ],
       "file": "packages/better_auth/lib/better_auth/plugins/admin.rb",
-      "line": 142,
+      "line": 144,
       "endpoint_key": "set_role",
       "plugin_hint": "admin",
       "body_fields": [
@@ -558,7 +574,7 @@
       "ruby_api_call": "auth.api.set_role",
       "upstream_registry_key": "setRole",
       "upstream_api_call": "auth.api.setRole",
-      "upstream_client_call": "admin.SetRole",
+      "upstream_client_call": "authClient.admin.setRole",
       "plugin_id": "admin",
       "operation_id": "setUserRole"
     },
@@ -568,7 +584,7 @@
         "POST"
       ],
       "file": "packages/better_auth/lib/better_auth/plugins/admin.rb",
-      "line": 564,
+      "line": 604,
       "endpoint_key": "set_user_password",
       "plugin_hint": "admin",
       "body_fields": [
@@ -594,7 +610,7 @@
       "ruby_api_call": "auth.api.set_user_password",
       "upstream_registry_key": "setUserPassword",
       "upstream_api_call": "auth.api.setUserPassword",
-      "upstream_client_call": "admin.SetUserPassword",
+      "upstream_client_call": "authClient.admin.setUserPassword",
       "plugin_id": "admin",
       "operation_id": "setUserPassword"
     },
@@ -604,7 +620,7 @@
         "POST"
       ],
       "file": "packages/better_auth/lib/better_auth/plugins/admin.rb",
-      "line": 436,
+      "line": 476,
       "endpoint_key": "stop_impersonating",
       "plugin_hint": "admin",
       "body_fields": [],
@@ -619,7 +635,7 @@
       "ruby_api_call": "auth.api.stop_impersonating",
       "upstream_registry_key": "stopImpersonating",
       "upstream_api_call": "auth.api.stopImpersonating",
-      "upstream_client_call": "admin.StopImpersonating",
+      "upstream_client_call": "authClient.admin.stopImpersonating",
       "plugin_id": "admin",
       "operation_id": "stopImpersonating"
     },
@@ -629,7 +645,7 @@
         "POST"
       ],
       "file": "packages/better_auth/lib/better_auth/plugins/admin.rb",
-      "line": 370,
+      "line": 407,
       "endpoint_key": "unban_user",
       "plugin_hint": "admin",
       "body_fields": [
@@ -650,7 +666,7 @@
       "ruby_api_call": "auth.api.unban_user",
       "upstream_registry_key": "unbanUser",
       "upstream_api_call": "auth.api.unbanUser",
-      "upstream_client_call": "admin.UnbanUser",
+      "upstream_client_call": "authClient.admin.unbanUser",
       "plugin_id": "admin",
       "operation_id": "unbanUser"
     },
@@ -660,7 +676,7 @@
         "POST"
       ],
       "file": "packages/better_auth/lib/better_auth/plugins/admin.rb",
-      "line": 247,
+      "line": 258,
       "endpoint_key": "admin_update_user",
       "plugin_hint": "admin",
       "body_fields": [
@@ -686,7 +702,7 @@
       "ruby_api_call": "auth.api.admin_update_user",
       "upstream_registry_key": "adminUpdateUser",
       "upstream_api_call": "auth.api.adminUpdateUser",
-      "upstream_client_call": "admin.UpdateUser",
+      "upstream_client_call": "authClient.admin.updateUser",
       "plugin_id": "admin",
       "operation_id": "adminUpdateUser"
     },
@@ -778,7 +794,10 @@
       "source": "runtime",
       "method": "POST",
       "ruby_api_method": "create_api_key",
-      "ruby_api_call": "auth.api.create_api_key"
+      "ruby_api_call": "auth.api.create_api_key",
+      "upstream_registry_key": "createApiKey",
+      "upstream_api_call": "auth.api.createApiKey",
+      "upstream_client_call": "authClient.apiKey.create"
     },
     {
       "path": "/api-key/delete",
@@ -808,7 +827,10 @@
       "source": "runtime",
       "method": "POST",
       "ruby_api_method": "delete_api_key",
-      "ruby_api_call": "auth.api.delete_api_key"
+      "ruby_api_call": "auth.api.delete_api_key",
+      "upstream_registry_key": "deleteApiKey",
+      "upstream_api_call": "auth.api.deleteApiKey",
+      "upstream_client_call": "authClient.apiKey.delete"
     },
     {
       "path": "/api-key/delete-all-expired-api-keys",
@@ -857,7 +879,10 @@
       "source": "runtime",
       "method": "GET",
       "ruby_api_method": "get_api_key",
-      "ruby_api_call": "auth.api.get_api_key"
+      "ruby_api_call": "auth.api.get_api_key",
+      "upstream_registry_key": "getApiKey",
+      "upstream_api_call": "auth.api.getApiKey",
+      "upstream_client_call": "authClient.apiKey.get"
     },
     {
       "path": "/api-key/list",
@@ -907,7 +932,10 @@
       "source": "runtime",
       "method": "GET",
       "ruby_api_method": "list_api_keys",
-      "ruby_api_call": "auth.api.list_api_keys"
+      "ruby_api_call": "auth.api.list_api_keys",
+      "upstream_registry_key": "listApiKeys",
+      "upstream_api_call": "auth.api.listApiKeys",
+      "upstream_client_call": "authClient.apiKey.list"
     },
     {
       "path": "/api-key/update",
@@ -997,7 +1025,10 @@
       "source": "runtime",
       "method": "POST",
       "ruby_api_method": "update_api_key",
-      "ruby_api_call": "auth.api.update_api_key"
+      "ruby_api_call": "auth.api.update_api_key",
+      "upstream_registry_key": "updateApiKey",
+      "upstream_api_call": "auth.api.updateApiKey",
+      "upstream_client_call": "authClient.apiKey.update"
     },
     {
       "path": "/api-key/verify",
@@ -1055,6 +1086,9 @@
       "method": "GET",
       "ruby_api_method": "callback_oauth",
       "ruby_api_call": "auth.api.callback_oauth",
+      "upstream_registry_key": "callbackOAuth",
+      "upstream_api_call": "auth.api.callbackOAuth",
+      "upstream_client_call": null,
       "plugin_id": "core",
       "operation_id": "callbackOAuth"
     },
@@ -1079,6 +1113,9 @@
       "method": "POST",
       "ruby_api_method": "callback_oauth",
       "ruby_api_call": "auth.api.callback_oauth",
+      "upstream_registry_key": "callbackOAuth",
+      "upstream_api_call": "auth.api.callbackOAuth",
+      "upstream_client_call": null,
       "plugin_id": "core",
       "operation_id": "callbackOAuth"
     },
@@ -1088,7 +1125,7 @@
         "POST"
       ],
       "file": "packages/better_auth/lib/better_auth/routes/user.rb",
-      "line": 263,
+      "line": 264,
       "endpoint_key": "change_email",
       "plugin_hint": "core",
       "body_fields": [
@@ -1114,7 +1151,7 @@
       "ruby_api_call": "auth.api.change_email",
       "upstream_registry_key": "changeEmail",
       "upstream_api_call": "auth.api.changeEmail",
-      "upstream_client_call": "changeEmail",
+      "upstream_client_call": null,
       "plugin_id": "core",
       "operation_id": "changeEmail"
     },
@@ -1155,7 +1192,7 @@
       "ruby_api_call": "auth.api.change_password",
       "upstream_registry_key": "changePassword",
       "upstream_api_call": "auth.api.changePassword",
-      "upstream_client_call": "changePassword",
+      "upstream_client_call": null,
       "plugin_id": "core",
       "operation_id": "changePassword"
     },
@@ -1178,6 +1215,9 @@
       "method": "POST",
       "ruby_api_method": "delete_anonymous_user",
       "ruby_api_call": "auth.api.delete_anonymous_user",
+      "upstream_registry_key": "deleteAnonymousUser",
+      "upstream_api_call": "auth.api.deleteAnonymousUser",
+      "upstream_client_call": null,
       "plugin_id": "anonymous",
       "operation_id": "deleteAnonymousUser"
     },
@@ -1218,7 +1258,7 @@
       "ruby_api_call": "auth.api.delete_user",
       "upstream_registry_key": "deleteUser",
       "upstream_api_call": "auth.api.deleteUser",
-      "upstream_client_call": "deleteUser",
+      "upstream_client_call": null,
       "plugin_id": "core",
       "operation_id": "deleteUser"
     },
@@ -1228,7 +1268,7 @@
         "GET"
       ],
       "file": "packages/better_auth/lib/better_auth/routes/user.rb",
-      "line": 212,
+      "line": 213,
       "endpoint_key": "delete_user_callback",
       "plugin_hint": "core",
       "body_fields": [],
@@ -1254,7 +1294,7 @@
       "ruby_api_call": "auth.api.delete_user_callback",
       "upstream_registry_key": "deleteUserCallback",
       "upstream_api_call": "auth.api.deleteUserCallback",
-      "upstream_client_call": "deleteUser.Callback",
+      "upstream_client_call": null,
       "plugin_id": "core",
       "operation_id": "deleteUserCallback"
     },
@@ -1264,7 +1304,7 @@
         "GET"
       ],
       "file": "packages/better_auth/lib/better_auth/plugins/device_authorization.rb",
-      "line": 187,
+      "line": 201,
       "endpoint_key": "device_verify",
       "plugin_hint": "device_authorization",
       "body_fields": [],
@@ -1279,7 +1319,7 @@
       "ruby_api_call": "auth.api.device_verify",
       "upstream_registry_key": "deviceVerify",
       "upstream_api_call": "auth.api.deviceVerify",
-      "upstream_client_call": "device",
+      "upstream_client_call": null,
       "plugin_id": "device-authorization",
       "operation_id": "getDeviceVerification"
     },
@@ -1289,7 +1329,7 @@
         "POST"
       ],
       "file": "packages/better_auth/lib/better_auth/plugins/device_authorization.rb",
-      "line": 211,
+      "line": 240,
       "endpoint_key": "device_approve",
       "plugin_hint": "device_authorization",
       "body_fields": [
@@ -1310,7 +1350,7 @@
       "ruby_api_call": "auth.api.device_approve",
       "upstream_registry_key": "deviceApprove",
       "upstream_api_call": "auth.api.deviceApprove",
-      "upstream_client_call": "device.Approve",
+      "upstream_client_call": null,
       "plugin_id": "device-authorization",
       "operation_id": "approveDevice"
     },
@@ -1320,7 +1360,7 @@
         "POST"
       ],
       "file": "packages/better_auth/lib/better_auth/plugins/device_authorization.rb",
-      "line": 50,
+      "line": 51,
       "endpoint_key": "device_code",
       "plugin_hint": "device_authorization",
       "body_fields": [
@@ -1331,6 +1371,11 @@
         },
         {
           "name": "scope",
+          "required": false,
+          "type": "string"
+        },
+        {
+          "name": "user_id",
           "required": false,
           "type": "string"
         }
@@ -1346,7 +1391,7 @@
       "ruby_api_call": "auth.api.device_code",
       "upstream_registry_key": "deviceCode",
       "upstream_api_call": "auth.api.deviceCode",
-      "upstream_client_call": "device.Code",
+      "upstream_client_call": null,
       "plugin_id": "device-authorization",
       "operation_id": "requestDeviceCode"
     },
@@ -1356,7 +1401,7 @@
         "POST"
       ],
       "file": "packages/better_auth/lib/better_auth/plugins/device_authorization.rb",
-      "line": 240,
+      "line": 269,
       "endpoint_key": "device_deny",
       "plugin_hint": "device_authorization",
       "body_fields": [
@@ -1377,7 +1422,7 @@
       "ruby_api_call": "auth.api.device_deny",
       "upstream_registry_key": "deviceDeny",
       "upstream_api_call": "auth.api.deviceDeny",
-      "upstream_client_call": "device.Deny",
+      "upstream_client_call": null,
       "plugin_id": "device-authorization",
       "operation_id": "denyDevice"
     },
@@ -1387,7 +1432,7 @@
         "POST"
       ],
       "file": "packages/better_auth/lib/better_auth/plugins/device_authorization.rb",
-      "line": 109,
+      "line": 112,
       "endpoint_key": "device_token",
       "plugin_hint": "device_authorization",
       "body_fields": [
@@ -1418,7 +1463,7 @@
       "ruby_api_call": "auth.api.device_token",
       "upstream_registry_key": "deviceToken",
       "upstream_api_call": "auth.api.deviceToken",
-      "upstream_client_call": "device.Token",
+      "upstream_client_call": null,
       "plugin_id": "device-authorization",
       "operation_id": "exchangeDeviceToken"
     },
@@ -1461,7 +1506,7 @@
         "POST"
       ],
       "file": "packages/better_auth/lib/better_auth/plugins/email_otp.rb",
-      "line": 385,
+      "line": 391,
       "endpoint_key": "change_email_email_otp",
       "plugin_hint": "email_otp",
       "body_fields": [
@@ -1487,7 +1532,7 @@
       "ruby_api_call": "auth.api.change_email_email_otp",
       "upstream_registry_key": "changeEmailEmailOTP",
       "upstream_api_call": "auth.api.changeEmailEmailOTP",
-      "upstream_client_call": "emailOtp.ChangeEmail",
+      "upstream_client_call": "authClient.emailOtp.changeEmail",
       "plugin_id": "email-otp",
       "operation_id": "changeEmailWithEmailOTP"
     },
@@ -1528,7 +1573,7 @@
       "ruby_api_call": "auth.api.check_verification_otp",
       "upstream_registry_key": "checkVerificationOTP",
       "upstream_api_call": "auth.api.checkVerificationOTP",
-      "upstream_client_call": "emailOtp.CheckVerificationOtp",
+      "upstream_client_call": null,
       "plugin_id": "email-otp",
       "operation_id": "checkVerificationOTP"
     },
@@ -1538,7 +1583,7 @@
         "POST"
       ],
       "file": "packages/better_auth/lib/better_auth/plugins/email_otp.rb",
-      "line": 338,
+      "line": 344,
       "endpoint_key": "request_email_change_email_otp",
       "plugin_hint": "email_otp",
       "body_fields": [
@@ -1564,7 +1609,7 @@
       "ruby_api_call": "auth.api.request_email_change_email_otp",
       "upstream_registry_key": "requestEmailChangeEmailOTP",
       "upstream_api_call": "auth.api.requestEmailChangeEmailOTP",
-      "upstream_client_call": "emailOtp.RequestEmailChange",
+      "upstream_client_call": "authClient.emailOtp.requestEmailChange",
       "plugin_id": "email-otp",
       "operation_id": "requestEmailChangeOTP"
     },
@@ -1574,7 +1619,7 @@
         "POST"
       ],
       "file": "packages/better_auth/lib/better_auth/plugins/email_otp.rb",
-      "line": 430,
+      "line": 436,
       "endpoint_key": "request_password_reset_email_otp",
       "plugin_hint": "email_otp",
       "body_fields": [
@@ -1595,7 +1640,7 @@
       "ruby_api_call": "auth.api.request_password_reset_email_otp",
       "upstream_registry_key": "requestPasswordResetEmailOTP",
       "upstream_api_call": "auth.api.requestPasswordResetEmailOTP",
-      "upstream_client_call": "emailOtp.RequestPasswordReset",
+      "upstream_client_call": "authClient.emailOtp.requestPasswordReset",
       "plugin_id": "email-otp",
       "operation_id": "requestPasswordResetEmailOTP"
     },
@@ -1605,7 +1650,7 @@
         "POST"
       ],
       "file": "packages/better_auth/lib/better_auth/plugins/email_otp.rb",
-      "line": 456,
+      "line": 462,
       "endpoint_key": "reset_password_email_otp",
       "plugin_hint": "email_otp",
       "body_fields": [
@@ -1636,7 +1681,7 @@
       "ruby_api_call": "auth.api.reset_password_email_otp",
       "upstream_registry_key": "resetPasswordEmailOTP",
       "upstream_api_call": "auth.api.resetPasswordEmailOTP",
-      "upstream_client_call": "emailOtp.ResetPassword",
+      "upstream_client_call": "authClient.emailOtp.resetPassword",
       "plugin_id": "email-otp",
       "operation_id": "resetPasswordEmailOTP"
     },
@@ -1670,6 +1715,9 @@
       "method": "POST",
       "ruby_api_method": "send_verification_otp",
       "ruby_api_call": "auth.api.send_verification_otp",
+      "upstream_registry_key": "sendVerificationOTP",
+      "upstream_api_call": "auth.api.sendVerificationOTP",
+      "upstream_client_call": "authClient.emailOtp.sendVerificationOtp",
       "plugin_id": "email-otp",
       "operation_id": "sendVerificationOTP"
     },
@@ -1705,7 +1753,7 @@
       "ruby_api_call": "auth.api.verify_email_otp",
       "upstream_registry_key": "verifyEmailOTP",
       "upstream_api_call": "auth.api.verifyEmailOTP",
-      "upstream_client_call": "emailOtp.VerifyEmail",
+      "upstream_client_call": "authClient.emailOtp.verifyEmail",
       "plugin_id": "email-otp",
       "operation_id": "verifyEmailOTP"
     },
@@ -1763,7 +1811,7 @@
       "ruby_api_call": "auth.api.expo_authorization_proxy",
       "upstream_registry_key": "expoAuthorizationProxy",
       "upstream_api_call": "auth.api.expoAuthorizationProxy",
-      "upstream_client_call": "expoAuthorizationProxy",
+      "upstream_client_call": null,
       "plugin_id": "expo",
       "operation_id": "expoAuthorizationProxy"
     },
@@ -1804,7 +1852,7 @@
       "ruby_api_call": "auth.api.get_access_token",
       "upstream_registry_key": "getAccessToken",
       "upstream_api_call": "auth.api.getAccessToken",
-      "upstream_client_call": "getAccessToken",
+      "upstream_client_call": null,
       "plugin_id": "core",
       "operation_id": "getAccessToken"
     },
@@ -1827,6 +1875,9 @@
       "method": "GET",
       "ruby_api_method": "get_session",
       "ruby_api_call": "auth.api.get_session",
+      "upstream_registry_key": "getSession",
+      "upstream_api_call": "auth.api.getSession",
+      "upstream_client_call": null,
       "plugin_id": "core",
       "operation_id": "getSession"
     },
@@ -1849,6 +1900,9 @@
       "method": "POST",
       "ruby_api_method": "get_session",
       "ruby_api_call": "auth.api.get_session",
+      "upstream_registry_key": "getSession",
+      "upstream_api_call": "auth.api.getSession",
+      "upstream_client_call": null,
       "plugin_id": "core",
       "operation_id": "getSession"
     },
@@ -1858,7 +1912,7 @@
         "POST"
       ],
       "file": "packages/better_auth/lib/better_auth/plugins/username.rb",
-      "line": 145,
+      "line": 151,
       "endpoint_key": "is_username_available",
       "plugin_hint": "username",
       "body_fields": [
@@ -1877,6 +1931,9 @@
       "method": "POST",
       "ruby_api_method": "is_username_available",
       "ruby_api_call": "auth.api.is_username_available",
+      "upstream_registry_key": "isUsernameAvailable",
+      "upstream_api_call": "auth.api.isUsernameAvailable",
+      "upstream_client_call": null,
       "plugin_id": "username",
       "operation_id": "isUsernameAvailable"
     },
@@ -1897,7 +1954,10 @@
       "source": "runtime",
       "method": "GET",
       "ruby_api_method": "get_jwks",
-      "ruby_api_call": "auth.api.get_jwks"
+      "ruby_api_call": "auth.api.get_jwks",
+      "upstream_registry_key": "getJwks",
+      "upstream_api_call": "auth.api.getJwks",
+      "upstream_client_call": null
     },
     {
       "path": "/link-social",
@@ -1905,7 +1965,7 @@
         "POST"
       ],
       "file": "packages/better_auth/lib/better_auth/routes/social.rb",
-      "line": 201,
+      "line": 202,
       "endpoint_key": "link_social",
       "plugin_hint": "core",
       "body_fields": [
@@ -1951,7 +2011,7 @@
       "ruby_api_call": "auth.api.link_social",
       "upstream_registry_key": "linkSocialAccount",
       "upstream_api_call": "auth.api.linkSocialAccount",
-      "upstream_client_call": "linkSocial",
+      "upstream_client_call": null,
       "plugin_id": "core",
       "operation_id": "linkSocialAccount"
     },
@@ -1976,7 +2036,7 @@
       "ruby_api_call": "auth.api.list_accounts",
       "upstream_registry_key": "listUserAccounts",
       "upstream_api_call": "auth.api.listUserAccounts",
-      "upstream_client_call": "listAccounts",
+      "upstream_client_call": null,
       "plugin_id": "core",
       "operation_id": "listUserAccounts"
     },
@@ -2001,7 +2061,7 @@
       "ruby_api_call": "auth.api.list_sessions",
       "upstream_registry_key": "listSessions",
       "upstream_api_call": "auth.api.listSessions",
-      "upstream_client_call": "listSessions",
+      "upstream_client_call": null,
       "plugin_id": "core",
       "operation_id": "listSessions"
     },
@@ -2011,7 +2071,7 @@
         "GET"
       ],
       "file": "packages/better_auth/lib/better_auth/plugins/magic_link.rb",
-      "line": 79,
+      "line": 84,
       "endpoint_key": "magic_link_verify",
       "plugin_hint": "magic_link",
       "body_fields": [],
@@ -2035,6 +2095,9 @@
       "method": "GET",
       "ruby_api_method": "magic_link_verify",
       "ruby_api_call": "auth.api.magic_link_verify",
+      "upstream_registry_key": "magicLinkVerify",
+      "upstream_api_call": "auth.api.magicLinkVerify",
+      "upstream_client_call": "authClient.magicLink.verify",
       "plugin_id": "magic-link",
       "operation_id": "magicLinkVerify"
     },
@@ -2057,6 +2120,9 @@
       "method": "GET",
       "ruby_api_method": "list_device_sessions",
       "ruby_api_call": "auth.api.list_device_sessions",
+      "upstream_registry_key": "listDeviceSessions",
+      "upstream_api_call": "auth.api.listDeviceSessions",
+      "upstream_client_call": "authClient.multiSession.listDeviceSessions",
       "plugin_id": "multi-session",
       "operation_id": "listDeviceSessions"
     },
@@ -2085,6 +2151,9 @@
       "method": "POST",
       "ruby_api_method": "revoke_device_session",
       "ruby_api_call": "auth.api.revoke_device_session",
+      "upstream_registry_key": "revokeDeviceSession",
+      "upstream_api_call": "auth.api.revokeDeviceSession",
+      "upstream_client_call": "authClient.multiSession.revoke",
       "plugin_id": "multi-session",
       "operation_id": "revokeDeviceSession"
     },
@@ -2113,6 +2182,9 @@
       "method": "POST",
       "ruby_api_method": "set_active_session",
       "ruby_api_call": "auth.api.set_active_session",
+      "upstream_registry_key": "setActiveSession",
+      "upstream_api_call": "auth.api.setActiveSession",
+      "upstream_client_call": "authClient.multiSession.setActive",
       "plugin_id": "multi-session",
       "operation_id": "setActiveSession"
     },
@@ -2146,6 +2218,9 @@
       "method": "GET",
       "ruby_api_method": "oauth_proxy",
       "ruby_api_call": "auth.api.oauth_proxy",
+      "upstream_registry_key": "oAuthProxy",
+      "upstream_api_call": "auth.api.oAuthProxy",
+      "upstream_client_call": null,
       "plugin_id": "oauth-proxy",
       "operation_id": "oauthProxyCallback"
     },
@@ -2168,6 +2243,9 @@
       "method": "GET",
       "ruby_api_method": "oauth2_authorize",
       "ruby_api_call": "auth.api.oauth2_authorize",
+      "upstream_registry_key": "oauth2Authorize",
+      "upstream_api_call": "auth.api.oauth2Authorize",
+      "upstream_client_call": null,
       "plugin_id": "oauth-provider",
       "operation_id": "getOauth2Authorize"
     },
@@ -2177,7 +2255,7 @@
         "GET"
       ],
       "file": "packages/better_auth/lib/better_auth/plugins/generic_oauth.rb",
-      "line": 270,
+      "line": 300,
       "endpoint_key": "oauth2_callback",
       "plugin_hint": "generic_oauth",
       "body_fields": [],
@@ -2194,7 +2272,7 @@
       "ruby_api_call": "auth.api.oauth2_callback",
       "upstream_registry_key": "oAuth2Callback",
       "upstream_api_call": "auth.api.oAuth2Callback",
-      "upstream_client_call": "oauth2.Callback.:providerid",
+      "upstream_client_call": null,
       "plugin_id": "generic-oauth",
       "operation_id": "oauth2Callback"
     },
@@ -2225,7 +2303,7 @@
       "ruby_api_call": "auth.api.rotate_oauth_client_secret",
       "upstream_registry_key": "rotateClientSecret",
       "upstream_api_call": "auth.api.rotateClientSecret",
-      "upstream_client_call": "oauth2.Client.RotateSecret",
+      "upstream_client_call": null,
       "plugin_id": "oauth-provider",
       "operation_id": "postOauth2ClientRotateSecret"
     },
@@ -2329,6 +2407,9 @@
       "method": "POST",
       "ruby_api_method": "oauth2_consent",
       "ruby_api_call": "auth.api.oauth2_consent",
+      "upstream_registry_key": "oauth2Consent",
+      "upstream_api_call": "auth.api.oauth2Consent",
+      "upstream_client_call": null,
       "plugin_id": "oauth-provider",
       "operation_id": "postOauth2Consent"
     },
@@ -2392,6 +2473,9 @@
       "method": "POST",
       "ruby_api_method": "oauth2_continue",
       "ruby_api_call": "auth.api.oauth2_continue",
+      "upstream_registry_key": "oauth2Continue",
+      "upstream_api_call": "auth.api.oauth2Continue",
+      "upstream_client_call": null,
       "plugin_id": "oauth-provider",
       "operation_id": "postOauth2Continue"
     },
@@ -2527,7 +2611,7 @@
       "ruby_api_call": "auth.api.create_oauth_client",
       "upstream_registry_key": "createOAuthClient",
       "upstream_api_call": "auth.api.createOAuthClient",
-      "upstream_client_call": "oauth2.CreateClient",
+      "upstream_client_call": null,
       "plugin_id": "oauth-provider",
       "operation_id": "postOauth2CreateClient"
     },
@@ -2558,7 +2642,7 @@
       "ruby_api_call": "auth.api.delete_oauth_client",
       "upstream_registry_key": "deleteOAuthClient",
       "upstream_api_call": "auth.api.deleteOAuthClient",
-      "upstream_client_call": "oauth2.DeleteClient",
+      "upstream_client_call": null,
       "plugin_id": "oauth-provider",
       "operation_id": "postOauth2DeleteClient"
     },
@@ -2594,7 +2678,7 @@
       "ruby_api_call": "auth.api.delete_oauth_consent",
       "upstream_registry_key": "deleteOAuthConsent",
       "upstream_api_call": "auth.api.deleteOAuthConsent",
-      "upstream_client_call": "oauth2.DeleteConsent",
+      "upstream_client_call": null,
       "plugin_id": "oauth-provider",
       "operation_id": "postOauth2DeleteConsent"
     },
@@ -2659,6 +2743,9 @@
       "method": "GET",
       "ruby_api_method": "oauth2_end_session",
       "ruby_api_call": "auth.api.oauth2_end_session",
+      "upstream_registry_key": "oauth2EndSession",
+      "upstream_api_call": "auth.api.oauth2EndSession",
+      "upstream_client_call": null,
       "plugin_id": "oauth-provider",
       "operation_id": "getOauth2EndSession"
     },
@@ -2747,7 +2834,7 @@
       "ruby_api_call": "auth.api.get_oauth_client",
       "upstream_registry_key": "getOAuthClient",
       "upstream_api_call": "auth.api.getOAuthClient",
-      "upstream_client_call": "oauth2.GetClient",
+      "upstream_client_call": null,
       "plugin_id": "oauth-provider",
       "operation_id": "getOauth2GetClient"
     },
@@ -2772,7 +2859,7 @@
       "ruby_api_call": "auth.api.get_oauth_clients",
       "upstream_registry_key": "getOAuthClients",
       "upstream_api_call": "auth.api.getOAuthClients",
-      "upstream_client_call": "oauth2.GetClients",
+      "upstream_client_call": null,
       "plugin_id": "oauth-provider",
       "operation_id": "getOauth2GetClients"
     },
@@ -2797,7 +2884,7 @@
       "ruby_api_call": "auth.api.get_oauth_consent",
       "upstream_registry_key": "getOAuthConsent",
       "upstream_api_call": "auth.api.getOAuthConsent",
-      "upstream_client_call": "oauth2.GetConsent",
+      "upstream_client_call": null,
       "plugin_id": "oauth-provider",
       "operation_id": "getOauth2GetConsent"
     },
@@ -2822,7 +2909,7 @@
       "ruby_api_call": "auth.api.get_oauth_consents",
       "upstream_registry_key": "getOAuthConsents",
       "upstream_api_call": "auth.api.getOAuthConsents",
-      "upstream_client_call": "oauth2.GetConsents",
+      "upstream_client_call": null,
       "plugin_id": "oauth-provider",
       "operation_id": "getOauth2GetConsents"
     },
@@ -2856,6 +2943,9 @@
       "method": "POST",
       "ruby_api_method": "oauth2_introspect",
       "ruby_api_call": "auth.api.oauth2_introspect",
+      "upstream_registry_key": "oauth2Introspect",
+      "upstream_api_call": "auth.api.oauth2Introspect",
+      "upstream_client_call": null,
       "plugin_id": "oauth-provider",
       "operation_id": "postOauth2Introspect"
     },
@@ -2865,7 +2955,7 @@
         "POST"
       ],
       "file": "packages/better_auth/lib/better_auth/plugins/generic_oauth.rb",
-      "line": 239,
+      "line": 269,
       "endpoint_key": "oauth2_link_account",
       "plugin_hint": "generic_oauth",
       "body_fields": [
@@ -2921,7 +3011,7 @@
       "ruby_api_call": "auth.api.oauth2_link_account",
       "upstream_registry_key": "oAuth2LinkAccount",
       "upstream_api_call": "auth.api.oAuth2LinkAccount",
-      "upstream_client_call": "oauth2.Link",
+      "upstream_client_call": "authClient.oauth2.link",
       "plugin_id": "generic-oauth",
       "operation_id": "linkOAuth2"
     },
@@ -2946,7 +3036,7 @@
       "ruby_api_call": "auth.api.get_oauth_client_public",
       "upstream_registry_key": "getOAuthClientPublic",
       "upstream_api_call": "auth.api.getOAuthClientPublic",
-      "upstream_client_call": "oauth2.PublicClient",
+      "upstream_client_call": null,
       "plugin_id": "oauth-provider",
       "operation_id": "getOauth2PublicClient"
     },
@@ -2980,6 +3070,9 @@
       "method": "POST",
       "ruby_api_method": "get_oauth_client_public_prelogin",
       "ruby_api_call": "auth.api.get_oauth_client_public_prelogin",
+      "upstream_registry_key": "getOAuthClientPublicPrelogin",
+      "upstream_api_call": "auth.api.getOAuthClientPublicPrelogin",
+      "upstream_client_call": null,
       "plugin_id": "oauth-provider",
       "operation_id": "postOauth2PublicClientPrelogin"
     },
@@ -3113,6 +3206,9 @@
       "method": "POST",
       "ruby_api_method": "register_oauth_client",
       "ruby_api_call": "auth.api.register_oauth_client",
+      "upstream_registry_key": "registerOAuthClient",
+      "upstream_api_call": "auth.api.registerOAuthClient",
+      "upstream_client_call": null,
       "plugin_id": "oauth-provider",
       "operation_id": "postOauth2Register"
     },
@@ -3146,6 +3242,9 @@
       "method": "POST",
       "ruby_api_method": "oauth2_revoke",
       "ruby_api_call": "auth.api.oauth2_revoke",
+      "upstream_registry_key": "oauth2Revoke",
+      "upstream_api_call": "auth.api.oauth2Revoke",
+      "upstream_client_call": null,
       "plugin_id": "oauth-provider",
       "operation_id": "postOauth2Revoke"
     },
@@ -3214,6 +3313,9 @@
       "method": "POST",
       "ruby_api_method": "oauth2_token",
       "ruby_api_call": "auth.api.oauth2_token",
+      "upstream_registry_key": "oauth2Token",
+      "upstream_api_call": "auth.api.oauth2Token",
+      "upstream_client_call": null,
       "plugin_id": "oauth-provider",
       "operation_id": "postOauth2Token"
     },
@@ -3249,7 +3351,7 @@
       "ruby_api_call": "auth.api.update_oauth_client",
       "upstream_registry_key": "updateOAuthClient",
       "upstream_api_call": "auth.api.updateOAuthClient",
-      "upstream_client_call": "oauth2.UpdateClient",
+      "upstream_client_call": null,
       "plugin_id": "oauth-provider",
       "operation_id": "postOauth2UpdateClient"
     },
@@ -3300,7 +3402,7 @@
       "ruby_api_call": "auth.api.update_oauth_consent",
       "upstream_registry_key": "updateOAuthConsent",
       "upstream_api_call": "auth.api.updateOAuthConsent",
-      "upstream_client_call": "oauth2.UpdateConsent",
+      "upstream_client_call": null,
       "plugin_id": "oauth-provider",
       "operation_id": "postOauth2UpdateConsent"
     },
@@ -3323,6 +3425,34 @@
       "method": "GET",
       "ruby_api_method": "oauth2_user_info",
       "ruby_api_call": "auth.api.oauth2_user_info",
+      "upstream_registry_key": "oauth2UserInfo",
+      "upstream_api_call": "auth.api.oauth2UserInfo",
+      "upstream_client_call": null,
+      "plugin_id": "oauth-provider",
+      "operation_id": "getOauth2Userinfo"
+    },
+    {
+      "path": "/oauth2/userinfo",
+      "methods": [
+        "POST"
+      ],
+      "file": "packages/better_auth-oauth-provider/lib/better_auth/plugins/oauth_provider/userinfo.rb",
+      "line": 8,
+      "endpoint_key": "oauth2_user_info",
+      "plugin_hint": "better_auth/plugins/oauth_provider",
+      "body_fields": [],
+      "query_params": [],
+      "path_params": [],
+      "header_params": [],
+      "disable_body": false,
+      "server_only": false,
+      "source": "static+runtime",
+      "method": "POST",
+      "ruby_api_method": "oauth2_user_info",
+      "ruby_api_call": "auth.api.oauth2_user_info",
+      "upstream_registry_key": "oauth2UserInfo",
+      "upstream_api_call": "auth.api.oauth2UserInfo",
+      "upstream_client_call": null,
       "plugin_id": "oauth-provider",
       "operation_id": "getOauth2Userinfo"
     },
@@ -3373,6 +3503,9 @@
       "method": "POST",
       "ruby_api_method": "one_tap_callback",
       "ruby_api_call": "auth.api.one_tap_callback",
+      "upstream_registry_key": "oneTapCallback",
+      "upstream_api_call": "auth.api.oneTapCallback",
+      "upstream_client_call": null,
       "plugin_id": "one-tap",
       "operation_id": "oneTapCallback"
     },
@@ -3395,6 +3528,9 @@
       "method": "GET",
       "ruby_api_method": "generate_one_time_token",
       "ruby_api_call": "auth.api.generate_one_time_token",
+      "upstream_registry_key": "generateOneTimeToken",
+      "upstream_api_call": "auth.api.generateOneTimeToken",
+      "upstream_client_call": "authClient.oneTimeToken.generate",
       "plugin_id": "one-time-token",
       "operation_id": "generateOneTimeToken"
     },
@@ -3423,6 +3559,9 @@
       "method": "POST",
       "ruby_api_method": "verify_one_time_token",
       "ruby_api_call": "auth.api.verify_one_time_token",
+      "upstream_registry_key": "verifyOneTimeToken",
+      "upstream_api_call": "auth.api.verifyOneTimeToken",
+      "upstream_client_call": "authClient.oneTimeToken.verify",
       "plugin_id": "one-time-token",
       "operation_id": "verifyOneTimeToken"
     },
@@ -3445,6 +3584,9 @@
       "method": "GET",
       "ruby_api_method": "generate_openapi_schema",
       "ruby_api_call": "auth.api.generate_openapi_schema",
+      "upstream_registry_key": "generateOpenAPISchema",
+      "upstream_api_call": "auth.api.generateOpenAPISchema",
+      "upstream_client_call": null,
       "plugin_id": "open-api",
       "operation_id": "getOpenApiGenerateSchema"
     },
@@ -3454,7 +3596,7 @@
         "POST"
       ],
       "file": "packages/better_auth/lib/better_auth/plugins/organization.rb",
-      "line": 374,
+      "line": 386,
       "endpoint_key": "accept_invitation",
       "plugin_hint": "organization",
       "body_fields": [
@@ -3480,7 +3622,7 @@
       "ruby_api_call": "auth.api.accept_invitation",
       "upstream_registry_key": "acceptInvitation",
       "upstream_api_call": "auth.api.acceptInvitation",
-      "upstream_client_call": "organization.AcceptInvitation",
+      "upstream_client_call": "authClient.organization.acceptInvitation",
       "plugin_id": "organization",
       "operation_id": "acceptOrganizationInvitation"
     },
@@ -3490,7 +3632,7 @@
         "POST"
       ],
       "file": "packages/better_auth/lib/better_auth/plugins/organization.rb",
-      "line": 447,
+      "line": 498,
       "endpoint_key": "add_member",
       "plugin_hint": "organization",
       "body_fields": [
@@ -3528,7 +3670,7 @@
         "POST"
       ],
       "file": "packages/better_auth/lib/better_auth/plugins/organization.rb",
-      "line": 650,
+      "line": 819,
       "endpoint_key": "add_team_member",
       "plugin_hint": "organization",
       "body_fields": [
@@ -3561,7 +3703,7 @@
         "POST"
       ],
       "file": "packages/better_auth/lib/better_auth/plugins/organization.rb",
-      "line": 409,
+      "line": 445,
       "endpoint_key": "cancel_invitation",
       "plugin_hint": "organization",
       "body_fields": [
@@ -3582,7 +3724,7 @@
       "ruby_api_call": "auth.api.cancel_invitation",
       "upstream_registry_key": "cancelInvitation",
       "upstream_api_call": "auth.api.cancelInvitation",
-      "upstream_client_call": "organization.CancelInvitation",
+      "upstream_client_call": "authClient.organization.cancelInvitation",
       "plugin_id": "organization",
       "operation_id": "cancelOrganizationInvitation"
     },
@@ -3592,7 +3734,7 @@
         "POST"
       ],
       "file": "packages/better_auth/lib/better_auth/plugins/organization.rb",
-      "line": 207,
+      "line": 210,
       "endpoint_key": "check_organization_slug",
       "plugin_hint": "organization",
       "body_fields": [
@@ -3613,7 +3755,7 @@
       "ruby_api_call": "auth.api.check_organization_slug",
       "upstream_registry_key": "checkOrganizationSlug",
       "upstream_api_call": "auth.api.checkOrganizationSlug",
-      "upstream_client_call": "organization.CheckSlug",
+      "upstream_client_call": "authClient.organization.checkSlug",
       "plugin_id": "organization",
       "operation_id": "checkOrganizationSlug"
     },
@@ -3623,7 +3765,7 @@
         "POST"
       ],
       "file": "packages/better_auth/lib/better_auth/plugins/organization.rb",
-      "line": 159,
+      "line": 162,
       "endpoint_key": "create_organization",
       "plugin_hint": "organization",
       "body_fields": [
@@ -3669,7 +3811,7 @@
       "ruby_api_call": "auth.api.create_organization",
       "upstream_registry_key": "createOrganization",
       "upstream_api_call": "auth.api.createOrganization",
-      "upstream_client_call": "organization.Create",
+      "upstream_client_call": "authClient.organization.create",
       "plugin_id": "organization",
       "operation_id": "createOrganization"
     },
@@ -3679,7 +3821,7 @@
         "POST"
       ],
       "file": "packages/better_auth/lib/better_auth/plugins/organization.rb",
-      "line": 683,
+      "line": 862,
       "endpoint_key": "create_org_role",
       "plugin_hint": "organization",
       "body_fields": [
@@ -3727,7 +3869,7 @@
         "POST"
       ],
       "file": "packages/better_auth/lib/better_auth/plugins/organization.rb",
-      "line": 554,
+      "line": 696,
       "endpoint_key": "create_team",
       "plugin_hint": "organization",
       "body_fields": [
@@ -3760,7 +3902,7 @@
         "POST"
       ],
       "file": "packages/better_auth/lib/better_auth/plugins/organization.rb",
-      "line": 252,
+      "line": 256,
       "endpoint_key": "delete_organization",
       "plugin_hint": "organization",
       "body_fields": [
@@ -3786,7 +3928,7 @@
       "ruby_api_call": "auth.api.delete_organization",
       "upstream_registry_key": "deleteOrganization",
       "upstream_api_call": "auth.api.deleteOrganization",
-      "upstream_client_call": "organization.Delete",
+      "upstream_client_call": "authClient.organization.delete",
       "plugin_id": "organization",
       "operation_id": "deleteOrganization"
     },
@@ -3796,7 +3938,7 @@
         "POST"
       ],
       "file": "packages/better_auth/lib/better_auth/plugins/organization.rb",
-      "line": 750,
+      "line": 929,
       "endpoint_key": "delete_org_role",
       "plugin_hint": "organization",
       "body_fields": [
@@ -3839,7 +3981,7 @@
         "GET"
       ],
       "file": "packages/better_auth/lib/better_auth/plugins/organization.rb",
-      "line": 497,
+      "line": 631,
       "endpoint_key": "get_active_member",
       "plugin_hint": "organization",
       "body_fields": [],
@@ -3854,7 +3996,7 @@
       "ruby_api_call": "auth.api.get_active_member",
       "upstream_registry_key": "getActiveMember",
       "upstream_api_call": "auth.api.getActiveMember",
-      "upstream_client_call": "organization.GetActiveMember",
+      "upstream_client_call": "authClient.organization.getActiveMember",
       "plugin_id": "organization",
       "operation_id": "getActiveOrganizationMember"
     },
@@ -3864,7 +4006,7 @@
         "GET"
       ],
       "file": "packages/better_auth/lib/better_auth/plugins/organization.rb",
-      "line": 507,
+      "line": 641,
       "endpoint_key": "get_active_member_role",
       "plugin_hint": "organization",
       "body_fields": [],
@@ -3879,7 +4021,7 @@
       "ruby_api_call": "auth.api.get_active_member_role",
       "upstream_registry_key": "getActiveMemberRole",
       "upstream_api_call": "auth.api.getActiveMemberRole",
-      "upstream_client_call": "organization.GetActiveMemberRole",
+      "upstream_client_call": "authClient.organization.getActiveMemberRole",
       "plugin_id": "organization",
       "operation_id": "getActiveOrganizationMemberRole"
     },
@@ -3889,7 +4031,7 @@
         "GET"
       ],
       "file": "packages/better_auth/lib/better_auth/plugins/organization.rb",
-      "line": 292,
+      "line": 303,
       "endpoint_key": "get_full_organization",
       "plugin_hint": "organization",
       "body_fields": [],
@@ -3904,7 +4046,7 @@
       "ruby_api_call": "auth.api.get_full_organization",
       "upstream_registry_key": "getFullOrganization",
       "upstream_api_call": "auth.api.getFullOrganization",
-      "upstream_client_call": "organization.GetFullOrganization",
+      "upstream_client_call": "authClient.organization.getFullOrganization",
       "plugin_id": "organization",
       "operation_id": "getOrganization"
     },
@@ -3914,7 +4056,7 @@
         "GET"
       ],
       "file": "packages/better_auth/lib/better_auth/plugins/organization.rb",
-      "line": 420,
+      "line": 460,
       "endpoint_key": "get_invitation",
       "plugin_hint": "organization",
       "body_fields": [],
@@ -3929,7 +4071,7 @@
       "ruby_api_call": "auth.api.get_invitation",
       "upstream_registry_key": "getInvitation",
       "upstream_api_call": "auth.api.getInvitation",
-      "upstream_client_call": "organization.GetInvitation",
+      "upstream_client_call": "authClient.organization.getInvitation",
       "plugin_id": "organization",
       "operation_id": "getOrganizationInvitation"
     },
@@ -3939,7 +4081,7 @@
         "GET"
       ],
       "file": "packages/better_auth/lib/better_auth/plugins/organization.rb",
-      "line": 713,
+      "line": 892,
       "endpoint_key": "get_org_role",
       "plugin_hint": "organization",
       "body_fields": [],
@@ -3961,7 +4103,7 @@
         "POST"
       ],
       "file": "packages/better_auth/lib/better_auth/plugins/organization.rb",
-      "line": 542,
+      "line": 684,
       "endpoint_key": "has_permission",
       "plugin_hint": "organization",
       "body_fields": [
@@ -3990,6 +4132,9 @@
       "method": "POST",
       "ruby_api_method": "has_permission",
       "ruby_api_call": "auth.api.has_permission",
+      "upstream_registry_key": "hasPermission",
+      "upstream_api_call": "auth.api.hasPermission",
+      "upstream_client_call": null,
       "plugin_id": "organization",
       "operation_id": "hasOrganizationPermission"
     },
@@ -3999,7 +4144,7 @@
         "POST"
       ],
       "file": "packages/better_auth/lib/better_auth/plugins/organization.rb",
-      "line": 319,
+      "line": 330,
       "endpoint_key": "create_invitation",
       "plugin_hint": "organization",
       "body_fields": [
@@ -4045,7 +4190,7 @@
       "ruby_api_call": "auth.api.create_invitation",
       "upstream_registry_key": "createInvitation",
       "upstream_api_call": "auth.api.createInvitation",
-      "upstream_client_call": "organization.InviteMember",
+      "upstream_client_call": "authClient.organization.inviteMember",
       "plugin_id": "organization",
       "operation_id": "createOrganizationInvitation"
     },
@@ -4055,7 +4200,7 @@
         "POST"
       ],
       "file": "packages/better_auth/lib/better_auth/plugins/organization.rb",
-      "line": 519,
+      "line": 653,
       "endpoint_key": "leave_organization",
       "plugin_hint": "organization",
       "body_fields": [
@@ -4076,7 +4221,7 @@
       "ruby_api_call": "auth.api.leave_organization",
       "upstream_registry_key": "leaveOrganization",
       "upstream_api_call": "auth.api.leaveOrganization",
-      "upstream_client_call": "organization.Leave",
+      "upstream_client_call": "authClient.organization.leave",
       "plugin_id": "organization",
       "operation_id": "leaveOrganization"
     },
@@ -4086,7 +4231,7 @@
         "GET"
       ],
       "file": "packages/better_auth/lib/better_auth/plugins/organization.rb",
-      "line": 218,
+      "line": 221,
       "endpoint_key": "list_organizations",
       "plugin_hint": "organization",
       "body_fields": [],
@@ -4101,7 +4246,7 @@
       "ruby_api_call": "auth.api.list_organizations",
       "upstream_registry_key": "listOrganizations",
       "upstream_api_call": "auth.api.listOrganizations",
-      "upstream_client_call": "organization.List",
+      "upstream_client_call": "authClient.organization.list",
       "plugin_id": "organization",
       "operation_id": "listOrganizations"
     },
@@ -4111,7 +4256,7 @@
         "GET"
       ],
       "file": "packages/better_auth/lib/better_auth/plugins/organization.rb",
-      "line": 428,
+      "line": 476,
       "endpoint_key": "list_invitations",
       "plugin_hint": "organization",
       "body_fields": [],
@@ -4126,7 +4271,7 @@
       "ruby_api_call": "auth.api.list_invitations",
       "upstream_registry_key": "listInvitations",
       "upstream_api_call": "auth.api.listInvitations",
-      "upstream_client_call": "organization.ListInvitations",
+      "upstream_client_call": "authClient.organization.listInvitations",
       "plugin_id": "organization",
       "operation_id": "listOrganizationInvitations"
     },
@@ -4136,7 +4281,7 @@
         "GET"
       ],
       "file": "packages/better_auth/lib/better_auth/plugins/organization.rb",
-      "line": 531,
+      "line": 673,
       "endpoint_key": "list_members",
       "plugin_hint": "organization",
       "body_fields": [],
@@ -4151,7 +4296,7 @@
       "ruby_api_call": "auth.api.list_members",
       "upstream_registry_key": "listMembers",
       "upstream_api_call": "auth.api.listMembers",
-      "upstream_client_call": "organization.ListMembers",
+      "upstream_client_call": "authClient.organization.listMembers",
       "plugin_id": "organization",
       "operation_id": "listOrganizationMembers"
     },
@@ -4161,7 +4306,7 @@
         "GET"
       ],
       "file": "packages/better_auth/lib/better_auth/plugins/organization.rb",
-      "line": 702,
+      "line": 881,
       "endpoint_key": "list_org_roles",
       "plugin_hint": "organization",
       "body_fields": [],
@@ -4183,7 +4328,7 @@
         "GET"
       ],
       "file": "packages/better_auth/lib/better_auth/plugins/organization.rb",
-      "line": 638,
+      "line": 807,
       "endpoint_key": "list_team_members",
       "plugin_hint": "organization",
       "body_fields": [],
@@ -4205,7 +4350,7 @@
         "GET"
       ],
       "file": "packages/better_auth/lib/better_auth/plugins/organization.rb",
-      "line": 574,
+      "line": 720,
       "endpoint_key": "list_organization_teams",
       "plugin_hint": "organization",
       "body_fields": [],
@@ -4227,7 +4372,7 @@
         "GET"
       ],
       "file": "packages/better_auth/lib/better_auth/plugins/organization.rb",
-      "line": 439,
+      "line": 487,
       "endpoint_key": "list_user_invitations",
       "plugin_hint": "organization",
       "body_fields": [],
@@ -4242,7 +4387,7 @@
       "ruby_api_call": "auth.api.list_user_invitations",
       "upstream_registry_key": "listUserInvitations",
       "upstream_api_call": "auth.api.listUserInvitations",
-      "upstream_client_call": "organization.ListUserInvitations",
+      "upstream_client_call": null,
       "plugin_id": "organization",
       "operation_id": "listUserInvitations"
     },
@@ -4252,7 +4397,7 @@
         "GET"
       ],
       "file": "packages/better_auth/lib/better_auth/plugins/organization.rb",
-      "line": 630,
+      "line": 799,
       "endpoint_key": "list_user_teams",
       "plugin_hint": "organization",
       "body_fields": [],
@@ -4274,7 +4419,7 @@
         "POST"
       ],
       "file": "packages/better_auth/lib/better_auth/plugins/organization.rb",
-      "line": 398,
+      "line": 429,
       "endpoint_key": "reject_invitation",
       "plugin_hint": "organization",
       "body_fields": [
@@ -4295,7 +4440,7 @@
       "ruby_api_call": "auth.api.reject_invitation",
       "upstream_registry_key": "rejectInvitation",
       "upstream_api_call": "auth.api.rejectInvitation",
-      "upstream_client_call": "organization.RejectInvitation",
+      "upstream_client_call": "authClient.organization.rejectInvitation",
       "plugin_id": "organization",
       "operation_id": "rejectOrganizationInvitation"
     },
@@ -4305,7 +4450,7 @@
         "POST"
       ],
       "file": "packages/better_auth/lib/better_auth/plugins/organization.rb",
-      "line": 468,
+      "line": 548,
       "endpoint_key": "remove_member",
       "plugin_hint": "organization",
       "body_fields": [
@@ -4336,7 +4481,7 @@
       "ruby_api_call": "auth.api.remove_member",
       "upstream_registry_key": "removeMember",
       "upstream_api_call": "auth.api.removeMember",
-      "upstream_client_call": "organization.RemoveMember",
+      "upstream_client_call": "authClient.organization.removeMember",
       "plugin_id": "organization",
       "operation_id": "removeOrganizationMember"
     },
@@ -4346,7 +4491,7 @@
         "POST"
       ],
       "file": "packages/better_auth/lib/better_auth/plugins/organization.rb",
-      "line": 596,
+      "line": 746,
       "endpoint_key": "remove_team",
       "plugin_hint": "organization",
       "body_fields": [
@@ -4374,7 +4519,7 @@
         "POST"
       ],
       "file": "packages/better_auth/lib/better_auth/plugins/organization.rb",
-      "line": 671,
+      "line": 844,
       "endpoint_key": "remove_team_member",
       "plugin_hint": "organization",
       "body_fields": [
@@ -4407,7 +4552,7 @@
         "POST"
       ],
       "file": "packages/better_auth/lib/better_auth/plugins/organization.rb",
-      "line": 273,
+      "line": 284,
       "endpoint_key": "set_active_organization",
       "plugin_hint": "organization",
       "body_fields": [
@@ -4433,7 +4578,7 @@
       "ruby_api_call": "auth.api.set_active_organization",
       "upstream_registry_key": "setActiveOrganization",
       "upstream_api_call": "auth.api.setActiveOrganization",
-      "upstream_client_call": "organization.SetActive",
+      "upstream_client_call": "authClient.organization.setActive",
       "plugin_id": "organization",
       "operation_id": "setActiveOrganization"
     },
@@ -4443,7 +4588,7 @@
         "POST"
       ],
       "file": "packages/better_auth/lib/better_auth/plugins/organization.rb",
-      "line": 612,
+      "line": 776,
       "endpoint_key": "set_active_team",
       "plugin_hint": "organization",
       "body_fields": [
@@ -4471,7 +4616,7 @@
         "POST"
       ],
       "file": "packages/better_auth/lib/better_auth/plugins/organization.rb",
-      "line": 227,
+      "line": 230,
       "endpoint_key": "update_organization",
       "plugin_hint": "organization",
       "body_fields": [
@@ -4522,7 +4667,7 @@
       "ruby_api_call": "auth.api.update_organization",
       "upstream_registry_key": "updateOrganization",
       "upstream_api_call": "auth.api.updateOrganization",
-      "upstream_client_call": "organization.Update",
+      "upstream_client_call": "authClient.organization.update",
       "plugin_id": "organization",
       "operation_id": "updateOrganization"
     },
@@ -4532,7 +4677,7 @@
         "POST"
       ],
       "file": "packages/better_auth/lib/better_auth/plugins/organization.rb",
-      "line": 485,
+      "line": 572,
       "endpoint_key": "update_member_role",
       "plugin_hint": "organization",
       "body_fields": [
@@ -4568,7 +4713,7 @@
       "ruby_api_call": "auth.api.update_member_role",
       "upstream_registry_key": "updateMemberRole",
       "upstream_api_call": "auth.api.updateMemberRole",
-      "upstream_client_call": "organization.UpdateMemberRole",
+      "upstream_client_call": "authClient.organization.updateMemberRole",
       "plugin_id": "organization",
       "operation_id": "updateOrganizationMemberRole"
     },
@@ -4578,7 +4723,7 @@
         "POST"
       ],
       "file": "packages/better_auth/lib/better_auth/plugins/organization.rb",
-      "line": 725,
+      "line": 904,
       "endpoint_key": "update_org_role",
       "plugin_hint": "organization",
       "body_fields": [
@@ -4636,7 +4781,7 @@
         "POST"
       ],
       "file": "packages/better_auth/lib/better_auth/plugins/organization.rb",
-      "line": 584,
+      "line": 730,
       "endpoint_key": "update_team",
       "plugin_hint": "organization",
       "body_fields": [
@@ -4690,7 +4835,7 @@
       "ruby_api_call": "auth.api.delete_passkey",
       "upstream_registry_key": "deletePasskey",
       "upstream_api_call": "auth.api.deletePasskey",
-      "upstream_client_call": "passkey.DeletePasskey",
+      "upstream_client_call": "authClient.passkey.deletePasskey",
       "plugin_id": "passkey",
       "operation_id": "postPasskeyDeletePasskey"
     },
@@ -4775,7 +4920,7 @@
       "ruby_api_call": "auth.api.list_passkeys",
       "upstream_registry_key": "listPasskeys",
       "upstream_api_call": "auth.api.listPasskeys",
-      "upstream_client_call": "passkey.ListUserPasskeys",
+      "upstream_client_call": "authClient.passkey.listUserPasskeys",
       "plugin_id": "passkey",
       "operation_id": "getPasskeyListUserPasskeys"
     },
@@ -4811,7 +4956,7 @@
       "ruby_api_call": "auth.api.update_passkey",
       "upstream_registry_key": "updatePasskey",
       "upstream_api_call": "auth.api.updatePasskey",
-      "upstream_client_call": "passkey.UpdatePasskey",
+      "upstream_client_call": "authClient.passkey.updatePasskey",
       "plugin_id": "passkey",
       "operation_id": "postPasskeyUpdatePasskey"
     },
@@ -4842,7 +4987,7 @@
       "ruby_api_call": "auth.api.verify_passkey_authentication",
       "upstream_registry_key": "verifyPasskeyAuthentication",
       "upstream_api_call": "auth.api.verifyPasskeyAuthentication",
-      "upstream_client_call": "passkey.VerifyAuthentication",
+      "upstream_client_call": null,
       "plugin_id": "passkey",
       "operation_id": "passkeyVerifyAuthentication"
     },
@@ -4878,7 +5023,7 @@
       "ruby_api_call": "auth.api.verify_passkey_registration",
       "upstream_registry_key": "verifyPasskeyRegistration",
       "upstream_api_call": "auth.api.verifyPasskeyRegistration",
-      "upstream_client_call": "passkey.VerifyRegistration",
+      "upstream_client_call": null,
       "plugin_id": "passkey",
       "operation_id": "passkeyVerifyRegistration"
     },
@@ -4907,6 +5052,9 @@
       "method": "POST",
       "ruby_api_method": "request_password_reset_phone_number",
       "ruby_api_call": "auth.api.request_password_reset_phone_number",
+      "upstream_registry_key": "requestPasswordResetPhoneNumber",
+      "upstream_api_call": "auth.api.requestPasswordResetPhoneNumber",
+      "upstream_client_call": null,
       "plugin_id": "phone-number",
       "operation_id": "requestPasswordResetPhoneNumber"
     },
@@ -4945,6 +5093,9 @@
       "method": "POST",
       "ruby_api_method": "reset_password_phone_number",
       "ruby_api_call": "auth.api.reset_password_phone_number",
+      "upstream_registry_key": "resetPasswordPhoneNumber",
+      "upstream_api_call": "auth.api.resetPasswordPhoneNumber",
+      "upstream_client_call": null,
       "plugin_id": "phone-number",
       "operation_id": "resetPasswordPhoneNumber"
     },
@@ -4973,6 +5124,9 @@
       "method": "POST",
       "ruby_api_method": "send_phone_number_otp",
       "ruby_api_call": "auth.api.send_phone_number_otp",
+      "upstream_registry_key": "sendPhoneNumberOTP",
+      "upstream_api_call": "auth.api.sendPhoneNumberOTP",
+      "upstream_client_call": "authClient.phoneNumber.sendOtp",
       "plugin_id": "phone-number",
       "operation_id": "sendPhoneNumberOTP"
     },
@@ -5018,7 +5172,7 @@
       "ruby_api_call": "auth.api.verify_phone_number",
       "upstream_registry_key": "verifyPhoneNumber",
       "upstream_api_call": "auth.api.verifyPhoneNumber",
-      "upstream_client_call": "phoneNumber.Verify",
+      "upstream_client_call": "authClient.phoneNumber.verify",
       "plugin_id": "phone-number",
       "operation_id": "verifyPhoneNumber"
     },
@@ -5078,7 +5232,7 @@
       "ruby_api_call": "auth.api.refresh_token",
       "upstream_registry_key": "refreshToken",
       "upstream_api_call": "auth.api.refreshToken",
-      "upstream_client_call": "refreshToken",
+      "upstream_client_call": null,
       "plugin_id": "core",
       "operation_id": "refreshToken"
     },
@@ -5114,7 +5268,7 @@
       "ruby_api_call": "auth.api.request_password_reset",
       "upstream_registry_key": "requestPasswordReset",
       "upstream_api_call": "auth.api.requestPasswordReset",
-      "upstream_client_call": "requestPasswordReset",
+      "upstream_client_call": null,
       "plugin_id": "core",
       "operation_id": "requestPasswordReset"
     },
@@ -5124,7 +5278,7 @@
         "POST"
       ],
       "file": "packages/better_auth/lib/better_auth/routes/password.rb",
-      "line": 120,
+      "line": 121,
       "endpoint_key": "reset_password",
       "plugin_hint": "core",
       "body_fields": [
@@ -5150,7 +5304,7 @@
       "ruby_api_call": "auth.api.reset_password",
       "upstream_registry_key": "resetPassword",
       "upstream_api_call": "auth.api.resetPassword",
-      "upstream_client_call": "resetPassword",
+      "upstream_client_call": null,
       "plugin_id": "core",
       "operation_id": "resetPassword"
     },
@@ -5160,7 +5314,7 @@
         "GET"
       ],
       "file": "packages/better_auth/lib/better_auth/routes/password.rb",
-      "line": 78,
+      "line": 79,
       "endpoint_key": "request_password_reset_callback",
       "plugin_hint": "core",
       "body_fields": [],
@@ -5183,7 +5337,7 @@
       "ruby_api_call": "auth.api.request_password_reset_callback",
       "upstream_registry_key": "requestPasswordResetCallback",
       "upstream_api_call": "auth.api.requestPasswordResetCallback",
-      "upstream_client_call": "resetPassword.:token",
+      "upstream_client_call": null,
       "plugin_id": "core",
       "operation_id": "requestPasswordResetCallback"
     },
@@ -5193,7 +5347,7 @@
         "POST"
       ],
       "file": "packages/better_auth/lib/better_auth/routes/session.rb",
-      "line": 154,
+      "line": 159,
       "endpoint_key": "revoke_other_sessions",
       "plugin_hint": "core",
       "body_fields": [],
@@ -5208,7 +5362,7 @@
       "ruby_api_call": "auth.api.revoke_other_sessions",
       "upstream_registry_key": "revokeOtherSessions",
       "upstream_api_call": "auth.api.revokeOtherSessions",
-      "upstream_client_call": "revokeOtherSessions",
+      "upstream_client_call": null,
       "plugin_id": "core",
       "operation_id": "revokeOtherSessions"
     },
@@ -5218,7 +5372,7 @@
         "POST"
       ],
       "file": "packages/better_auth/lib/better_auth/routes/session.rb",
-      "line": 98,
+      "line": 103,
       "endpoint_key": "revoke_session",
       "plugin_hint": "core",
       "body_fields": [
@@ -5239,7 +5393,7 @@
       "ruby_api_call": "auth.api.revoke_session",
       "upstream_registry_key": "revokeSession",
       "upstream_api_call": "auth.api.revokeSession",
-      "upstream_client_call": "revokeSession",
+      "upstream_client_call": null,
       "plugin_id": "core",
       "operation_id": "revokeSession"
     },
@@ -5249,7 +5403,7 @@
         "POST"
       ],
       "file": "packages/better_auth/lib/better_auth/routes/session.rb",
-      "line": 133,
+      "line": 138,
       "endpoint_key": "revoke_sessions",
       "plugin_hint": "core",
       "body_fields": [],
@@ -5264,7 +5418,7 @@
       "ruby_api_call": "auth.api.revoke_sessions",
       "upstream_registry_key": "revokeSessions",
       "upstream_api_call": "auth.api.revokeSessions",
-      "upstream_client_call": "revokeSessions",
+      "upstream_client_call": null,
       "plugin_id": "core",
       "operation_id": "revokeSessions"
     },
@@ -5274,7 +5428,7 @@
         "POST"
       ],
       "file": "packages/better_auth-scim/lib/better_auth/scim/routes.rb",
-      "line": 84,
+      "line": 92,
       "endpoint_key": "delete_scim_provider_connection",
       "plugin_hint": "better_auth/scim/routes.rb",
       "body_fields": [
@@ -5295,7 +5449,7 @@
       "ruby_api_call": "auth.api.delete_scim_provider_connection",
       "upstream_registry_key": "deleteSCIMProviderConnection",
       "upstream_api_call": "auth.api.deleteSCIMProviderConnection",
-      "upstream_client_call": "scim.DeleteProviderConnection",
+      "upstream_client_call": null,
       "plugin_id": "scim",
       "operation_id": "postScimDeleteProviderConnection"
     },
@@ -5331,7 +5485,7 @@
       "ruby_api_call": "auth.api.generate_scim_token",
       "upstream_registry_key": "generateSCIMToken",
       "upstream_api_call": "auth.api.generateSCIMToken",
-      "upstream_client_call": "scim.GenerateToken",
+      "upstream_client_call": null,
       "plugin_id": "scim",
       "operation_id": "postScimGenerateToken"
     },
@@ -5341,7 +5495,7 @@
         "GET"
       ],
       "file": "packages/better_auth-scim/lib/better_auth/scim/routes.rb",
-      "line": 75,
+      "line": 83,
       "endpoint_key": "get_scim_provider_connection",
       "plugin_hint": "better_auth/scim/routes.rb",
       "body_fields": [],
@@ -5356,7 +5510,7 @@
       "ruby_api_call": "auth.api.get_scim_provider_connection",
       "upstream_registry_key": "getSCIMProviderConnection",
       "upstream_api_call": "auth.api.getSCIMProviderConnection",
-      "upstream_client_call": "scim.GetProviderConnection",
+      "upstream_client_call": null,
       "plugin_id": "scim",
       "operation_id": "getScimGetProviderConnection"
     },
@@ -5366,7 +5520,7 @@
         "GET"
       ],
       "file": "packages/better_auth-scim/lib/better_auth/scim/routes.rb",
-      "line": 54,
+      "line": 62,
       "endpoint_key": "list_scim_provider_connections",
       "plugin_hint": "better_auth/scim/routes.rb",
       "body_fields": [],
@@ -5381,7 +5535,7 @@
       "ruby_api_call": "auth.api.list_scim_provider_connections",
       "upstream_registry_key": "listSCIMProviderConnections",
       "upstream_api_call": "auth.api.listSCIMProviderConnections",
-      "upstream_client_call": "scim.ListProviderConnections",
+      "upstream_client_call": null,
       "plugin_id": "scim",
       "operation_id": "getScimListProviderConnections"
     },
@@ -5391,7 +5545,7 @@
         "GET"
       ],
       "file": "packages/better_auth-scim/lib/better_auth/scim/routes.rb",
-      "line": 278,
+      "line": 340,
       "endpoint_key": "get_scim_resource_types",
       "plugin_hint": "better_auth/scim/routes.rb",
       "body_fields": [],
@@ -5406,7 +5560,7 @@
       "ruby_api_call": "auth.api.get_scim_resource_types",
       "upstream_registry_key": "getSCIMResourceTypes",
       "upstream_api_call": "auth.api.getSCIMResourceTypes",
-      "upstream_client_call": "scim.V2.Resourcetypes",
+      "upstream_client_call": null,
       "plugin_id": "scim",
       "operation_id": "getScimV2Resourcetypes"
     },
@@ -5416,7 +5570,7 @@
         "GET"
       ],
       "file": "packages/better_auth-scim/lib/better_auth/scim/routes.rb",
-      "line": 285,
+      "line": 347,
       "endpoint_key": "get_scim_resource_type",
       "plugin_hint": "better_auth/scim/routes.rb",
       "body_fields": [],
@@ -5433,7 +5587,7 @@
       "ruby_api_call": "auth.api.get_scim_resource_type",
       "upstream_registry_key": "getSCIMResourceType",
       "upstream_api_call": "auth.api.getSCIMResourceType",
-      "upstream_client_call": "scim.V2.Resourcetypes.:resourcetypeid",
+      "upstream_client_call": null,
       "plugin_id": "scim",
       "operation_id": "getScimV2ResourcetypesResourcetypeid"
     },
@@ -5443,7 +5597,7 @@
         "GET"
       ],
       "file": "packages/better_auth-scim/lib/better_auth/scim/routes.rb",
-      "line": 263,
+      "line": 325,
       "endpoint_key": "get_scim_schemas",
       "plugin_hint": "better_auth/scim/routes.rb",
       "body_fields": [],
@@ -5458,7 +5612,7 @@
       "ruby_api_call": "auth.api.get_scim_schemas",
       "upstream_registry_key": "getSCIMSchemas",
       "upstream_api_call": "auth.api.getSCIMSchemas",
-      "upstream_client_call": "scim.V2.Schemas",
+      "upstream_client_call": null,
       "plugin_id": "scim",
       "operation_id": "getScimV2Schemas"
     },
@@ -5468,7 +5622,7 @@
         "GET"
       ],
       "file": "packages/better_auth-scim/lib/better_auth/scim/routes.rb",
-      "line": 270,
+      "line": 332,
       "endpoint_key": "get_scim_schema",
       "plugin_hint": "better_auth/scim/routes.rb",
       "body_fields": [],
@@ -5485,7 +5639,7 @@
       "ruby_api_call": "auth.api.get_scim_schema",
       "upstream_registry_key": "getSCIMSchema",
       "upstream_api_call": "auth.api.getSCIMSchema",
-      "upstream_client_call": "scim.V2.Schemas.:schemaid",
+      "upstream_client_call": null,
       "plugin_id": "scim",
       "operation_id": "getScimV2SchemasSchemaid"
     },
@@ -5495,7 +5649,7 @@
         "GET"
       ],
       "file": "packages/better_auth-scim/lib/better_auth/scim/routes.rb",
-      "line": 241,
+      "line": 303,
       "endpoint_key": "get_scim_service_provider_config",
       "plugin_hint": "better_auth/scim/routes.rb",
       "body_fields": [],
@@ -5510,7 +5664,7 @@
       "ruby_api_call": "auth.api.get_scim_service_provider_config",
       "upstream_registry_key": "getSCIMServiceProviderConfig",
       "upstream_api_call": "auth.api.getSCIMServiceProviderConfig",
-      "upstream_client_call": "scim.V2.Serviceproviderconfig",
+      "upstream_client_call": null,
       "plugin_id": "scim",
       "operation_id": "getScimV2Serviceproviderconfig"
     },
@@ -5520,7 +5674,7 @@
         "GET"
       ],
       "file": "packages/better_auth-scim/lib/better_auth/scim/routes.rb",
-      "line": 184,
+      "line": 246,
       "endpoint_key": "list_scim_users",
       "plugin_hint": "better_auth/scim/routes.rb",
       "body_fields": [],
@@ -5535,7 +5689,7 @@
       "ruby_api_call": "auth.api.list_scim_users",
       "upstream_registry_key": "listSCIMUsers",
       "upstream_api_call": "auth.api.listSCIMUsers",
-      "upstream_client_call": "scim.V2.Users",
+      "upstream_client_call": null,
       "plugin_id": "scim",
       "operation_id": "getScimV2Users"
     },
@@ -5545,7 +5699,7 @@
         "POST"
       ],
       "file": "packages/better_auth-scim/lib/better_auth/scim/routes.rb",
-      "line": 95,
+      "line": 103,
       "endpoint_key": "create_scim_user",
       "plugin_hint": "better_auth/scim/routes.rb",
       "body_fields": [],
@@ -5560,7 +5714,7 @@
       "ruby_api_call": "auth.api.create_scim_user",
       "upstream_registry_key": "createSCIMUser",
       "upstream_api_call": "auth.api.createSCIMUser",
-      "upstream_client_call": "scim.V2.Users",
+      "upstream_client_call": null,
       "plugin_id": "scim",
       "operation_id": "postScimV2Users"
     },
@@ -5570,7 +5724,7 @@
         "DELETE"
       ],
       "file": "packages/better_auth-scim/lib/better_auth/scim/routes.rb",
-      "line": 172,
+      "line": 206,
       "endpoint_key": "delete_scim_user",
       "plugin_hint": "better_auth/scim/routes.rb",
       "body_fields": [],
@@ -5587,7 +5741,7 @@
       "ruby_api_call": "auth.api.delete_scim_user",
       "upstream_registry_key": "deleteSCIMUser",
       "upstream_api_call": "auth.api.deleteSCIMUser",
-      "upstream_client_call": "scim.V2.Users.:userid",
+      "upstream_client_call": null,
       "plugin_id": "scim",
       "operation_id": "deleteScimV2UsersUserid"
     },
@@ -5597,7 +5751,7 @@
         "GET"
       ],
       "file": "packages/better_auth-scim/lib/better_auth/scim/routes.rb",
-      "line": 234,
+      "line": 296,
       "endpoint_key": "get_scim_user",
       "plugin_hint": "better_auth/scim/routes.rb",
       "body_fields": [],
@@ -5614,7 +5768,7 @@
       "ruby_api_call": "auth.api.get_scim_user",
       "upstream_registry_key": "getSCIMUser",
       "upstream_api_call": "auth.api.getSCIMUser",
-      "upstream_client_call": "scim.V2.Users.:userid",
+      "upstream_client_call": null,
       "plugin_id": "scim",
       "operation_id": "getScimV2UsersUserid"
     },
@@ -5624,7 +5778,7 @@
         "PATCH"
       ],
       "file": "packages/better_auth-scim/lib/better_auth/scim/routes.rb",
-      "line": 142,
+      "line": 164,
       "endpoint_key": "patch_scim_user",
       "plugin_hint": "better_auth/scim/routes.rb",
       "body_fields": [],
@@ -5641,7 +5795,7 @@
       "ruby_api_call": "auth.api.patch_scim_user",
       "upstream_registry_key": "patchSCIMUser",
       "upstream_api_call": "auth.api.patchSCIMUser",
-      "upstream_client_call": "scim.V2.Users.:userid",
+      "upstream_client_call": null,
       "plugin_id": "scim",
       "operation_id": "patchScimV2UsersUserid"
     },
@@ -5651,7 +5805,7 @@
         "PUT"
       ],
       "file": "packages/better_auth-scim/lib/better_auth/scim/routes.rb",
-      "line": 127,
+      "line": 142,
       "endpoint_key": "update_scim_user",
       "plugin_hint": "better_auth/scim/routes.rb",
       "body_fields": [],
@@ -5668,7 +5822,7 @@
       "ruby_api_call": "auth.api.update_scim_user",
       "upstream_registry_key": "updateSCIMUser",
       "upstream_api_call": "auth.api.updateSCIMUser",
-      "upstream_client_call": "scim.V2.Users.:userid",
+      "upstream_client_call": null,
       "plugin_id": "scim",
       "operation_id": "putScimV2UsersUserid"
     },
@@ -5704,7 +5858,7 @@
       "ruby_api_call": "auth.api.send_verification_email",
       "upstream_registry_key": "sendVerificationEmail",
       "upstream_api_call": "auth.api.sendVerificationEmail",
-      "upstream_client_call": "sendVerificationEmail",
+      "upstream_client_call": null,
       "plugin_id": "core",
       "operation_id": "sendVerificationEmail"
     },
@@ -5755,6 +5909,9 @@
       "method": "POST",
       "ruby_api_method": "sign_in_anonymous",
       "ruby_api_call": "auth.api.sign_in_anonymous",
+      "upstream_registry_key": "signInAnonymous",
+      "upstream_api_call": "auth.api.signInAnonymous",
+      "upstream_client_call": null,
       "plugin_id": "anonymous",
       "operation_id": "signInAnonymous"
     },
@@ -5800,7 +5957,7 @@
       "ruby_api_call": "auth.api.sign_in_email",
       "upstream_registry_key": "signInEmail",
       "upstream_api_call": "auth.api.signInEmail",
-      "upstream_client_call": "signIn.Email",
+      "upstream_client_call": null,
       "plugin_id": "core",
       "operation_id": "signInEmail"
     },
@@ -5836,7 +5993,7 @@
       "ruby_api_call": "auth.api.sign_in_email_otp",
       "upstream_registry_key": "signInEmailOTP",
       "upstream_api_call": "auth.api.signInEmailOTP",
-      "upstream_client_call": "signIn.EmailOtp",
+      "upstream_client_call": "authClient.signIn.emailOtp",
       "plugin_id": "email-otp",
       "operation_id": "signInEmailOTP"
     },
@@ -5846,7 +6003,7 @@
         "POST"
       ],
       "file": "packages/better_auth/lib/better_auth/plugins/magic_link.rb",
-      "line": 31,
+      "line": 34,
       "endpoint_key": "sign_in_magic_link",
       "plugin_hint": "magic_link",
       "body_fields": [
@@ -5890,6 +6047,9 @@
       "method": "POST",
       "ruby_api_method": "sign_in_magic_link",
       "ruby_api_call": "auth.api.sign_in_magic_link",
+      "upstream_registry_key": "signInMagicLink",
+      "upstream_api_call": "auth.api.signInMagicLink",
+      "upstream_client_call": "authClient.signIn.magicLink",
       "plugin_id": "magic-link",
       "operation_id": "signInMagicLink"
     },
@@ -5899,7 +6059,7 @@
         "POST"
       ],
       "file": "packages/better_auth/lib/better_auth/plugins/generic_oauth.rb",
-      "line": 216,
+      "line": 246,
       "endpoint_key": "sign_in_with_oauth2",
       "plugin_hint": "generic_oauth",
       "body_fields": [
@@ -5955,7 +6115,7 @@
       "ruby_api_call": "auth.api.sign_in_with_oauth2",
       "upstream_registry_key": "signInWithOAuth2",
       "upstream_api_call": "auth.api.signInWithOAuth2",
-      "upstream_client_call": "signIn.Oauth2",
+      "upstream_client_call": "authClient.signIn.oauth2",
       "plugin_id": "generic-oauth",
       "operation_id": "signInOAuth2"
     },
@@ -5996,7 +6156,7 @@
       "ruby_api_call": "auth.api.sign_in_phone_number",
       "upstream_registry_key": "signInPhoneNumber",
       "upstream_api_call": "auth.api.signInPhoneNumber",
-      "upstream_client_call": "signIn.PhoneNumber",
+      "upstream_client_call": "authClient.signIn.phoneNumber",
       "plugin_id": "phone-number",
       "operation_id": "signInPhoneNumber"
     },
@@ -6072,7 +6232,7 @@
       "ruby_api_call": "auth.api.sign_in_social",
       "upstream_registry_key": "signInSocial",
       "upstream_api_call": "auth.api.signInSocial",
-      "upstream_client_call": "signIn.Social",
+      "upstream_client_call": null,
       "plugin_id": "core",
       "operation_id": "socialSignIn"
     },
@@ -6133,7 +6293,7 @@
       "ruby_api_call": "auth.api.sign_in_sso",
       "upstream_registry_key": "signInSSO",
       "upstream_api_call": "auth.api.signInSSO",
-      "upstream_client_call": "signIn.Sso",
+      "upstream_client_call": null,
       "plugin_id": "sso",
       "operation_id": "postSignInSso"
     },
@@ -6177,6 +6337,9 @@
       "method": "POST",
       "ruby_api_method": "sign_in_username",
       "ruby_api_call": "auth.api.sign_in_username",
+      "upstream_registry_key": "signInUsername",
+      "upstream_api_call": "auth.api.signInUsername",
+      "upstream_client_call": null,
       "plugin_id": "username",
       "operation_id": "signInUsername"
     },
@@ -6201,7 +6364,7 @@
       "ruby_api_call": "auth.api.sign_out",
       "upstream_registry_key": "signOut",
       "upstream_api_call": "auth.api.signOut",
-      "upstream_client_call": "signOut",
+      "upstream_client_call": null,
       "plugin_id": "core",
       "operation_id": "signOut"
     },
@@ -6257,7 +6420,7 @@
       "ruby_api_call": "auth.api.sign_up_email",
       "upstream_registry_key": "signUpEmail",
       "upstream_api_call": "auth.api.signUpEmail",
-      "upstream_client_call": "signUp.Email",
+      "upstream_client_call": null,
       "plugin_id": "core",
       "operation_id": "signUpWithEmailAndPassword"
     },
@@ -6267,7 +6430,7 @@
         "POST"
       ],
       "file": "packages/better_auth/lib/better_auth/plugins/siwe.rb",
-      "line": 27,
+      "line": 30,
       "endpoint_key": "get_siwe_nonce",
       "plugin_hint": "siwe",
       "body_fields": [
@@ -6291,6 +6454,9 @@
       "method": "POST",
       "ruby_api_method": "get_siwe_nonce",
       "ruby_api_call": "auth.api.get_siwe_nonce",
+      "upstream_registry_key": "getSiweNonce",
+      "upstream_api_call": "auth.api.getSiweNonce",
+      "upstream_client_call": null,
       "plugin_id": "siwe",
       "operation_id": "getSiweNonce"
     },
@@ -6300,7 +6466,7 @@
         "POST"
       ],
       "file": "packages/better_auth/lib/better_auth/plugins/siwe.rb",
-      "line": 75,
+      "line": 78,
       "endpoint_key": "verify_siwe_message",
       "plugin_hint": "siwe",
       "body_fields": [
@@ -6339,6 +6505,9 @@
       "method": "POST",
       "ruby_api_method": "verify_siwe_message",
       "ruby_api_call": "auth.api.verify_siwe_message",
+      "upstream_registry_key": "verifySiweMessage",
+      "upstream_api_call": "auth.api.verifySiweMessage",
+      "upstream_client_call": null,
       "plugin_id": "siwe",
       "operation_id": "verifySiweMessage"
     },
@@ -6394,7 +6563,7 @@
         "POST"
       ],
       "file": "packages/better_auth-sso/lib/better_auth/sso/plugin/providers.rb",
-      "line": 123,
+      "line": 130,
       "endpoint_key": "delete_sso_provider",
       "plugin_hint": "better_auth/sso/plugin",
       "body_fields": [
@@ -6415,7 +6584,7 @@
       "ruby_api_call": "auth.api.delete_sso_provider",
       "upstream_registry_key": "deleteSSOProvider",
       "upstream_api_call": "auth.api.deleteSSOProvider",
-      "upstream_client_call": "sso.DeleteProvider",
+      "upstream_client_call": null,
       "plugin_id": "sso",
       "operation_id": "postSsoDeleteProvider"
     },
@@ -6425,7 +6594,7 @@
         "GET"
       ],
       "file": "packages/better_auth-sso/lib/better_auth/sso/plugin/providers.rb",
-      "line": 76,
+      "line": 77,
       "endpoint_key": "get_sso_provider",
       "plugin_hint": "better_auth/sso/plugin",
       "body_fields": [],
@@ -6440,7 +6609,7 @@
       "ruby_api_call": "auth.api.get_sso_provider",
       "upstream_registry_key": "getSSOProvider",
       "upstream_api_call": "auth.api.getSSOProvider",
-      "upstream_client_call": "sso.GetProvider",
+      "upstream_client_call": null,
       "plugin_id": "sso",
       "operation_id": "getSsoGetProvider"
     },
@@ -6450,7 +6619,7 @@
         "GET"
       ],
       "file": "packages/better_auth-sso/lib/better_auth/sso/plugin/providers.rb",
-      "line": 66,
+      "line": 67,
       "endpoint_key": "list_sso_providers",
       "plugin_hint": "better_auth/sso/plugin",
       "body_fields": [],
@@ -6465,7 +6634,7 @@
       "ruby_api_call": "auth.api.list_sso_providers",
       "upstream_registry_key": "listSSOProviders",
       "upstream_api_call": "auth.api.listSSOProviders",
-      "upstream_client_call": "sso.Providers",
+      "upstream_client_call": null,
       "plugin_id": "sso",
       "operation_id": "getSsoProviders"
     },
@@ -6526,7 +6695,7 @@
       "ruby_api_call": "auth.api.register_sso_provider",
       "upstream_registry_key": "registerSSOProvider",
       "upstream_api_call": "auth.api.registerSSOProvider",
-      "upstream_client_call": "sso.Register",
+      "upstream_client_call": null,
       "plugin_id": "sso",
       "operation_id": "postSsoRegister"
     },
@@ -6602,6 +6771,9 @@
       "method": "GET",
       "ruby_api_method": "callback_sso_saml",
       "ruby_api_call": "auth.api.callback_sso_saml",
+      "upstream_registry_key": "callbackSSOSAML",
+      "upstream_api_call": "auth.api.callbackSSOSAML",
+      "upstream_client_call": null,
       "plugin_id": "sso",
       "operation_id": "getSsoSaml2CallbackProviderid"
     },
@@ -6657,6 +6829,9 @@
       "method": "POST",
       "ruby_api_method": "callback_sso_saml",
       "ruby_api_call": "auth.api.callback_sso_saml",
+      "upstream_registry_key": "callbackSSOSAML",
+      "upstream_api_call": "auth.api.callbackSSOSAML",
+      "upstream_client_call": null,
       "plugin_id": "sso",
       "operation_id": "getSsoSaml2CallbackProviderid"
     },
@@ -6689,7 +6864,7 @@
       "ruby_api_call": "auth.api.initiate_slo",
       "upstream_registry_key": "initiateSLO",
       "upstream_api_call": "auth.api.initiateSLO",
-      "upstream_client_call": "sso.Saml2.Logout.:providerid",
+      "upstream_client_call": null,
       "plugin_id": "sso",
       "operation_id": "postSsoSaml2LogoutProviderid"
     },
@@ -6747,7 +6922,7 @@
       "ruby_api_call": "auth.api.acs",
       "upstream_registry_key": "acsEndpoint",
       "upstream_api_call": "auth.api.acsEndpoint",
-      "upstream_client_call": "sso.Saml2.Sp.Acs.:providerid",
+      "upstream_client_call": null,
       "plugin_id": "sso",
       "operation_id": "postSsoSaml2SpAcsProviderid"
     },
@@ -6772,7 +6947,7 @@
       "ruby_api_call": "auth.api.sp_metadata",
       "upstream_registry_key": "spMetadata",
       "upstream_api_call": "auth.api.spMetadata",
-      "upstream_client_call": "sso.Saml2.Sp.Metadata",
+      "upstream_client_call": null,
       "plugin_id": "sso",
       "operation_id": "getSsoSaml2SpMetadata"
     },
@@ -6828,6 +7003,9 @@
       "method": "GET",
       "ruby_api_method": "slo",
       "ruby_api_call": "auth.api.slo",
+      "upstream_registry_key": "sloEndpoint",
+      "upstream_api_call": "auth.api.sloEndpoint",
+      "upstream_client_call": null,
       "plugin_id": "sso",
       "operation_id": "getSsoSaml2SpSloProviderid"
     },
@@ -6883,6 +7061,9 @@
       "method": "POST",
       "ruby_api_method": "slo",
       "ruby_api_call": "auth.api.slo",
+      "upstream_registry_key": "sloEndpoint",
+      "upstream_api_call": "auth.api.sloEndpoint",
+      "upstream_client_call": null,
       "plugin_id": "sso",
       "operation_id": "getSsoSaml2SpSloProviderid"
     },
@@ -6892,7 +7073,7 @@
         "POST"
       ],
       "file": "packages/better_auth-sso/lib/better_auth/sso/plugin/providers.rb",
-      "line": 86,
+      "line": 87,
       "endpoint_key": "update_sso_provider",
       "plugin_hint": "better_auth/sso/plugin",
       "body_fields": [
@@ -6943,7 +7124,7 @@
       "ruby_api_call": "auth.api.update_sso_provider",
       "upstream_registry_key": "updateSSOProvider",
       "upstream_api_call": "auth.api.updateSSOProvider",
-      "upstream_client_call": "sso.UpdateProvider",
+      "upstream_client_call": null,
       "plugin_id": "sso",
       "operation_id": "postSsoUpdateProvider"
     },
@@ -6987,7 +7168,7 @@
       "ruby_api_call": "auth.api.stripe_webhook",
       "upstream_registry_key": "stripeWebhook",
       "upstream_api_call": "auth.api.stripeWebhook",
-      "upstream_client_call": "stripe.Webhook"
+      "upstream_client_call": null
     },
     {
       "path": "/subscription/billing-portal",
@@ -7295,7 +7476,7 @@
         "GET"
       ],
       "file": "packages/better_auth/lib/better_auth/plugins/jwt.rb",
-      "line": 134,
+      "line": 140,
       "endpoint_key": "get_token",
       "plugin_hint": "jwt",
       "body_fields": [],
@@ -7308,6 +7489,9 @@
       "method": "GET",
       "ruby_api_method": "get_token",
       "ruby_api_call": "auth.api.get_token",
+      "upstream_registry_key": "getToken",
+      "upstream_api_call": "auth.api.getToken",
+      "upstream_client_call": null,
       "plugin_id": "jwt",
       "operation_id": "getJSONWebToken"
     },
@@ -7317,7 +7501,7 @@
         "POST"
       ],
       "file": "packages/better_auth/lib/better_auth/plugins/two_factor.rb",
-      "line": 141,
+      "line": 156,
       "endpoint_key": "generate_totp",
       "plugin_hint": "two_factor",
       "body_fields": [
@@ -7345,7 +7529,7 @@
         "POST"
       ],
       "file": "packages/better_auth/lib/better_auth/plugins/two_factor.rb",
-      "line": 118,
+      "line": 133,
       "endpoint_key": "disable_two_factor",
       "plugin_hint": "two_factor",
       "body_fields": [
@@ -7364,6 +7548,9 @@
       "method": "POST",
       "ruby_api_method": "disable_two_factor",
       "ruby_api_call": "auth.api.disable_two_factor",
+      "upstream_registry_key": "disableTwoFactor",
+      "upstream_api_call": "auth.api.disableTwoFactor",
+      "upstream_client_call": "authClient.twoFactor.disable",
       "plugin_id": "two-factor",
       "operation_id": "disableTwoFactor"
     },
@@ -7373,7 +7560,7 @@
         "POST"
       ],
       "file": "packages/better_auth/lib/better_auth/plugins/two_factor.rb",
-      "line": 82,
+      "line": 97,
       "endpoint_key": "enable_two_factor",
       "plugin_hint": "two_factor",
       "body_fields": [
@@ -7397,6 +7584,9 @@
       "method": "POST",
       "ruby_api_method": "enable_two_factor",
       "ruby_api_call": "auth.api.enable_two_factor",
+      "upstream_registry_key": "enableTwoFactor",
+      "upstream_api_call": "auth.api.enableTwoFactor",
+      "upstream_client_call": "authClient.twoFactor.enable",
       "plugin_id": "two-factor",
       "operation_id": "enableTwoFactor"
     },
@@ -7406,7 +7596,7 @@
         "POST"
       ],
       "file": "packages/better_auth/lib/better_auth/plugins/two_factor.rb",
-      "line": 274,
+      "line": 330,
       "endpoint_key": "generate_backup_codes",
       "plugin_hint": "two_factor",
       "body_fields": [
@@ -7425,6 +7615,9 @@
       "method": "POST",
       "ruby_api_method": "generate_backup_codes",
       "ruby_api_call": "auth.api.generate_backup_codes",
+      "upstream_registry_key": "generateBackupCodes",
+      "upstream_api_call": "auth.api.generateBackupCodes",
+      "upstream_client_call": "authClient.twoFactor.generateBackupCodes",
       "plugin_id": "two-factor",
       "operation_id": "generateBackupCodes"
     },
@@ -7434,7 +7627,7 @@
         "POST"
       ],
       "file": "packages/better_auth/lib/better_auth/plugins/two_factor.rb",
-      "line": 149,
+      "line": 164,
       "endpoint_key": "get_totp_uri",
       "plugin_hint": "two_factor",
       "body_fields": [
@@ -7453,6 +7646,9 @@
       "method": "POST",
       "ruby_api_method": "get_totp_uri",
       "ruby_api_call": "auth.api.get_totp_uri",
+      "upstream_registry_key": "getTOTPURI",
+      "upstream_api_call": "auth.api.getTOTPURI",
+      "upstream_client_call": "authClient.twoFactor.getTotpUri",
       "plugin_id": "two-factor",
       "operation_id": "getTOTPURI"
     },
@@ -7462,7 +7658,7 @@
         "POST"
       ],
       "file": "packages/better_auth/lib/better_auth/plugins/two_factor.rb",
-      "line": 194,
+      "line": 223,
       "endpoint_key": "send_two_factor_otp",
       "plugin_hint": "two_factor",
       "body_fields": [],
@@ -7475,6 +7671,9 @@
       "method": "POST",
       "ruby_api_method": "send_two_factor_otp",
       "ruby_api_call": "auth.api.send_two_factor_otp",
+      "upstream_registry_key": "sendTwoFactorOTP",
+      "upstream_api_call": "auth.api.sendTwoFactorOTP",
+      "upstream_client_call": "authClient.twoFactor.sendOtp",
       "plugin_id": "two-factor",
       "operation_id": "sendTwoFactorOTP"
     },
@@ -7484,7 +7683,7 @@
         "POST"
       ],
       "file": "packages/better_auth/lib/better_auth/plugins/two_factor.rb",
-      "line": 249,
+      "line": 289,
       "endpoint_key": "verify_backup_code",
       "plugin_hint": "two_factor",
       "body_fields": [
@@ -7513,6 +7712,9 @@
       "method": "POST",
       "ruby_api_method": "verify_backup_code",
       "ruby_api_call": "auth.api.verify_backup_code",
+      "upstream_registry_key": "verifyBackupCode",
+      "upstream_api_call": "auth.api.verifyBackupCode",
+      "upstream_client_call": "authClient.twoFactor.verifyBackupCode",
       "plugin_id": "two-factor",
       "operation_id": "verifyBackupCode"
     },
@@ -7522,7 +7724,7 @@
         "POST"
       ],
       "file": "packages/better_auth/lib/better_auth/plugins/two_factor.rb",
-      "line": 215,
+      "line": 244,
       "endpoint_key": "verify_two_factor_otp",
       "plugin_hint": "two_factor",
       "body_fields": [
@@ -7546,6 +7748,9 @@
       "method": "POST",
       "ruby_api_method": "verify_two_factor_otp",
       "ruby_api_call": "auth.api.verify_two_factor_otp",
+      "upstream_registry_key": "verifyTwoFactorOTP",
+      "upstream_api_call": "auth.api.verifyTwoFactorOTP",
+      "upstream_client_call": "authClient.twoFactor.verifyOtp",
       "plugin_id": "two-factor",
       "operation_id": "verifyTwoFactorOTP"
     },
@@ -7555,7 +7760,7 @@
         "POST"
       ],
       "file": "packages/better_auth/lib/better_auth/plugins/two_factor.rb",
-      "line": 162,
+      "line": 177,
       "endpoint_key": "verify_totp",
       "plugin_hint": "two_factor",
       "body_fields": [
@@ -7579,6 +7784,9 @@
       "method": "POST",
       "ruby_api_method": "verify_totp",
       "ruby_api_call": "auth.api.verify_totp",
+      "upstream_registry_key": "verifyTOTP",
+      "upstream_api_call": "auth.api.verifyTOTP",
+      "upstream_client_call": "authClient.twoFactor.verifyTotp",
       "plugin_id": "two-factor",
       "operation_id": "verifyTOTP"
     },
@@ -7614,7 +7822,7 @@
       "ruby_api_call": "auth.api.unlink_account",
       "upstream_registry_key": "unlinkAccount",
       "upstream_api_call": "auth.api.unlinkAccount",
-      "upstream_client_call": "unlinkAccount",
+      "upstream_client_call": null,
       "plugin_id": "core",
       "operation_id": "unlinkAccount"
     },
@@ -7639,7 +7847,7 @@
       "ruby_api_call": "auth.api.update_session",
       "upstream_registry_key": "updateSession",
       "upstream_api_call": "auth.api.updateSession",
-      "upstream_client_call": "updateSession",
+      "upstream_client_call": null,
       "plugin_id": "core",
       "operation_id": "updateSession"
     },
@@ -7675,7 +7883,7 @@
       "ruby_api_call": "auth.api.update_user",
       "upstream_registry_key": "updateUser",
       "upstream_api_call": "auth.api.updateUser",
-      "upstream_client_call": "updateUser",
+      "upstream_client_call": null,
       "plugin_id": "core",
       "operation_id": "updateUser"
     },
@@ -7685,7 +7893,7 @@
         "GET"
       ],
       "file": "packages/better_auth/lib/better_auth/routes/email_verification.rb",
-      "line": 56,
+      "line": 78,
       "endpoint_key": "verify_email",
       "plugin_hint": "core",
       "body_fields": [],
@@ -7711,7 +7919,7 @@
       "ruby_api_call": "auth.api.verify_email",
       "upstream_registry_key": "verifyEmail",
       "upstream_api_call": "auth.api.verifyEmail",
-      "upstream_client_call": "verifyEmail",
+      "upstream_client_call": null,
       "plugin_id": "core",
       "operation_id": "verifyEmail"
     },
@@ -7721,7 +7929,7 @@
         "POST"
       ],
       "file": "packages/better_auth/lib/better_auth/routes/password.rb",
-      "line": 178,
+      "line": 177,
       "endpoint_key": "verify_password",
       "plugin_hint": "core",
       "body_fields": [
@@ -7742,7 +7950,7 @@
       "ruby_api_call": "auth.api.verify_password",
       "upstream_registry_key": "verifyPassword",
       "upstream_api_call": "auth.api.verifyPassword",
-      "upstream_client_call": "verifyPassword",
+      "upstream_client_call": null,
       "plugin_id": "core",
       "operation_id": "verifyPassword"
     }

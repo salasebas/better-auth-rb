@@ -35,7 +35,7 @@ Override them with `BETTER_AUTH_EXAMPLE_POSTGRES_URL`,
 The repository root `docker-compose.yml` still uses the standard ports
 `5432`, `3306`, `27017`, `1433`, and `6379` for package tests. The examples
 compose file intentionally uses alternate host ports so it does not interact
-with existing `openauth-*` or other local containers.
+with other local development containers.
 
 ## Run Apps
 

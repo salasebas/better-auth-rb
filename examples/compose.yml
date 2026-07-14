@@ -1,5 +1,5 @@
 # Isolated services for examples. Uses alternate host ports so it does not
-# collide with repository-level or openauth development containers.
+# collide with repository-level or other local development containers.
 
 x-postgres-healthcheck: &postgres-healthcheck
   healthcheck:

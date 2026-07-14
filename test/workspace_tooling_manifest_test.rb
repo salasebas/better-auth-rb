@@ -25,6 +25,12 @@ class WorkspaceToolingManifestTest < Minitest::Test
     end
   end
 
+  def test_workspace_test_task_discovers_root_tests_and_excludes_only_database_smoke
+    assert_includes root_rakefile, 'WORKSPACE_TEST_PATHS = Dir["test/**/*_test.rb"].sort.reject'
+    assert_includes root_rakefile, 'path == "test/mysql_plugin_schema_smoke_test.rb"'
+    assert_includes rake_task_body(:ci), 'Rake::Task["test:workspace"].invoke'
+  end
+
   def test_root_package_tasks_cover_released_package_gemfiles
     released_packages_with_gemfiles.each do |package|
       assert_includes rake_task_body(:install), %(cd "packages/#{package}"), "#{package} must be represented in root rake install"

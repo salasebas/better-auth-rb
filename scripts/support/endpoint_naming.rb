@@ -11,6 +11,7 @@ module EndpointNaming
     [/OIDC(?=[A-Z]|$)/, "oidc"],
     [/SCIM(?=[A-Z]|$)/, "scim"],
     [/SSO(?=[A-Z]|$)/, "sso"],
+    [/TOTP(?=[A-Z]|$)/, "totp"],
     [/OTP(?=[A-Z]|$)/, "otp"],
     [/JWT(?=[A-Z]|$)/, "jwt"],
     [/URL(?=[A-Z]|$)/, "url"],

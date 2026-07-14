@@ -97,8 +97,6 @@ better-auth doctor --cwd . --config config/better_auth.rb --json
 `BetterAuth::Schema.auth_tables`, endpoint counts, and doctor findings without
 serializing sensitive config values.
 
-Install `openauth-cli` for the `openauth` executable alias.
-
 ## Command reference
 
 | Command | Required flags | Optional flags |
