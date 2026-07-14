@@ -69,6 +69,10 @@ The `signUp` function should take a new `username` property in the object.
        */
       password: string = "password123"
       /**
+       * The URL to redirect to after signing in.
+       */
+      callbackURL?: string = "/dashboard"
+      /**
        * The user name.
        */
       name?: string = "Ada"
@@ -83,6 +87,8 @@ The `signUp` function should take a new `username` property in the object.
 <Callout type="info">
   If only `username` is provided, the `displayUsername` will be set to the pre normalized version of the `username`. You can see the [Username Normalization](#username-normalization) and [Display Username Normalization](#display-username-normalization) sections for more details.
 </Callout>
+
+When `displayUsername` is provided without a `username`, it is used as the username only when it passes username validation; otherwise it remains display-only. An explicit empty `username` is invalid. On successful username sign-in, `callbackURL` is echoed in the response and returned as the `Location` header when supplied.
 
 ### Sign in
 

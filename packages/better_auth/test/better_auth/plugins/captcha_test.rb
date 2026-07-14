@@ -137,6 +137,81 @@ class BetterAuthPluginsCaptchaTest < Minitest::Test
     assert_equal "Captcha verification failed", error.fetch("message")
   end
 
+  def test_google_recaptcha_binds_tokens_to_configured_action_and_hostname
+    auth = build_auth(
+      provider: "google-recaptcha",
+      expected_action: "sign-in",
+      allowed_hostnames: ["app.example.com"],
+      verifier: ->(_params) { {success: true, score: 0.9, action: "other", hostname: "app.example.com"} }
+    )
+    auth.api.sign_up_email(body: {email: "captcha-binding@example.com", password: "password123", name: "Captcha"})
+
+    status, = auth.call(rack_env(
+      "POST",
+      "/api/auth/sign-in/email",
+      body: {email: "captcha-binding@example.com", password: "password123"},
+      headers: {"HTTP_X_CAPTCHA_RESPONSE" => "token"}
+    ))
+
+    assert_equal 403, status
+  end
+
+  def test_empty_expected_action_disables_action_comparison
+    auth = build_auth(
+      provider: "google-recaptcha",
+      expected_action: "",
+      verifier: ->(_params) { {success: true, score: 0.9, action: "different-action"} }
+    )
+    auth.api.sign_up_email(body: {email: "captcha-empty-action@example.com", password: "password123", name: "Captcha"})
+
+    status, = auth.call(rack_env(
+      "POST",
+      "/api/auth/sign-in/email",
+      body: {email: "captcha-empty-action@example.com", password: "password123"},
+      headers: {"HTTP_X_CAPTCHA_RESPONSE" => "token"}
+    ))
+
+    assert_equal 200, status
+  end
+
+  def test_google_recaptcha_rejects_missing_hostname_and_accepts_matching_action_and_hostname
+    options = {provider: "google-recaptcha", expected_action: "sign-in", allowed_hostnames: ["app.example.com"]}
+    missing_host = build_auth(options.merge(verifier: ->(_params) { {success: true, score: 0.9, action: "sign-in"} }))
+    missing_host.api.sign_up_email(body: {email: "captcha-host@example.com", password: "password123", name: "Captcha"})
+    assert_equal 403, missing_host.call(rack_env("POST", "/api/auth/sign-in/email", body: {email: "captcha-host@example.com", password: "password123"}, headers: {"HTTP_X_CAPTCHA_RESPONSE" => "token"})).first
+
+    matching = build_auth(options.merge(verifier: ->(_params) { {success: true, score: 0.9, action: "sign-in", hostname: "app.example.com"} }))
+    matching.api.sign_up_email(body: {email: "captcha-host-ok@example.com", password: "password123", name: "Captcha"})
+    assert_equal 200, matching.call(rack_env("POST", "/api/auth/sign-in/email", body: {email: "captcha-host-ok@example.com", password: "password123"}, headers: {"HTTP_X_CAPTCHA_RESPONSE" => "token"})).first
+  end
+
+  def test_captcha_timeout_fails_closed_without_waiting
+    auth = build_auth(provider: "cloudflare-turnstile", verifier: ->(_params) { {success: true} })
+    auth.api.sign_up_email(body: {email: "captcha-timeout@example.com", password: "password123", name: "Captcha"})
+
+    Timeout.stub(:timeout, ->(_seconds, &_block) { raise Timeout::Error }) do
+      assert_equal 500, auth.call(rack_env("POST", "/api/auth/sign-in/email", body: {email: "captcha-timeout@example.com", password: "password123"}, headers: {"HTTP_X_CAPTCHA_RESPONSE" => "token"})).first
+    end
+  end
+
+  def test_email_otp_is_excluded_by_default_and_can_be_explicitly_protected
+    options = {additional_plugins: [BetterAuth::Plugins.email_otp]}
+    default_auth = build_auth(options.merge(provider: "cloudflare-turnstile", verifier: ->(_params) { {success: true} }))
+    default_status, _default_headers, default_body = default_auth.call(rack_env("POST", "/api/auth/sign-in/email-otp", body: {}))
+    assert_equal 400, default_status
+    refute_equal "MISSING_RESPONSE", JSON.parse(default_body.join).fetch("code")
+
+    protected_auth = build_auth(
+      provider: "cloudflare-turnstile",
+      endpoints: ["/sign-in/email-otp"],
+      additional_plugins: [BetterAuth::Plugins.email_otp],
+      verifier: ->(_params) { {success: true} }
+    )
+    protected_status, _protected_headers, protected_body = protected_auth.call(rack_env("POST", "/api/auth/sign-in/email-otp", body: {}))
+    assert_equal 400, protected_status
+    assert_equal "MISSING_RESPONSE", JSON.parse(protected_body.join).fetch("code")
+  end
+
   def test_hcaptcha_and_captchafox_include_site_key_and_expected_remote_ip_key
     hcaptcha_seen = nil
     hcaptcha = build_auth(provider: "hcaptcha", site_key: "site", verifier: ->(params) {
@@ -306,11 +381,13 @@ class BetterAuthPluginsCaptchaTest < Minitest::Test
           secret_key: options.fetch(:secret_key, "secret"),
           site_key: options[:site_key],
           min_score: options[:min_score],
+          expected_action: options[:expected_action],
+          allowed_hostnames: options[:allowed_hostnames],
           endpoints: options[:endpoints],
           site_verify_url_override: options[:site_verify_url_override] || "https://captcha.test/siteverify",
           verifier: options.fetch(:verifier)
         )
-      ]
+      ] + Array(options[:additional_plugins])
     )
   end
 

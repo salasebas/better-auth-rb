@@ -73,10 +73,12 @@ module BetterAuth
                 "Signed in",
                 OpenAPI.object_schema(
                   {
+                    redirect: {type: "boolean"},
                     token: {type: "string"},
+                    url: {type: ["string", "null"]},
                     user: {type: "object", "$ref": "#/components/schemas/User"}
                   },
-                  required: ["token", "user"]
+                  required: ["redirect", "token", "user"]
                 )
               )
             }
@@ -94,12 +96,12 @@ module BetterAuth
           raise APIError.new("UNAUTHORIZED", message: USERNAME_ERROR_CODES["INVALID_USERNAME_OR_PASSWORD"])
         end
 
-        username = username_for_validation(raw_username, config)
+        username = username_for_sign_in_validation(raw_username, config)
         validate_username!(username, config, status: "UNPROCESSABLE_ENTITY")
 
         user = ctx.context.adapter.find_one(
           model: "user",
-          where: [{field: "username", value: normalize_username(username, config)}]
+          where: [{field: "username", value: normalize_username(raw_username, config)}]
         )
         unless user
           Routes.hash_password(ctx, password)
@@ -135,8 +137,11 @@ module BetterAuth
         raise APIError.new("INTERNAL_SERVER_ERROR", message: BASE_ERROR_CODES["FAILED_TO_CREATE_SESSION"]) unless session
 
         Cookies.set_session_cookie(ctx, {session: session, user: user}, dont_remember_me)
+        ctx.set_header("location", callback_url) if callback_url
         ctx.json({
+          redirect: !callback_url.nil?,
           token: session["token"],
+          url: callback_url,
           user: Schema.parse_output(ctx.context.options, "user", user)
         })
       end
@@ -208,12 +213,36 @@ module BetterAuth
     end
 
     def username_database_hooks(config)
-      before_hook = lambda do |user, _context|
+      before_hook = lambda do |user, endpoint_context|
         data = user.dup
-        if data["username"].is_a?(String) && !data["username"].empty?
-          data["username"] = normalize_username(data["username"], config)
+        raw_username = data["username"]
+        raw_display_username = data["displayUsername"]
+        if raw_username.is_a?(String) && !raw_username.empty?
+          unless endpoint_context && username_mutation_path?(endpoint_context.path)
+            username = username_for_validation(raw_username, config)
+            validate_username!(username, config, status: "BAD_REQUEST")
+            adapter = endpoint_context&.context&.adapter
+            if adapter
+              existing = adapter.find_one(model: "user", where: [{field: "username", value: normalize_username(username, config)}])
+              current_user_id = endpoint_context&.context&.current_session&.dig(:user, "id")
+              if existing && existing["id"] != current_user_id
+                raise APIError.new("BAD_REQUEST", code: "USERNAME_IS_ALREADY_TAKEN", message: USERNAME_ERROR_CODES["USERNAME_IS_ALREADY_TAKEN"])
+              end
+            end
+          end
+          data["username"] = normalize_username(raw_username, config)
+          data["displayUsername"] = raw_username unless raw_display_username.is_a?(String) && !raw_display_username.empty?
         end
         if data["displayUsername"].is_a?(String) && !data["displayUsername"].empty?
+          display_username = if validation_order(config, :display_username) == "post-normalization"
+            normalize_display_username(data["displayUsername"], config)
+          else
+            data["displayUsername"]
+          end
+          validator = config[:display_username_validator]
+          unless !validator.respond_to?(:call) || validator.call(display_username)
+            raise APIError.new("BAD_REQUEST", code: "INVALID_DISPLAY_USERNAME", message: USERNAME_ERROR_CODES["INVALID_DISPLAY_USERNAME"])
+          end
           data["displayUsername"] = normalize_display_username(data["displayUsername"], config)
         end
         {data: data}
@@ -230,6 +259,15 @@ module BetterAuth
     def validate_username_mutation!(ctx, config)
       body = normalize_hash(ctx.body)
       raw_username = body.key?(:username) ? body[:username] : nil
+      if raw_username.nil? && present?(body[:display_username])
+        begin
+          validate_username!(username_for_validation(body[:display_username], config), config, status: "BAD_REQUEST")
+          body[:username] = body[:display_username]
+          raw_username = body[:username]
+        rescue APIError
+          # A display-only value that cannot be a username remains display-only.
+        end
+      end
       username = if raw_username.is_a?(String) && validation_order(config, :username) == "post-normalization"
         normalize_username(raw_username, config)
       else
@@ -243,11 +281,11 @@ module BetterAuth
         same_user = existing && current && existing["id"] == current[:session]["userId"]
 
         if existing && ctx.path == "/sign-up/email"
-          raise APIError.new("UNPROCESSABLE_ENTITY", message: USERNAME_ERROR_CODES["USERNAME_IS_ALREADY_TAKEN"])
+          raise APIError.new("UNPROCESSABLE_ENTITY", code: "USERNAME_IS_ALREADY_TAKEN", message: USERNAME_ERROR_CODES["USERNAME_IS_ALREADY_TAKEN"])
         end
 
         if existing && ctx.path == "/update-user" && !same_user
-          raise APIError.new("BAD_REQUEST", message: USERNAME_ERROR_CODES["USERNAME_IS_ALREADY_TAKEN"])
+          raise APIError.new("BAD_REQUEST", code: "USERNAME_IS_ALREADY_TAKEN", message: USERNAME_ERROR_CODES["USERNAME_IS_ALREADY_TAKEN"])
         end
       end
 
@@ -261,35 +299,39 @@ module BetterAuth
       if display_username.is_a?(String)
         validator = config[:display_username_validator]
         unless !validator.respond_to?(:call) || validator.call(display_username)
-          raise APIError.new("BAD_REQUEST", message: USERNAME_ERROR_CODES["INVALID_DISPLAY_USERNAME"])
+          raise APIError.new("BAD_REQUEST", code: "INVALID_DISPLAY_USERNAME", message: USERNAME_ERROR_CODES["INVALID_DISPLAY_USERNAME"])
         end
       end
+      ctx.body = body
       nil
     end
 
     def mirror_username_fields!(ctx)
       body = normalize_hash(ctx.body)
       body[:display_username] = body[:username] if present?(body[:username]) && !present?(body[:display_username])
-      body[:username] = body[:display_username] if present?(body[:display_username]) && !present?(body[:username])
       ctx.body = body
       nil
     end
 
     def validate_username!(username, config, status:)
       if username.length < min_username_length(config)
-        raise APIError.new(status, message: USERNAME_ERROR_CODES["USERNAME_TOO_SHORT"])
+        raise APIError.new(status, code: "USERNAME_TOO_SHORT", message: USERNAME_ERROR_CODES["USERNAME_TOO_SHORT"])
       end
 
       if username.length > max_username_length(config)
-        raise APIError.new(status, message: USERNAME_ERROR_CODES["USERNAME_TOO_LONG"])
+        raise APIError.new(status, code: "USERNAME_TOO_LONG", message: USERNAME_ERROR_CODES["USERNAME_TOO_LONG"])
       end
 
       validator = config[:username_validator]
       valid = validator.respond_to?(:call) ? validator.call(username) : default_username_valid?(username)
-      raise APIError.new(status, message: USERNAME_ERROR_CODES["INVALID_USERNAME"]) unless valid
+      raise APIError.new(status, code: "INVALID_USERNAME", message: USERNAME_ERROR_CODES["INVALID_USERNAME"]) unless valid
     end
 
     def username_for_validation(username, config)
+      (validation_order(config, :username) == "post-normalization") ? normalize_username(username, config) : username
+    end
+
+    def username_for_sign_in_validation(username, config)
       (validation_order(config, :username) == "pre-normalization") ? normalize_username(username, config) : username
     end
 

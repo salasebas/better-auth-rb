@@ -326,6 +326,18 @@ class BetterAuthRoutesSessionTest < Minitest::Test
     assert_equal [auth.api.get_session(headers: {"cookie" => cookie})[:session]["userId"]], result.map { |session| session["userId"] }.uniq
   end
 
+  def test_list_sessions_requires_a_fresh_authoritative_session
+    auth = build_auth(session: {fresh_age: 1, expires_in: 3600, update_age: 3600})
+    cookie = sign_up_cookie(auth, email: "stale-list@example.com")
+    session = auth.api.get_session(headers: {"cookie" => cookie})[:session]
+    auth.context.internal_adapter.update_session(session["token"], "createdAt" => Time.now - 120, "updatedAt" => Time.now - 120)
+
+    error = assert_raises(BetterAuth::APIError) { auth.api.list_sessions(headers: {"cookie" => cookie}) }
+
+    assert_equal 403, error.status_code
+    assert_equal "SESSION_NOT_FRESH", error.code
+  end
+
   def test_update_session_returns_updated_session_payload
     auth = build_auth(
       plugins: [

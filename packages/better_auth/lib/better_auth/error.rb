@@ -55,6 +55,7 @@ module BetterAuth
     "PASSWORD_ALREADY_SET" => "User already has a password set",
     "RESET_PASSWORD_DISABLED" => "Reset password isn't enabled",
     "EMAIL_PASSWORD_DISABLED" => "Email and password is not enabled",
-    "EMAIL_PASSWORD_SIGN_UP_DISABLED" => "Email and password sign up is not enabled"
+    "EMAIL_PASSWORD_SIGN_UP_DISABLED" => "Email and password sign up is not enabled",
+    "CHANGE_EMAIL_DISABLED" => "Change email is disabled"
   }.freeze
 end

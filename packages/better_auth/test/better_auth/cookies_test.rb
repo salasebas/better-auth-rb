@@ -93,10 +93,42 @@ class BetterAuthCookiesTest < Minitest::Test
   end
 
   def test_parse_cookies_decodes_percent_encoded_values_without_rejecting_legacy_raw_values
-    cookies = BetterAuth::Cookies.parse_cookies("json=%7B%22prompt%22%3A%22login%3Bstrict%22%7D; legacy=raw%ZZvalue")
+    cookies = BetterAuth::Cookies.parse_cookies("json=%7B%22prompt%22%3A%22login%3Bstrict%22%7D; legacy=raw%ZZvalue; byte=%FF; pair=%C3%28")
 
     assert_equal "{\"prompt\":\"login;strict\"}", cookies.fetch("json")
     assert_equal "raw%ZZvalue", cookies.fetch("legacy")
+    assert_equal "%FF", cookies.fetch("byte")
+    assert_equal "%C3%28", cookies.fetch("pair")
+  end
+
+  def test_set_request_cookie_matches_upstream_parse_mutate_serialize_semantics
+    assert_equal "better-auth.session_token=abc", BetterAuth::Cookies.set_request_cookie("", "better-auth.session_token", "abc")
+    assert_equal(
+      "preference=dark; locale=en; better-auth.session_token=abc",
+      BetterAuth::Cookies.set_request_cookie("preference=dark; locale=en", "better-auth.session_token", "abc")
+    )
+    assert_equal(
+      "better-auth.session_token=fresh; locale=en",
+      BetterAuth::Cookies.set_request_cookie("better-auth.session_token=stale; locale=en", "better-auth.session_token", "fresh")
+    )
+    assert_equal(
+      "valid=1; locale=en; better-auth.session_token=abc",
+      BetterAuth::Cookies.set_request_cookie("valid=1; ; =orphan; locale=en", "better-auth.session_token", "abc")
+    )
+    assert_equal "locale=en; session=foo%3Bbar%3Dbaz", BetterAuth::Cookies.set_request_cookie("locale=en", "session", "foo;bar=baz")
+    assert_equal "token=%22abc%22", BetterAuth::Cookies.set_request_cookie("", "token", '"abc"')
+    assert_equal "x=%25C3%2528", BetterAuth::Cookies.set_request_cookie("x=%C3%28", "x", "%C3%28")
+  end
+
+  def test_set_request_cookie_validates_names_values_and_only_trims_ows
+    header = "\tquoted = \"hello%20world\"\t; bad name=value; bad-value=has\\slash; ctl=bad\rvalue; plus=a+b"
+
+    assert_equal(
+      "quoted=hello%20world; plus=a%2Bb; fresh=value",
+      BetterAuth::Cookies.set_request_cookie(header, "fresh", "value")
+    )
+    assert_equal "valid=1", BetterAuth::Cookies.set_request_cookie("valid=1", "bad name", "ignored")
+    assert_equal "valid=1; token=line%0Abreak", BetterAuth::Cookies.set_request_cookie("valid=1", "token", "line\nbreak")
   end
 
   def test_cookie_cache_compact_strategy_round_trips_and_validates_version
@@ -133,7 +165,7 @@ class BetterAuthCookiesTest < Minitest::Test
     )
     assert_equal 200, status
 
-    cookie = headers.fetch("set-cookie").lines.map { |line| line.split(";").first }.join("; ")
+    cookie = headers.fetch("set-cookie").to_s.lines(chomp: true).map { |line| line.split(";").first }.join("; ")
     session = auth.api.get_session(headers: {"cookie" => cookie})
     user_id = session.fetch(:user).fetch("id")
     auth.context.adapter.update(model: "user", where: [{field: "id", value: user_id}], update: {name: "Database"})
@@ -179,7 +211,7 @@ class BetterAuthCookiesTest < Minitest::Test
     }, false)
     BetterAuth::Cookies.set_account_cookie(old_ctx, {"providerId" => "github", "accountId" => "account-1"})
 
-    header = old_ctx.response_headers.fetch("set-cookie").lines.map { |line| line.split(";").first }.join("; ")
+    header = old_ctx.response_headers.fetch("set-cookie").to_s.lines(chomp: true).map { |line| line.split(";").first }.join("; ")
     new_auth = BetterAuth.auth(
       secret: "legacy-secret-that-is-long-enough-for-cookies",
       secrets: [
@@ -252,7 +284,7 @@ class BetterAuthCookiesTest < Minitest::Test
     assert_operator cookies.length, :>, 1
     store.set_cookies(cookies)
 
-    header = ctx.response_headers.fetch("set-cookie").lines.map { |line| line.split(";").first }.join("; ")
+    header = ctx.response_headers.fetch("set-cookie").to_s.lines(chomp: true).map { |line| line.split(";").first }.join("; ")
     request_ctx = endpoint_context(auth, cookie: header)
     assert_equal "x" * 8_000, BetterAuth::SessionStore.get_chunked_cookie(request_ctx, "better-auth.session_data")
   end
@@ -377,7 +409,7 @@ class BetterAuthCookiesTest < Minitest::Test
     ctx.set_cookie("better-auth.session_token", "token", path: "/")
     ctx.set_cookie("better-auth.session_data", "cache", path: "/")
 
-    lines = ctx.response_headers.fetch("set-cookie").lines.map { |line| line.split(";").first }
+    lines = ctx.response_headers.fetch("set-cookie").to_s.lines(chomp: true).map { |line| line.split(";").first }
 
     assert_equal ["better-auth.session_token=token", "better-auth.session_data=cache"], lines
   end
@@ -475,7 +507,7 @@ class BetterAuthCookiesTest < Minitest::Test
       session: {"id" => "session-1", "token" => "token-1", "userId" => "user-1", "note" => "x" * 8_000},
       user: {"id" => "user-1", "email" => "chunked@example.com"}
     }, false)
-    chunked_header = large_ctx.response_headers.fetch("set-cookie").lines.map { |line| line.split(";").first }.join("; ")
+    chunked_header = large_ctx.response_headers.fetch("set-cookie").to_s.lines(chomp: true).map { |line| line.split(";").first }.join("; ")
     refute_includes chunked_header, "better-auth.session_data="
 
     request_ctx = endpoint_context(auth, cookie: chunked_header)
@@ -504,7 +536,7 @@ class BetterAuthCookiesTest < Minitest::Test
     set_cookie = ctx.response_headers.fetch("set-cookie")
     assert set_cookie.lines.count { |line| line.start_with?("better-auth.account_data.") } > 1
 
-    header = set_cookie.lines.map { |line| line.split(";").first }.join("; ")
+    header = set_cookie.to_s.lines(chomp: true).map { |line| line.split(";").first }.join("; ")
     request_ctx = endpoint_context(auth, cookie: header)
     account = BetterAuth::Cookies.get_account_cookie(request_ctx)
 

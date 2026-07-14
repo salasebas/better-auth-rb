@@ -159,6 +159,19 @@ class BetterAuthRoutesUserTest < Minitest::Test
     assert_equal "new-email@example.com", auth.context.internal_adapter.find_user_by_email("new-email@example.com")[:user]["email"]
   end
 
+  def test_change_email_disabled_has_precise_error_code_and_message
+    auth = build_auth
+    cookie = sign_up_cookie(auth, email: "change-email-disabled@example.com", password: "password123")
+
+    error = assert_raises(BetterAuth::APIError) do
+      auth.api.change_email(headers: {"cookie" => cookie}, body: {newEmail: "new@example.com"})
+    end
+
+    assert_equal 400, error.status_code
+    assert_equal "CHANGE_EMAIL_DISABLED", error.code
+    assert_equal BetterAuth::BASE_ERROR_CODES.fetch("CHANGE_EMAIL_DISABLED"), error.message
+  end
+
   def test_change_email_accepts_snake_case_new_email_alias
     auth = build_auth(user: {change_email: {enabled: true, update_email_without_verification: true}})
     cookie = sign_up_cookie(auth, email: "old-snake-email@example.com", password: "password123")

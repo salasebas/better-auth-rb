@@ -132,6 +132,28 @@ class BetterAuthPluginsBearerTest < Minitest::Test
     assert_equal "bearer-cookie@example.com", session[:user]["email"]
   end
 
+  def test_bearer_replaces_an_existing_session_cookie_and_encodes_the_manual_value
+    auth = build_auth(plugins: [BetterAuth::Plugins.bearer])
+    signed_token = signed_session_token(auth, token: "session/token with spaces")
+    cookie_name = auth.context.auth_cookies[:session_token].name
+    ctx = BetterAuth::Endpoint::Context.new(
+      path: "/get-session",
+      method: "GET",
+      query: {},
+      body: {},
+      params: {},
+      headers: {"authorization" => "Bearer #{signed_token}", "cookie" => "other=keep; #{cookie_name}=stale"},
+      context: auth.context
+    )
+
+    result = BetterAuth::Plugins.apply_bearer_token(ctx, {})
+    cookie = result.fetch(:context).fetch(:headers).fetch("cookie")
+
+    assert_equal 1, cookie.scan(/#{Regexp.escape(cookie_name)}=/).length
+    assert_includes cookie, "other=keep"
+    assert_includes cookie, "session%2Ftoken%20with%20spaces"
+  end
+
   def test_bearer_does_not_expose_expired_session_cookie_as_auth_token
     auth = build_auth(plugins: [BetterAuth::Plugins.bearer])
     cookie_name = auth.context.auth_cookies[:session_token].name

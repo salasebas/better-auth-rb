@@ -2,6 +2,7 @@
 
 require "json"
 require "net/http"
+require "timeout"
 require "uri"
 
 module BetterAuth
@@ -22,6 +23,7 @@ module BetterAuth
       "/sign-in/email",
       "/request-password-reset"
     ].freeze
+    CAPTCHA_VERIFY_TIMEOUT_SECONDS = 10
 
     CAPTCHA_SITE_VERIFY_URLS = {
       "cloudflare-turnstile" => "https://challenges.cloudflare.com/turnstile/v0/siteverify",
@@ -46,7 +48,11 @@ module BetterAuth
 
     def captcha_on_request(request, context, config)
       endpoints = Array(config[:endpoints]).empty? ? CAPTCHA_DEFAULT_ENDPOINTS : Array(config[:endpoints])
-      return nil unless endpoints.any? { |endpoint| request.path_info.include?(endpoint.to_s) || request.url.include?(endpoint.to_s) }
+      path = request.path_info.to_s
+      email_otp_path = "/sign-in/email-otp"
+      email_otp_is_explicit = Array(config[:endpoints]).map(&:to_s).include?(email_otp_path)
+      return nil if path.include?(email_otp_path) && !email_otp_is_explicit
+      return nil unless endpoints.any? { |endpoint| path.include?(endpoint.to_s) }
 
       raise CAPTCHA_INTERNAL_ERROR_CODES["MISSING_SECRET_KEY"] if config[:secret_key].to_s.empty?
 
@@ -76,9 +82,13 @@ module BetterAuth
         min_score: config[:min_score],
         provider: provider
       }
-      return captcha_normalize_verifier_response(config[:verifier].call(captcha_verifier_params(params))) if config[:verifier].respond_to?(:call)
-
-      captcha_http_verify(params)
+      Timeout.timeout(CAPTCHA_VERIFY_TIMEOUT_SECONDS) do
+        if config[:verifier].respond_to?(:call)
+          captcha_normalize_verifier_response(config[:verifier].call(captcha_verifier_params(params)))
+        else
+          captcha_http_verify(params)
+        end
+      end
     end
 
     def captcha_verifier_params(params)
@@ -103,7 +113,7 @@ module BetterAuth
       else
         URI.encode_www_form(verifier[:payload])
       end
-      response = HTTPClient.request(uri, request)
+      response = HTTPClient.request(uri, request, open_timeout: CAPTCHA_VERIFY_TIMEOUT_SECONDS, read_timeout: CAPTCHA_VERIFY_TIMEOUT_SECONDS)
       raise CAPTCHA_INTERNAL_ERROR_CODES["SERVICE_UNAVAILABLE"] unless response.is_a?(Net::HTTPSuccess)
 
       JSON.parse(response.body.to_s)
@@ -127,7 +137,15 @@ module BetterAuth
       return false unless result && result["success"]
 
       if config[:provider].to_s == "google-recaptcha" && result.key?("score")
-        return result["score"].to_f >= (config[:min_score] || 0.5).to_f
+        return false if result["score"].to_f < (config[:min_score] || 0.5).to_f
+      end
+
+      if ["google-recaptcha", "cloudflare-turnstile"].include?(config[:provider].to_s)
+        expected_action = config[:expected_action].to_s
+        return false if !expected_action.empty? && result["action"] != expected_action
+
+        allowed_hostnames = Array(config[:allowed_hostnames]).map(&:to_s)
+        return false if allowed_hostnames.any? && !allowed_hostnames.include?(result["hostname"].to_s)
       end
 
       true

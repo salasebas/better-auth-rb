@@ -25,15 +25,17 @@ module BetterAuth
       "YOU_CANNOT_REMOVE_YOURSELF" => "You cannot remove yourself",
       "YOU_ARE_NOT_ALLOWED_TO_SET_NON_EXISTENT_VALUE" => "You are not allowed to set a non-existent role value",
       "YOU_CANNOT_IMPERSONATE_ADMINS" => "You cannot impersonate admins",
-      "INVALID_ROLE_TYPE" => "Invalid role type"
+      "INVALID_ROLE_TYPE" => "Invalid role type",
+      "YOU_ARE_NOT_ALLOWED_TO_SET_USERS_EMAIL" => "You are not allowed to update users email",
+      "PASSWORD_CANNOT_BE_UPDATED_VIA_UPDATE_USER" => "Password cannot be updated through update-user. Use the set-user-password endpoint instead"
     }.freeze
 
     ADMIN_DEFAULT_STATEMENTS = {
-      user: ["create", "list", "set-role", "ban", "impersonate", "impersonate-admins", "delete", "set-password", "get", "update"],
+      user: ["create", "list", "set-role", "ban", "impersonate", "impersonate-admins", "delete", "set-password", "set-email", "get", "update"],
       session: ["list", "revoke", "delete"]
     }.freeze
     ADMIN_DEFAULT_ROLE_STATEMENTS = {
-      user: ["create", "list", "set-role", "ban", "impersonate", "delete", "set-password", "get", "update"],
+      user: ["create", "list", "set-role", "ban", "impersonate", "delete", "set-password", "set-email", "get", "update"],
       session: ["list", "revoke", "delete"]
     }.freeze
 
@@ -158,6 +160,8 @@ module BetterAuth
         user_id = body[:user_id].to_s
         raise APIError.new("BAD_REQUEST", message: "userId is required") if user_id.empty?
         update = {role: admin_validate_roles!(body[:role], config)}
+        raise APIError.new("NOT_FOUND", code: "USER_NOT_FOUND", message: BASE_ERROR_CODES.fetch("USER_NOT_FOUND")) unless ctx.context.internal_adapter.find_user_by_id(user_id)
+
         user = ctx.context.internal_adapter.update_user(user_id, update)
         ctx.json({user: Schema.parse_output(ctx.context.options, "user", user || {})})
       end
@@ -189,7 +193,7 @@ module BetterAuth
         elsif query[:email]
           ctx.context.internal_adapter.find_user_by_email(query[:email])&.fetch(:user)
         end
-        raise APIError.new("NOT_FOUND", message: BASE_ERROR_CODES.fetch("USER_NOT_FOUND")) unless user
+        raise APIError.new("NOT_FOUND", code: "USER_NOT_FOUND", message: BASE_ERROR_CODES.fetch("USER_NOT_FOUND")) unless user
         ctx.json(Schema.parse_output(ctx.context.options, "user", user))
       end
     end
@@ -212,10 +216,10 @@ module BetterAuth
           required: ["email", "name"]
         )
       ) do |ctx|
-        session = Routes.current_session(ctx, allow_nil: true)
+        session = Routes.current_session(ctx, allow_nil: true, sensitive: true)
         if session
           unless admin_permission?(session[:user], session[:user]["role"], {user: ["create"]}, config)
-            raise APIError.new("FORBIDDEN", message: ADMIN_ERROR_CODES.fetch("YOU_ARE_NOT_ALLOWED_TO_CREATE_USERS"))
+            raise APIError.new("FORBIDDEN", code: "YOU_ARE_NOT_ALLOWED_TO_CREATE_USERS", message: ADMIN_ERROR_CODES.fetch("YOU_ARE_NOT_ALLOWED_TO_CREATE_USERS"))
           end
         elsif !ctx.headers.empty?
           raise APIError.new("UNAUTHORIZED")
@@ -223,18 +227,25 @@ module BetterAuth
 
         body = normalize_hash(ctx.body)
         email = body[:email].to_s.downcase
-        raise APIError.new("BAD_REQUEST", message: BASE_ERROR_CODES.fetch("INVALID_EMAIL")) unless Routes::EMAIL_PATTERN.match?(email)
+        raise APIError.new("BAD_REQUEST", code: "INVALID_EMAIL", message: BASE_ERROR_CODES.fetch("INVALID_EMAIL")) unless Routes::EMAIL_PATTERN.match?(email)
 
         if ctx.context.internal_adapter.find_user_by_email(email)
-          raise APIError.new("BAD_REQUEST", message: ADMIN_ERROR_CODES.fetch("USER_ALREADY_EXISTS_USE_ANOTHER_EMAIL"))
+          raise APIError.new("BAD_REQUEST", code: "USER_ALREADY_EXISTS_USE_ANOTHER_EMAIL", message: ADMIN_ERROR_CODES.fetch("USER_ALREADY_EXISTS_USE_ANOTHER_EMAIL"))
         end
         data = normalize_hash(body[:data]).each_with_object({}) { |(key, value), result| result[Schema.storage_key(key)] = value }
+        requested_role = body.key?(:role) ? body[:role] : data.delete("role")
+        if !requested_role.nil? && session
+          admin_require_permission!(ctx, config, {user: ["set-role"]}, ADMIN_ERROR_CODES.fetch("YOU_ARE_NOT_ALLOWED_TO_CHANGE_USERS_ROLE"))
+        end
+        if session && ["banned", "banReason", "banExpires"].any? { |field| data.key?(field) }
+          admin_require_permission!(ctx, config, {user: ["ban"]}, ADMIN_ERROR_CODES.fetch("YOU_ARE_NOT_ALLOWED_TO_BAN_USERS"))
+        end
         user = ctx.context.internal_adapter.create_user(data.merge(
           name: body[:name].to_s,
           email: email,
-          role: admin_validate_roles!(body[:role] || config[:default_role], config)
+          role: requested_role.nil? ? config[:default_role] : admin_validate_roles!(requested_role, config)
         ).merge(body.key?(:image) ? {image: body[:image]} : {}), context: ctx)
-        raise APIError.new("INTERNAL_SERVER_ERROR", message: ADMIN_ERROR_CODES.fetch("FAILED_TO_CREATE_USER")) unless user
+        raise APIError.new("INTERNAL_SERVER_ERROR", code: "FAILED_TO_CREATE_USER", message: ADMIN_ERROR_CODES.fetch("FAILED_TO_CREATE_USER")) unless user
 
         if body[:password].to_s != ""
           ctx.context.internal_adapter.link_account(userId: user["id"], providerId: "credential", accountId: user["id"], password: Routes.hash_password(ctx, body[:password]))
@@ -269,12 +280,38 @@ module BetterAuth
         admin_require_permission!(ctx, config, {user: ["update"]}, ADMIN_ERROR_CODES.fetch("YOU_ARE_NOT_ALLOWED_TO_UPDATE_USERS"))
         body = normalize_hash(ctx.body)
         data = normalize_hash(body[:data] || body).except(:user_id, :data)
-        raise APIError.new("BAD_REQUEST", message: ADMIN_ERROR_CODES.fetch("NO_DATA_TO_UPDATE")) if data.empty?
+        raise APIError.new("BAD_REQUEST", code: "NO_DATA_TO_UPDATE", message: ADMIN_ERROR_CODES.fetch("NO_DATA_TO_UPDATE")) if data.empty?
+        if data.key?(:password)
+          raise APIError.new("BAD_REQUEST", code: "PASSWORD_CANNOT_BE_UPDATED_VIA_UPDATE_USER", message: ADMIN_ERROR_CODES.fetch("PASSWORD_CANNOT_BE_UPDATED_VIA_UPDATE_USER"))
+        end
         if data.key?(:role)
           admin_require_permission!(ctx, config, {user: ["set-role"]}, ADMIN_ERROR_CODES.fetch("YOU_ARE_NOT_ALLOWED_TO_CHANGE_USERS_ROLE"))
           data[:role] = admin_validate_roles!(data[:role], config)
         end
-        user = ctx.context.internal_adapter.update_user(body[:user_id], data)
+        if [:banned, :ban_reason, :ban_expires].any? { |field| data.key?(field) }
+          session = admin_require_permission!(ctx, config, {user: ["ban"]}, ADMIN_ERROR_CODES.fetch("YOU_ARE_NOT_ALLOWED_TO_BAN_USERS"))
+          if data[:banned] == true && body[:user_id] == session[:user]["id"]
+            raise APIError.new("BAD_REQUEST", code: "YOU_CANNOT_BAN_YOURSELF", message: ADMIN_ERROR_CODES.fetch("YOU_CANNOT_BAN_YOURSELF"))
+          end
+        end
+        if data.key?(:email) || data.key?(:email_verified)
+          admin_require_permission!(ctx, config, {user: ["set-email"]}, ADMIN_ERROR_CODES.fetch("YOU_ARE_NOT_ALLOWED_TO_SET_USERS_EMAIL"))
+          if data.key?(:email)
+            email = data[:email].to_s.downcase
+            raise APIError.new("BAD_REQUEST", code: "INVALID_EMAIL", message: BASE_ERROR_CODES.fetch("INVALID_EMAIL")) unless Routes::EMAIL_PATTERN.match?(email)
+
+            existing = ctx.context.internal_adapter.find_user_by_email(email)
+            if existing && existing[:user]["id"] != body[:user_id]
+              raise APIError.new("BAD_REQUEST", code: "USER_ALREADY_EXISTS_USE_ANOTHER_EMAIL", message: ADMIN_ERROR_CODES.fetch("USER_ALREADY_EXISTS_USE_ANOTHER_EMAIL"))
+            end
+            data[:email] = email
+          end
+        end
+        raise APIError.new("NOT_FOUND", code: "USER_NOT_FOUND", message: BASE_ERROR_CODES.fetch("USER_NOT_FOUND")) unless ctx.context.internal_adapter.find_user_by_id(body[:user_id])
+
+        stored_data = data.each_with_object({}) { |(key, value), result| result[Schema.storage_key(key)] = value }
+        user = ctx.context.internal_adapter.update_user(body[:user_id], stored_data)
+        ctx.context.internal_adapter.delete_user_sessions(body[:user_id]) if data[:banned] == true
         ctx.json(Schema.parse_output(ctx.context.options, "user", user))
       end
     end
@@ -357,8 +394,8 @@ module BetterAuth
         session = admin_require_permission!(ctx, config, {user: ["ban"]}, ADMIN_ERROR_CODES.fetch("YOU_ARE_NOT_ALLOWED_TO_BAN_USERS"))
         body = normalize_hash(ctx.body)
         found = ctx.context.internal_adapter.find_user_by_id(body[:user_id])
-        raise APIError.new("NOT_FOUND", message: BASE_ERROR_CODES.fetch("USER_NOT_FOUND")) unless found
-        raise APIError.new("BAD_REQUEST", message: ADMIN_ERROR_CODES.fetch("YOU_CANNOT_BAN_YOURSELF")) if body[:user_id] == session[:user]["id"]
+        raise APIError.new("NOT_FOUND", code: "USER_NOT_FOUND", message: BASE_ERROR_CODES.fetch("USER_NOT_FOUND")) unless found
+        raise APIError.new("BAD_REQUEST", code: "YOU_CANNOT_BAN_YOURSELF", message: ADMIN_ERROR_CODES.fetch("YOU_CANNOT_BAN_YOURSELF")) if body[:user_id] == session[:user]["id"]
         expires_in = body[:ban_expires_in] || config[:default_ban_expires_in]
         user = ctx.context.internal_adapter.update_user(body[:user_id], banned: true, banReason: body[:ban_reason] || config[:default_ban_reason] || "No reason", banExpires: expires_in ? Time.now + expires_in.to_i : nil, updatedAt: Time.now)
         ctx.context.internal_adapter.delete_user_sessions(body[:user_id])
@@ -381,7 +418,10 @@ module BetterAuth
         )
       ) do |ctx|
         admin_require_permission!(ctx, config, {user: ["ban"]}, ADMIN_ERROR_CODES.fetch("YOU_ARE_NOT_ALLOWED_TO_BAN_USERS"))
-        user = ctx.context.internal_adapter.update_user(normalize_hash(ctx.body)[:user_id], banned: false, banReason: nil, banExpires: nil, updatedAt: Time.now)
+        user_id = normalize_hash(ctx.body)[:user_id]
+        raise APIError.new("NOT_FOUND", code: "USER_NOT_FOUND", message: BASE_ERROR_CODES.fetch("USER_NOT_FOUND")) unless ctx.context.internal_adapter.find_user_by_id(user_id)
+
+        user = ctx.context.internal_adapter.update_user(user_id, banned: false, banReason: nil, banExpires: nil, updatedAt: Time.now)
         ctx.json({user: Schema.parse_output(ctx.context.options, "user", user)})
       end
     end
@@ -411,11 +451,11 @@ module BetterAuth
         session = admin_require_permission!(ctx, config, {user: ["impersonate"]}, ADMIN_ERROR_CODES.fetch("YOU_ARE_NOT_ALLOWED_TO_IMPERSONATE_USERS"))
         body = normalize_hash(ctx.body)
         target = ctx.context.internal_adapter.find_user_by_id(body[:user_id])
-        raise APIError.new("NOT_FOUND", message: "User not found") unless target
+        raise APIError.new("NOT_FOUND", code: "USER_NOT_FOUND", message: BASE_ERROR_CODES.fetch("USER_NOT_FOUND")) unless target
         can_impersonate_admins = config[:allow_impersonating_admins] ||
           admin_permission?(session[:user], session[:user]["role"], {user: ["impersonate-admins"]}, config)
         if !can_impersonate_admins && admin_user?(target, config)
-          raise APIError.new("FORBIDDEN", message: ADMIN_ERROR_CODES.fetch("YOU_CANNOT_IMPERSONATE_ADMINS"))
+          raise APIError.new("FORBIDDEN", code: "YOU_CANNOT_IMPERSONATE_ADMINS", message: ADMIN_ERROR_CODES.fetch("YOU_CANNOT_IMPERSONATE_ADMINS"))
         end
         impersonated = ctx.context.internal_adapter.create_session(target["id"], true, {impersonatedBy: session[:user]["id"], expiresAt: Time.now + config[:impersonation_session_duration].to_i}, true, ctx)
         raise APIError.new("INTERNAL_SERVER_ERROR", message: ADMIN_ERROR_CODES.fetch("FAILED_TO_CREATE_USER")) unless impersonated
@@ -553,8 +593,8 @@ module BetterAuth
       ) do |ctx|
         session = admin_require_permission!(ctx, config, {user: ["delete"]}, ADMIN_ERROR_CODES.fetch("YOU_ARE_NOT_ALLOWED_TO_DELETE_USERS"))
         user_id = normalize_hash(ctx.body)[:user_id]
-        raise APIError.new("BAD_REQUEST", message: ADMIN_ERROR_CODES.fetch("YOU_CANNOT_REMOVE_YOURSELF")) if user_id == session[:user]["id"]
-        raise APIError.new("NOT_FOUND", message: BASE_ERROR_CODES.fetch("USER_NOT_FOUND")) unless ctx.context.internal_adapter.find_user_by_id(user_id)
+        raise APIError.new("BAD_REQUEST", code: "YOU_CANNOT_REMOVE_YOURSELF", message: ADMIN_ERROR_CODES.fetch("YOU_CANNOT_REMOVE_YOURSELF")) if user_id == session[:user]["id"]
+        raise APIError.new("NOT_FOUND", code: "USER_NOT_FOUND", message: BASE_ERROR_CODES.fetch("USER_NOT_FOUND")) unless ctx.context.internal_adapter.find_user_by_id(user_id)
         ctx.context.internal_adapter.delete_user(user_id)
         ctx.json({success: true})
       end
@@ -590,9 +630,17 @@ module BetterAuth
         raise APIError.new("BAD_REQUEST", message: "userId is required") if user_id.empty?
         min = ctx.context.options.email_and_password[:min_password_length]
         max = ctx.context.options.email_and_password[:max_password_length]
-        raise APIError.new("BAD_REQUEST", message: BASE_ERROR_CODES.fetch("PASSWORD_TOO_SHORT")) if password.length < min
-        raise APIError.new("BAD_REQUEST", message: BASE_ERROR_CODES.fetch("PASSWORD_TOO_LONG")) if password.length > max
-        ctx.context.internal_adapter.update_password(user_id, Routes.hash_password(ctx, password))
+        raise APIError.new("BAD_REQUEST", code: "PASSWORD_TOO_SHORT", message: BASE_ERROR_CODES.fetch("PASSWORD_TOO_SHORT")) if password.length < min
+        raise APIError.new("BAD_REQUEST", code: "PASSWORD_TOO_LONG", message: BASE_ERROR_CODES.fetch("PASSWORD_TOO_LONG")) if password.length > max
+        raise APIError.new("NOT_FOUND", code: "USER_NOT_FOUND", message: BASE_ERROR_CODES.fetch("USER_NOT_FOUND")) unless ctx.context.internal_adapter.find_user_by_id(user_id)
+
+        hashed_password = Routes.hash_password(ctx, password)
+        credential_account = ctx.context.internal_adapter.find_accounts(user_id).find { |account| account["providerId"] == "credential" }
+        if credential_account
+          ctx.context.internal_adapter.update_password(user_id, hashed_password)
+        else
+          ctx.context.internal_adapter.create_account(userId: user_id, providerId: "credential", accountId: user_id, password: hashed_password)
+        end
         ctx.json({status: true})
       end
     end
@@ -631,7 +679,7 @@ module BetterAuth
           }
         }
       ) do |ctx|
-        session = Routes.current_session(ctx, allow_nil: true)
+        session = Routes.current_session(ctx, allow_nil: true, sensitive: true)
         body = normalize_hash(ctx.body)
         permissions = body[:permissions] || body[:permission]
         unless permissions
@@ -723,7 +771,10 @@ module BetterAuth
       session = Routes.current_session(ctx, sensitive: true)
       return session if admin_permission?(session[:user], session[:user]["role"], permissions, config)
 
-      raise APIError.new("FORBIDDEN", message: message)
+      code = ADMIN_ERROR_CODES.key(message)
+      raise Error, "Unknown admin permission error: #{message}" unless code
+
+      raise APIError.new("FORBIDDEN", code: code, message: message)
     end
 
     def admin_permission?(user, role_string, permissions, config)
@@ -750,7 +801,7 @@ module BetterAuth
 
     def admin_validate_roles!(roles, config)
       unless Array(roles).all? { |role| role.is_a?(String) || role.is_a?(Symbol) }
-        raise APIError.new("BAD_REQUEST", message: ADMIN_ERROR_CODES.fetch("INVALID_ROLE_TYPE"))
+        raise APIError.new("BAD_REQUEST", code: "INVALID_ROLE_TYPE", message: ADMIN_ERROR_CODES.fetch("INVALID_ROLE_TYPE"))
       end
 
       parsed = admin_parse_roles(roles)
@@ -758,7 +809,7 @@ module BetterAuth
         defined_roles = (config[:roles] || {}).transform_keys(&:to_s)
         invalid = parsed.split(",", -1).reject { |role| admin_role_for(defined_roles, role) }
         if invalid.any?
-          raise APIError.new("BAD_REQUEST", message: ADMIN_ERROR_CODES.fetch("YOU_ARE_NOT_ALLOWED_TO_SET_NON_EXISTENT_VALUE"))
+          raise APIError.new("BAD_REQUEST", code: "YOU_ARE_NOT_ALLOWED_TO_SET_NON_EXISTENT_VALUE", message: ADMIN_ERROR_CODES.fetch("YOU_ARE_NOT_ALLOWED_TO_SET_NON_EXISTENT_VALUE"))
         end
       end
 

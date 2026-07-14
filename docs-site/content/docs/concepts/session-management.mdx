@@ -132,6 +132,7 @@ Cookie: better-auth.session_token=...
 ### List Sessions
 
 The `listSessions` function returns a list of sessions that are active for the user.
+Because this exposes authoritative session state, it requires a fresh database-backed session. A stale cached session receives `403 SESSION_NOT_FRESH`.
 
 ```http
 GET /api/auth/list-sessions

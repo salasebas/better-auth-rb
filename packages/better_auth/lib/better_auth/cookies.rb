@@ -8,6 +8,8 @@ module BetterAuth
   module Cookies
     SECURE_COOKIE_PREFIX = "__Secure-"
     HOST_COOKIE_PREFIX = "__Host-"
+    COOKIE_NAME_PATTERN = /\A[\x21\x23-\x27\x2A\x2B\x2D\x2E\x30-\x39\x41-\x5A\x5E\x5F\x60\x61-\x7A\x7C\x7E]+\z/
+    COOKIE_VALUE_PATTERN = /\A[\x20\x21\x23-\x3A\x3C-\x5B\x5D-\x7E]*\z/
 
     Cookie = Struct.new(:name, :attributes) do
       alias_method :options, :attributes
@@ -61,12 +63,26 @@ module BetterAuth
     end
 
     def parse_cookies(cookie_header)
-      cookie_header.to_s.split(/;\s*/).each_with_object({}) do |pair, result|
-        name, value = pair.split("=", 2)
-        next if name.to_s.empty? || value.nil?
+      header = cookie_header.to_s
+      return {} if header.length < 2
 
-        result[name.strip] = decode_cookie_value(value.strip)
+      header.split(";", -1).each_with_object({}) do |pair, result|
+        separator = pair.index("=")
+        next unless separator
+
+        name = trim_cookie_ows(pair[0...separator])
+        value = unquote_cookie_value(trim_cookie_ows(pair[(separator + 1)..]))
+        next unless COOKIE_NAME_PATTERN.match?(name) && COOKIE_VALUE_PATTERN.match?(value)
+
+        result[name] = decode_cookie_value(value)
       end
+    end
+
+    def set_request_cookie(cookie_header, name, value)
+      cookies = parse_cookies(cookie_header)
+      cookie_name = name.to_s
+      cookies[cookie_name] = value.to_s if COOKIE_NAME_PATTERN.match?(cookie_name)
+      cookies.map { |key, semantic_value| "#{key}=#{encode_cookie_value(semantic_value)}" }.join("; ")
     end
 
     def strip_secure_cookie_prefix(name)
@@ -287,9 +303,30 @@ module BetterAuth
     end
 
     def decode_cookie_value(value)
-      URI.decode_uri_component(value)
+      decoded = URI.decode_uri_component(value)
+      decoded.valid_encoding? ? decoded : value
     rescue ArgumentError
       value
+    end
+
+    def trim_cookie_ows(value)
+      value.sub(/\A[ \t]*/, "").sub(/[ \t]*\z/, "")
+    end
+
+    def unquote_cookie_value(value)
+      return value unless value.length >= 2 && value.start_with?("\"") && value.end_with?("\"")
+
+      value[1...-1]
+    end
+
+    def encode_cookie_value(value)
+      value.to_s.encode(Encoding::UTF_8).bytes.map do |byte|
+        if byte.between?(48, 57) || byte.between?(65, 90) || byte.between?(97, 122) || [33, 39, 40, 41, 42, 45, 46, 95, 126].include?(byte)
+          byte.chr
+        else
+          "%#{byte.to_s(16).upcase.rjust(2, "0")}"
+        end
+      end.join
     end
 
     def header_value(request_or_cookie_header)

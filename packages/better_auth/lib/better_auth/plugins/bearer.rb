@@ -50,7 +50,7 @@ module BetterAuth
       return unless signed_token && valid_signed_token?(ctx, signed_token)
 
       cookie_name = ctx.context.auth_cookies[:session_token].name
-      cookie = [ctx.headers["cookie"], "#{cookie_name}=#{signed_token}"].compact.reject(&:empty?).join("; ")
+      cookie = Cookies.set_request_cookie(ctx.headers["cookie"], cookie_name, signed_token)
       {context: {headers: ctx.headers.merge("cookie" => cookie)}}
     end
 

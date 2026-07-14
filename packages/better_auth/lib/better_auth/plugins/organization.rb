@@ -868,7 +868,7 @@ module BetterAuth
         raise APIError.new("BAD_REQUEST", message: ORGANIZATION_ERROR_CODES.fetch("ROLE_NAME_IS_ALREADY_TAKEN")) if organization_roles(config).key?(role_name) || organization_role_by_name(ctx, organization_id, role_name)
         permission = stringify_permission(body[:permission] || body[:permissions])
         validate_permission_resources!(config, permission)
-        unless organization_permission?(ctx, config, require_member!(ctx, session[:user]["id"], organization_id)["role"], permission, organization_id)
+        unless organization_can_delegate_permissions?(ctx, config, require_member!(ctx, session[:user]["id"], organization_id)["role"], permission, organization_id)
           raise APIError.new("FORBIDDEN", message: ORGANIZATION_ERROR_CODES.fetch("YOU_ARE_NOT_ALLOWED_TO_CREATE_A_ROLE"))
         end
         role = ctx.context.adapter.create(model: "organizationRole", data: {organizationId: organization_id, role: role_name, permission: JSON.generate(permission), createdAt: Time.now}.merge(additional_input(body, :organization_id, :role, :role_name, :permission, :permissions)))
@@ -914,7 +914,7 @@ module BetterAuth
         if permission
           permission = stringify_permission(permission)
           validate_permission_resources!(config, permission)
-          unless organization_permission?(ctx, config, require_member!(ctx, session[:user]["id"], organization_id)["role"], permission, organization_id)
+          unless organization_can_delegate_permissions?(ctx, config, require_member!(ctx, session[:user]["id"], organization_id)["role"], permission, organization_id)
             raise APIError.new("FORBIDDEN", message: ORGANIZATION_ERROR_CODES.fetch("YOU_ARE_NOT_ALLOWED_TO_UPDATE_A_ROLE"))
           end
           update[:permission] = JSON.generate(permission)
@@ -1149,6 +1149,14 @@ module BetterAuth
       end
       role_string.to_s.split(",").any? do |role|
         roles[role]&.authorize(permissions || {})&.fetch(:success, false)
+      end
+    end
+
+    def organization_can_delegate_permissions?(ctx, config, role_string, permissions, organization_id)
+      permissions.all? do |resource, actions|
+        actions.all? do |action|
+          organization_permission?(ctx, config, role_string, {resource => [action]}, organization_id)
+        end
       end
     end
 

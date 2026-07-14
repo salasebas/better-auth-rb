@@ -11,13 +11,91 @@ class BetterAuthRoutesEmailVerificationTest < Minitest::Test
     auth = build_auth(email_verification: {send_verification_email: ->(data, _request = nil) { sent << data }})
     auth.api.sign_up_email(body: {email: "verify-me@example.com", password: "password123", name: "Verify"})
 
-    assert_equal({status: true}, auth.api.send_verification_email(body: {email: "verify-me@example.com", callbackURL: "/dashboard"}))
-    assert_equal({status: true}, auth.api.send_verification_email(body: {email: "missing@example.com"}))
+    with_verification_email_timing do
+      assert_equal({status: true}, auth.api.send_verification_email(body: {email: "verify-me@example.com", callbackURL: "/dashboard"}))
+    end
+    with_verification_email_timing do
+      assert_equal({status: true}, auth.api.send_verification_email(body: {email: "missing@example.com"}))
+    end
 
     assert_equal 1, sent.length
     assert_equal "verify-me@example.com", sent.first[:user]["email"]
     assert_includes sent.first[:url], "/verify-email?token="
     assert_includes sent.first[:url], "callbackURL=%2Fdashboard"
+  end
+
+  def test_unauthenticated_send_verification_email_applies_floor_to_nonexistent_and_verified_users
+    calls = 0
+    auth = build_auth(email_verification: {send_verification_email: ->(_data, _request = nil) { calls += 1 }})
+    auth.api.sign_up_email(body: {email: "timed-verified@example.com", password: "password123", name: "Verified"})
+    auth.context.internal_adapter.update_user_by_email("timed-verified@example.com", emailVerified: true)
+
+    missing_sleep = with_verification_email_timing do
+      assert_equal({status: true}, auth.api.send_verification_email(body: {email: "timed-missing@example.com"}))
+    end
+    verified_sleep = with_verification_email_timing do
+      assert_equal({status: true}, auth.api.send_verification_email(body: {email: "timed-verified@example.com"}))
+    end
+
+    assert_equal 0, calls
+    assert_in_delta 0.4, missing_sleep.fetch(0), 0.001
+    assert_in_delta 0.4, verified_sleep.fetch(0), 0.001
+  end
+
+  def test_unauthenticated_send_verification_email_applies_floor_after_sending
+    calls = 0
+    auth = build_auth(email_verification: {send_verification_email: ->(_data, _request = nil) { calls += 1 }})
+    auth.api.sign_up_email(body: {email: "timed-send@example.com", password: "password123", name: "Timed"})
+
+    slept = with_verification_email_timing do
+      assert_equal({status: true}, auth.api.send_verification_email(body: {email: "timed-send@example.com"}))
+    end
+
+    assert_equal 1, calls
+    assert_in_delta 0.4, slept.fetch(0), 0.001
+  end
+
+  def test_unauthenticated_send_verification_email_delays_sender_errors_to_the_minimum_floor
+    calls = 0
+    auth = build_auth(email_verification: {
+      send_verification_email: lambda do |_data, _request = nil|
+        calls += 1
+        raise "sender failed"
+      end
+    })
+    auth.api.sign_up_email(body: {email: "timed-error@example.com", password: "password123", name: "Timed"})
+
+    slept = with_verification_email_timing do
+      error = assert_raises(RuntimeError) { auth.api.send_verification_email(body: {email: "timed-error@example.com"}) }
+      assert_equal "sender failed", error.message
+    end
+
+    assert_equal 1, calls
+    assert_in_delta 0.4, slept.fetch(0), 0.001
+  end
+
+  def test_unauthenticated_send_verification_email_does_not_delay_lookup_or_fallback_token_errors
+    calls = 0
+    auth = build_auth(email_verification: {send_verification_email: ->(_data, _request = nil) { calls += 1 }})
+    auth.context.internal_adapter.define_singleton_method(:find_user_by_email) { |_email| raise "lookup failed" }
+
+    lookup_sleep = with_verification_email_timing(clock: [10.0]) do
+      error = assert_raises(RuntimeError) { auth.api.send_verification_email(body: {email: "lookup-error@example.com"}) }
+      assert_equal "lookup failed", error.message
+    end
+    assert_empty lookup_sleep
+
+    token_auth = build_auth(email_verification: {send_verification_email: ->(_data, _request = nil) { calls += 1 }})
+    token_sleep = nil
+    BetterAuth::Routes.stub(:create_email_verification_token, ->(*_args, **_kwargs) { raise "token failed" }) do
+      token_sleep = with_verification_email_timing(clock: [20.0]) do
+        error = assert_raises(RuntimeError) { token_auth.api.send_verification_email(body: {email: "token-error@example.com"}) }
+        assert_equal "token failed", error.message
+      end
+    end
+
+    assert_empty token_sleep
+    assert_equal 0, calls
   end
 
   def test_verification_links_only_use_canonical_or_allowlisted_serving_origins
@@ -552,6 +630,16 @@ class BetterAuthRoutesEmailVerificationTest < Minitest::Test
   end
 
   private
+
+  def with_verification_email_timing(clock: [10.0, 10.1])
+    slept = []
+    BetterAuth::Routes.stub(:verification_email_monotonic_clock, -> { clock.shift || raise("unexpected clock read") }) do
+      BetterAuth::Routes.stub(:verification_email_sleep, ->(seconds) { slept << seconds }) do
+        yield
+      end
+    end
+    slept
+  end
 
   def build_auth(options = {})
     email_and_password = {enabled: true}.merge(options.fetch(:email_and_password, {}))

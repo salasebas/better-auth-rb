@@ -299,7 +299,7 @@ module BetterAuth
         }
       ) do |ctx|
         enabled = ctx.context.options.user.dig(:change_email, :enabled)
-        raise APIError.new("BAD_REQUEST", message: "Change email is disabled") unless enabled
+        raise APIError.new("BAD_REQUEST", code: "CHANGE_EMAIL_DISABLED", message: BASE_ERROR_CODES["CHANGE_EMAIL_DISABLED"]) unless enabled
         session = current_session(ctx, sensitive: true)
         body = normalize_hash(ctx.body)
         new_email = (body["newEmail"] || body["new_email"]).to_s.downcase

@@ -43,14 +43,35 @@ module BetterAuth
           next ctx.json({status: true})
         end
 
+        start = verification_email_monotonic_clock
         found = ctx.context.internal_adapter.find_user_by_email(email)
         if found && !found[:user]["emailVerified"]
-          send_verification_email_payload(ctx, found[:user], body["callbackURL"] || body["callbackUrl"] || body["callback_url"])
+          begin
+            send_verification_email_payload(ctx, found[:user], body["callbackURL"] || body["callbackUrl"] || body["callback_url"])
+          rescue => error
+            enforce_verification_email_floor(start)
+            raise error
+          end
         else
           create_email_verification_token(ctx, email)
         end
+        enforce_verification_email_floor(start)
+
         ctx.json({status: true})
       end
+    end
+
+    def self.verification_email_monotonic_clock
+      Process.clock_gettime(Process::CLOCK_MONOTONIC)
+    end
+
+    def self.verification_email_sleep(seconds)
+      sleep(seconds)
+    end
+
+    def self.enforce_verification_email_floor(start)
+      remaining = 0.5 - (verification_email_monotonic_clock - start)
+      verification_email_sleep(remaining) if remaining.positive?
     end
 
     def self.verify_email

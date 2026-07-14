@@ -56,7 +56,7 @@ module BetterAuth
           }
         }
       ) do |ctx|
-        session = current_session(ctx)
+        session = current_session(ctx, sensitive: true, fresh: true)
         sessions = ctx.context.internal_adapter.list_sessions(session[:user]["id"])
         active = sessions
           .map { |entry| stringify_keys(entry) }

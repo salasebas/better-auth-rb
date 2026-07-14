@@ -88,3 +88,7 @@ The **Captcha Plugin** integrates bot protection into your RubyAuth system by ad
 * `minScore` (optional - only *Google ReCAPTCHA v3*): minimum score threshold. Default is `0.5`.
 * `siteKey` (optional - only *hCaptcha* and *CaptchaFox*): prevents tokens issued on one sitekey from being redeemed elsewhere.
 * `siteVerifyURLOverride` (optional): overrides endpoint URL for the captcha verification request.
+* `expectedAction` (optional - Google reCAPTCHA and Cloudflare Turnstile): rejects tokens minted for a different action.
+* `allowedHostnames` (optional - Google reCAPTCHA and Cloudflare Turnstile): accepts tokens only from the configured hostnames.
+
+Provider verification is bounded to 10 seconds and fails closed. `/sign-in/email-otp` is excluded from the default protected endpoints; add it explicitly to `endpoints` to protect it.

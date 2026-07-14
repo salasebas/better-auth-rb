@@ -80,24 +80,36 @@ class BetterAuthPluginsAccessTest < Minitest::Test
     assert_match(/billing/, failed.fetch(:error))
   end
 
-  def test_rejects_malformed_resource_requests
-    assert_raises(BetterAuth::Error) do
-      @role.authorize(project: {})
-    end
+  def test_empty_actions_are_not_authorized_and_or_continues_after_unknown_resources
+    refute @role.authorize(project: []).fetch(:success)
 
-    assert_raises(BetterAuth::Error) do
-      @role.authorize(project: {connector: "AND"})
-    end
-
-    assert_raises(BetterAuth::Error) do
-      @role.authorize(project: {actions: nil})
-    end
+    response = @role.authorize({billing: ["read"], project: ["create"]}, "OR")
+    assert_equal true, response.fetch(:success)
   end
 
-  def test_accepts_lowercase_connectors_as_ruby_adaptation
+  def test_rejects_malformed_resource_requests
+    assert_raises(BetterAuth::Error) do
+      @role.authorize(project: "create")
+    end
+
+    [{}, {connector: "AND"}, {actions: nil}, {actions: "create"}, {actions: []}, {actions: [123]}].each do |request|
+      refute @role.authorize(project: request).fetch(:success)
+    end
+
+    refute @role.authorize(project: {connector: "unexpected", actions: ["create", "delete-many"]}).fetch(:success)
+  end
+
+  def test_unknown_connectors_default_to_and
     response = @role.authorize({project: {connector: "or", actions: ["create", "delete-many"]}}, "and")
 
-    assert_equal true, response.fetch(:success)
+    assert_equal false, response.fetch(:success)
+  end
+
+  def test_outer_connector_only_accepts_exact_or
+    ["or", :OR, nil, "XOR"].each do |connector|
+      refute @role.authorize({project: ["delete-many"], ui: ["view"]}, connector).fetch(:success)
+      refute @role.authorize({billing: ["read"], project: ["create"]}, connector).fetch(:success)
+    end
   end
 
   def test_create_access_control_has_camel_case_alias

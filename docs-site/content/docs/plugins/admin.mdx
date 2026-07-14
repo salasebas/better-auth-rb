@@ -423,10 +423,12 @@ By default, there are two roles:
 
 ### Permissions
 
-By default, there are two resources with up to six permissions.
+By default, there are two resources. The `user` resource has eleven permissions, and the `session` resource has three.
 
 **user**:
-`create` `list` `set-role` `ban` `impersonate` `impersonate-admins` `delete` `set-password`
+`create` `list` `set-role` `ban` `impersonate` `impersonate-admins` `delete` `set-password` `set-email` `get` `update`
+
+Changing a user's email or email-verification status through `/admin/update-user` requires the `user:set-email` permission. Role and ban fields require `user:set-role` and `user:ban` respectively; set passwords with `/admin/set-user-password` rather than `update-user`.
 
 **session**:
 `list` `revoke` `delete`

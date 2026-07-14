@@ -81,6 +81,11 @@ class BetterAuthPluginsAdminTest < Minitest::Test
       assert_equal 403, denied.status_code
     end
 
+    create_denied = assert_raises(BetterAuth::APIError) do
+      auth.api.create_user(headers: {"cookie" => user_cookie}, body: {email: "direct-denied@example.com", name: "Denied"})
+    end
+    assert_equal "YOU_ARE_NOT_ALLOWED_TO_CREATE_USERS", create_denied.code
+
     assert_equal true, auth.api.user_has_permission(
       headers: {"cookie" => admin_cookie},
       body: {permissions: {user: ["list"], session: ["revoke"]}}
@@ -171,6 +176,164 @@ class BetterAuthPluginsAdminTest < Minitest::Test
       auth.api.admin_update_user(headers: {"cookie" => admin_cookie}, body: {userId: target.fetch("id"), data: {role: "missing-role"}})
     end
     assert_equal 400, invalid.status_code
+  end
+
+  def test_admin_set_user_password_creates_a_credential_account_and_update_rejects_password
+    auth = build_auth
+    admin_cookie = sign_up_cookie(auth, email: "password-admin@example.com")
+    admin = auth.api.get_session(headers: {"cookie" => admin_cookie}).fetch(:user)
+    auth.context.internal_adapter.update_user(admin.fetch("id"), role: "admin")
+    target = auth.context.internal_adapter.create_user(email: "password-target@example.com", name: "Target")
+
+    assert_equal({status: true}, auth.api.set_user_password(
+      headers: {"cookie" => admin_cookie},
+      body: {userId: target.fetch("id"), newPassword: "newpassword123"}
+    ))
+    assert auth.api.sign_in_email(body: {email: "password-target@example.com", password: "newpassword123"}).fetch(:token)
+
+    error = assert_raises(BetterAuth::APIError) do
+      auth.api.admin_update_user(headers: {"cookie" => admin_cookie}, body: {userId: target.fetch("id"), data: {password: "plaintext"}})
+    end
+    assert_equal 400, error.status_code
+    assert_equal "PASSWORD_CANNOT_BE_UPDATED_VIA_UPDATE_USER", error.code
+    assert_equal BetterAuth::Plugins::ADMIN_ERROR_CODES.fetch("PASSWORD_CANNOT_BE_UPDATED_VIA_UPDATE_USER"), error.message
+  end
+
+  def test_admin_missing_user_mutations_return_semantic_codes
+    auth = build_auth
+    admin_cookie = sign_up_cookie(auth, email: "missing-admin@example.com")
+    admin = auth.api.get_session(headers: {"cookie" => admin_cookie}).fetch(:user)
+    auth.context.internal_adapter.update_user(admin.fetch("id"), role: "admin")
+
+    calls = [
+      -> { auth.api.set_role(headers: {"cookie" => admin_cookie}, body: {userId: "missing", role: "user"}) },
+      -> { auth.api.unban_user(headers: {"cookie" => admin_cookie}, body: {userId: "missing"}) },
+      -> { auth.api.admin_update_user(headers: {"cookie" => admin_cookie}, body: {userId: "missing", data: {name: "Missing"}}) },
+      -> { auth.api.set_user_password(headers: {"cookie" => admin_cookie}, body: {userId: "missing", newPassword: "newpassword123"}) }
+    ]
+
+    calls.each do |call|
+      error = assert_raises(BetterAuth::APIError) { call.call }
+      assert_equal 404, error.status_code
+      assert_equal "USER_NOT_FOUND", error.code
+      assert_equal BetterAuth::BASE_ERROR_CODES.fetch("USER_NOT_FOUND"), error.message
+    end
+  end
+
+  def test_admin_field_permissions_use_precise_semantic_codes
+    ac = BetterAuth::Plugins.create_access_control(user: ["create", "update", "set-role", "ban", "set-email"])
+    auth = build_auth(
+      plugins: [
+        BetterAuth::Plugins.admin(
+          ac: ac,
+          roles: {
+            admin: ac.new_role(user: ["create", "update", "set-role", "ban", "set-email"]),
+            creator: ac.new_role(user: ["create"]),
+            support: ac.new_role(user: ["update"]),
+            user: ac.new_role(user: [])
+          }
+        )
+      ]
+    )
+    creator_cookie = sign_up_cookie(auth, email: "creator@example.com")
+    support_cookie = sign_up_cookie(auth, email: "support-fields@example.com")
+    target_cookie = sign_up_cookie(auth, email: "field-target@example.com")
+    creator = auth.api.get_session(headers: {"cookie" => creator_cookie}).fetch(:user)
+    support = auth.api.get_session(headers: {"cookie" => support_cookie}).fetch(:user)
+    target = auth.api.get_session(headers: {"cookie" => target_cookie}).fetch(:user)
+    auth.context.internal_adapter.update_user(creator.fetch("id"), role: "creator")
+    auth.context.internal_adapter.update_user(support.fetch("id"), role: "support")
+
+    created = auth.api.create_user(headers: {"cookie" => creator_cookie}, body: {email: "creator-made@example.com", name: "Created"})
+    assert_equal "user", created.fetch(:user).fetch("role")
+
+    denied = {
+      "YOU_ARE_NOT_ALLOWED_TO_CHANGE_USERS_ROLE" => -> {
+        auth.api.create_user(headers: {"cookie" => creator_cookie}, body: {email: "creator-role@example.com", name: "Role", role: "admin"})
+      },
+      "YOU_ARE_NOT_ALLOWED_TO_BAN_USERS" => -> {
+        auth.api.create_user(headers: {"cookie" => creator_cookie}, body: {email: "creator-ban@example.com", name: "Ban", data: {banned: true}})
+      },
+      "YOU_ARE_NOT_ALLOWED_TO_CHANGE_USERS_ROLE:update" => -> {
+        auth.api.admin_update_user(headers: {"cookie" => support_cookie}, body: {userId: target.fetch("id"), data: {role: "admin"}})
+      },
+      "YOU_ARE_NOT_ALLOWED_TO_BAN_USERS:update" => -> {
+        auth.api.admin_update_user(headers: {"cookie" => support_cookie}, body: {userId: target.fetch("id"), data: {banned: true}})
+      },
+      "YOU_ARE_NOT_ALLOWED_TO_SET_USERS_EMAIL" => -> {
+        auth.api.admin_update_user(headers: {"cookie" => support_cookie}, body: {userId: target.fetch("id"), data: {emailVerified: true}})
+      }
+    }
+
+    denied.each do |label, call|
+      expected_code = label.delete_suffix(":update")
+      error = assert_raises(BetterAuth::APIError) { call.call }
+      assert_equal 403, error.status_code
+      assert_equal expected_code, error.code
+      assert_equal BetterAuth::Plugins::ADMIN_ERROR_CODES.fetch(expected_code), error.message
+    end
+  end
+
+  def test_admin_update_email_and_ban_hardening
+    auth = build_auth
+    admin_cookie = sign_up_cookie(auth, email: "hardening-admin@example.com")
+    target_cookie = sign_up_cookie(auth, email: "hardening-target@example.com")
+    other_cookie = sign_up_cookie(auth, email: "hardening-other@example.com")
+    admin = auth.api.get_session(headers: {"cookie" => admin_cookie}).fetch(:user)
+    target = auth.api.get_session(headers: {"cookie" => target_cookie}).fetch(:user)
+    auth.context.internal_adapter.update_user(admin.fetch("id"), role: "admin")
+
+    normalized = auth.api.admin_update_user(
+      headers: {"cookie" => admin_cookie},
+      body: {userId: target.fetch("id"), data: {email: "Normalized-Target@Example.com", emailVerified: false}}
+    )
+    assert_equal "normalized-target@example.com", normalized.fetch("email")
+
+    collision = assert_raises(BetterAuth::APIError) do
+      auth.api.admin_update_user(
+        headers: {"cookie" => admin_cookie},
+        body: {userId: target.fetch("id"), data: {email: "HARDENING-OTHER@EXAMPLE.COM"}}
+      )
+    end
+    assert_equal "USER_ALREADY_EXISTS_USE_ANOTHER_EMAIL", collision.code
+
+    self_ban = assert_raises(BetterAuth::APIError) do
+      auth.api.admin_update_user(headers: {"cookie" => admin_cookie}, body: {userId: admin.fetch("id"), data: {banned: true}})
+    end
+    assert_equal "YOU_CANNOT_BAN_YOURSELF", self_ban.code
+
+    auth.api.admin_update_user(headers: {"cookie" => admin_cookie}, body: {userId: target.fetch("id"), data: {banned: true, banReason: "Violation"}})
+    assert_empty auth.context.internal_adapter.list_sessions(target.fetch("id"))
+    assert auth.api.get_session(headers: {"cookie" => other_cookie})
+  end
+
+  def test_admin_create_user_validates_and_mirrors_username_fields
+    auth = build_auth(plugins: [BetterAuth::Plugins.username, BetterAuth::Plugins.admin])
+
+    created = auth.api.create_user(
+      body: {
+        email: "admin-username@example.com",
+        name: "Admin Username",
+        data: {username: "JamesSmith"}
+      }
+    ).fetch(:user)
+    assert_equal "jamessmith", created.fetch("username")
+    assert_equal "JamesSmith", created.fetch("displayUsername")
+
+    duplicate = assert_raises(BetterAuth::APIError) do
+      auth.api.create_user(body: {email: "admin-username-copy@example.com", name: "Copy", data: {username: "JAMESSMITH"}})
+    end
+    assert_equal "USERNAME_IS_ALREADY_TAKEN", duplicate.code
+
+    invalid = assert_raises(BetterAuth::APIError) do
+      auth.api.create_user(body: {email: "admin-username-invalid@example.com", name: "Invalid", data: {username: "Invalid Username!"}})
+    end
+    assert_equal "INVALID_USERNAME", invalid.code
+
+    too_short = assert_raises(BetterAuth::APIError) do
+      auth.api.create_user(body: {email: "admin-username-short@example.com", name: "Short", data: {username: "ab"}})
+    end
+    assert_equal "USERNAME_TOO_SHORT", too_short.code
   end
 
   def test_admin_has_permission_requires_user_id_or_role_and_handles_missing_users
@@ -467,6 +630,21 @@ class BetterAuthPluginsAdminTest < Minitest::Test
 
     visible_sessions = auth.api.list_sessions(headers: {"cookie" => target_cookie})
     assert visible_sessions.all? { |session| !session.key?("impersonatedBy") }
+  end
+
+  def test_admin_impersonation_reports_missing_users_with_the_base_error
+    auth = build_auth
+    admin_cookie = sign_up_cookie(auth, email: "missing-impersonation-admin@example.com")
+    admin = auth.api.get_session(headers: {"cookie" => admin_cookie}).fetch(:user)
+    auth.context.internal_adapter.update_user(admin.fetch("id"), role: "admin")
+
+    error = assert_raises(BetterAuth::APIError) do
+      auth.api.impersonate_user(headers: {"cookie" => admin_cookie}, body: {userId: "missing-user"})
+    end
+
+    assert_equal 404, error.status_code
+    assert_equal "USER_NOT_FOUND", error.code
+    assert_equal BetterAuth::BASE_ERROR_CODES.fetch("USER_NOT_FOUND"), error.message
   end
 
   def test_admin_list_sessions_hook_preserves_missing_session_error

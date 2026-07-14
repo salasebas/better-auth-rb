@@ -681,6 +681,50 @@ class BetterAuthPluginsOrganizationTest < Minitest::Test
     ).fetch(:success)
   end
 
+  def test_dynamic_role_delegation_combines_permissions_across_acting_roles
+    ac = BetterAuth::Plugins.create_access_control(
+      organization: ["update", "delete"],
+      member: ["create", "update", "delete"],
+      invitation: ["create", "cancel"],
+      team: ["create", "update", "delete"],
+      ac: ["create", "read", "update", "delete"],
+      project: ["read", "update"]
+    )
+    auth = build_auth(
+      plugins: [
+        BetterAuth::Plugins.organization(
+          dynamic_access_control: {enabled: true},
+          ac: ac,
+          roles: {
+            owner: ac.new_role(ac: ["create", "read", "update", "delete"], project: ["read", "update"]),
+            permission_reader: ac.new_role(ac: ["create", "update"], project: ["read"]),
+            permission_writer: ac.new_role(project: ["update"])
+          }
+        )
+      ]
+    )
+    cookie = sign_up_cookie(auth, email: "split-delegation@example.com")
+    user = auth.api.get_session(headers: {"cookie" => cookie}).fetch(:user)
+    organization = auth.api.create_organization(headers: {"cookie" => cookie}, body: {name: "Split Delegation", slug: "split-delegation"})
+    auth.context.adapter.update(
+      model: "member",
+      where: [{field: "organizationId", value: organization.fetch("id")}, {field: "userId", value: user.fetch("id")}],
+      update: {role: "permission_reader,permission_writer"}
+    )
+
+    created = auth.api.create_org_role(
+      headers: {"cookie" => cookie},
+      body: {organizationId: organization.fetch("id"), role: "project-editor", permission: {project: ["read", "update"]}}
+    )
+    assert_equal true, created.fetch(:success)
+
+    updated = auth.api.update_org_role(
+      headers: {"cookie" => cookie},
+      body: {organizationId: organization.fetch("id"), role: "project-editor", data: {permission: {project: ["read", "update"]}}}
+    )
+    assert_equal true, updated.fetch(:success)
+  end
+
   def test_additional_fields_and_organization_hooks
     calls = []
     auth = build_auth(

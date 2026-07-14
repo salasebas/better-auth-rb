@@ -87,10 +87,10 @@ class BetterAuthPluginsUsernameTest < Minitest::Test
         )
       ]
     )
-    display_cookie = sign_up_cookie(display_auth, email: "display-only@example.com", display_username: "Test Username")
+    display_cookie = sign_up_cookie(display_auth, email: "display-only@example.com", display_username: "Test_Username")
     display_session = display_auth.api.get_session(headers: {"cookie" => display_cookie}, query: {disableCookieCache: true})
-    assert_equal "test username", display_session[:user]["username"]
-    assert_equal "Test Username", display_session[:user]["displayUsername"]
+    assert_equal "test_username", display_session[:user]["username"]
+    assert_equal "Test_Username", display_session[:user]["displayUsername"]
 
     post_auth = build_auth(
       plugins: [
@@ -140,6 +140,43 @@ class BetterAuthPluginsUsernameTest < Minitest::Test
       auth.api.sign_up_email(body: {email: "display@example.com", displayUsername: "Invalid!", password: "password123", name: "Display"})
     end
     assert_equal BetterAuth::Plugins::USERNAME_ERROR_CODES["INVALID_DISPLAY_USERNAME"], invalid_display.message
+  end
+
+  def test_validation_order_uses_raw_value_by_default_and_normalized_value_when_requested
+    default_auth = build_auth(plugins: [BetterAuth::Plugins.username(username_normalization: ->(value) { value.tr(" ", "_") })])
+    assert_raises(BetterAuth::APIError) do
+      default_auth.api.sign_up_email(body: {email: "raw-order@example.com", username: "raw value", password: "password123", name: "Raw"})
+    end
+
+    post_auth = build_auth(plugins: [BetterAuth::Plugins.username(validation_order: {username: "post-normalization"}, username_normalization: ->(value) { value.tr(" ", "_") })])
+    assert_equal "post_value", post_auth.api.sign_up_email(body: {email: "post-order@example.com", username: "post value", password: "password123", name: "Post"}).fetch(:user).fetch("username")
+  end
+
+  def test_post_normalization_sign_in_validates_the_raw_username
+    auth = build_auth(plugins: [BetterAuth::Plugins.username(
+      validation_order: {username: "post-normalization"},
+      username_normalization: ->(value) { value.tr(" ", "_") }
+    )])
+    created = auth.api.sign_up_email(body: {email: "sign-in-order@example.com", username: "sign in value", password: "password123", name: "Sign In"})
+    assert_equal "sign_in_value", created.fetch(:user).fetch("username")
+
+    assert_raises(BetterAuth::APIError) do
+      auth.api.sign_in_username(body: {username: "sign in value", password: "password123"})
+    end
+
+    signed_in = auth.api.sign_in_username(body: {username: "sign_in_value", password: "password123"})
+    assert_equal created.fetch(:user).fetch("id"), signed_in.fetch(:user).fetch("id")
+  end
+
+  def test_invalid_display_only_stays_display_only_and_explicit_empty_username_errors
+    auth = build_auth(plugins: [BetterAuth::Plugins.username])
+    cookie = sign_up_cookie(auth, email: "invalid-display@example.com", display_username: "invalid! value")
+    assert_nil auth.api.get_session(headers: {"cookie" => cookie})[:user]["username"]
+
+    error = assert_raises(BetterAuth::APIError) do
+      auth.api.sign_up_email(body: {email: "empty-username@example.com", username: "", password: "password123", name: "Empty"})
+    end
+    assert_equal BetterAuth::Plugins::USERNAME_ERROR_CODES["USERNAME_TOO_SHORT"], error.message
   end
 
   def test_username_email_verification_does_not_leak_until_password_is_valid
@@ -196,6 +233,21 @@ class BetterAuthPluginsUsernameTest < Minitest::Test
 
     assert_equal 200, session_status
     assert_equal "rack_user", session.fetch("user").fetch("username")
+  end
+
+  def test_username_sign_in_honors_callback_url
+    auth = build_auth(plugins: [BetterAuth::Plugins.username])
+    sign_up_cookie(auth, email: "callback-username@example.com", username: "callback_user")
+
+    _status, headers, body = auth.api.sign_in_username(
+      body: {username: "callback_user", password: "password123", callbackURL: "/dashboard"},
+      as_response: true
+    )
+
+    assert_equal "/dashboard", headers.fetch("location")
+    response = JSON.parse(body.join)
+    assert_equal true, response.fetch("redirect")
+    assert_equal "/dashboard", response.fetch("url")
   end
 
   private

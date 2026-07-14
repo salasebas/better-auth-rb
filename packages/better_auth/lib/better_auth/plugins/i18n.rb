@@ -84,7 +84,7 @@ module BetterAuth
       return explicit_locale if explicit && available_locales.include?(explicit_locale)
       return "en" if available_locales.include?("en")
 
-      available_locales.first
+      nil
     end
 
     def parse_accept_language(header)

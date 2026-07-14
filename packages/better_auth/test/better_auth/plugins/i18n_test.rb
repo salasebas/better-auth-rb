@@ -380,7 +380,7 @@ class BetterAuthPluginsI18nTest < Minitest::Test
     assert_equal "Invalid email or password", payload["message"]
   end
 
-  def test_first_translation_locale_used_when_default_not_set_and_en_missing
+  def test_builtin_english_is_preserved_when_default_and_english_translation_are_missing
     auth = build_auth(
       plugins: [
         BetterAuth::Plugins.i18n(
@@ -404,7 +404,7 @@ class BetterAuthPluginsI18nTest < Minitest::Test
 
     payload = JSON.parse(body.join)
 
-    assert_equal "FR invalid email or password", payload["message"]
+    assert_equal "Invalid email or password", payload["message"]
   end
 
   def test_en_used_as_implicit_default_when_available_but_not_specified

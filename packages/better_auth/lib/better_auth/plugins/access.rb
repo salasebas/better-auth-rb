@@ -10,36 +10,33 @@ module BetterAuth
       end
 
       def authorize(request, connector = "AND")
+        connector = (connector == "OR") ? "OR" : "AND"
         success = false
         stringify_request(request).each do |resource, requested_actions|
           allowed_actions = statements[resource]
           unless allowed_actions
+            next if connector == "OR"
+
             return {success: false, error: "You are not allowed to access resource: #{resource}"}
           end
 
           success = if requested_actions.is_a?(Array)
-            requested_actions.all? { |action| allowed_actions.include?(action.to_s) }
+            requested_actions.any? && requested_actions.all? { |action| action.is_a?(String) && allowed_actions.include?(action) }
           elsif requested_actions.is_a?(Hash)
-            unless requested_actions.key?("actions") || requested_actions.key?(:actions)
-              raise Error, "Invalid access control request"
-            end
-
             raw_actions = requested_actions["actions"] || requested_actions[:actions]
-            raise Error, "Invalid access control request" if raw_actions.nil?
-
-            actions = Array(raw_actions).map(&:to_s)
-            action_connector = (requested_actions["connector"] || requested_actions[:connector] || "AND").to_s.upcase
+            actions = raw_actions.is_a?(Array) ? raw_actions : []
+            action_connector = ((requested_actions["connector"] || requested_actions[:connector]) == "OR") ? "OR" : "AND"
             if action_connector == "OR"
-              actions.any? { |action| allowed_actions.include?(action) }
+              actions.any? { |action| action.is_a?(String) && allowed_actions.include?(action) }
             else
-              actions.all? { |action| allowed_actions.include?(action) }
+              actions.any? && actions.all? { |action| action.is_a?(String) && allowed_actions.include?(action) }
             end
           else
             raise Error, "Invalid access control request"
           end
 
-          return {success: true} if success && connector.to_s.upcase == "OR"
-          return {success: false, error: "unauthorized to access resource \"#{resource}\""} if !success && connector.to_s.upcase == "AND"
+          return {success: true} if success && connector == "OR"
+          return {success: false, error: "unauthorized to access resource \"#{resource}\""} if !success && connector == "AND"
         end
 
         success ? {success: true} : {success: false, error: "Not authorized"}
