@@ -103,6 +103,12 @@ This is useful when you have the ID Token from Google on your app and want to us
   signed in directly.
 </Callout>
 
+<Callout type="warn">
+  Google ID tokens are accepted only when their audience matches a nonblank
+  configured `client_id`. If `client_id` is an array, the token may target any
+  entry in that array; an empty audience configuration is rejected.
+</Callout>
+
 ```ruby title="server.rb"
 result = auth.api.sign_in_social(
   body: {
@@ -164,6 +170,25 @@ user = result.fetch(:user)
 <Callout type="info">
   The array only expands ID token audience verification. The authorization code flow still uses the first entry paired with the single `client_secret` and `redirect_uri`, so those cannot vary per platform within one provider block.
 </Callout>
+
+### Restrict Sign-In to Google Workspace
+
+Set `hd` on the Google provider to require a verified Google Workspace
+hosted-domain claim. Google also receives this value as an account-selection
+hint, but Better Auth enforces the returned claim after Google signs the token.
+
+```ruby title="config/auth.rb"
+google: BetterAuth::SocialProviders.google(
+  client_id: ENV.fetch("GOOGLE_CLIENT_ID"),
+  client_secret: ENV.fetch("GOOGLE_CLIENT_SECRET"),
+  hd: "company.com"
+)
+```
+
+A specific domain requires an exact match. Set `hd: "*"` to allow any Google
+Workspace hosted domain. Whenever `hd` is configured, a token or callback
+profile with no `hd` claim is rejected. Omitting `hd` applies no hosted-domain
+restriction.
 
 ### Always ask to select an account
 

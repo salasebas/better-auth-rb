@@ -55,6 +55,42 @@ class BetterAuthPluginsOneTapTest < Minitest::Test
     assert_equal 1, auth.context.internal_adapter.find_accounts(first[:user]["id"]).length
   end
 
+  def test_callback_signs_in_google_sub_owner_instead_of_unrelated_email_match
+    shared_sub = "one-tap-sub-owned-by-user-a"
+    email_match = "one-tap-email-collision-b@example.com"
+    auth = build_auth(
+      plugins: [
+        BetterAuth::Plugins.one_tap(verify_id_token: google_verifier(
+          email: email_match,
+          email_verified: true,
+          name: "Email Match B",
+          sub: shared_sub
+        ))
+      ]
+    )
+    sub_owner = auth.context.internal_adapter.create_user(
+      name: "Sub Owner A",
+      email: "one-tap-sub-owner-a@example.com"
+    )
+    auth.context.internal_adapter.create_account(
+      userId: sub_owner["id"],
+      providerId: "google",
+      accountId: shared_sub
+    )
+    email_matched_user = auth.context.internal_adapter.create_user(
+      name: "Email Match B",
+      email: email_match,
+      emailVerified: false
+    )
+
+    result = auth.api.one_tap_callback(body: {idToken: "verified-token"})
+
+    assert_equal sub_owner["id"], result[:user]["id"]
+    refute_equal email_matched_user["id"], result[:user]["id"]
+    refute auth.context.internal_adapter.find_user_by_id(email_matched_user["id"])["emailVerified"]
+    assert_equal sub_owner["id"], auth.context.internal_adapter.find_account_by_provider_id(shared_sub, "google")["userId"]
+  end
+
   def test_callback_rejects_existing_unverified_user_by_default_even_when_google_email_is_verified
     auth = build_auth(
       plugins: [
@@ -271,6 +307,235 @@ class BetterAuthPluginsOneTapTest < Minitest::Test
     auth.api.one_tap_callback(body: {idToken: "audience-token"})
 
     assert_equal ["one-tap-client-id"], audiences
+  end
+
+  def test_callback_passes_google_provider_client_id_to_token_verifier
+    audiences = []
+    auth = build_auth(
+      social_providers: {google: {client_id: "provider-client-id"}},
+      plugins: [
+        BetterAuth::Plugins.one_tap(
+          verify_id_token: ->(_token, _ctx = nil, audience: nil) {
+            audiences << audience
+            {
+              "email" => "provider-audience@example.com",
+              "email_verified" => true,
+              "name" => "Provider Audience",
+              "sub" => "google-sub-provider-audience"
+            }
+          }
+        )
+      ]
+    )
+
+    auth.api.one_tap_callback(body: {idToken: "audience-token"})
+
+    assert_equal ["provider-client-id"], audiences
+  end
+
+  def test_callback_fails_closed_before_verification_when_audience_is_missing
+    verifier_calls = 0
+    auth = build_auth(
+      social_providers: {},
+      plugins: [
+        BetterAuth::Plugins.one_tap(
+          verify_id_token: ->(_token, _ctx = nil, **_options) {
+            verifier_calls += 1
+            {
+              "email" => "missing-audience@example.com",
+              "email_verified" => true,
+              "name" => "Missing Audience",
+              "sub" => "google-sub-missing-audience"
+            }
+          }
+        )
+      ]
+    )
+
+    error = assert_raises(BetterAuth::APIError) do
+      auth.api.one_tap_callback(body: {idToken: "audience-token"})
+    end
+
+    assert_equal 400, error.status_code
+    assert_includes error.message, "Google client ID is required"
+    assert_equal 0, verifier_calls
+  end
+
+  def test_callback_fails_closed_before_verification_when_audience_is_empty
+    verifier_calls = 0
+    auth = build_auth(
+      social_providers: {google: {client_id: ""}},
+      plugins: [
+        BetterAuth::Plugins.one_tap(
+          verify_id_token: ->(_token, _ctx = nil, **_options) {
+            verifier_calls += 1
+            {
+              "email" => "empty-audience@example.com",
+              "email_verified" => true,
+              "name" => "Empty Audience",
+              "sub" => "google-sub-empty-audience"
+            }
+          }
+        )
+      ]
+    )
+
+    error = assert_raises(BetterAuth::APIError) do
+      auth.api.one_tap_callback(body: {idToken: "audience-token"})
+    end
+
+    assert_equal 400, error.status_code
+    assert_includes error.message, "Google client ID is required"
+    assert_equal 0, verifier_calls
+  end
+
+  def test_callback_accepts_exact_configured_hosted_domain
+    auth = build_auth(
+      social_providers: {google: {client_id: "google-client-id", hd: "company.com"}},
+      plugins: [
+        BetterAuth::Plugins.one_tap(verify_id_token: google_verifier(
+          email: "one-tap-hd-match@company.com",
+          email_verified: true,
+          name: "Hosted Domain Match",
+          sub: "one-tap-hd-match-sub",
+          hd: "company.com"
+        ))
+      ]
+    )
+
+    result = auth.api.one_tap_callback(body: {idToken: "verified-token"})
+
+    assert_equal "one-tap-hd-match@company.com", result[:user]["email"]
+  end
+
+  def test_callback_rejects_hosted_domain_that_does_not_exactly_match
+    auth = build_auth(
+      social_providers: {google: {client_id: "google-client-id", hd: "company.com"}},
+      plugins: [
+        BetterAuth::Plugins.one_tap(verify_id_token: google_verifier(
+          email: "one-tap-hd-mismatch@other.com",
+          email_verified: true,
+          name: "Hosted Domain Mismatch",
+          sub: "one-tap-hd-mismatch-sub",
+          hd: "other.com"
+        ))
+      ]
+    )
+
+    error = assert_raises(BetterAuth::APIError) do
+      auth.api.one_tap_callback(body: {idToken: "verified-token"})
+    end
+
+    assert_equal 400, error.status_code
+    assert_equal "invalid id token", error.message
+    assert_nil auth.context.internal_adapter.find_user_by_email("one-tap-hd-mismatch@other.com")
+  end
+
+  def test_callback_accepts_nonempty_hosted_domain_for_wildcard
+    auth = build_auth(
+      social_providers: {google: {client_id: "google-client-id", hd: "*"}},
+      plugins: [
+        BetterAuth::Plugins.one_tap(verify_id_token: google_verifier(
+          email: "one-tap-hd-wildcard@company.com",
+          email_verified: true,
+          name: "Hosted Domain Wildcard",
+          sub: "one-tap-hd-wildcard-sub",
+          hd: "company.com"
+        ))
+      ]
+    )
+
+    result = auth.api.one_tap_callback(body: {idToken: "verified-token"})
+
+    assert_equal "one-tap-hd-wildcard@company.com", result[:user]["email"]
+  end
+
+  def test_callback_rejects_missing_hosted_domain_for_exact_restriction
+    auth = build_auth(
+      social_providers: {google: {client_id: "google-client-id", hd: "company.com"}},
+      plugins: [
+        BetterAuth::Plugins.one_tap(verify_id_token: google_verifier(
+          email: "one-tap-hd-missing@company.com",
+          email_verified: true,
+          name: "Hosted Domain Missing",
+          sub: "one-tap-hd-missing-sub"
+        ))
+      ]
+    )
+
+    error = assert_raises(BetterAuth::APIError) do
+      auth.api.one_tap_callback(body: {idToken: "verified-token"})
+    end
+
+    assert_equal 400, error.status_code
+    assert_equal "invalid id token", error.message
+  end
+
+  def test_callback_rejects_missing_hosted_domain_for_wildcard_restriction
+    auth = build_auth(
+      social_providers: {google: {client_id: "google-client-id", hd: "*"}},
+      plugins: [
+        BetterAuth::Plugins.one_tap(verify_id_token: google_verifier(
+          email: "one-tap-hd-wildcard-missing@example.com",
+          email_verified: true,
+          name: "Hosted Domain Wildcard Missing",
+          sub: "one-tap-hd-wildcard-missing-sub"
+        ))
+      ]
+    )
+
+    error = assert_raises(BetterAuth::APIError) do
+      auth.api.one_tap_callback(body: {idToken: "verified-token"})
+    end
+
+    assert_equal 400, error.status_code
+    assert_equal "invalid id token", error.message
+  end
+
+  def test_callback_enforces_hosted_domain_from_google_factory_options
+    payload = {
+      "email" => "factory-hd-match@company.com",
+      "email_verified" => true,
+      "name" => "Factory Hosted Domain",
+      "sub" => "factory-hd-match-sub",
+      "hd" => "company.com"
+    }
+    google = BetterAuth::SocialProviders.google(
+      client_id: "google-client-id",
+      client_secret: "google-client-secret",
+      hd: "company.com"
+    )
+    auth = build_auth(
+      social_providers: {google: google},
+      plugins: [
+        BetterAuth::Plugins.one_tap(
+          verify_id_token: ->(_token, _ctx = nil, **_options) { payload.dup }
+        )
+      ]
+    )
+
+    result = auth.api.one_tap_callback(body: {idToken: "matching-token"})
+    assert_equal "factory-hd-match@company.com", result[:user]["email"]
+
+    payload.replace(
+      "email" => "factory-hd-mismatch@other.com",
+      "email_verified" => true,
+      "name" => "Factory Hosted Domain Mismatch",
+      "sub" => "factory-hd-mismatch-sub",
+      "hd" => "other.com"
+    )
+    mismatch = assert_raises(BetterAuth::APIError) do
+      auth.api.one_tap_callback(body: {idToken: "mismatching-token"})
+    end
+    assert_equal "invalid id token", mismatch.message
+
+    payload.delete("hd")
+    payload["email"] = "factory-hd-missing@company.com"
+    payload["sub"] = "factory-hd-missing-sub"
+    missing = assert_raises(BetterAuth::APIError) do
+      auth.api.one_tap_callback(body: {idToken: "missing-hd-token"})
+    end
+    assert_equal "invalid id token", missing.message
   end
 
   def test_callback_rejects_untrusted_google_sub_for_existing_user

@@ -50,6 +50,14 @@ description: WeChat provider setup and usage in Better Auth Ruby.
       }
     )
     ```
+
+    <Callout type="info">
+      When WeChat does not return an email, Better Auth uses
+      `<unionid-or-openid>@wechat.invalid` and marks it unverified. The reserved
+      `.invalid` address is a non-routable identity placeholder and must never
+      receive mail. Configure `map_profile_to_user` to replace both the email
+      and its verification state when your application has trusted email data.
+    </Callout>
   </Step>
 
   <Step>

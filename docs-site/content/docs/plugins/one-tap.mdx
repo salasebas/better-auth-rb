@@ -167,6 +167,24 @@ When using button mode, pass a `button` object to the `oneTap` action with the f
 * `disableSignUp`: Disable the sign-up option, allowing only existing users to sign in. Default is false.
 * `clientId`: Optionally, pass a client ID here if it is not provided in your social provider configuration.
 
+<Callout type="warn">
+  One Tap requires a nonblank Google client ID as the ID-token audience. Set
+  `client_id` on `BetterAuth::Plugins.one_tap`, or configure
+  `social_providers.google.client_id` as the fallback. The callback fails before
+  token verification when neither is available, and rejects tokens whose
+  audience does not match.
+</Callout>
+
+<Callout type="info">
+  **Restricting One Tap to a Google Workspace domain (`hd`)**
+
+  One Tap applies `social_providers.google.hd` with the same rules as standard
+  Google sign-in. A specific domain requires an exact claim match; `hd: "*"`
+  accepts any nonblank Workspace domain; and a missing claim is rejected
+  whenever `hd` is configured. If you configure only the One Tap plugin and no
+  Google social provider, no hosted-domain restriction is applied.
+</Callout>
+
 ### Authorized JavaScript origins
 
 Ensure you have configured the Authorized JavaScript origins (e.g., [http://localhost:3000](http://localhost:3000), [https://example.com](https://example.com)) for your Client ID in the Google Cloud Console. This is a required step for the Google One Tap API, and it will not function correctly unless your origins are correctly set.

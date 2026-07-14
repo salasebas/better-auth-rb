@@ -87,6 +87,24 @@ session = auth.api.verify_siwe_message(
 session[:user]
 ```
 
+<Callout type="warning">
+  `message` must be a valid [ERC-4361](https://eips.ethereum.org/EIPS/eip-4361)
+  message. Before accepting the signature, Better Auth requires its domain,
+  server-issued nonce, wallet address, and chain ID to match the current
+  sign-in attempt, and enforces its `Expiration Time` and `Not Before` bounds.
+  A valid signature over arbitrary text is not sufficient. Your
+  `verify_message` callback remains responsible for cryptographic signature
+  verification.
+</Callout>
+
+<Callout type="warning">
+  A wallet signature does not prove ownership of a supplied email. Better Auth
+  lowercases that email and stores it unverified only when it is not already in
+  use. If another account already owns it, including under different casing,
+  the new wallet account silently receives the wallet-derived placeholder
+  instead. The response does not reveal whether the supplied email exists.
+</Callout>
+
 ### Chain-Specific Examples
 
 Here are examples for different blockchain networks:
@@ -153,7 +171,7 @@ The SIWE plugin accepts the following configuration options:
 * **emailDomainName**: The email domain name for creating user accounts when not using anonymous mode. Defaults to the domain from your base URL
 * **anonymous**: Whether to allow anonymous sign-ins without requiring an email. Default is `true`
 * **getNonce**: Function to generate a unique nonce for each sign-in attempt. You must implement this function to return a cryptographically secure random string. Must return a `Promise<string>`
-* **verifyMessage**: Function to verify the signed SIWE message. Receives message details and should return `Promise<boolean>`
+* **verifyMessage**: Function that performs cryptographic verification of the signature over the supplied SIWE message. Better Auth independently validates the signed message's nonce, domain, address, Chain ID, and time bounds before creating a session.
 * **ensLookup**: Optional function to lookup ENS names and avatars for Ethereum addresses
 
 ## Schema

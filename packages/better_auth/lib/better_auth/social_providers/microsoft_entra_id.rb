@@ -2,6 +2,9 @@
 
 module BetterAuth
   module SocialProviders
+    MICROSOFT_CONSUMER_TENANT_ID = "9188040d-6c67-4c5b-b112-36a304b66dad"
+    private_constant :MICROSOFT_CONSUMER_TENANT_ID
+
     module_function
 
     def microsoft_entra_id(client_id:, client_secret:, tenant_id: "common", scopes: ["openid", "profile", "email", "User.Read", "offline_access"], **options)
@@ -80,6 +83,12 @@ module BetterAuth
             audience: Array(client_id),
             nonce: nonce
           )
+
+          tid = profile&.fetch("tid", nil)
+          next false unless tid.is_a?(String)
+          next false unless profile["iss"] == "#{authority.to_s.sub(%r{/+\z}, "")}/#{tid}/v2.0"
+          next false if tenant_id.to_s == "organizations" && tid == MICROSOFT_CONSUMER_TENANT_ID
+          next false if tenant_id.to_s == "consumers" && tid != MICROSOFT_CONSUMER_TENANT_ID
 
           !!(profile&.fetch("sub", nil) || profile&.fetch("oid", nil))
         end,

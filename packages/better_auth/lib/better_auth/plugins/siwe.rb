@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require "uri"
+require "time"
 
 module BetterAuth
   module Plugins
@@ -8,6 +9,8 @@ module BetterAuth
 
     SIWE_WALLET_PATTERN = /\A0[xX][a-fA-F0-9]{40}\z/
     SIWE_EMAIL_PATTERN = /\A[^@\s]+@[^@\s]+\.[^@\s]+\z/
+    SIWE_HEADER_PATTERN = /\A(?:([a-zA-Z][a-zA-Z0-9+.-]*):\/\/)?(\S+) wants you to sign in with your Ethereum account:\z/
+    SIWE_FIELD_PATTERN = /\A([A-Za-z ]+): (.*)\z/
 
     def siwe(options = {})
       config = normalize_hash(options)
@@ -111,7 +114,7 @@ module BetterAuth
         body = normalize_hash(ctx.body)
         wallet_address = siwe_normalize_wallet!(body[:wallet_address])
         chain_id = siwe_chain_id(body[:chain_id])
-        email = body[:email].to_s
+        email = body[:email].to_s.downcase
         anonymous = config.key?(:anonymous) ? config[:anonymous] : true
         raise APIError.new("BAD_REQUEST", message: "Email is required when anonymous is disabled.") if anonymous == false && email.empty?
         raise APIError.new("BAD_REQUEST", message: "Invalid email address") if !email.empty? && !SIWE_EMAIL_PATTERN.match?(email)
@@ -120,6 +123,8 @@ module BetterAuth
         unless verification
           raise APIError.new("UNAUTHORIZED_INVALID_OR_EXPIRED_NONCE", message: "Unauthorized: Invalid or expired nonce")
         end
+
+        siwe_validate_message!(body[:message], config[:domain], wallet_address, chain_id, verification["value"])
 
         verified = siwe_verify_message(config, body, wallet_address, chain_id, verification["value"], ctx)
         raise APIError.new("UNAUTHORIZED", message: "Unauthorized: Invalid SIWE signature") unless verified
@@ -199,10 +204,11 @@ module BetterAuth
       siwe_normalize_wallet!(data[:wallet_address])
       data[:chain_id] = siwe_chain_id(data[:chain_id])
       anonymous = config.key?(:anonymous) ? config[:anonymous] : true
-      email = data[:email].to_s
+      email = data[:email].to_s.downcase
       raise APIError.new("BAD_REQUEST", message: "Email is required when anonymous is disabled.") if anonymous == false && email.empty?
       raise APIError.new("BAD_REQUEST", message: "Invalid email address") if !email.empty? && !SIWE_EMAIL_PATTERN.match?(email)
 
+      data[:email] = email unless email.empty?
       data
     end
 
@@ -222,6 +228,101 @@ module BetterAuth
 
     def siwe_identifier(wallet_address, chain_id)
       "siwe:#{wallet_address}:#{chain_id}"
+    end
+
+    def siwe_parse_message(message)
+      result = {}
+      lines = message.to_s.split(/\r?\n/)
+
+      if (header = SIWE_HEADER_PATTERN.match(lines[0].to_s))
+        result[:scheme] = header[1] if header[1]
+        result[:domain] = header[2]
+      end
+
+      address = lines[1].to_s.strip
+      result[:address] = address if SIWE_WALLET_PATTERN.match?(address)
+
+      lines.each do |line|
+        field = SIWE_FIELD_PATTERN.match(line)
+        next unless field
+
+        key = field[1]
+        value = field[2]
+        case key
+        when "URI"
+          result[:uri] = value
+        when "Version"
+          result[:version] = value
+        when "Chain ID"
+          parsed_chain_id = siwe_parse_message_chain_id(value)
+          result[:chain_id] = parsed_chain_id unless parsed_chain_id.nil?
+        when "Nonce"
+          result[:nonce] = value
+        when "Issued At"
+          result[:issued_at] = value
+        when "Expiration Time"
+          result[:expiration_time] = value
+        when "Not Before"
+          result[:not_before] = value
+        when "Request ID"
+          result[:request_id] = value
+        end
+      end
+
+      result
+    rescue
+      {}
+    end
+
+    def siwe_parse_message_chain_id(value)
+      number = Float(value)
+      number.to_i if number.finite? && number == number.to_i
+    rescue ArgumentError, TypeError, RangeError
+      nil
+    end
+
+    def siwe_normalize_domain(domain)
+      normalized = domain.to_s.strip.downcase.sub(/\A[a-z][a-z0-9+.-]*:\/\//, "")
+      path_start = normalized.index("/")
+      path_start ? normalized[0...path_start] : normalized
+    rescue
+      ""
+    end
+
+    def siwe_validate_message!(message, domain, wallet_address, chain_id, nonce)
+      parsed = siwe_parse_message(message)
+      matches = parsed[:nonce] == nonce &&
+        parsed[:address]&.downcase == wallet_address.downcase &&
+        parsed[:chain_id] == chain_id &&
+        parsed[:domain] && siwe_normalize_domain(parsed[:domain]) == siwe_normalize_domain(domain)
+
+      unless matches
+        raise siwe_unauthorized_error(
+          "UNAUTHORIZED_SIWE_MESSAGE_MISMATCH",
+          "Unauthorized: SIWE message does not match the expected nonce, domain, address, or chain ID"
+        )
+      end
+
+      now = Time.now
+      expiration_time = siwe_parse_message_time(parsed[:expiration_time]) if parsed[:expiration_time]
+      if expiration_time && now >= expiration_time
+        raise siwe_unauthorized_error("UNAUTHORIZED_SIWE_MESSAGE_EXPIRED", "Unauthorized: SIWE message has expired")
+      end
+
+      not_before = siwe_parse_message_time(parsed[:not_before]) if parsed[:not_before]
+      if not_before && now < not_before
+        raise siwe_unauthorized_error("UNAUTHORIZED_SIWE_MESSAGE_NOT_YET_VALID", "Unauthorized: SIWE message is not yet valid")
+      end
+    end
+
+    def siwe_parse_message_time(value)
+      Time.parse(value.to_s)
+    rescue ArgumentError, TypeError, RangeError
+      nil
+    end
+
+    def siwe_unauthorized_error(status, message)
+      APIError.new("UNAUTHORIZED", code: status, message: message)
     end
 
     def siwe_verify_message(config, body, wallet_address, chain_id, nonce, ctx)
@@ -263,9 +364,14 @@ module BetterAuth
       domain = config[:email_domain_name] || URI.parse(ctx.context.canonical_base_url).host || ctx.context.canonical_base_url
       lookup = config[:ens_lookup]
       ens = lookup.respond_to?(:call) ? normalize_hash(lookup.call(wallet_address: wallet_address) || {}) : {}
+      normalized_email = email.to_s.downcase
+      user_email = "#{wallet_address}@#{domain}".downcase
+      if anonymous == false && !normalized_email.empty? && !ctx.context.internal_adapter.find_user_by_email(normalized_email)
+        user_email = normalized_email
+      end
       ctx.context.internal_adapter.create_user(
         name: ens[:name] || wallet_address,
-        email: (anonymous == false && !email.empty?) ? email : "#{wallet_address}@#{domain}",
+        email: user_email,
         image: ens[:avatar] || "",
         context: ctx
       )

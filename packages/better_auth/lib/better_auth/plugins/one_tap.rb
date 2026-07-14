@@ -56,31 +56,26 @@ module BetterAuth
           next ctx.json({error: "Email not available in token"})
         end
 
-        user = ctx.context.internal_adapter.find_user_by_email(email)
-        if user
-          one_tap_link_account_unless_present!(ctx, config, user, payload, id_token)
-          session_data = one_tap_create_session(ctx, user[:user])
-        else
-          raise APIError.new("BAD_GATEWAY", message: "User not found") if config[:disable_signup]
-
-          created = ctx.context.internal_adapter.create_oauth_user(
-            {
-              email: email,
-              emailVerified: one_tap_boolean_value(fetch_value(payload, "email_verified")),
-              name: fetch_value(payload, "name").to_s,
-              image: fetch_value(payload, "picture")
-            },
-            {
-              providerId: "google",
-              accountId: fetch_value(payload, "sub").to_s,
-              idToken: id_token
-            },
-            context: ctx
-          )
-          raise APIError.new("INTERNAL_SERVER_ERROR", message: "Could not create user") unless created
-
-          session_data = one_tap_create_session(ctx, created[:user])
-        end
+        sub = fetch_value(payload, "sub").to_s
+        session_data = Routes.persist_social_user(
+          ctx,
+          "google",
+          {
+            id: sub,
+            email: email,
+            emailVerified: one_tap_boolean_value(fetch_value(payload, "email_verified")),
+            name: fetch_value(payload, "name").to_s,
+            image: fetch_value(payload, "picture")
+          },
+          {
+            providerId: "google",
+            accountId: sub,
+            idToken: id_token,
+            scope: "openid,profile,email"
+          },
+          disable_sign_up: config[:disable_signup]
+        )
+        one_tap_raise_persistence_error!(session_data[:error]) if session_data[:error]
 
         Cookies.set_session_cookie(ctx, session_data)
         ctx.json({
@@ -91,16 +86,35 @@ module BetterAuth
     end
 
     def one_tap_verify_id_token(ctx, config, id_token)
-      verifier = config[:verify_id_token]
-      audience = config[:client_id] || ctx.context.options.social_providers.dig(:google, :client_id)
-      payload = if verifier.respond_to?(:call)
-        verifier.call(id_token, ctx, audience: audience)
-      else
-        one_tap_verify_google_id_token(id_token, audience)
+      google_provider = ctx.context.options.social_providers[:google] || {}
+      google_options = fetch_value(google_provider, "options") || {}
+      audience = config[:client_id]
+      audience = fetch_value(google_provider, "client_id") if one_tap_blank_audience?(audience)
+      if one_tap_blank_audience?(audience)
+        raise APIError.new(
+          "BAD_REQUEST",
+          message: "Google client ID is required for One Tap. Set it on the one_tap plugin (client_id) or on social_providers.google."
+        )
       end
-      one_tap_stringify_payload(payload)
-    rescue
-      raise APIError.new("BAD_REQUEST", message: "invalid id token")
+
+      begin
+        verifier = config[:verify_id_token]
+        payload = if verifier.respond_to?(:call)
+          verifier.call(id_token, ctx, audience: audience)
+        else
+          one_tap_verify_google_id_token(id_token, audience)
+        end
+        payload = one_tap_stringify_payload(payload)
+        hosted_domain = fetch_value(google_provider, "hd")
+        hosted_domain = fetch_value(google_options, "hd") if hosted_domain.nil?
+        unless SocialProviders.google_hosted_domain_allowed?(hosted_domain, payload["hd"])
+          raise "Invalid Google hosted domain"
+        end
+
+        payload
+      rescue
+        raise APIError.new("BAD_REQUEST", message: "invalid id token")
+      end
     end
 
     def one_tap_verify_google_id_token(id_token, audience)
@@ -110,10 +124,8 @@ module BetterAuth
         iss: ["https://accounts.google.com", "accounts.google.com"],
         verify_iss: true
       }
-      if audience
-        options[:aud] = audience
-        options[:verify_aud] = true
-      end
+      options[:aud] = audience
+      options[:verify_aud] = true
       payload, = ::JWT.decode(id_token, nil, true, options.merge(jwks: jwks))
       payload
     end
@@ -130,38 +142,19 @@ module BetterAuth
       jwks
     end
 
-    def one_tap_link_account_unless_present!(ctx, _config, user, payload, id_token)
-      sub = fetch_value(payload, "sub").to_s
-      account = ctx.context.internal_adapter.find_account_by_provider_id(sub, "google")
-      if account
-        return if account["userId"] == user[:user]["id"]
-
-        raise APIError.new("UNAUTHORIZED", message: "Google sub doesn't match")
-      end
-
-      user_info = payload.merge("emailVerified" => one_tap_boolean_value(fetch_value(payload, "email_verified")))
-      should_link_account = Routes.linkable_provider?(ctx, "google", user_info, implicit: true, local_user: user[:user])
-      unless should_link_account
-        raise APIError.new("UNAUTHORIZED", message: "Google sub doesn't match")
-      end
-
-      user[:user] = ctx.context.adapter.transaction do
-        account = ctx.context.internal_adapter.link_account(
-          userId: user[:user]["id"],
-          providerId: "google",
-          accountId: sub,
-          scope: "openid,profile,email",
-          idToken: id_token
-        )
-        raise BetterAuth::Error, "Failed to link One Tap account" unless account
-
-        Routes.promote_verified_email_on_link!(ctx, user[:user], user_info) || user[:user]
-      end
+    def one_tap_blank_audience?(audience)
+      Array(audience).empty? || Array(audience).all? { |value| value.to_s.strip.empty? }
     end
 
-    def one_tap_create_session(ctx, user)
-      session = ctx.context.internal_adapter.create_session(user["id"])
-      {session: session, user: user}
+    def one_tap_raise_persistence_error!(error)
+      case error
+      when "signup disabled"
+        raise APIError.new("BAD_GATEWAY", message: "User not found")
+      when "account not linked", "banned"
+        raise APIError.new("UNAUTHORIZED", message: "Google sub doesn't match")
+      else
+        raise APIError.new("INTERNAL_SERVER_ERROR", message: "Could not create user")
+      end
     end
 
     def one_tap_stringify_payload(payload)

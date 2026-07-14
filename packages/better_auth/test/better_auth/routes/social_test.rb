@@ -1559,11 +1559,338 @@ class BetterAuthRoutesSocialTest < Minitest::Test
     assert_equal BetterAuth::BASE_ERROR_CODES["ID_TOKEN_NOT_SUPPORTED"], error.message
   end
 
+  def test_provider_mapped_fields_are_filtered_and_coerced_on_create_and_override
+    profile = {
+      id: "mapped-profile-account",
+      email: "mapped-profile@example.com",
+      name: "Created Name",
+      image: "https://example.com/created.png",
+      emailVerified: true,
+      mappedCode: "created-code",
+      mappedAt: "2026-07-13T10:20:30Z",
+      serverRole: "admin",
+      unknownField: "discard me"
+    }
+    auth = build_auth(
+      user: {additional_fields: mapped_profile_fields},
+      social_providers: {
+        github: {
+          id: "github",
+          overrideUserInfoOnSignIn: true,
+          verify_id_token: ->(_token, _nonce = nil) { true },
+          get_user_info: ->(_tokens) { {user: profile.dup} }
+        }
+      }
+    )
+
+    auth.api.sign_in_social(body: {provider: "github", idToken: {token: "create-token"}})
+    created = auth.context.internal_adapter.find_user_by_email("mapped-profile@example.com").fetch(:user)
+
+    assert_equal "created-code", created.fetch("mappedCode")
+    assert_equal Time.utc(2026, 7, 13, 10, 20, 30), created.fetch("mappedAt")
+    assert_equal "member", created.fetch("serverRole")
+    refute created.key?("unknownField")
+
+    profile = profile.merge(
+      name: "Updated Name",
+      mappedCode: "updated-code",
+      mappedAt: "2026-07-14T11:22:33Z",
+      serverRole: "owner"
+    )
+    auth.api.sign_in_social(body: {provider: "github", idToken: {token: "update-token"}})
+    updated = auth.context.internal_adapter.find_user_by_id(created.fetch("id"))
+
+    assert_equal "Updated Name", updated.fetch("name")
+    assert_equal "updated-code", updated.fetch("mappedCode")
+    assert_equal Time.utc(2026, 7, 14, 11, 22, 33), updated.fetch("mappedAt")
+    assert_equal "member", updated.fetch("serverRole")
+  end
+
+  def test_update_user_info_on_link_persists_filtered_mapped_fields_without_rebinding_identity
+    auth = build_auth(
+      user: {additional_fields: mapped_profile_fields},
+      social_providers: {
+        github: {
+          id: "github",
+          create_authorization_url: ->(data) { "https://github.example/oauth?state=#{URI.encode_www_form_component(data[:state])}" },
+          validate_authorization_code: ->(_data) { {accessToken: "link-access-token"} },
+          get_user_info: ->(_tokens) {
+            {
+              user: {
+                id: "remote-link-account",
+                email: "different-provider@example.com",
+                name: "Linked Name",
+                image: "https://example.com/linked.png",
+                emailVerified: true,
+                mappedCode: "linked-code",
+                mappedAt: "2026-07-15T12:00:00Z",
+                serverRole: "admin",
+                unknownField: "discard me"
+              }
+            }
+          }
+        }
+      },
+      account: {
+        account_linking: {
+          trusted_providers: ["github"],
+          allow_different_emails: true,
+          update_user_info_on_link: true
+        }
+      }
+    )
+    cookie = sign_up_cookie(auth, email: "local-link@example.com")
+    original = auth.context.internal_adapter.find_user_by_email("local-link@example.com").fetch(:user)
+    response = auth.api.link_social(
+      headers: {"cookie" => cookie},
+      body: {provider: "github", callbackURL: "/linked", disableRedirect: true}
+    )
+    state = URI.decode_www_form(URI.parse(response[:url]).query).assoc("state").last
+
+    status, headers, = auth.api.callback_oauth(
+      params: {providerId: "github"},
+      query: {code: "code", state: state},
+      as_response: true
+    )
+    updated = auth.context.internal_adapter.find_user_by_id(original.fetch("id"))
+
+    assert_equal 302, status
+    assert_equal "/linked", headers.fetch("location")
+    assert_equal original.fetch("id"), updated.fetch("id")
+    assert_equal "local-link@example.com", updated.fetch("email")
+    assert_equal false, updated.fetch("emailVerified")
+    assert_equal "Linked Name", updated.fetch("name")
+    assert_equal "https://example.com/linked.png", updated.fetch("image")
+    assert_equal "linked-code", updated.fetch("mappedCode")
+    assert_equal Time.utc(2026, 7, 15, 12), updated.fetch("mappedAt")
+    assert_equal "member", updated.fetch("serverRole")
+    refute updated.key?("unknownField")
+  end
+
+  def test_social_query_failure_uses_a_safe_fixed_message_with_a_callable_logger
+    entries = []
+    logger = ->(*arguments) { entries << arguments }
+    auth = build_auth(
+      logger: logger,
+      social_providers: {
+        github: {
+          id: "github",
+          verify_id_token: ->(_token, _nonce = nil) { true },
+          get_user_info: ->(_tokens) {
+            {user: {id: "query-account", email: "email-sentinel@example.com", name: "Profile Sentinel", emailVerified: true}}
+          }
+        }
+      }
+    )
+    entries.clear
+    failure = ->(*) { raise "EXCEPTION_SENTINEL TOKEN_SENTINEL PROFILE_SENTINEL EMAIL_SENTINEL" }
+
+    error = assert_raises(BetterAuth::APIError) do
+      auth.context.internal_adapter.stub(:find_oauth_user, failure) do
+        auth.api.sign_in_social(body: {provider: "github", idToken: {token: "TOKEN_SENTINEL"}})
+      end
+    end
+
+    assert_equal "internal server error", error.message
+    assert_safe_social_log(entries, [:error, "Unable to query social user"])
+  end
+
+  def test_social_create_failure_uses_a_safe_fixed_message_with_a_callable_logger
+    entries = []
+    logger = ->(*arguments) { entries << arguments }
+    auth = build_auth(
+      logger: logger,
+      user: {
+        additional_fields: {
+          serverValue: {
+            type: "string",
+            input: false,
+            default_value: -> { raise "EXCEPTION_SENTINEL TOKEN_SENTINEL PROFILE_SENTINEL EMAIL_SENTINEL" }
+          }
+        }
+      },
+      social_providers: {
+        github: {
+          id: "github",
+          verify_id_token: ->(_token, _nonce = nil) { true },
+          get_user_info: ->(_tokens) {
+            {
+              user: {
+                id: "create-account",
+                email: "email-sentinel@example.com",
+                name: "Profile Sentinel",
+                emailVerified: true,
+                profileSentinel: "PROFILE_SENTINEL"
+              }
+            }
+          }
+        }
+      }
+    )
+    entries.clear
+
+    error = assert_raises(BetterAuth::APIError) do
+      auth.api.sign_in_social(body: {provider: "github", idToken: {token: "TOKEN_SENTINEL"}})
+    end
+
+    assert_equal "unable to create user", error.message
+    assert_safe_social_log(entries, [:error, "Unable to create social user"])
+  end
+
+  def test_social_link_failure_uses_a_safe_fixed_message_with_an_object_logger
+    entries = []
+    logger = recording_logger(entries)
+    auth = build_auth(
+      logger: logger,
+      social_providers: {
+        github: {
+          id: "github",
+          create_authorization_url: ->(data) { "https://github.example/oauth?state=#{URI.encode_www_form_component(data[:state])}" },
+          validate_authorization_code: ->(_data) { {accessToken: "TOKEN_SENTINEL"} },
+          get_user_info: ->(_tokens) {
+            {user: {id: "link-account", email: "email-sentinel@example.com", name: "Profile Sentinel", emailVerified: true}}
+          }
+        }
+      },
+      account: {account_linking: {trusted_providers: ["github"], allow_different_emails: true}}
+    )
+    cookie = sign_up_cookie(auth, email: "local-safe-link@example.com")
+    response = auth.api.link_social(
+      headers: {"cookie" => cookie},
+      body: {provider: "github", callbackURL: "/linked", errorCallbackURL: "/error", disableRedirect: true}
+    )
+    state = URI.decode_www_form(URI.parse(response[:url]).query).assoc("state").last
+    entries.clear
+    failure = ->(*) { raise "EXCEPTION_SENTINEL TOKEN_SENTINEL PROFILE_SENTINEL EMAIL_SENTINEL" }
+
+    status, headers, = auth.context.internal_adapter.stub(:create_account, failure) do
+      auth.api.callback_oauth(
+        params: {providerId: "github"},
+        query: {code: "code", state: state},
+        as_response: true
+      )
+    end
+
+    assert_equal 302, status
+    assert_includes headers.fetch("location"), "error=unable_to_link_account"
+    assert_safe_social_log(entries, [:error, "Unable to link social account"])
+  end
+
+  def test_override_mapped_profile_failure_is_fatal_and_logs_safely_with_an_object_logger
+    entries = []
+    logger = recording_logger(entries)
+    profile = {
+      id: "override-safe-account",
+      email: "email-sentinel@example.com",
+      name: "Original Name",
+      emailVerified: true,
+      mappedAt: "2026-07-13T00:00:00Z"
+    }
+    auth = build_auth(
+      logger: logger,
+      user: {additional_fields: {mappedAt: {type: "date", required: false}}},
+      social_providers: {
+        github: {
+          id: "github",
+          overrideUserInfoOnSignIn: true,
+          verify_id_token: ->(_token, _nonce = nil) { true },
+          get_user_info: ->(_tokens) { {user: profile.dup} }
+        }
+      }
+    )
+    created = auth.api.sign_in_social(body: {provider: "github", idToken: {token: "first-token"}})
+    entries.clear
+    profile = profile.merge(name: "Profile Sentinel", mappedAt: "PROFILE_SENTINEL")
+
+    error = assert_raises(ArgumentError) do
+      auth.api.sign_in_social(body: {provider: "github", idToken: {token: "TOKEN_SENTINEL"}})
+    end
+
+    assert_includes error.message, "no time information"
+    assert_equal "Original Name", auth.context.internal_adapter.find_user_by_id(created.fetch(:user).fetch("id")).fetch("name")
+    assert_safe_social_log(entries, [:warn, "Could not override social user info"])
+  end
+
+  def test_update_user_info_on_link_failure_is_nonfatal_and_logs_safely_with_a_callable_logger
+    entries = []
+    logger = ->(*arguments) { entries << arguments }
+    auth = build_auth(
+      logger: logger,
+      user: {additional_fields: {mappedAt: {type: "date", required: false}}},
+      social_providers: {
+        github: {
+          id: "github",
+          create_authorization_url: ->(data) { "https://github.example/oauth?state=#{URI.encode_www_form_component(data[:state])}" },
+          validate_authorization_code: ->(_data) { {accessToken: "TOKEN_SENTINEL"} },
+          get_user_info: ->(_tokens) {
+            {
+              user: {
+                id: "update-link-safe-account",
+                email: "email-sentinel@example.com",
+                name: "Profile Sentinel",
+                emailVerified: true,
+                mappedAt: "PROFILE_SENTINEL"
+              }
+            }
+          }
+        }
+      },
+      account: {
+        account_linking: {
+          trusted_providers: ["github"],
+          allow_different_emails: true,
+          update_user_info_on_link: true
+        }
+      }
+    )
+    cookie = sign_up_cookie(auth, email: "local-safe-update-link@example.com")
+    response = auth.api.link_social(
+      headers: {"cookie" => cookie},
+      body: {provider: "github", callbackURL: "/linked", disableRedirect: true}
+    )
+    state = URI.decode_www_form(URI.parse(response[:url]).query).assoc("state").last
+    entries.clear
+
+    status, headers, = auth.api.callback_oauth(
+      params: {providerId: "github"},
+      query: {code: "code", state: state},
+      as_response: true
+    )
+
+    assert_equal 302, status
+    assert_equal "/linked", headers.fetch("location")
+    assert_safe_social_log(entries, [:warn, "Could not update user info on account link"])
+  end
+
   private
 
   def build_auth(options = {})
     email_and_password = {enabled: true}.merge(options.fetch(:email_and_password, {}))
     BetterAuth.auth({base_url: "http://localhost:3000", secret: SECRET, database: :memory}.merge(options).merge(email_and_password: email_and_password))
+  end
+
+  def mapped_profile_fields
+    {
+      mappedCode: {type: "string", required: false},
+      mappedAt: {type: "date", required: false},
+      serverRole: {type: "string", required: false, input: false, default_value: "member"}
+    }
+  end
+
+  def recording_logger(entries)
+    Object.new.tap do |logger|
+      [:error, :warn, :info, :debug].each do |level|
+        logger.define_singleton_method(level) { |*arguments| entries << [level, *arguments] }
+      end
+    end
+  end
+
+  def assert_safe_social_log(entries, expected)
+    assert_equal [expected], entries
+    rendered = entries.flatten.join(" ")
+    %w[TOKEN_SENTINEL PROFILE_SENTINEL EMAIL_SENTINEL EXCEPTION_SENTINEL email-sentinel@example.com].each do |sentinel|
+      refute_includes rendered, sentinel
+    end
   end
 
   def sign_up_cookie(auth, email:)

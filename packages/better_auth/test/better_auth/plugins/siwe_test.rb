@@ -23,7 +23,7 @@ class BetterAuthPluginsSiweTest < Minitest::Test
     auth.api.get_siwe_nonce(body: {walletAddress: WALLET, chainId: 1})
 
     status, headers, body = auth.api.verify_siwe_message(
-      body: {message: "valid-message", signature: "valid-signature", walletAddress: WALLET, chainId: 1},
+      body: {message: siwe_message(nonce: "nonce-1"), signature: "valid-signature", walletAddress: WALLET, chainId: 1},
       as_response: true
     )
     data = JSON.parse(body.first)
@@ -43,7 +43,7 @@ class BetterAuthPluginsSiweTest < Minitest::Test
     assert auth.context.internal_adapter.find_account_by_provider_id("#{WALLET}:1", "siwe")
 
     error = assert_raises(BetterAuth::APIError) do
-      auth.api.verify_siwe_message(body: {message: "valid-message", signature: "valid-signature", walletAddress: WALLET, chainId: 1})
+      auth.api.verify_siwe_message(body: {message: siwe_message(nonce: "nonce-1"), signature: "valid-signature", walletAddress: WALLET, chainId: 1})
     end
     assert_equal 401, error.status_code
     assert_equal "UNAUTHORIZED_INVALID_OR_EXPIRED_NONCE", error.status
@@ -59,7 +59,7 @@ class BetterAuthPluginsSiweTest < Minitest::Test
       Thread.new do
         ready << true
         start.pop
-        results << [:success, auth.api.verify_siwe_message(body: {message: "valid-message", signature: "valid-signature", walletAddress: WALLET, chainId: 1})]
+        results << [:success, auth.api.verify_siwe_message(body: {message: siwe_message(nonce: "nonce-1"), signature: "valid-signature", walletAddress: WALLET, chainId: 1})]
       rescue BetterAuth::APIError => error
         results << [:error, error]
       end
@@ -77,13 +77,13 @@ class BetterAuthPluginsSiweTest < Minitest::Test
     auth = build_auth
 
     missing_nonce = assert_raises(BetterAuth::APIError) do
-      auth.api.verify_siwe_message(body: {message: "valid-message", signature: "valid-signature", walletAddress: WALLET})
+      auth.api.verify_siwe_message(body: {message: siwe_message(nonce: "nonce-1"), signature: "valid-signature", walletAddress: WALLET})
     end
     assert_equal 401, missing_nonce.status_code
 
     auth.api.get_siwe_nonce(body: {walletAddress: WALLET})
     invalid_signature = assert_raises(BetterAuth::APIError) do
-      auth.api.verify_siwe_message(body: {message: "valid-message", signature: "bad-signature", walletAddress: WALLET})
+      auth.api.verify_siwe_message(body: {message: siwe_message(nonce: "nonce-1"), signature: "bad-signature", walletAddress: WALLET})
     end
     assert_equal 401, invalid_signature.status_code
     assert_equal "Unauthorized: Invalid SIWE signature", invalid_signature.message
@@ -99,7 +99,7 @@ class BetterAuthPluginsSiweTest < Minitest::Test
 
     auth.api.get_siwe_nonce(body: {walletAddress: WALLET})
     missing_email = assert_raises(BetterAuth::APIError) do
-      auth.api.verify_siwe_message(body: {message: "valid-message", signature: "valid-signature", walletAddress: WALLET})
+      auth.api.verify_siwe_message(body: {message: siwe_message(nonce: "nonce-1"), signature: "valid-signature", walletAddress: WALLET})
     end
     assert_equal 400, missing_email.status_code
     assert_equal "Email is required when anonymous is disabled.", missing_email.message
@@ -110,7 +110,7 @@ class BetterAuthPluginsSiweTest < Minitest::Test
     assert_equal 400, invalid_email.status_code
 
     auth.api.get_siwe_nonce(body: {walletAddress: WALLET})
-    result = auth.api.verify_siwe_message(body: {message: "valid-message", signature: "valid-signature", walletAddress: WALLET, email: "wallet@example.com"})
+    result = auth.api.verify_siwe_message(body: {message: siwe_message(nonce: "nonce-2"), signature: "valid-signature", walletAddress: WALLET, email: "WALLET@EXAMPLE.COM"})
     assert_equal true, result[:success]
     wallet = auth.context.adapter.find_one(model: "walletAddress", where: [{field: "address", value: WALLET}])
     user = auth.context.internal_adapter.find_user_by_id(wallet["userId"])
@@ -127,7 +127,8 @@ class BetterAuthPluginsSiweTest < Minitest::Test
     )
 
     auth.api.get_siwe_nonce(body: {walletAddress: WALLET})
-    result = auth.api.verify_siwe_message(body: {message: "valid-message", signature: "valid-signature", walletAddress: WALLET})
+    message = siwe_message(nonce: "nonce-1")
+    result = auth.api.verify_siwe_message(body: {message: message, signature: "valid-signature", walletAddress: WALLET})
 
     assert_equal true, result.fetch(:success)
     assert_kind_of String, result.fetch(:token)
@@ -136,7 +137,7 @@ class BetterAuthPluginsSiweTest < Minitest::Test
     assert_kind_of String, result.dig(:user, :id)
 
     call = calls.fetch(0)
-    assert_equal "valid-message", call.fetch(:message)
+    assert_equal message, call.fetch(:message)
     assert_equal "valid-signature", call.fetch(:signature)
     assert_equal WALLET, call.fetch(:address)
     assert_equal 1, call.fetch(:chain_id)
@@ -149,9 +150,9 @@ class BetterAuthPluginsSiweTest < Minitest::Test
     auth = build_auth
 
     auth.api.get_siwe_nonce(body: {walletAddress: WALLET, chainId: 1})
-    first = auth.api.verify_siwe_message(body: {message: "valid-message", signature: "valid-signature", walletAddress: WALLET, chainId: 1})
+    first = auth.api.verify_siwe_message(body: {message: siwe_message(nonce: "nonce-1"), signature: "valid-signature", walletAddress: WALLET, chainId: 1})
     auth.api.get_siwe_nonce(body: {walletAddress: WALLET, chainId: 137})
-    second = auth.api.verify_siwe_message(body: {message: "valid-message", signature: "valid-signature", walletAddress: WALLET, chainId: 137})
+    second = auth.api.verify_siwe_message(body: {message: siwe_message(nonce: "nonce-2", chain_id: 137), signature: "valid-signature", walletAddress: WALLET, chainId: 137})
 
     assert_equal first[:user][:id], second[:user][:id]
     wallets = auth.context.adapter.find_many(model: "walletAddress", where: [{field: "address", value: WALLET}])
@@ -165,7 +166,7 @@ class BetterAuthPluginsSiweTest < Minitest::Test
     lowercase_wallet = WALLET.downcase
 
     auth.api.get_siwe_nonce(body: {walletAddress: lowercase_wallet, chainId: 1})
-    result = auth.api.verify_siwe_message(body: {message: "valid-message", signature: "valid-signature", walletAddress: lowercase_wallet, chainId: 1})
+    result = auth.api.verify_siwe_message(body: {message: siwe_message(nonce: "nonce-1", address: lowercase_wallet), signature: "valid-signature", walletAddress: lowercase_wallet, chainId: 1})
 
     assert_equal WALLET, result.dig(:user, :walletAddress)
     wallet = auth.context.adapter.find_one(model: "walletAddress", where: [{field: "address", value: WALLET}])
@@ -177,9 +178,9 @@ class BetterAuthPluginsSiweTest < Minitest::Test
     auth = build_auth
 
     auth.api.get_siwe_nonce(body: {walletAddress: WALLET.downcase, chainId: 1})
-    first = auth.api.verify_siwe_message(body: {message: "valid-message", signature: "valid-signature", walletAddress: WALLET.downcase, chainId: 1})
+    first = auth.api.verify_siwe_message(body: {message: siwe_message(nonce: "nonce-1", address: WALLET.downcase), signature: "valid-signature", walletAddress: WALLET.downcase, chainId: 1})
     auth.api.get_siwe_nonce(body: {walletAddress: WALLET.upcase, chainId: 1})
-    second = auth.api.verify_siwe_message(body: {message: "valid-message", signature: "valid-signature", walletAddress: WALLET.upcase, chainId: 1})
+    second = auth.api.verify_siwe_message(body: {message: siwe_message(nonce: "nonce-2", address: WALLET.upcase), signature: "valid-signature", walletAddress: WALLET.upcase, chainId: 1})
 
     assert_equal first.dig(:user, :id), second.dig(:user, :id)
     wallets = auth.context.adapter.find_many(model: "walletAddress", where: [{field: "address", value: WALLET}])
@@ -236,27 +237,151 @@ class BetterAuthPluginsSiweTest < Minitest::Test
     auth.context.internal_adapter.update_verification_value(stored["id"], expiresAt: Time.now - 60)
 
     error = assert_raises(BetterAuth::APIError) do
-      auth.api.verify_siwe_message(body: {message: "valid-message", signature: "valid-signature", walletAddress: WALLET, chainId: 1})
+      auth.api.verify_siwe_message(body: {message: siwe_message(nonce: "nonce-1"), signature: "valid-signature", walletAddress: WALLET, chainId: 1})
     end
 
     assert_equal 401, error.status_code
     assert_equal "UNAUTHORIZED_INVALID_OR_EXPIRED_NONCE", error.status
   end
 
+  def test_verify_binds_erc4361_message_to_server_state
+    cases = {
+      domain: -> { siwe_message(nonce: "nonce-1", domain: "evil.example") },
+      nonce: -> { siwe_message(nonce: "wrong-nonce") },
+      address: -> { siwe_message(nonce: "nonce-1", address: "0x000000000000000000000000000000000000bEEF") },
+      chain: -> { siwe_message(nonce: "nonce-1", chain_id: 137) },
+      arbitrary_text: -> { "this is signed but is not an ERC-4361 message" }
+    }
+
+    cases.each do |name, message|
+      auth = build_auth(verify_message: ->(**) { true })
+      auth.api.get_siwe_nonce(body: {walletAddress: WALLET, chainId: 1})
+
+      error = assert_raises(BetterAuth::APIError, "#{name} should be rejected") do
+        auth.api.verify_siwe_message(
+          body: {message: message.call, signature: "valid-signature", walletAddress: WALLET, chainId: 1}
+        )
+      end
+
+      assert_equal 401, error.status_code
+      assert_equal "UNAUTHORIZED", error.status
+      assert_equal "UNAUTHORIZED_SIWE_MESSAGE_MISMATCH", error.code
+    end
+  end
+
+  def test_verify_enforces_signed_expiration_and_not_before
+    now = Time.now.utc
+    cases = {
+      ["UNAUTHORIZED_SIWE_MESSAGE_EXPIRED", now - 60, nil] => :expiration_time,
+      ["UNAUTHORIZED_SIWE_MESSAGE_NOT_YET_VALID", nil, now + 60] => :not_before
+    }
+
+    cases.each do |(status, expiration_time, not_before), _kind|
+      auth = build_auth(verify_message: ->(**) { true })
+      auth.api.get_siwe_nonce(body: {walletAddress: WALLET, chainId: 1})
+      message = siwe_message(nonce: "nonce-1", expiration_time: expiration_time, not_before: not_before)
+
+      error = assert_raises(BetterAuth::APIError) do
+        auth.api.verify_siwe_message(
+          body: {message: message, signature: "valid-signature", walletAddress: WALLET, chainId: 1}
+        )
+      end
+
+      assert_equal 401, error.status_code
+      assert_equal "UNAUTHORIZED", error.status
+      assert_equal status, error.code
+    end
+  end
+
+  def test_occupied_email_silently_falls_back_to_wallet_placeholder
+    ["taken@example.com", "TAKEN@EXAMPLE.COM"].each do |requested_email|
+      auth = build_auth(anonymous: false)
+      owner = auth.context.internal_adapter.create_user(name: "Owner", email: "taken@example.com")
+      auth.api.get_siwe_nonce(body: {walletAddress: WALLET, chainId: 1})
+
+      result = auth.api.verify_siwe_message(
+        body: {
+          message: siwe_message(nonce: "nonce-1"),
+          signature: "valid-signature",
+          walletAddress: WALLET,
+          chainId: 1,
+          email: requested_email
+        }
+      )
+
+      wallet_user = auth.context.internal_adapter.find_user_by_id(result.dig(:user, :id))
+      assert_equal "#{WALLET}@localhost".downcase, wallet_user["email"]
+      assert_equal owner["id"], auth.context.internal_adapter.find_user_by_email("taken@example.com").dig(:user, "id")
+    end
+  end
+
+  def test_wallet_placeholder_uses_canonical_host_not_signing_domain
+    auth = build_auth(base_url: "https://auth.example.test", domain: "signing.example.test")
+    auth.api.get_siwe_nonce(body: {walletAddress: WALLET, chainId: 1})
+
+    result = auth.api.verify_siwe_message(
+      body: {
+        message: siwe_message(nonce: "nonce-1", domain: "signing.example.test"),
+        signature: "valid-signature",
+        walletAddress: WALLET,
+        chainId: 1
+      }
+    )
+
+    user = auth.context.internal_adapter.find_user_by_id(result.dig(:user, :id))
+    assert_equal "#{WALLET}@auth.example.test".downcase, user["email"]
+
+    explicit = build_auth(
+      base_url: "https://auth.example.test",
+      domain: "signing.example.test",
+      email_domain_name: "wallets.example.test"
+    )
+    explicit.api.get_siwe_nonce(body: {walletAddress: WALLET, chainId: 1})
+    explicit_result = explicit.api.verify_siwe_message(
+      body: {
+        message: siwe_message(nonce: "nonce-1", domain: "signing.example.test"),
+        signature: "valid-signature",
+        walletAddress: WALLET,
+        chainId: 1
+      }
+    )
+    explicit_user = explicit.context.internal_adapter.find_user_by_id(explicit_result.dig(:user, :id))
+    assert_equal "#{WALLET}@wallets.example.test".downcase, explicit_user["email"]
+  end
+
   private
+
+  def siwe_message(nonce:, domain: "example.com", address: WALLET, chain_id: 1, expiration_time: nil, not_before: nil)
+    lines = [
+      "#{domain} wants you to sign in with your Ethereum account:",
+      address,
+      "",
+      "Sign in to Better Auth.",
+      "",
+      "URI: https://#{domain}",
+      "Version: 1",
+      "Chain ID: #{chain_id}",
+      "Nonce: #{nonce}",
+      "Issued At: #{Time.now.utc.iso8601}"
+    ]
+    lines << "Expiration Time: #{expiration_time.utc.iso8601}" if expiration_time
+    lines << "Not Before: #{not_before.utc.iso8601}" if not_before
+    lines.join("\n")
+  end
 
   def build_auth(options = {})
     nonce = 0
+    base_url = options.delete(:base_url) || "http://localhost:3000"
     verify_message = options.delete(:verify_message) || lambda do |message:, signature:, address:, chain_id:, cacao:|
       signature == "valid-signature" &&
-        message == "valid-message" &&
+        message.include?("wants you to sign in with your Ethereum account") &&
         address == WALLET &&
         chain_id.to_i.positive? &&
         cacao[:p][:nonce].start_with?("nonce-")
     end
 
     BetterAuth.auth(
-      base_url: "http://localhost:3000",
+      base_url: base_url,
       secret: SECRET,
       database: :memory,
       email_and_password: {enabled: true},

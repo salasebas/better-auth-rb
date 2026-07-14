@@ -17,10 +17,11 @@ module BetterAuth
         scopes: scopes,
         scope_separator: ",",
         profile_map: ->(profile) {
+          id = profile["unionid"] || profile["openid"]
           {
-            id: profile["unionid"] || profile["openid"],
+            id: id,
             name: profile["nickname"],
-            email: profile["email"],
+            email: profile["email"] || "#{id}@wechat.invalid",
             image: profile["headimgurl"],
             emailVerified: false
           }
@@ -85,11 +86,12 @@ module BetterAuth
         profile = Base.get_json(url)
         next nil if !profile || profile["errcode"]
 
+        id = profile["unionid"] || profile["openid"] || openid
         user = Base.apply_profile_mapping(
           {
-            id: profile["unionid"] || profile["openid"] || openid,
+            id: id,
             name: profile["nickname"],
-            email: profile["email"],
+            email: profile["email"] || "#{id}@wechat.invalid",
             image: profile["headimgurl"],
             emailVerified: false
           },

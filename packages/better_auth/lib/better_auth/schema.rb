@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require "time"
+
 module BetterAuth
   module Schema
     module_function
@@ -81,6 +83,43 @@ module BetterAuth
       end
     rescue KeyError
       data
+    end
+
+    def parse_provider_profile_user_input(options, profile, action:)
+      action = action.to_sym
+      raise ArgumentError, "action must be :create or :update" unless [:create, :update].include?(action)
+
+      input = (profile || {}).each_with_object({}) do |(key, value), result|
+        result[storage_key(key)] = value
+      end
+      core_fields = %w[id email emailVerified name image createdAt updatedAt]
+      fields = auth_tables(options).fetch("user").fetch(:fields).except(*core_fields)
+
+      fields.each_with_object({}) do |(field, attributes), result|
+        provider_value_allowed = attributes[:input] != false && input.key?(field)
+        if provider_value_allowed
+          value = coerce_provider_profile_value(input[field], attributes)
+          transform = attributes[:transform]
+          value = transform.call(value) if transform.respond_to?(:call)
+          validator = attributes[:validator]
+          if validator.respond_to?(:call) && !validator.call(value)
+            raise APIError.new("BAD_REQUEST", message: "#{field} is invalid")
+          end
+          result[field] = value
+        elsif action == :create && attributes.key?(:default_value)
+          default = attributes[:default_value]
+          result[field] = default.respond_to?(:call) ? default.call : default
+        elsif action == :create && attributes[:required]
+          raise APIError.new("BAD_REQUEST", message: "#{field} is required")
+        end
+      end
+    end
+
+    private_class_method def self.coerce_provider_profile_value(value, attributes)
+      return value if value.nil?
+      return Time.parse(value) if attributes[:type] == "date" && value.is_a?(String)
+
+      value
     end
 
     private_class_method def self.user_table(options, plugin_table)

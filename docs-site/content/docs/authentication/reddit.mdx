@@ -37,6 +37,14 @@ description: Reddit provider setup and usage in Better Auth Ruby.
       }
     )
     ```
+
+    <Callout type="info">
+      Reddit does not provide a routable email address for this flow. By
+      default, Better Auth uses `<Reddit profile ID>@reddit.invalid` and marks
+      it unverified; the reserved `.invalid` domain must never receive mail.
+      Configure `map_profile_to_user` to replace both the email and its
+      verification state when your application has trusted email data.
+    </Callout>
   </Step>
 
   <Step>

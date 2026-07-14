@@ -30,13 +30,25 @@ Enabling OAuth with Microsoft Azure Entra ID (formerly Active Directory) allows 
       social_providers: {
         microsoft: BetterAuth::SocialProviders.microsoft(
           client_id: ENV.fetch("MICROSOFT_CLIENT_ID"),
-          client_secret: ENV.fetch("MICROSOFT_CLIENT_SECRET")
+          client_secret: ENV.fetch("MICROSOFT_CLIENT_SECRET"),
+          tenant_id: "common"
         )
       }
     )
     ```
 
     **Authority URL**: Use the default `https://login.microsoftonline.com` for standard Entra ID scenarios or `https://<tenant-id>.ciamlogin.com` for CIAM (Customer Identity and Access Management) scenarios.
+
+    #### Tenant modes
+
+    Choose `tenant_id` according to the accounts your application accepts:
+
+    * `common` (the default) accepts both work/school and personal Microsoft accounts.
+    * `organizations` accepts work/school tenants and rejects personal Microsoft accounts.
+    * `consumers` accepts only personal Microsoft accounts.
+    * A specific tenant ID accepts only that tenant.
+
+    For every mode, the token must identify a string tenant ID and its issuer must match that same tenant under the configured authority. This prevents a token from one tenant class or authority being accepted as another.
 
     <Callout type="warn">
       Entra does not emit the `email` claim for managed users by default, and the value is [tenant-mutable and never verified by Microsoft](https://learn.microsoft.com/en-us/entra/identity-platform/id-token-claims-reference); it must not be used for authorization decisions. Request `email` as an [optional claim](https://learn.microsoft.com/en-us/entra/identity-platform/optional-claims) for managed users, and use `profile.oid` (plus `profile.tid` when correlating across tenants) as the stable identity anchor. See [Handling Providers Without Email](/docs/concepts/oauth#handling-providers-without-email) for the `map_profile_to_user` fallback.

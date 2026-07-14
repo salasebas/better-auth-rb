@@ -259,8 +259,15 @@ module BetterAuth
             account["providerId"] == provider_id && account["accountId"] == account_id
           end
           unless existing
-            ctx.context.internal_adapter.create_account(token_hash_for_storage(ctx, data[:account]).merge("userId" => session[:user]["id"]))
+            begin
+              account = ctx.context.internal_adapter.create_account(token_hash_for_storage(ctx, data[:account]).merge("userId" => session[:user]["id"]))
+              raise BetterAuth::Error, "Unable to link social account" unless account
+            rescue
+              social_log(ctx.context, :error, "Unable to link social account")
+              raise APIError.new("INTERNAL_SERVER_ERROR", message: "Unable to link social account")
+            end
           end
+          update_social_user_info_on_link(ctx, session[:user]["id"], data[:user])
           update_verified_email_on_link(ctx, session[:user]["id"], session[:user]["email"], data[:user])
           next ctx.json({url: "", status: true, redirect: false})
         end
@@ -334,13 +341,25 @@ module BetterAuth
       account_id = (account_info["accountId"] || account_info[:accountId] || account_info[:account_id] || fetch_value(user_info, "id")).to_s
       return {error: "unable to get user info"} if blank_remote_id?(account_id)
 
-      existing = ctx.context.internal_adapter.find_oauth_user(email, account_id, provider_id)
+      existing = begin
+        ctx.context.internal_adapter.find_oauth_user(email, account_id, provider_id)
+      rescue
+        social_log(ctx.context, :error, "Unable to query social user")
+        raise APIError.new("INTERNAL_SERVER_ERROR", message: "internal server error")
+      end
 
       if existing && existing[:linked_account]
         user = existing[:user]
         if ctx.context.options.account[:update_account_on_sign_in] != false
           update_data = account_storage_fields(account_info)
-          ctx.context.internal_adapter.update_account(existing[:linked_account]["id"], update_data) unless update_data.empty?
+          unless update_data.empty?
+            begin
+              ctx.context.internal_adapter.update_account(existing[:linked_account]["id"], update_data)
+            rescue
+              social_log(ctx.context, :error, "Unable to link social account")
+              raise
+            end
+          end
         end
         verified_user = update_verified_email_on_link(ctx, user["id"], user["email"], user_info)
         user = verified_user if verified_user
@@ -352,26 +371,42 @@ module BetterAuth
         end
         user = existing[:user]
         user = ctx.context.adapter.transaction do
-          account = ctx.context.internal_adapter.create_account(account_info.merge("providerId" => provider_id, "accountId" => account_id, "userId" => user["id"]))
-          raise BetterAuth::Error, "Failed to link social account" unless account
+          account = begin
+            ctx.context.internal_adapter.create_account(account_info.merge("providerId" => provider_id, "accountId" => account_id, "userId" => user["id"]))
+          rescue
+            social_log(ctx.context, :error, "Unable to link social account")
+            raise
+          end
+          unless account
+            social_log(ctx.context, :error, "Unable to link social account")
+            raise BetterAuth::Error, "Failed to link social account"
+          end
 
           promoted = promote_verified_email_on_link!(ctx, user, user_info)
-          promoted || user
+          linked_user = promoted || user
+          update_social_user_info_on_link(ctx, linked_user["id"], user_info) || linked_user
         end
         new_user = false
       else
         return {error: "signup disabled"} if disable_sign_up
 
-        created = ctx.context.internal_adapter.create_oauth_user(
-          {
-            email: email,
-            name: fetch_value(user_info, "name").to_s,
-            image: fetch_value(user_info, "image"),
-            emailVerified: !!fetch_value(user_info, "emailVerified")
-          },
-          account_info.merge("providerId" => provider_id, "accountId" => account_id),
-          context: ctx
-        )
+        begin
+          provider_fields = Schema.parse_provider_profile_user_input(ctx.context.options, user_info, action: :create)
+          created = ctx.context.internal_adapter.create_oauth_user(
+            provider_fields.merge(
+              email: email,
+              name: fetch_value(user_info, "name").to_s,
+              image: fetch_value(user_info, "image"),
+              emailVerified: !!fetch_value(user_info, "emailVerified")
+            ),
+            account_info.merge("providerId" => provider_id, "accountId" => account_id),
+            context: ctx
+          )
+          raise BetterAuth::Error, "Failed to create social user" unless created
+        rescue
+          social_log(ctx.context, :error, "Unable to create social user")
+          return {error: "unable to create user"}
+        end
         user = created[:user]
         new_user = true
       end
@@ -458,20 +493,21 @@ module BetterAuth
         "userId" => user_id
       )
       existing = ctx.context.internal_adapter.find_account_by_provider_id(account_id, provider_id)
-      if existing
-        return {error: "account_already_linked_to_different_user"} if existing["userId"].to_s != user_id
+      begin
+        account = if existing
+          return {error: "account_already_linked_to_different_user"} if existing["userId"].to_s != user_id
 
-        ctx.context.internal_adapter.update_account(existing["id"], account_info)
-      else
-        ctx.context.internal_adapter.create_account(account_info)
+          ctx.context.internal_adapter.update_account(existing["id"], account_info)
+        else
+          ctx.context.internal_adapter.create_account(account_info)
+        end
+        raise BetterAuth::Error, "Unable to link social account" unless account
+      rescue
+        social_log(ctx.context, :error, "Unable to link social account")
+        return {error: "unable_to_link_account"}
       end
 
-      if ctx.context.options.account.dig(:account_linking, :update_user_info_on_link)
-        ctx.context.internal_adapter.update_user(user_id, {
-          name: fetch_value(user_info, "name"),
-          image: fetch_value(user_info, "image")
-        }.compact)
-      end
+      update_social_user_info_on_link(ctx, user_id, user_info)
       update_verified_email_on_link(ctx, user_id, link_email, user_info)
 
       {status: true}
@@ -489,13 +525,33 @@ module BetterAuth
       else
         !!fetch_value(user_info, "emailVerified")
       end
-      update = {
+      provider_fields = Schema.parse_provider_profile_user_input(ctx.context.options, user_info, action: :update)
+      update = provider_fields.merge(
         "email" => email,
         "name" => fetch_value(user_info, "name").to_s,
         "image" => fetch_value(user_info, "image"),
         "emailVerified" => email_verified
-      }.reject { |_key, value| value.nil? }
+      ).reject { |_key, value| value.nil? }
       ctx.context.internal_adapter.update_user(user["id"], update)
+    rescue
+      social_log(ctx.context, :warn, "Could not override social user info")
+      raise
+    end
+
+    def self.update_social_user_info_on_link(ctx, user_id, user_info)
+      return unless ctx.context.options.account.dig(:account_linking, :update_user_info_on_link)
+
+      provider_fields = Schema.parse_provider_profile_user_input(ctx.context.options, user_info, action: :update)
+      update = provider_fields.merge(
+        "name" => fetch_value(user_info, "name"),
+        "image" => fetch_value(user_info, "image")
+      ).reject { |_key, value| value.nil? }
+      return if update.empty?
+
+      ctx.context.internal_adapter.update_user(user_id, update)
+    rescue
+      social_log(ctx.context, :warn, "Could not update user info on account link")
+      nil
     end
 
     def self.safe_additional_state(body)
@@ -553,6 +609,15 @@ module BetterAuth
       parsed.is_a?(Hash) ? parsed : {}
     rescue JSON::ParserError
       {}
+    end
+
+    def self.social_log(context, level, message)
+      logger = context.logger
+      if logger.respond_to?(:call)
+        logger.call(level, message)
+      elsif logger.respond_to?(level)
+        logger.public_send(level, message)
+      end
     end
   end
 end

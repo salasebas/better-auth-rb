@@ -85,6 +85,15 @@ description: PayPal provider setup and usage in Better Auth Ruby.
       }
     )
     ```
+
+    <Callout type="warn">
+      PayPal ID-token sign-in requires verified proof; decoded claims alone are
+      never trusted. Better Auth accepts only PayPal's supported RS256 or HS256
+      signature paths and verifies the configured sandbox/live issuer, client
+      audience, expiry and maximum age, plus the nonce when one is expected.
+      When an ID token accompanies an access-token profile, its verified
+      subject must match the profile identity before the profile is accepted.
+    </Callout>
   </Step>
 
   <Step>

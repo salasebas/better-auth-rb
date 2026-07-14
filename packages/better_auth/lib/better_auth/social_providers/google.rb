@@ -4,6 +4,14 @@ module BetterAuth
   module SocialProviders
     module_function
 
+    def google_hosted_domain_allowed?(configured_hosted_domain, token_hosted_domain)
+      return true if configured_hosted_domain.nil? || configured_hosted_domain.to_s.empty?
+      return false unless token_hosted_domain.is_a?(String) && !token_hosted_domain.strip.empty?
+      return true if configured_hosted_domain == "*"
+
+      token_hosted_domain == configured_hosted_domain
+    end
+
     def google(client_id:, client_secret:, scopes: ["openid", "email", "profile"], **options)
       normalized = Base.normalize_options(options)
       primary_client_id = Base.primary_client_id(client_id)
@@ -12,6 +20,7 @@ module BetterAuth
         name: "Google",
         client_id: client_id,
         client_secret: client_secret,
+        options: normalized,
         create_authorization_url: lambda do |data|
           verifier = data[:code_verifier] || data[:codeVerifier]
           raise Error, "codeVerifier is required for Google" if verifier.to_s.empty?
@@ -57,7 +66,7 @@ module BetterAuth
             audience: audiences,
             nonce: nonce
           )
-          !!profile&.fetch("sub", nil)
+          !!profile&.fetch("sub", nil) && google_hosted_domain_allowed?(normalized[:hd], profile["hd"])
         end,
         get_user_info: lambda do |tokens|
           custom = normalized[:get_user_info]
@@ -65,6 +74,8 @@ module BetterAuth
           next nil unless Base.id_token(tokens)
 
           profile = Base.decode_jwt_payload(Base.id_token(tokens))
+          next nil unless google_hosted_domain_allowed?(normalized[:hd], profile["hd"])
+
           user = Base.apply_profile_mapping(
             {
               id: profile["sub"],

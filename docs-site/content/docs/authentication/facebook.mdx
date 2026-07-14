@@ -106,6 +106,15 @@ To sign in with Facebook using the ID Token, you can use the `auth.api.sign_in_s
 
 This is useful when you have the ID Token from Facebook on your app and want to use it to sign in on the server.
 
+<Callout type="warn">
+  Better Auth validates both Facebook token forms before trusting the identity.
+  Limited Login JWTs must pass signature, issuer, and audience checks, plus a
+  nonce check when one is expected. Opaque access tokens require a configured
+  `client_secret`; Better Auth asks Facebook to confirm that the token is valid
+  for one of your configured app IDs, then requires the confirmed user ID to
+  match the `/me` profile. Missing or mismatched proof is rejected.
+</Callout>
+
 <Callout>
   If ID token is provided no redirection will happen, and the user will be signed in directly.
 </Callout>

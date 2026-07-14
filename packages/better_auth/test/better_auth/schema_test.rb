@@ -68,6 +68,71 @@ class BetterAuthSchemaTest < Minitest::Test
     assert_equal "user_id", schema["session"][:fields]["userId"][:field_name]
   end
 
+  def test_provider_profile_user_input_filters_to_allowed_additional_fields_on_create
+    config = provider_profile_config
+    profile = {
+      id: "provider-account-id",
+      email: "provider@example.com",
+      emailVerified: true,
+      name: "Provider Name",
+      image: "https://example.com/provider.png",
+      unknownField: "discard me",
+      mappedCode: "created",
+      mappedAt: "2026-07-13T12:34:56Z",
+      serverRole: "admin",
+      requiredClaim: "present",
+      transformedCode: "make-me-upper",
+      validatedCode: "allowed"
+    }
+
+    parsed = BetterAuth::Schema.parse_provider_profile_user_input(config, profile, action: :create)
+
+    assert_equal %w[mappedCode mappedAt serverRole requiredClaim transformedCode validatedCode], parsed.keys
+    assert_equal "created", parsed.fetch("mappedCode")
+    assert_equal Time.utc(2026, 7, 13, 12, 34, 56), parsed.fetch("mappedAt")
+    assert_equal "member", parsed.fetch("serverRole")
+    assert_equal "present", parsed.fetch("requiredClaim")
+    assert_equal "MAKE-ME-UPPER", parsed.fetch("transformedCode")
+    assert_equal "allowed", parsed.fetch("validatedCode")
+  end
+
+  def test_provider_profile_user_input_enforces_required_fields_only_on_create
+    missing = assert_raises(BetterAuth::APIError) do
+      BetterAuth::Schema.parse_provider_profile_user_input(provider_profile_config, {mappedCode: "created"}, action: :create)
+    end
+
+    assert_equal 400, missing.status_code
+    assert_equal "requiredClaim is required", missing.message
+
+    parsed = BetterAuth::Schema.parse_provider_profile_user_input(
+      provider_profile_config,
+      {
+        mappedCode: "updated",
+        mappedAt: "2026-07-14T01:02:03Z",
+        serverRole: "owner"
+      },
+      action: :update
+    )
+
+    assert_equal %w[mappedCode mappedAt], parsed.keys
+    assert_equal "updated", parsed.fetch("mappedCode")
+    assert_equal Time.utc(2026, 7, 14, 1, 2, 3), parsed.fetch("mappedAt")
+    refute parsed.key?("serverRole")
+    refute parsed.key?("requiredClaim")
+  end
+
+  def test_provider_profile_user_input_rejects_failed_field_validation
+    error = assert_raises(BetterAuth::APIError) do
+      BetterAuth::Schema.parse_provider_profile_user_input(
+        provider_profile_config,
+        {requiredClaim: "present", validatedCode: "rejected"},
+        action: :create
+      )
+    end
+
+    assert_equal 400, error.status_code
+  end
+
   def test_custom_model_names_are_applied_to_core_tables
     config = BetterAuth::Configuration.new(
       secret: SECRET,
@@ -365,5 +430,24 @@ class BetterAuthSchemaTest < Minitest::Test
     assert_includes mssql, "[metadata] varchar(8000)"
     assert_includes mssql, "[tags] varchar(8000)"
     assert_includes mssql, "[scores] varchar(8000)"
+  end
+
+  private
+
+  def provider_profile_config
+    BetterAuth::Configuration.new(
+      secret: SECRET,
+      database: :memory,
+      user: {
+        additional_fields: {
+          mappedCode: {type: "string", required: false},
+          mappedAt: {type: "date", required: false},
+          serverRole: {type: "string", required: false, input: false, default_value: "member"},
+          requiredClaim: {type: "string", required: true},
+          transformedCode: {type: "string", required: false, transform: ->(value) { value.upcase }},
+          validatedCode: {type: "string", required: false, validator: ->(value) { value == "allowed" }}
+        }
+      }
+    )
   end
 end

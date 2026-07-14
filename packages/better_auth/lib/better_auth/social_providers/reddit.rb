@@ -23,9 +23,9 @@ module BetterAuth
           {
             id: profile["id"],
             name: profile["name"],
-            email: profile["oauth_client_id"],
+            email: "#{profile["id"]}@reddit.invalid",
             image: profile["icon_img"].to_s.split("?").first,
-            emailVerified: !!profile["has_verified_email"]
+            emailVerified: false
           }
         },
         **options

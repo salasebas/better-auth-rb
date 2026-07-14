@@ -111,21 +111,34 @@ class BetterAuthPluginsLastLoginMethodTest < Minitest::Test
   end
 
   def test_last_login_method_sets_cookie_and_database_value_for_siwe
+    wallet = "0x000000000000000000000000000000000000dEaD"
+    nonce = "A1b2C3d4E5f6G7h8J"
+    siwe_message = [
+      "example.com wants you to sign in with your Ethereum account:",
+      wallet,
+      "",
+      "Sign in to Better Auth.",
+      "",
+      "URI: https://example.com",
+      "Version: 1",
+      "Chain ID: 1",
+      "Nonce: #{nonce}",
+      "Issued At: 2026-07-13T00:00:00Z"
+    ].join("\n")
     auth = build_auth(
       plugins: [
         BetterAuth::Plugins.last_login_method(store_in_database: true),
         BetterAuth::Plugins.siwe(
           domain: "example.com",
-          get_nonce: -> { "A1b2C3d4E5f6G7h8J" },
-          verify_message: ->(message:, signature:, **) { message == "valid_message" && signature == "valid_signature" }
+          get_nonce: -> { nonce },
+          verify_message: ->(message:, signature:, **) { message == siwe_message && signature == "valid_signature" }
         )
       ]
     )
-    wallet = "0x000000000000000000000000000000000000dEaD"
     auth.api.get_siwe_nonce(body: {walletAddress: wallet, chainId: 1})
 
     _status, headers, _body = auth.api.verify_siwe_message(
-      body: {message: "valid_message", signature: "valid_signature", walletAddress: wallet, chainId: 1, email: "siwe@example.com"},
+      body: {message: siwe_message, signature: "valid_signature", walletAddress: wallet, chainId: 1, email: "siwe@example.com"},
       as_response: true
     )
     cookie = headers.fetch("set-cookie").lines.map { |line| line.split(";").first }.join("; ")

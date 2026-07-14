@@ -143,6 +143,49 @@ class BetterAuthSocialProvidersTest < Minitest::Test
     refute provider.fetch(:verify_id_token).call(fake_jwt("iss" => "https://accounts.google.com", "aud" => "ios-id", "sub" => "sub-1"))
   end
 
+  def test_google_id_token_verifier_enforces_hosted_domain_restrictions
+    key = OpenSSL::PKey::RSA.generate(2048)
+    jwks = {"keys" => [rsa_public_jwk(key, "google-hd-kid")]}
+    claims = {"iss" => "https://accounts.google.com", "aud" => "google-id", "sub" => "google-sub"}
+    workspace_token = signed_jwt(key, "google-hd-kid", claims.merge("hd" => "example.com"))
+    other_workspace_token = signed_jwt(key, "google-hd-kid", claims.merge("hd" => "other.com"))
+    consumer_token = signed_jwt(key, "google-hd-kid", claims)
+
+    exact = BetterAuth::SocialProviders.google(client_id: "google-id", client_secret: "google-secret", hd: "example.com", jwks: jwks)
+    wildcard = BetterAuth::SocialProviders.google(client_id: "google-id", client_secret: "google-secret", hd: "*", jwks: jwks)
+    unrestricted = BetterAuth::SocialProviders.google(client_id: "google-id", client_secret: "google-secret", jwks: jwks)
+
+    assert exact.fetch(:verify_id_token).call(workspace_token)
+    refute exact.fetch(:verify_id_token).call(other_workspace_token)
+    refute exact.fetch(:verify_id_token).call(consumer_token)
+    assert wildcard.fetch(:verify_id_token).call(workspace_token)
+    refute wildcard.fetch(:verify_id_token).call(consumer_token)
+    assert unrestricted.fetch(:verify_id_token).call(consumer_token)
+  end
+
+  def test_google_profile_path_enforces_hosted_domain_restrictions
+    profile = {
+      "sub" => "google-sub",
+      "name" => "Workspace User",
+      "email" => "workspace@example.com",
+      "email_verified" => true
+    }
+    workspace_token = unsigned_jwt(profile.merge("hd" => "example.com"))
+    other_workspace_token = unsigned_jwt(profile.merge("hd" => "other.com"))
+    consumer_token = unsigned_jwt(profile)
+
+    exact = BetterAuth::SocialProviders.google(client_id: "google-id", client_secret: "google-secret", hd: "example.com")
+    wildcard = BetterAuth::SocialProviders.google(client_id: "google-id", client_secret: "google-secret", hd: "*")
+    unrestricted = BetterAuth::SocialProviders.google(client_id: "google-id", client_secret: "google-secret")
+
+    assert_equal "workspace@example.com", exact.fetch(:get_user_info).call(idToken: workspace_token).fetch(:user).fetch(:email)
+    assert_nil exact.fetch(:get_user_info).call(idToken: other_workspace_token)
+    assert_nil exact.fetch(:get_user_info).call(idToken: consumer_token)
+    assert_equal "workspace@example.com", wildcard.fetch(:get_user_info).call(idToken: workspace_token).fetch(:user).fetch(:email)
+    assert_nil wildcard.fetch(:get_user_info).call(idToken: consumer_token)
+    assert_equal "workspace@example.com", unrestricted.fetch(:get_user_info).call(idToken: consumer_token).fetch(:user).fetch(:email)
+  end
+
   def test_id_token_jwks_timeout_returns_invalid_token_result
     provider = BetterAuth::SocialProviders.google(
       client_id: "google-id",
@@ -176,8 +219,63 @@ class BetterAuthSocialProvidersTest < Minitest::Test
       jwks: {"keys" => [rsa_public_jwk(key, "microsoft-kid")]}
     )
 
-    assert provider.fetch(:verify_id_token).call(signed_jwt(key, "microsoft-kid", "iss" => "https://login.microsoftonline.com/tenant-1/v2.0", "aud" => "microsoft-id", "sub" => "ms-sub"))
-    refute provider.fetch(:verify_id_token).call(signed_jwt(key, "microsoft-kid", "iss" => "https://login.microsoftonline.com/other/v2.0", "aud" => "microsoft-id", "sub" => "ms-sub"))
+    assert provider.fetch(:verify_id_token).call(signed_jwt(key, "microsoft-kid", "iss" => "https://login.microsoftonline.com/tenant-1/v2.0", "aud" => "microsoft-id", "sub" => "ms-sub", "tid" => "tenant-1"))
+    refute provider.fetch(:verify_id_token).call(signed_jwt(key, "microsoft-kid", "iss" => "https://login.microsoftonline.com/other/v2.0", "aud" => "microsoft-id", "sub" => "ms-sub", "tid" => "tenant-1"))
+  end
+
+  def test_microsoft_id_token_verifier_enforces_organization_tenant_class
+    key = OpenSSL::PKey::RSA.generate(2048)
+    provider = microsoft_provider_for_test(key, tenant_id: "organizations")
+
+    assert provider.fetch(:verify_id_token).call(microsoft_token(key, tid: microsoft_work_tenant_id))
+    refute provider.fetch(:verify_id_token).call(microsoft_token(key, tid: microsoft_consumer_tenant_id))
+  end
+
+  def test_microsoft_id_token_verifier_enforces_consumer_tenant_class
+    key = OpenSSL::PKey::RSA.generate(2048)
+    provider = microsoft_provider_for_test(key, tenant_id: "consumers")
+
+    assert provider.fetch(:verify_id_token).call(microsoft_token(key, tid: microsoft_consumer_tenant_id))
+    refute provider.fetch(:verify_id_token).call(microsoft_token(key, tid: microsoft_work_tenant_id))
+  end
+
+  def test_microsoft_id_token_verifier_common_accepts_work_and_consumer_tenants
+    key = OpenSSL::PKey::RSA.generate(2048)
+    provider = microsoft_provider_for_test(key, tenant_id: "common")
+
+    assert provider.fetch(:verify_id_token).call(microsoft_token(key, tid: microsoft_work_tenant_id))
+    assert provider.fetch(:verify_id_token).call(microsoft_token(key, tid: microsoft_consumer_tenant_id))
+  end
+
+  def test_microsoft_id_token_verifier_rejects_missing_or_non_string_tenant_id
+    key = OpenSSL::PKey::RSA.generate(2048)
+    provider = microsoft_provider_for_test(key, tenant_id: "common")
+    issuer = "https://login.microsoftonline.com/#{microsoft_work_tenant_id}/v2.0"
+
+    refute provider.fetch(:verify_id_token).call(signed_jwt(key, "microsoft-tenant-kid", "iss" => issuer, "aud" => "microsoft-id", "sub" => "ms-sub"))
+    refute provider.fetch(:verify_id_token).call(signed_jwt(key, "microsoft-tenant-kid", "iss" => issuer, "aud" => "microsoft-id", "sub" => "ms-sub", "tid" => 123))
+  end
+
+  def test_microsoft_id_token_verifier_binds_issuer_to_tenant_id
+    key = OpenSSL::PKey::RSA.generate(2048)
+    provider = microsoft_provider_for_test(key, tenant_id: "common")
+    token = microsoft_token(
+      key,
+      tid: microsoft_work_tenant_id,
+      issuer: "https://login.microsoftonline.com/#{microsoft_consumer_tenant_id}/v2.0"
+    )
+
+    refute provider.fetch(:verify_id_token).call(token)
+  end
+
+  def test_microsoft_id_token_verifier_normalizes_custom_authority_and_binds_issuer
+    key = OpenSSL::PKey::RSA.generate(2048)
+    provider = microsoft_provider_for_test(key, tenant_id: "common", authority: "https://login.example.test/")
+    valid = microsoft_token(key, tid: microsoft_work_tenant_id, authority: "https://login.example.test")
+    wrong_authority = microsoft_token(key, tid: microsoft_work_tenant_id)
+
+    assert provider.fetch(:verify_id_token).call(valid)
+    refute provider.fetch(:verify_id_token).call(wrong_authority)
   end
 
   def test_facebook_default_id_token_verifier_validates_limited_login_jwt
@@ -195,6 +293,71 @@ class BetterAuthSocialProvidersTest < Minitest::Test
     refute provider.fetch(:verify_id_token).call(signed_jwt(key, "facebook-kid", "iss" => "https://www.facebook.com", "aud" => "other-id", "sub" => "fb-sub"))
     refute BetterAuth::SocialProviders.facebook(client_id: "facebook-id", client_secret: "facebook-secret", disable_id_token_sign_in: true)
       .fetch(:verify_id_token).call("opaque-access-token")
+  end
+
+  def test_facebook_opaque_token_verifier_requires_debug_token_app_binding
+    captured_urls = []
+    get_json = lambda do |url, _headers = {}|
+      captured_urls << url
+      {"data" => {"is_valid" => true, "app_id" => "facebook-id", "user_id" => "fb-user"}}
+    end
+    provider = BetterAuth::SocialProviders.facebook(client_id: "facebook-id", client_secret: "facebook-secret")
+
+    BetterAuth::SocialProviders::Base.stub(:get_json, get_json) do
+      assert provider.fetch(:verify_id_token).call("opaque-access-token")
+    end
+
+    refute_empty captured_urls
+    debug_params = auth_params(captured_urls.fetch(0))
+    assert_includes captured_urls.fetch(0), "https://graph.facebook.com/debug_token"
+    assert_equal "opaque-access-token", debug_params.fetch("input_token")
+    assert_equal "facebook-id|facebook-secret", debug_params.fetch("access_token")
+  end
+
+  def test_facebook_opaque_token_verifier_rejects_wrong_app_and_invalid_token
+    provider = BetterAuth::SocialProviders.facebook(client_id: "facebook-id", client_secret: "facebook-secret")
+    responses = [
+      {"data" => {"is_valid" => true, "app_id" => "other-app", "user_id" => "fb-user"}},
+      {"data" => {"is_valid" => false, "app_id" => "facebook-id", "user_id" => "fb-user"}}
+    ]
+
+    BetterAuth::SocialProviders::Base.stub(:get_json, ->(_url, _headers = {}) { responses.shift }) do
+      refute provider.fetch(:verify_id_token).call("wrong-app-token")
+      refute provider.fetch(:verify_id_token).call("revoked-token")
+    end
+  end
+
+  def test_facebook_opaque_token_verifier_rejects_missing_client_secret
+    provider = BetterAuth::SocialProviders.facebook(client_id: "facebook-id", client_secret: "")
+    get_json = ->(_url, _headers = {}) { flunk "Facebook should not inspect a token without an app secret" }
+
+    BetterAuth::SocialProviders::Base.stub(:get_json, get_json) do
+      refute provider.fetch(:verify_id_token).call("opaque-access-token")
+    end
+  end
+
+  def test_facebook_opaque_profile_requires_debug_token_subject_match
+    provider = BetterAuth::SocialProviders.facebook(client_id: "facebook-id", client_secret: "facebook-secret")
+    get_json = lambda do |url, _headers = {}|
+      if url.include?("debug_token")
+        {"data" => {"is_valid" => true, "app_id" => "facebook-id", "user_id" => "bound-user"}}
+      else
+        facebook_profile("different-user")
+      end
+    end
+
+    BetterAuth::SocialProviders::Base.stub(:get_json, get_json) do
+      assert_nil_user_info provider, accessToken: "opaque-access-token"
+    end
+  end
+
+  def test_facebook_opaque_profile_requires_access_token
+    provider = BetterAuth::SocialProviders.facebook(client_id: "facebook-id", client_secret: "facebook-secret")
+    get_json = ->(_url, _headers = {}) { flunk "Facebook should not fetch a profile without an access token" }
+
+    BetterAuth::SocialProviders::Base.stub(:get_json, get_json) do
+      assert_nil_user_info provider, {}
+    end
   end
 
   def test_cognito_default_id_token_verifier_validates_issuer_audience_and_nonce
@@ -250,13 +413,94 @@ class BetterAuthSocialProvidersTest < Minitest::Test
       .fetch(:verify_id_token).call("line-id-token")
   end
 
-  def test_paypal_default_id_token_verifier_decodes_subject_and_honors_disable_flag
-    provider = BetterAuth::SocialProviders.paypal(client_id: "paypal-id", client_secret: "paypal-secret")
+  def test_paypal_id_token_verifier_accepts_rs256
+    key = OpenSSL::PKey::RSA.generate(2048)
+    provider = paypal_provider(jwks: {"keys" => [rsa_public_jwk(key, "paypal-kid")]})
+    token = signed_jwt(key, "paypal-kid", paypal_id_token_claims)
 
-    assert provider.fetch(:verify_id_token).call(unsigned_jwt("sub" => "paypal-sub"))
-    refute provider.fetch(:verify_id_token).call(unsigned_jwt("name" => "missing subject"))
-    refute BetterAuth::SocialProviders.paypal(client_id: "paypal-id", client_secret: "paypal-secret", disable_id_token_sign_in: true)
-      .fetch(:verify_id_token).call(unsigned_jwt("sub" => "paypal-sub"))
+    assert provider.fetch(:verify_id_token).call(token, "nonce-1")
+  end
+
+  def test_paypal_id_token_verifier_accepts_hs256
+    provider = paypal_provider
+    token = algorithm_jwt("paypal-secret", "HS256", paypal_id_token_claims)
+
+    assert provider.fetch(:verify_id_token).call(token, "nonce-1")
+  end
+
+  def test_paypal_id_token_verifier_rejects_wrong_signature
+    trusted_key = OpenSSL::PKey::RSA.generate(2048)
+    attacker_key = OpenSSL::PKey::RSA.generate(2048)
+    provider = paypal_provider(jwks: {"keys" => [rsa_public_jwk(trusted_key, "paypal-kid")]})
+    token = signed_jwt(attacker_key, "paypal-kid", paypal_id_token_claims)
+
+    refute provider.fetch(:verify_id_token).call(token, "nonce-1")
+  end
+
+  def test_paypal_id_token_verifier_rejects_unsupported_algorithm
+    provider = paypal_provider
+    token = algorithm_jwt("paypal-secret", "HS384", paypal_id_token_claims)
+
+    refute provider.fetch(:verify_id_token).call(token, "nonce-1")
+  end
+
+  def test_paypal_id_token_verifier_rejects_wrong_issuer
+    provider = paypal_provider
+    token = algorithm_jwt("paypal-secret", "HS256", paypal_id_token_claims.merge("iss" => "https://attacker.example"))
+
+    refute provider.fetch(:verify_id_token).call(token, "nonce-1")
+  end
+
+  def test_paypal_id_token_verifier_rejects_wrong_audience
+    provider = paypal_provider
+    token = algorithm_jwt("paypal-secret", "HS256", paypal_id_token_claims.merge("aud" => "other-client"))
+
+    refute provider.fetch(:verify_id_token).call(token, "nonce-1")
+  end
+
+  def test_paypal_id_token_verifier_rejects_wrong_nonce
+    provider = paypal_provider
+    token = algorithm_jwt("paypal-secret", "HS256", paypal_id_token_claims)
+
+    refute provider.fetch(:verify_id_token).call(token, "other-nonce")
+  end
+
+  def test_paypal_id_token_verifier_honors_disable_flag
+    provider = paypal_provider(disable_id_token_sign_in: true)
+    token = algorithm_jwt("paypal-secret", "HS256", paypal_id_token_claims)
+
+    refute provider.fetch(:verify_id_token).call(token, "nonce-1")
+  end
+
+  def test_paypal_user_info_matches_id_token_subject_and_keeps_user_id
+    provider = paypal_provider
+    token = algorithm_jwt("paypal-secret", "HS256", paypal_id_token_claims("sub" => "paypal-subject"))
+    profile = paypal_profile("user_id" => "paypal-account", "sub" => "paypal-subject")
+
+    BetterAuth::SocialProviders::Base.stub(:get_json, ->(_url, _headers = {}) { profile }) do
+      info = provider.fetch(:get_user_info).call(accessToken: "paypal-access", idToken: token)
+
+      assert_equal "paypal-account", info.fetch(:user).fetch(:id)
+    end
+  end
+
+  def test_paypal_user_info_rejects_mismatched_id_token_subject
+    provider = paypal_provider
+    token = algorithm_jwt("paypal-secret", "HS256", paypal_id_token_claims("sub" => "other-subject"))
+
+    BetterAuth::SocialProviders::Base.stub(:get_json, ->(_url, _headers = {}) { paypal_profile("user_id" => "paypal-account") }) do
+      assert_nil_user_info provider, accessToken: "paypal-access", idToken: token
+    end
+  end
+
+  def test_paypal_user_info_prefers_profile_subject_for_matching
+    provider = paypal_provider
+    token = algorithm_jwt("paypal-secret", "HS256", paypal_id_token_claims("sub" => "paypal-account"))
+    profile = paypal_profile("user_id" => "paypal-account", "sub" => "different-subject")
+
+    BetterAuth::SocialProviders::Base.stub(:get_json, ->(_url, _headers = {}) { profile }) do
+      assert_nil_user_info provider, accessToken: "paypal-access", idToken: token
+    end
   end
 
   def test_cognito_requires_hosted_domain_options_and_encodes_scope_with_percent_twenty
@@ -420,6 +664,39 @@ class BetterAuthSocialProvidersTest < Minitest::Test
     assert_equal "text/plain", captured.fetch(0).fetch(:headers).fetch("accept")
     assert_equal "better-auth", captured.fetch(0).fetch(:headers).fetch("user-agent")
     assert_equal "authorization_code", captured.fetch(0).fetch(:form).fetch(:grant_type)
+  end
+
+  def test_reddit_uses_distinct_unverified_placeholder_emails_per_profile
+    provider = BetterAuth::SocialProviders.reddit(client_id: "reddit-app", client_secret: "reddit-secret")
+    profiles = [
+      reddit_profile("user-a", oauth_client_id: "shared-client"),
+      reddit_profile("user-b", oauth_client_id: "shared-client")
+    ]
+
+    BetterAuth::SocialProviders::Base.stub(:get_json, ->(_url, _headers = {}) { profiles.shift }) do
+      first = provider.fetch(:get_user_info).call(accessToken: "reddit-token-a")
+      second = provider.fetch(:get_user_info).call(accessToken: "reddit-token-b")
+
+      assert_equal "user-a@reddit.invalid", first.fetch(:user).fetch(:email)
+      assert_equal "user-b@reddit.invalid", second.fetch(:user).fetch(:email)
+      refute first.fetch(:user).fetch(:emailVerified)
+      refute second.fetch(:user).fetch(:emailVerified)
+    end
+  end
+
+  def test_reddit_profile_mapping_can_override_placeholder_email_and_verification
+    provider = BetterAuth::SocialProviders.reddit(
+      client_id: "reddit-app",
+      client_secret: "reddit-secret",
+      map_profile_to_user: ->(_profile) { {email: "real@example.com", emailVerified: true} }
+    )
+
+    BetterAuth::SocialProviders::Base.stub(:get_json, ->(_url, _headers = {}) { reddit_profile("mapped-user") }) do
+      info = provider.fetch(:get_user_info).call(accessToken: "reddit-token")
+
+      assert_equal "real@example.com", info.fetch(:user).fetch(:email)
+      assert info.fetch(:user).fetch(:emailVerified)
+    end
   end
 
   def test_remaining_provider_authorization_url_contracts
@@ -1028,8 +1305,45 @@ class BetterAuthSocialProvidersTest < Minitest::Test
     assert_equal "zh_CN", params.fetch("lang")
     assert_equal "union-1", info.fetch(:user).fetch(:id)
     assert_equal "WeChat User", info.fetch(:user).fetch(:name)
-    assert_nil info.fetch(:user).fetch(:email)
+    assert_equal "union-1@wechat.invalid", info.fetch(:user).fetch(:email)
     assert_equal false, info.fetch(:user).fetch(:emailVerified)
+  end
+
+  def test_wechat_get_user_info_uses_openid_placeholder_without_unionid
+    profile = {
+      "openid" => "openid-only",
+      "nickname" => "WeChat User",
+      "headimgurl" => "https://wechat.example/avatar.png"
+    }
+    provider = BetterAuth::SocialProviders.wechat(client_id: "wx-app", client_secret: "wx-secret")
+
+    BetterAuth::SocialProviders::Base.stub(:get_json, ->(_url, _headers = {}) { profile }) do
+      info = provider.fetch(:get_user_info).call("accessToken" => "wechat-access", "openid" => "openid-only")
+
+      assert_equal "openid-only@wechat.invalid", info.fetch(:user).fetch(:email)
+      refute info.fetch(:user).fetch(:emailVerified)
+    end
+  end
+
+  def test_wechat_profile_mapping_can_override_placeholder_email
+    profile = {
+      "openid" => "openid-1",
+      "unionid" => "union-1",
+      "nickname" => "WeChat User",
+      "headimgurl" => "https://wechat.example/avatar.png"
+    }
+    provider = BetterAuth::SocialProviders.wechat(
+      client_id: "wx-app",
+      client_secret: "wx-secret",
+      map_profile_to_user: ->(_profile) { {email: "real@example.com", emailVerified: true} }
+    )
+
+    BetterAuth::SocialProviders::Base.stub(:get_json, ->(_url, _headers = {}) { profile }) do
+      info = provider.fetch(:get_user_info).call("accessToken" => "wechat-access", "openid" => "openid-1")
+
+      assert_equal "real@example.com", info.fetch(:user).fetch(:email)
+      assert info.fetch(:user).fetch(:emailVerified)
+    end
   end
 
   def test_wechat_get_user_info_returns_nil_without_openid
@@ -1110,6 +1424,82 @@ class BetterAuthSocialProvidersTest < Minitest::Test
 
   private
 
+  def paypal_provider(**options)
+    BetterAuth::SocialProviders.paypal(
+      client_id: "paypal-id",
+      client_secret: "paypal-secret",
+      environment: "live",
+      **options
+    )
+  end
+
+  def paypal_id_token_claims(overrides = {})
+    {
+      "iss" => "https://www.paypal.com",
+      "aud" => "paypal-id",
+      "sub" => "paypal-sub",
+      "nonce" => "nonce-1"
+    }.merge(overrides)
+  end
+
+  def paypal_profile(overrides = {})
+    {
+      "user_id" => "paypal-account",
+      "name" => "PayPal User",
+      "email" => "paypal@example.com",
+      "email_verified" => true,
+      "picture" => "https://paypal.example/avatar.png"
+    }.merge(overrides)
+  end
+
+  def reddit_profile(id, oauth_client_id: "reddit-app")
+    {
+      "id" => id,
+      "name" => "reddit-#{id}",
+      "icon_img" => "https://reddit.example/#{id}.png",
+      "has_verified_email" => true,
+      "oauth_client_id" => oauth_client_id
+    }
+  end
+
+  def microsoft_provider_for_test(key, tenant_id:, authority: nil)
+    options = {
+      client_id: "microsoft-id",
+      tenant_id: tenant_id,
+      jwks: {"keys" => [rsa_public_jwk(key, "microsoft-tenant-kid")]}
+    }
+    options[:authority] = authority if authority
+    BetterAuth::SocialProviders.microsoft(**options)
+  end
+
+  def microsoft_token(key, tid:, issuer: nil, authority: "https://login.microsoftonline.com")
+    signed_jwt(
+      key,
+      "microsoft-tenant-kid",
+      "iss" => issuer || "#{authority}/#{tid}/v2.0",
+      "aud" => "microsoft-id",
+      "sub" => "ms-sub",
+      "tid" => tid
+    )
+  end
+
+  def microsoft_consumer_tenant_id
+    "9188040d-6c67-4c5b-b112-36a304b66dad"
+  end
+
+  def microsoft_work_tenant_id
+    "11111111-2222-3333-4444-555555555555"
+  end
+
+  def facebook_profile(id)
+    {
+      "id" => id,
+      "name" => "Facebook User",
+      "email" => "#{id}@example.com",
+      "picture" => {"data" => {"url" => "https://facebook.example/avatar.png"}}
+    }
+  end
+
   def auth_params(url)
     Rack::Utils.parse_query(URI.parse(url).query)
   end
@@ -1147,11 +1537,16 @@ class BetterAuthSocialProvidersTest < Minitest::Test
   end
 
   def signed_jwt(private_key, kid, payload)
+    algorithm_jwt(private_key, "RS256", payload, kid: kid)
+  end
+
+  def algorithm_jwt(signing_key, algorithm, payload, kid: nil)
     claims = {
       "iat" => Time.now.to_i,
       "exp" => Time.now.to_i + 3600
     }.merge(payload)
-    JWT.encode(claims, private_key, "RS256", kid: kid)
+    headers = kid ? {kid: kid} : {}
+    JWT.encode(claims, signing_key, algorithm, headers)
   end
 
   def rsa_public_jwk(key, kid)
