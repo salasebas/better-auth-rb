@@ -312,6 +312,7 @@ module BetterAuth
 
     def open_api_paths(endpoints, options)
       disabled_paths = Array(options.disabled_paths).map(&:to_s)
+      used_operation_ids = Set.new
       endpoints.each_with_object({}) do |(key, endpoint, tag), paths|
         next unless endpoint.path
         next if endpoint.metadata[:exclude_from_openapi] || endpoint.metadata[:SERVER_ONLY] || endpoint.metadata[:server_only]
@@ -322,7 +323,7 @@ module BetterAuth
         path = open_api_path(endpoint.path)
         paths[path] ||= {}
         endpoint.methods.reject { |method| method == "*" }.each do |method|
-          paths[path][method.downcase.to_sym] = open_api_operation(endpoint, method, tag)
+          paths[path][method.downcase.to_sym] = open_api_operation(endpoint, method, tag, used_operation_ids)
         end
       end
     end
@@ -335,12 +336,12 @@ module BetterAuth
       tag == "Default" && [:ok, :error].include?(key) && endpoint.metadata[:openapi]
     end
 
-    def open_api_operation(endpoint, method, tag)
+    def open_api_operation(endpoint, method, tag, used_operation_ids)
       metadata = endpoint.metadata[:openapi] || {}
       operation = {
         tags: Array(metadata[:tags] || [tag]),
         description: metadata[:description],
-        operationId: metadata[:operationId],
+        operationId: open_api_operation_id(metadata[:operationId], method, used_operation_ids),
         security: [
           {
             bearerAuth: []
@@ -357,6 +358,26 @@ module BetterAuth
       operation
     end
 
+    def open_api_operation_id(base_id, method, used_operation_ids)
+      return if base_id.to_s.empty?
+
+      operation_id = base_id.to_s
+      unless used_operation_ids.include?(operation_id)
+        used_operation_ids << operation_id
+        return operation_id
+      end
+
+      suffix = method.to_s.downcase.capitalize
+      candidate = "#{operation_id}#{suffix}"
+      duplicate_index = 2
+      while used_operation_ids.include?(candidate)
+        candidate = "#{operation_id}#{suffix}#{duplicate_index}"
+        duplicate_index += 1
+      end
+      used_operation_ids << candidate
+      candidate
+    end
+
     def open_api_components(options)
       Schema.auth_tables(options).each_with_object({}) do |(model, table), schemas|
         name = model.to_s.split(/[_-]/).map(&:capitalize).join
@@ -365,11 +386,14 @@ module BetterAuth
     end
 
     def schema_for_table(table)
-      required = []
+      required = ["id"]
       properties = table[:fields].each_with_object({}) do |(field, attributes), result|
+        next if field.to_s == "id"
+
         result[field.to_sym] = field_schema(attributes)
-        required << field if attributes[:required] && attributes[:input] != false && field != "id"
+        required << field if attributes[:required] && attributes[:returned] != false
       end
+      properties = {id: {type: "string", readOnly: true}}.merge(properties)
       {type: "object", properties: properties, required: required}
     end
 

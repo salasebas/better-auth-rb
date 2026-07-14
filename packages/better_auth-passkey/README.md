@@ -75,7 +75,7 @@ Pass `context` when generating registration options:
 auth.api.generate_passkey_registration_options(query: { context: invitation_token })
 ```
 
-During passkey-first registration, `after_verification` may return `{ user_id: "..." }` to attach the credential to a concrete user. During session-required registration, switching users is rejected.
+During passkey-first registration, `after_verification` may return `{ user_id: "...", name: "Provider label" }` to attach the credential to a concrete user and provide a fallback label. During session-required registration, switching users is rejected. The callback runs exactly once. Stored-name precedence is a trimmed nonblank client name, then a trimmed nonblank callback name, then `nil`.
 
 ## Callback contracts
 
@@ -87,6 +87,27 @@ Ruby uses hashes for the upstream TypeScript contracts:
 - Authentication `after_verification` receives `{ ctx:, verification:, client_data: }`.
 - Callback `verification` values are objects from the Ruby `webauthn` gem. They are not the TypeScript `VerifiedRegistrationResponse` or `VerifiedAuthenticationResponse` structs from upstream's Node implementation.
 - Passkey records use upstream wire keys including `userId`, `credentialID`, `publicKey`, `deviceType`, `backedUp`, `createdAt`, and optional `aaguid`.
+
+## Authenticator metadata
+
+Resolve a best-effort display label from the stored AAGUID:
+
+```ruby
+label = passkey["name"] ||
+  BetterAuth::Passkey.get_authenticator_name(passkey["aaguid"]) ||
+  "Passkey"
+```
+
+`BetterAuth::Passkey::COMMON_AUTHENTICATOR_NAMES` contains common Google, Apple, Windows Hello, password-manager, and Samsung authenticator families. Lookup trims and lowercases the AAGUID. Unknown, missing, non-string, and all-zero AAGUIDs return `nil`.
+
+Pass a map to extend the built-in names without mutating the constant:
+
+```ruby
+BetterAuth::Passkey.get_authenticator_name(
+  passkey["aaguid"],
+  names: {"your-aaguid" => "Your Provider"}
+)
+```
 
 ### Ruby vs TypeScript callback shapes
 
@@ -126,7 +147,7 @@ The Ruby plugin tracks Better Auth `v1.6.9` upstream behavior. A few wire-shape 
 - `credentialID` is unique in the Ruby schema. This is intentional hardening beyond upstream v1.6.9 and prevents the same WebAuthn credential from being stored more than once.
 - `rp_id` resolution falls back to `URI.parse(base_url).host` (port stripped). When `base_url` is empty or unparseable, `rp_id` defaults to `"localhost"`.
 - For passkey-first registration, the `after_verification` callback may return `{ user_id: nil }` or `{ user_id: "" }` to leave the resolved user unchanged. Returning any other non-empty-string value (integer, boolean, etc.) raises `RESOLVED_USER_INVALID`.
-- `update_passkey` accepts an empty-string `name` to match upstream `z.string()`. Missing or non-string `name` still raises `VALIDATION_ERROR`.
+- `update_passkey` trims names and rejects missing, non-string, empty, or whitespace-only values with `VALIDATION_ERROR`.
 - Cross-user `delete_passkey` and `update_passkey` raise `NOT_FOUND` with the `PASSKEY_NOT_FOUND` message. This is an intentional Ruby hardening to avoid user/passkey enumeration while preserving the upstream error message.
 - Existing databases should deduplicate historical `credential_id` values before adding the unique constraint during migration.
 

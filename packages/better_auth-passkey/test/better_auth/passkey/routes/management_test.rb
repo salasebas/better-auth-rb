@@ -43,6 +43,23 @@ class BetterAuthPasskeyRoutesManagementTest < Minitest::Test
     assert_equal "Original", auth.context.adapter.find_one(model: "passkey", where: [{field: "id", value: other_passkey.fetch("id")}]).fetch("name")
   end
 
+  def test_update_trims_name_and_rejects_blank_name
+    auth = build_auth
+    cookie = sign_up_cookie(auth, email: "trim-update-route@example.com")
+    user = auth.api.get_session(headers: {"cookie" => cookie})[:user]
+    passkey = create_passkey(auth, user_id: user.fetch("id"), name: "Original", credential_id: "trim-update-route")
+
+    updated = auth.api.update_passkey(headers: {"cookie" => cookie}, body: {id: passkey.fetch("id"), name: "  Renamed Key  "})
+    error = assert_raises(BetterAuth::APIError) do
+      auth.api.update_passkey(headers: {"cookie" => cookie}, body: {id: passkey.fetch("id"), name: "   "})
+    end
+
+    assert_equal "Renamed Key", updated.fetch(:passkey).fetch("name")
+    assert_equal 400, error.status_code
+    assert_equal BetterAuth::BASE_ERROR_CODES.fetch("VALIDATION_ERROR"), error.message
+    assert_equal "Renamed Key", auth.context.adapter.find_one(model: "passkey", where: [{field: "id", value: passkey.fetch("id")}]).fetch("name")
+  end
+
   def test_delete_returns_same_not_found_response_for_missing_and_other_user_passkeys
     auth = build_auth
     first_cookie = sign_up_cookie(auth, email: "first-delete-enum-route@example.com")

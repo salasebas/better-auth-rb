@@ -211,6 +211,24 @@ class BetterAuthSocialProvidersTest < Minitest::Test
     refute provider.fetch(:verify_id_token).call(signed_jwt(key, "apple-kid", "iss" => "https://appleid.apple.com", "aud" => "web-id", "sub" => "apple-sub"))
   end
 
+  def test_apple_id_token_verifier_accepts_raw_and_native_hashed_nonce
+    key = OpenSSL::PKey::RSA.generate(2048)
+    provider = BetterAuth::SocialProviders.apple(
+      client_id: "web-id",
+      client_secret: "apple-secret",
+      jwks: {"keys" => [rsa_public_jwk(key, "apple-kid")]}
+    )
+    claims = {"iss" => "https://appleid.apple.com", "aud" => "web-id", "sub" => "apple-sub"}
+    raw_nonce = "raw-native-ios-nonce"
+    hashed_nonce = OpenSSL::Digest::SHA256.hexdigest(raw_nonce)
+
+    assert provider.fetch(:verify_id_token).call(signed_jwt(key, "apple-kid", claims.merge("nonce" => raw_nonce)), raw_nonce)
+    assert provider.fetch(:verify_id_token).call(signed_jwt(key, "apple-kid", claims.merge("nonce" => hashed_nonce)), raw_nonce)
+    refute provider.fetch(:verify_id_token).call(signed_jwt(key, "apple-kid", claims.merge("nonce" => hashed_nonce)), "different-nonce")
+    refute provider.fetch(:verify_id_token).call(signed_jwt(key, "apple-kid", claims), raw_nonce)
+    refute provider.fetch(:verify_id_token).call(signed_jwt(key, "apple-kid", claims.merge("nonce" => 123)), raw_nonce)
+  end
+
   def test_microsoft_id_token_verifier_validates_specific_tenant_issuer
     key = OpenSSL::PKey::RSA.generate(2048)
     provider = BetterAuth::SocialProviders.microsoft(

@@ -49,6 +49,8 @@ module BetterAuth
             unless body.key?(:name) && body[:name].is_a?(String)
               raise APIError.new("BAD_REQUEST", message: BASE_ERROR_CODES.fetch("VALIDATION_ERROR"))
             end
+            name = Utils.normalized_passkey_name(body[:name])
+            raise APIError.new("BAD_REQUEST", message: BASE_ERROR_CODES.fetch("VALIDATION_ERROR")) unless name
 
             passkey = ctx.context.adapter.find_one(
               model: "passkey",
@@ -65,7 +67,7 @@ module BetterAuth
                 {field: "id", value: body[:id]},
                 {field: "userId", value: session.fetch(:user).fetch("id")}
               ],
-              update: {name: body[:name].to_s}
+              update: {name: name}
             )
             raise APIError.new("NOT_FOUND", message: ErrorCodes::PASSKEY_ERROR_CODES.fetch("PASSKEY_NOT_FOUND")) unless updated
 

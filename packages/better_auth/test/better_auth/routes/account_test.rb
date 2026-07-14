@@ -463,7 +463,7 @@ class BetterAuthRoutesAccountTest < Minitest::Test
       accessToken: "access-token"
     )
 
-    info = auth.api.account_info(headers: {"cookie" => cookie}, query: {accountId: account["id"]})
+    info = auth.api.account_info(headers: {"cookie" => cookie}, query: {accountId: account["accountId"]})
 
     assert_equal "provider@example.com", info[:user][:email]
     assert_equal "access-token", info[:data][:accessToken]
@@ -502,7 +502,7 @@ class BetterAuthRoutesAccountTest < Minitest::Test
       scope: "user"
     )
 
-    info = auth.api.account_info(headers: {"cookie" => cookie}, query: {accountId: account["id"]})
+    info = auth.api.account_info(headers: {"cookie" => cookie}, query: {accountId: account["accountId"]})
 
     assert_equal "fresh-info@example.com", info[:user][:email]
     assert_equal "fresh-access", info[:data][:accessToken]
@@ -613,6 +613,143 @@ class BetterAuthRoutesAccountTest < Minitest::Test
     assert_equal ["repo", "user"], info[:data][:scopes]
     assert_equal "refreshed-access", stored["accessToken"]
     assert_equal "refreshed-refresh", stored["refreshToken"]
+  end
+
+  def test_direct_account_info_allows_trusted_user_id_without_session
+    provider = {
+      id: "github",
+      get_user_info: ->(tokens) { {user: {id: "direct-info", email: "direct-info@example.com"}, data: {accessToken: tokens[:accessToken]}} }
+    }
+    auth = build_auth(social_providers: {github: provider})
+    cookie = sign_up_cookie(auth, email: "direct-account-info-user@example.com")
+    user_id = auth.api.get_session(headers: {"cookie" => cookie})[:user]["id"]
+    auth.context.internal_adapter.create_account(userId: user_id, providerId: "github", accountId: "direct-info", accessToken: "direct-info-token")
+
+    info = auth.api.account_info(query: {userId: user_id, accountId: "direct-info", providerId: "github"})
+
+    assert_equal "direct-info@example.com", info[:user][:email]
+    assert_equal "direct-info-token", info[:data][:accessToken]
+  end
+
+  def test_direct_account_info_rejects_user_id_with_headers_without_session
+    calls = 0
+    provider = {
+      id: "github",
+      get_user_info: ->(_tokens) { calls += 1 }
+    }
+    auth = build_auth(social_providers: {github: provider})
+    cookie = sign_up_cookie(auth, email: "headerful-account-info-user@example.com")
+    user_id = auth.api.get_session(headers: {"cookie" => cookie})[:user]["id"]
+    auth.context.internal_adapter.create_account(userId: user_id, providerId: "github", accountId: "headerful-info", accessToken: "secret-info-token")
+
+    error = assert_raises(BetterAuth::APIError) do
+      auth.api.account_info(
+        headers: {"x" => "y"},
+        query: {userId: user_id, accountId: "headerful-info", providerId: "github"}
+      )
+    end
+
+    assert_equal 401, error.status_code
+    assert_equal 0, calls
+  end
+
+  def test_rack_account_info_rejects_user_id_without_session
+    calls = 0
+    provider = {
+      id: "github",
+      get_user_info: ->(_tokens) { calls += 1 }
+    }
+    auth = build_auth(social_providers: {github: provider})
+    cookie = sign_up_cookie(auth, email: "rack-account-info-user@example.com")
+    user_id = auth.api.get_session(headers: {"cookie" => cookie})[:user]["id"]
+    auth.context.internal_adapter.create_account(userId: user_id, providerId: "github", accountId: "rack-info", accessToken: "secret-info-token")
+    query = URI.encode_www_form(userId: user_id, accountId: "rack-info", providerId: "github")
+
+    status, _headers, body = auth.call(rack_env("GET", "/api/auth/account-info", query: query))
+
+    assert_equal 401, status
+    assert_equal 0, calls
+    refute_includes body.join, "secret-info-token"
+  end
+
+  def test_account_info_session_user_wins_over_direct_user_id
+    calls = 0
+    provider = {id: "github", get_user_info: ->(_tokens) { calls += 1 }}
+    auth = build_auth(social_providers: {github: provider})
+    session_cookie = sign_up_cookie(auth, email: "session-account-info@example.com")
+    sign_up_cookie(auth, email: "other-account-info@example.com")
+    other_user_id = auth.context.internal_adapter.find_user_by_email("other-account-info@example.com")[:user]["id"]
+    auth.context.internal_adapter.create_account(userId: other_user_id, providerId: "github", accountId: "other-info", accessToken: "other-token")
+
+    error = assert_raises(BetterAuth::APIError) do
+      auth.api.account_info(headers: {"cookie" => session_cookie}, query: {userId: other_user_id, accountId: "other-info", providerId: "github"})
+    end
+
+    assert_equal 400, error.status_code
+    assert_equal BetterAuth::BASE_ERROR_CODES.fetch("ACCOUNT_NOT_FOUND"), error.message
+    assert_equal 0, calls
+  end
+
+  def test_account_info_requires_provider_to_disambiguate_same_provider_account_id
+    github = {id: "github", get_user_info: ->(_tokens) { {user: {id: "shared", email: "github-shared@example.com"}, data: {provider: "github"}} }}
+    google = {id: "google", get_user_info: ->(_tokens) { {user: {id: "shared", email: "google-shared@example.com"}, data: {provider: "google"}} }}
+    auth = build_auth(social_providers: {github: github, google: google})
+    cookie = sign_up_cookie(auth, email: "ambiguous-account-info@example.com")
+    user_id = auth.api.get_session(headers: {"cookie" => cookie})[:user]["id"]
+    auth.context.internal_adapter.create_account(userId: user_id, providerId: "github", accountId: "shared-id", accessToken: "github-token")
+    auth.context.internal_adapter.create_account(userId: user_id, providerId: "google", accountId: "shared-id", accessToken: "google-token")
+
+    error = assert_raises(BetterAuth::APIError) do
+      auth.api.account_info(headers: {"cookie" => cookie}, query: {accountId: "shared-id"})
+    end
+    info = auth.api.account_info(headers: {"cookie" => cookie}, query: {accountId: "shared-id", providerId: "google"})
+
+    assert_equal 400, error.status_code
+    assert_equal "AMBIGUOUS_ACCOUNT", error.code
+    assert_equal "google-shared@example.com", info[:user][:email]
+  end
+
+  def test_account_info_never_selects_same_account_id_from_another_user
+    provider = {id: "github", get_user_info: ->(_tokens) { flunk "provider should not be called" }}
+    auth = build_auth(social_providers: {github: provider})
+    current_cookie = sign_up_cookie(auth, email: "safe-account-info@example.com")
+    other_cookie = sign_up_cookie(auth, email: "unsafe-account-info@example.com")
+    other_user_id = auth.api.get_session(headers: {"cookie" => other_cookie})[:user]["id"]
+    auth.context.internal_adapter.create_account(userId: other_user_id, providerId: "github", accountId: "cross-user-id", accessToken: "other-secret")
+
+    error = assert_raises(BetterAuth::APIError) do
+      auth.api.account_info(headers: {"cookie" => current_cookie}, query: {accountId: "cross-user-id", providerId: "github"})
+    end
+
+    assert_equal BetterAuth::BASE_ERROR_CODES.fetch("ACCOUNT_NOT_FOUND"), error.message
+  end
+
+  def test_account_info_rejects_internal_account_id
+    provider = {id: "github", get_user_info: ->(_tokens) { flunk "provider should not be called" }}
+    auth = build_auth(social_providers: {github: provider})
+    cookie = sign_up_cookie(auth, email: "internal-id-account-info@example.com")
+    user_id = auth.api.get_session(headers: {"cookie" => cookie})[:user]["id"]
+    account = auth.context.internal_adapter.create_account(userId: user_id, providerId: "github", accountId: "provider-issued-id", accessToken: "token")
+
+    error = assert_raises(BetterAuth::APIError) do
+      auth.api.account_info(headers: {"cookie" => cookie}, query: {accountId: account["id"], providerId: "github"})
+    end
+
+    assert_equal BetterAuth::BASE_ERROR_CODES.fetch("ACCOUNT_NOT_FOUND"), error.message
+  end
+
+  def test_account_info_reports_unconfigured_credential_provider_as_client_error
+    auth = build_auth
+    cookie = sign_up_cookie(auth, email: "credential-account-info@example.com")
+    user_id = auth.api.get_session(headers: {"cookie" => cookie})[:user]["id"]
+
+    error = assert_raises(BetterAuth::APIError) do
+      auth.api.account_info(headers: {"cookie" => cookie}, query: {accountId: user_id, providerId: "credential"})
+    end
+
+    assert_equal 400, error.status_code
+    assert_equal "PROVIDER_NOT_CONFIGURED", error.code
+    assert_equal "Account is not associated with a configured social provider.", error.message
   end
 
   def test_list_accounts_omits_sensitive_token_and_password_fields
@@ -752,12 +889,12 @@ class BetterAuthRoutesAccountTest < Minitest::Test
     Struct.new(:context).new(auth.context)
   end
 
-  def rack_env(method, path, body: nil)
+  def rack_env(method, path, body: nil, query: nil)
     payload = body ? JSON.generate(body) : ""
     {
       "REQUEST_METHOD" => method,
       "PATH_INFO" => path,
-      "QUERY_STRING" => "",
+      "QUERY_STRING" => query.to_s,
       "SERVER_NAME" => "localhost",
       "SERVER_PORT" => "3000",
       "REMOTE_ADDR" => "127.0.0.1",

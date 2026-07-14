@@ -15,7 +15,8 @@ class BetterAuthPluginsOpenAPITest < Minitest::Test
       user: {
         additional_fields: {
           role: {type: "string", required: true, default_value: "user"},
-          preferences: {type: "string", required: false}
+          preferences: {type: "string", required: false},
+          internal_note: {type: "string", required: true, returned: false}
         }
       }
     )
@@ -26,9 +27,11 @@ class BetterAuthPluginsOpenAPITest < Minitest::Test
     assert_equal "Better Auth", schema.dig(:info, :title)
     assert_equal "API Reference for your Better Auth Instance", schema.dig(:info, :description)
     assert_equal "1.1.0", schema.dig(:info, :version)
-    assert_equal({type: "string"}, schema.dig(:components, :schemas, :User, :properties, :id))
+    assert_equal({type: "string", readOnly: true}, schema.dig(:components, :schemas, :User, :properties, :id))
+    assert_includes schema.dig(:components, :schemas, :User, :required), "id"
     assert_equal "user", schema.dig(:components, :schemas, :User, :properties, :role, :default)
     assert_includes schema.dig(:components, :schemas, :User, :required), "role"
+    refute_includes schema.dig(:components, :schemas, :User, :required), "internalNote"
     assert_includes schema[:paths].keys, "/sign-in/social"
     assert_includes schema[:paths].keys, "/token"
     refute_includes schema[:paths].keys, "/open-api/generate-schema"
@@ -194,8 +197,20 @@ class BetterAuthPluginsOpenAPITest < Minitest::Test
       {type: "string", format: "date-time", default: "Generated at runtime"},
       schema.dig(:components, :schemas, :User, :properties, :createdAt)
     )
-    refute_includes schema.dig(:components, :schemas, :User, :required), "emailVerified"
+    assert_includes schema.dig(:components, :schemas, :User, :required), "emailVerified"
     assert_includes schema.dig(:components, :schemas, :Session, :required), "token"
+  end
+
+  def test_open_api_operation_ids_are_unique_across_all_documented_operations
+    auth = build_auth(plugins: [BetterAuth::Plugins.open_api])
+    schema = auth.api.generate_openapi_schema
+    operation_ids = schema[:paths].values.flat_map do |path_item|
+      path_item.values.filter_map { |operation| operation[:operationId] }
+    end
+
+    assert_equal operation_ids.length, operation_ids.uniq.length
+    assert_equal "getSession", schema.dig(:paths, "/get-session", :get, :operationId)
+    assert_equal "getSessionPost", schema.dig(:paths, "/get-session", :post, :operationId)
   end
 
   def test_open_api_uses_upstream_31_nullable_request_body_shapes

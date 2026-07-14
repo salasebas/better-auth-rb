@@ -69,7 +69,9 @@ module BetterAuth
               credential = WebAuthn::Credential.from_create(response, relying_party: relying_party)
               credential.verify(challenge.fetch("expectedChallenge"), user_verification: false)
               authenticator_data = Credentials.authenticator_data(credential)
-              target_user_id = Utils.after_registration_verification_user_id(config, ctx, credential, challenge, response, session)
+              callback_result = Utils.after_registration_verification(config, ctx, credential, challenge, response, session)
+              target_user_id = callback_result.fetch(:user_id)
+              name = Utils.normalized_passkey_name(body[:name]) || callback_result[:name]
             rescue WebAuthn::Error, ArgumentError => error
               ctx.context.logger&.error("Failed to verify registration", error)
               raise APIError.new("BAD_REQUEST", message: ErrorCodes::PASSKEY_ERROR_CODES.fetch("FAILED_TO_VERIFY_REGISTRATION"))
@@ -84,7 +86,7 @@ module BetterAuth
               data = ctx.context.adapter.create(
                 model: "passkey",
                 data: {
-                  name: body[:name],
+                  name: name,
                   userId: target_user_id,
                   credentialID: credential.id,
                   publicKey: Base64.strict_encode64(credential.public_key),

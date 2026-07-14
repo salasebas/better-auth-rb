@@ -134,11 +134,11 @@ module BetterAuth
         normalize_hash(extensions.respond_to?(:call) ? call_callback(extensions, {ctx: ctx}) : extensions)
       end
 
-      def after_registration_verification_user_id(config, ctx, credential, challenge, response, session)
+      def after_registration_verification(config, ctx, credential, challenge, response, session)
         user_data = challenge.fetch("userData")
         target_user_id = user_data.fetch("id")
         callback = config.dig(:registration, :after_verification)
-        return target_user_id unless callback.respond_to?(:call)
+        return {user_id: target_user_id, name: nil} unless callback.respond_to?(:call)
 
         result = normalize_hash(call_callback(callback, {
           ctx: ctx,
@@ -152,17 +152,30 @@ module BetterAuth
           context: challenge["context"]
         }) || {})
         returned_user_id = result[:user_id]
-        return target_user_id if returned_user_id.nil? || returned_user_id == ""
+        unless returned_user_id.nil? || returned_user_id == ""
+          unless returned_user_id.is_a?(String) && returned_user_id.length.positive?
+            raise APIError.new("BAD_REQUEST", message: BetterAuth::Passkey::ErrorCodes::PASSKEY_ERROR_CODES.fetch("RESOLVED_USER_INVALID"))
+          end
 
-        unless returned_user_id.is_a?(String) && returned_user_id.length.positive?
-          raise APIError.new("BAD_REQUEST", message: BetterAuth::Passkey::ErrorCodes::PASSKEY_ERROR_CODES.fetch("RESOLVED_USER_INVALID"))
+          if session && returned_user_id != session.fetch(:user).fetch("id")
+            raise APIError.new("UNAUTHORIZED", message: BetterAuth::Passkey::ErrorCodes::PASSKEY_ERROR_CODES.fetch("YOU_ARE_NOT_ALLOWED_TO_REGISTER_THIS_PASSKEY"))
+          end
+
+          target_user_id = returned_user_id
         end
 
-        if session && returned_user_id != session.fetch(:user).fetch("id")
-          raise APIError.new("UNAUTHORIZED", message: BetterAuth::Passkey::ErrorCodes::PASSKEY_ERROR_CODES.fetch("YOU_ARE_NOT_ALLOWED_TO_REGISTER_THIS_PASSKEY"))
-        end
+        {user_id: target_user_id, name: normalized_passkey_name(result[:name])}
+      end
 
-        returned_user_id
+      def after_registration_verification_user_id(config, ctx, credential, challenge, response, session)
+        after_registration_verification(config, ctx, credential, challenge, response, session).fetch(:user_id)
+      end
+
+      def normalized_passkey_name(value)
+        return nil unless value.is_a?(String)
+
+        normalized = value.strip
+        normalized unless normalized.empty?
       end
 
       def call_callback(callback, data)

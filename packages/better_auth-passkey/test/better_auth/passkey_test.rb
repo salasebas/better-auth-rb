@@ -765,18 +765,22 @@ class BetterAuthPluginsPasskeyTest < Minitest::Test
     assert_equal BetterAuth::Plugins::PASSKEY_ERROR_CODES.fetch("RESOLVED_USER_INVALID"), error.message
   end
 
-  def test_update_passkey_allows_empty_name_to_match_upstream
+  def test_update_passkey_rejects_empty_name_to_match_upstream
     auth = build_auth
     cookie = sign_up_cookie(auth, email: "update-empty-name@example.com")
     user = auth.api.get_session(headers: {"cookie" => cookie})[:user]
     passkey = create_passkey(auth, user_id: user.fetch("id"), name: "Original", credential_id: "empty-name-cred")
 
-    result = auth.api.update_passkey(
-      headers: {"cookie" => cookie},
-      body: {id: passkey.fetch("id"), name: ""}
-    )
+    error = assert_raises(BetterAuth::APIError) do
+      auth.api.update_passkey(
+        headers: {"cookie" => cookie},
+        body: {id: passkey.fetch("id"), name: ""}
+      )
+    end
 
-    assert_equal "", result.fetch(:passkey).fetch("name")
+    assert_equal 400, error.status_code
+    assert_equal BetterAuth::BASE_ERROR_CODES.fetch("VALIDATION_ERROR"), error.message
+    assert_equal "Original", auth.context.adapter.find_one(model: "passkey", where: [{field: "id", value: passkey.fetch("id")}]).fetch("name")
   end
 
   def test_registration_missing_origin_uses_failed_registration_error

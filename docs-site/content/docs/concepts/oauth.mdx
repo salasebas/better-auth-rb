@@ -85,7 +85,7 @@ Pass `accountId` when a user may have more than one account for the same provide
 
 ### Get Account Info Provided By The Provider
 
-Use `account_info` when you need provider-specific profile data from the linked account. RubyAuth detects the provider from the stored account and calls the provider's `get_user_info` implementation with a valid access token.
+Use `account_info` when you need provider-specific profile data from a linked account. Normal HTTP use is session-authenticated: the session user always wins, even if the query also contains `userId`. RubyAuth scopes account lookup to that user, detects the provider, and calls its `get_user_info` implementation with a valid access token.
 
 ```ruby
 info = auth.api.account_info(
@@ -95,6 +95,20 @@ info = auth.api.account_info(
   }
 )
 ```
+
+Trusted server code may make a headerless direct API call with `userId`. `accountId` is the provider-issued account ID, not RubyAuth's internal account-row ID. Add `providerId` when two providers use the same account ID:
+
+```ruby
+info = auth.api.account_info(
+  query: {
+    userId: user.id,
+    accountId: "provider-account-id",
+    providerId: "github"
+  }
+)
+```
+
+This direct form is for trusted server code only. A Rack/HTTP request without a valid session is unauthorized even when it supplies `userId`.
 
 ### Requesting Additional Scopes
 

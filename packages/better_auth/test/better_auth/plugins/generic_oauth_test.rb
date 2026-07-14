@@ -180,6 +180,69 @@ class BetterAuthPluginsGenericOAuthTest < Minitest::Test
     assert_equal "/error?error=please_restart_the_process", headers.fetch("location")
   end
 
+  def test_callback_preserves_provider_error_description_and_existing_error_query
+    auth = build_auth(on_api_error: {error_url: "/fallback-error"})
+    sign_in = auth.api.sign_in_with_oauth2(
+      body: {
+        providerId: "custom",
+        callbackURL: "/dashboard",
+        errorCallbackURL: "/flow-error?source=oauth&keep=yes"
+      }
+    )
+    state = Rack::Utils.parse_query(URI.parse(sign_in[:url]).query).fetch("state")
+
+    status, headers, = auth.api.oauth2_callback(
+      params: {providerId: "custom"},
+      query: {state: state, error: "access denied/ü", error_description: "User said no & left"},
+      as_response: true
+    )
+
+    params = Rack::Utils.parse_query(URI.parse(headers.fetch("location")).query)
+    assert_equal 302, status
+    assert_equal "/flow-error", URI.parse(headers.fetch("location")).path
+    assert_equal({"source" => "oauth", "keep" => "yes", "error" => "access denied/ü", "error_description" => "User said no & left"}, params)
+  end
+
+  def test_state_cookie_failure_uses_recovered_per_flow_error_url
+    auth = build_auth(on_api_error: {error_url: "/fallback-error"})
+    _status, _headers, body = auth.call(rack_env(
+      "POST",
+      "/api/auth/sign-in/oauth2",
+      body: {providerId: "custom", callbackURL: "/dashboard", errorCallbackURL: "/flow-error?source=state"}
+    ))
+    state = Rack::Utils.parse_query(URI.parse(JSON.parse(body.join).fetch("url")).query).fetch("state")
+
+    status, headers, = auth.call(rack_env("GET", "/api/auth/oauth2/callback/custom?code=oauth-code&state=#{URI.encode_www_form_component(state)}"))
+
+    assert_equal 302, status
+    assert_equal({"source" => "state", "error" => "state_mismatch"}, Rack::Utils.parse_query(URI.parse(headers.fetch("location")).query))
+  end
+
+  def test_callback_redirects_api_error_code_and_message_from_persistence
+    auth = build_auth(
+      database_hooks: {
+        account: {
+          update: {
+            before: ->(_data, _context) { raise BetterAuth::APIError.new("FORBIDDEN", code: "ACCOUNT_UPDATE_BLOCKED", message: "Account update blocked & audited") }
+          }
+        }
+      }
+    )
+    first = auth.api.sign_in_with_oauth2(body: {providerId: "custom", callbackURL: "/dashboard"})
+    first_state = Rack::Utils.parse_query(URI.parse(first[:url]).query).fetch("state")
+    auth.api.oauth2_callback(params: {providerId: "custom"}, query: {code: "oauth-code", state: first_state}, as_response: true)
+
+    second = auth.api.sign_in_with_oauth2(body: {providerId: "custom", callbackURL: "/dashboard", errorCallbackURL: "/error?source=hook"})
+    second_state = Rack::Utils.parse_query(URI.parse(second[:url]).query).fetch("state")
+    status, headers, = auth.api.oauth2_callback(params: {providerId: "custom"}, query: {code: "oauth-code", state: second_state}, as_response: true)
+
+    assert_equal 302, status
+    assert_equal(
+      {"source" => "hook", "error" => "ACCOUNT_UPDATE_BLOCKED", "error_description" => "Account update blocked & audited"},
+      Rack::Utils.parse_query(URI.parse(headers.fetch("location")).query)
+    )
+  end
+
   def test_callback_redirects_when_provider_and_mapped_profile_omit_email
     auth = build_auth(
       user_info: {id: "missing-email-sub", name: "Missing Email User", emailVerified: true},
@@ -362,6 +425,96 @@ class BetterAuthPluginsGenericOAuthTest < Minitest::Test
     refute_includes BetterAuth::Plugins.auth0(client_id: "id", client_secret: "secret", domain: "tenant.auth0.com"), :get_user_info
     refute_includes BetterAuth::Plugins.okta(client_id: "id", client_secret: "secret", issuer: "https://okta.example.com/oauth2/default"), :get_user_info
     refute_includes BetterAuth::Plugins.keycloak(client_id: "id", client_secret: "secret", issuer: "https://realm.example.com/realms/main"), :get_user_info
+  end
+
+  def test_yandex_helper_fetches_and_maps_profile
+    yandex = BetterAuth::Plugins.yandex(client_id: "id", client_secret: "secret")
+    profile = {
+      "id" => "yandex-id",
+      "login" => "fallback-login",
+      "display_name" => "Yandex User",
+      "default_email" => "yandex@example.com",
+      "emails" => ["other@example.com"],
+      "is_avatar_empty" => false,
+      "default_avatar_id" => "avatar-id"
+    }
+
+    with_stubbed_http_json("https://login.yandex.ru/info?format=json" => profile) do |requests|
+      assert_equal(
+        {
+          id: "yandex-id",
+          name: "Yandex User",
+          email: "yandex@example.com",
+          emailVerified: false,
+          image: "https://avatars.yandex.net/get-yapic/avatar-id/islands-200"
+        },
+        yandex.fetch(:get_user_info).call(accessToken: "yandex-token")
+      )
+      assert_equal ["OAuth yandex-token"], requests.first.fetch(:headers).fetch("authorization")
+    end
+
+    profile["display_name"] = nil
+    profile["default_email"] = nil
+    profile["is_avatar_empty"] = true
+    with_stubbed_http_json("https://login.yandex.ru/info?format=json" => profile) do
+      result = yandex.fetch(:get_user_info).call(accessToken: "yandex-token")
+      assert_equal "fallback-login", result.fetch(:name)
+      assert_equal "other@example.com", result.fetch(:email)
+      refute_includes result, :image
+    end
+  end
+
+  def test_access_token_expiry_fallback_applies_to_custom_exchange_without_overwriting_explicit_expiry
+    before = Time.now
+    auth = build_auth(provider_overrides: {accessTokenExpiresIn: 120})
+    sign_in = auth.api.sign_in_with_oauth2(body: {providerId: "custom", callbackURL: "/dashboard"})
+    state = Rack::Utils.parse_query(URI.parse(sign_in[:url]).query).fetch("state")
+    auth.api.oauth2_callback(params: {providerId: "custom"}, query: {code: "oauth-code", state: state}, as_response: true)
+    account = auth.context.internal_adapter.find_account_by_provider_id("oauth-sub", "custom")
+    assert_operator account.fetch("accessTokenExpiresAt"), :>=, before + 119
+    assert_operator account.fetch("accessTokenExpiresAt"), :<=, Time.now + 121
+
+    explicit = Time.now + 600
+    auth = build_auth(provider_overrides: {
+      access_token_expires_in: 120,
+      get_token: ->(**_data) { {accessToken: "explicit-token", accessTokenExpiresAt: explicit} }
+    })
+    sign_in = auth.api.sign_in_with_oauth2(body: {providerId: "custom", callbackURL: "/dashboard"})
+    state = Rack::Utils.parse_query(URI.parse(sign_in[:url]).query).fetch("state")
+    auth.api.oauth2_callback(params: {providerId: "custom"}, query: {code: "oauth-code", state: state}, as_response: true)
+    assert_equal explicit, auth.context.internal_adapter.find_account_by_provider_id("oauth-sub", "custom").fetch("accessTokenExpiresAt")
+  end
+
+  def test_access_token_expiry_fallback_applies_to_standard_exchange_and_refresh
+    requests = []
+    with_oauth_server(requests) do |base_url|
+      auth = build_auth(provider_overrides: {
+        get_token: nil,
+        token_url: "#{base_url}/token",
+        token_url_params: {omit_expiry: "1"},
+        access_token_expires_in: 120
+      })
+      before = Time.now
+      sign_in = auth.api.sign_in_with_oauth2(body: {providerId: "custom", callbackURL: "/dashboard"})
+      state = Rack::Utils.parse_query(URI.parse(sign_in[:url]).query).fetch("state")
+      auth.api.oauth2_callback(params: {providerId: "custom"}, query: {code: "oauth-code", state: state}, as_response: true)
+      account = auth.context.internal_adapter.find_account_by_provider_id("oauth-sub", "custom")
+      assert_operator account.fetch("accessTokenExpiresAt"), :>=, before + 119
+
+      refreshed = auth.context.social_providers.fetch(:custom).fetch(:refresh_access_token).call("refresh-token")
+      assert_operator refreshed.fetch(:access_token_expires_at), :>=, before + 119
+    end
+  end
+
+  def test_access_token_expiry_remains_unknown_when_fallback_is_unset_or_nonpositive
+    [nil, 0, -1].each do |fallback|
+      tokens = BetterAuth::Plugins.send(
+        :generic_oauth_normalize_tokens,
+        {accessToken: "token"},
+        access_token_expires_in: fallback
+      )
+      refute_includes tokens, :access_token_expires_at
+    end
   end
 
   def test_state_cookie_is_set_and_cleared_for_database_state_strategy
@@ -1065,7 +1218,7 @@ class BetterAuthPluginsGenericOAuthTest < Minitest::Test
 
     info = auth.api.account_info(
       headers: {"cookie" => cookie_header(headers.fetch("set-cookie"))},
-      query: {accountId: account.fetch("id")}
+      query: {accountId: account.fetch("accountId")}
     )
 
     assert_equal "info-sub", info.fetch(:user).fetch(:id)
@@ -1299,6 +1452,12 @@ class BetterAuthPluginsGenericOAuthTest < Minitest::Test
         options: {client_id: "id", client_secret: "secret"},
         defaults: {provider_id: "slack", authorization_url: "https://slack.com/openid/connect/authorize", token_url: "https://slack.com/api/openid.connect.token", user_info_url: "https://slack.com/api/openid.connect.userInfo", scopes: ["openid", "profile", "email"]},
         has_get_user_info: true
+      },
+      {
+        helper: :yandex,
+        options: {client_id: "id", client_secret: "secret"},
+        defaults: {provider_id: "yandex", authorization_url: "https://oauth.yandex.com/authorize", token_url: "https://oauth.yandex.com/token", scopes: ["login:info", "login:email", "login:avatar"]},
+        has_get_user_info: true
       }
     ]
   end
@@ -1334,7 +1493,8 @@ class BetterAuthPluginsGenericOAuthTest < Minitest::Test
       {helper: :microsoft_entra_id, options: camel_base.merge(tenantId: "organizations"), expected: {authorization_url: "https://login.microsoftonline.com/organizations/oauth2/v2.0/authorize", token_url: "https://login.microsoftonline.com/organizations/oauth2/v2.0/token"}},
       {helper: :okta, options: base.merge(issuer: "https://okta.example.com/oauth2/default/"), expected: {discovery_url: "https://okta.example.com/oauth2/default/.well-known/openid-configuration"}},
       {helper: :patreon, options: base, expected: {}},
-      {helper: :slack, options: base, expected: {}}
+      {helper: :slack, options: base, expected: {}},
+      {helper: :yandex, options: camel_base.merge(accessTokenExpiresIn: 3600), expected: {access_token_expires_in: 3600}}
     ]
   end
 
@@ -1499,15 +1659,16 @@ class BetterAuthPluginsGenericOAuthTest < Minitest::Test
 
     if path == "/token"
       access_token = (params["grant_type"] == "refresh_token") ? "refreshed-access-token" : "http-access-token"
-      return JSON.generate(
+      token_response = {
         access_token: access_token,
         refresh_token: "http-refresh-token",
-        expires_in: 3600,
         refresh_token_expires_in: 7200,
         scope: "openid email",
         token_type: "Bearer",
         raw_provider_field: "preserved"
-      )
+      }
+      token_response[:expires_in] = 3600 unless params["omit_expiry"] == "1"
+      return JSON.generate(token_response)
     end
 
     JSON.generate(

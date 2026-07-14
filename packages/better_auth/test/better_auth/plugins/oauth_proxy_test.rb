@@ -179,6 +179,34 @@ class BetterAuthPluginsOAuthProxyTest < Minitest::Test
     assert_includes payload.fetch("cookies"), "better-auth.session_token="
   end
 
+  def test_generic_oauth_provider_error_survives_proxy_callback_unchanged
+    auth = build_auth(
+      database: nil,
+      plugins: [
+        BetterAuth::Plugins.oauth_proxy(current_url: "http://preview.local"),
+        generic_oauth_plugin
+      ]
+    )
+    error_callback = "http://preview.local/api/auth/oauth-proxy-callback?callbackURL=%2Fdashboard&source=provider"
+    sign_in = auth.api.sign_in_with_oauth2(
+      body: {providerId: "custom", callbackURL: "/dashboard", errorCallbackURL: error_callback}
+    )
+    encrypted_state = Rack::Utils.parse_query(URI.parse(sign_in[:url]).query).fetch("state")
+
+    status, headers, = auth.api.oauth2_callback(
+      params: {providerId: "custom"},
+      query: {state: encrypted_state, error: "access_denied", error_description: "Provider declined & explained"},
+      as_response: true
+    )
+
+    params = Rack::Utils.parse_query(URI.parse(headers.fetch("location")).query)
+    assert_equal 302, status
+    assert_equal "access_denied", params.fetch("error")
+    assert_equal "Provider declined & explained", params.fetch("error_description")
+    assert_equal "provider", params.fetch("source")
+    refute_equal "user_creation_failed", params.fetch("error")
+  end
+
   private
 
   def build_auth(options = {})

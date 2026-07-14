@@ -141,6 +141,24 @@ passkey = auth.api.verify_passkey_registration(
 )
 ```
 
+Registration `after_verification` may return both `user_id` and `name`:
+
+```ruby title="config/auth.rb"
+BetterAuth::Plugins.passkey(
+  registration: {
+    after_verification: lambda do |data|
+      aaguid = MyPasskeyMetadata.aaguid_from(data.fetch(:verification))
+      {
+        user_id: data.fetch(:user).fetch(:id),
+        name: BetterAuth::Passkey.get_authenticator_name(aaguid)
+      }
+    end
+  }
+)
+```
+
+The callback runs exactly once. A trimmed nonblank client `name` takes precedence, followed by a trimmed nonblank callback-returned `name`; otherwise the stored name is `nil`. The exact AAGUID accessor depends on the Ruby `webauthn` verification object, so inspect `data[:verification]` for your gem version.
+
 ## Usage
 
 ### Add/Register a passkey
@@ -235,6 +253,27 @@ passkeys = auth.api.list_passkeys(
 )
 ```
 
+### Authenticator labels from AAGUIDs
+
+Use the best-effort public resolver when a stored passkey has no explicit name:
+
+```ruby title="server.rb"
+label = passkey["name"] ||
+  BetterAuth::Passkey.get_authenticator_name(passkey["aaguid"]) ||
+  "Passkey"
+```
+
+`BetterAuth::Passkey::COMMON_AUTHENTICATOR_NAMES` includes common Google, Apple, Windows Hello, password-manager, and Samsung families. Lookup trims and lowercases AAGUIDs. Unknown, missing, non-string, and all-zero AAGUIDs resolve to `nil`; privacy-preserving platforms commonly report the all-zero value.
+
+Pass a custom map to extend the built-in names without mutating the exported constant:
+
+```ruby title="server.rb"
+label = BetterAuth::Passkey.get_authenticator_name(
+  passkey["aaguid"],
+  names: {"your-aaguid" => "Your Provider"}
+)
+```
+
 ### Deleting passkeys
 
 `POST /passkey/delete-passkey`
@@ -261,6 +300,8 @@ result = auth.api.update_passkey(
   }
 )
 ```
+
+Names are trimmed before storage. Empty or whitespace-only updates are rejected with the normal validation error.
 
 ### Conditional UI
 

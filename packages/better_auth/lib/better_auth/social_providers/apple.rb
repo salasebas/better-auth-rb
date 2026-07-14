@@ -45,8 +45,13 @@ module BetterAuth
             algorithms: ["RS256"],
             issuers: "https://appleid.apple.com",
             audience: audiences,
-            nonce: nonce
+            nonce: nil
           )
+          if nonce
+            token_nonce = profile&.fetch("nonce", nil)
+            expected_nonces = [nonce, OpenSSL::Digest::SHA256.hexdigest(nonce.to_s)]
+            return false unless token_nonce.is_a?(String) && expected_nonces.include?(token_nonce)
+          end
           !!profile&.fetch("sub", nil)
         end,
         get_user_info: lambda do |tokens|

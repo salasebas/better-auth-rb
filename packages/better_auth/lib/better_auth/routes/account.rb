@@ -230,6 +230,18 @@ module BetterAuth
                 in: "query",
                 required: false,
                 schema: {type: "string"}
+              },
+              {
+                name: "providerId",
+                in: "query",
+                required: false,
+                schema: {type: "string"}
+              },
+              {
+                name: "userId",
+                in: "query",
+                required: false,
+                schema: {type: "string"}
               }
             ],
             responses: {
@@ -260,23 +272,43 @@ module BetterAuth
           }
         }
       ) do |ctx|
-        session = current_session(ctx)
+        session = current_session(ctx, allow_nil: true)
+        raise APIError.new("UNAUTHORIZED") if !session && (ctx.request || !ctx.headers.empty?)
+
+        user_id = session&.dig(:user, "id") || fetch_value(ctx.query, "userId")
+        raise APIError.new("BAD_REQUEST", code: "USER_ID_OR_SESSION_REQUIRED", message: "Either userId or session is required") if user_id.to_s.empty?
+
         account_id = fetch_value(ctx.query, "accountId")
-        account = if account_id
-          ctx.context.internal_adapter.find_accounts(session[:user]["id"]).find do |entry|
-            entry["id"] == account_id || entry["accountId"] == account_id
+        provider_id = fetch_value(ctx.query, "providerId")
+        account = if !account_id.to_s.empty?
+          matching_accounts = ctx.context.internal_adapter.find_accounts(user_id).select do |entry|
+            entry["accountId"] == account_id && (provider_id.to_s.empty? || entry["providerId"] == provider_id)
           end
+          if matching_accounts.length > 1
+            raise APIError.new(
+              "BAD_REQUEST",
+              code: "AMBIGUOUS_ACCOUNT",
+              message: "Multiple accounts share this account ID. Pass a providerId to disambiguate."
+            )
+          end
+          matching_accounts.first
         else
-          account_cookie(ctx, nil, nil, session[:user]["id"])
+          account_cookie(ctx, provider_id, nil, user_id)
         end
-        raise APIError.new("BAD_REQUEST", message: "Account not found") unless account && account["userId"] == session[:user]["id"]
+        raise APIError.new("BAD_REQUEST", message: BASE_ERROR_CODES["ACCOUNT_NOT_FOUND"]) unless account && account["userId"] == user_id
 
         provider = social_provider(ctx.context, account["providerId"])
-        raise APIError.new("INTERNAL_SERVER_ERROR", message: "Provider account provider is #{account["providerId"]} but it is not configured") unless provider
+        unless provider && provider_callable(provider, :get_user_info)
+          raise APIError.new(
+            "BAD_REQUEST",
+            code: "PROVIDER_NOT_CONFIGURED",
+            message: "Account is not associated with a configured social provider."
+          )
+        end
 
         tokens = access_token_response(
           ctx,
-          user_id: session[:user]["id"],
+          user_id: user_id,
           provider_id: account["providerId"],
           account_id: account["accountId"],
           provider: provider

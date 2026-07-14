@@ -100,6 +100,7 @@ RubyAuth provides pre-configured helper functions for popular OAuth providers. T
 * **Okta** - `okta(options)`
 * **Slack** - `slack(options)`
 * **Patreon** - `patreon(options)`
+* **Yandex** - `yandex(options)`
 
 ### Example: Using Pre-configured Providers
 
@@ -125,6 +126,18 @@ Each provider helper accepts common OAuth options (extending `BaseOAuthProviderO
 * **Okta**: Requires `issuer` (e.g., `https://dev-xxxxx.okta.com/oauth2/default`)
 * **Slack**: No additional required fields
 * **Patreon**: No additional required fields
+* **Yandex**: No additional required fields. Defaults to `login:info`, `login:email`, and `login:avatar`; it maps the Yandex profile and uses the `islands-200` avatar when available.
+
+```ruby title="config/auth.rb"
+BetterAuth::Plugins.generic_oauth(
+  config: [
+    BetterAuth::Plugins.yandex(
+      client_id: ENV.fetch("YANDEX_CLIENT_ID"),
+      client_secret: ENV.fetch("YANDEX_CLIENT_SECRET")
+    )
+  ]
+)
+```
 
 All providers support the same optional fields:
 
@@ -134,6 +147,7 @@ All providers support the same optional fields:
 * `disableImplicitSignUp?: boolean` - Disable automatic sign-up for new users
 * `disableSignUp?: boolean` - Disable sign-up entirely
 * `overrideUserInfo?: boolean` - Override user info on sign in
+* `access_token_expires_in?: number` - Fallback access-token lifetime in seconds
 
 ## Configuration
 
@@ -193,6 +207,8 @@ BetterAuth::Plugins.generic_oauth(
 **pkce**: (Optional) If true, enables PKCE (Proof Key for Code Exchange) for enhanced security. Defaults to `false`.
 
 **accessType**: (Optional) The access type for the authorization request. Use `"offline"` to request a refresh token.
+
+**accessTokenExpiresIn**: (Optional; Ruby key `access_token_expires_in`) Fallback access-token lifetime in seconds. It is used only when the provider token result omits an explicit expiry, including standard exchange, custom `get_token`, and refresh results. Provider-returned expiry always wins. Leave it unset when the provider returns `expires_in`.
 
 **getToken**: (Optional) A custom function to exchange authorization code for tokens. If provided, this function will be used instead of the default token exchange logic. This is useful for providers with non-standard token endpoints that use GET requests or custom parameters.
 

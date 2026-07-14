@@ -212,6 +212,36 @@ module BetterAuth
       )
     end
 
+    def yandex(options = {})
+      data = normalize_hash(options)
+      generic_oauth_provider_config(
+        data,
+        provider_id: "yandex",
+        authorization_url: "https://oauth.yandex.com/authorize",
+        token_url: "https://oauth.yandex.com/token",
+        scopes: ["login:info", "login:email", "login:avatar"],
+        get_user_info: ->(tokens) {
+          profile = generic_oauth_fetch_json(
+            "https://login.yandex.ru/info?format=json",
+            authorization: "OAuth #{fetch_value(tokens, "accessToken")}"
+          )
+          return nil unless profile
+
+          avatar_id = fetch_value(profile, "default_avatar_id")
+          image = if !fetch_value(profile, "is_avatar_empty") && !avatar_id.to_s.empty?
+            "https://avatars.yandex.net/get-yapic/#{avatar_id}/islands-200"
+          end
+          {
+            id: fetch_value(profile, "id"),
+            name: fetch_value(profile, "display_name") || fetch_value(profile, "real_name") || fetch_value(profile, "first_name") || fetch_value(profile, "login"),
+            email: fetch_value(profile, "default_email") || Array(fetch_value(profile, "emails")).first,
+            emailVerified: false,
+            image: image
+          }.compact
+        }
+      )
+    end
+
     def sign_in_with_oauth2_endpoint(config)
       Endpoint.new(
         path: "/sign-in/oauth2",
@@ -291,9 +321,9 @@ module BetterAuth
         provider = generic_oauth_provider!(config, provider_id)
         state_data = generic_oauth_parse_state(ctx, query[:state].to_s)
         error_url = state_data["errorURL"] || state_data["errorCallbackURL"] || "#{ctx.context.base_url}/error"
-        redirect_error = ->(error) { raise ctx.redirect(generic_oauth_error_url(error_url, error)) }
+        redirect_error = ->(error, description = nil) { raise ctx.redirect(generic_oauth_error_url(error_url, error, description)) }
 
-        redirect_error.call(query[:error] || "oAuth_code_missing") if query[:error] || query[:code].to_s.empty?
+        redirect_error.call(query[:error] || "oAuth_code_missing", query[:error_description]) if query[:error] || query[:code].to_s.empty?
         generic_oauth_validate_issuer!(ctx, provider, query, redirect_error)
 
         tokens = begin
@@ -324,13 +354,19 @@ module BetterAuth
         if !existing && (provider[:disable_sign_up] || (provider[:disable_implicit_sign_up] && !state_data["requestSignUp"]))
           redirect_error.call("signup_disabled")
         end
-        session_data = Routes.persist_social_user(
-          ctx,
-          provider_id,
-          mapped_user.merge("email" => email, "name" => name, "id" => account_id),
-          generic_oauth_account_info(ctx, provider_id, account_id, tokens),
-          override_user_info: provider[:override_user_info]
-        )
+        session_data = begin
+          Routes.persist_social_user(
+            ctx,
+            provider_id,
+            mapped_user.merge("email" => email, "name" => name, "id" => account_id),
+            generic_oauth_account_info(ctx, provider_id, account_id, tokens),
+            override_user_info: provider[:override_user_info]
+          )
+        rescue APIError => error
+          raise if error.code.to_s.empty?
+
+          redirect_error.call(error.code, error.message)
+        end
         redirect_error.call(session_data[:error].tr(" ", "_")) if session_data[:error]
         generic_oauth_set_account_cookie(ctx, provider_id, account_id, session_data[:user]["id"])
         Cookies.set_session_cookie(ctx, session_data)
@@ -456,13 +492,13 @@ module BetterAuth
     def generic_oauth_exchange_token(ctx, provider, code, state_data)
       token_callback = provider[:get_token]
       if token_callback.respond_to?(:call)
-        return normalize_hash(token_callback.call(
+        return generic_oauth_normalize_tokens(token_callback.call(
           code: code,
           redirectURI: generic_oauth_redirect_uri(ctx, provider),
           redirect_uri: generic_oauth_redirect_uri(ctx, provider),
           codeVerifier: provider[:pkce] ? state_data["codeVerifier"] : nil,
           code_verifier: provider[:pkce] ? state_data["codeVerifier"] : nil
-        ))
+        ), access_token_expires_in: provider[:access_token_expires_in])
       end
 
       token_url = provider[:token_url] || generic_oauth_discovery(provider)["token_endpoint"]
@@ -498,10 +534,10 @@ module BetterAuth
 
         Cookies.expire_cookie(ctx, cookie)
         if parsed["state"] != state
-          raise ctx.redirect(generic_oauth_error_url(generic_oauth_state_error_url(ctx), "state_mismatch"))
+          raise ctx.redirect(generic_oauth_error_url(generic_oauth_recovered_state_error_url(ctx, parsed), "state_mismatch"))
         end
         if parsed["expiresAt"].to_i.positive? && parsed["expiresAt"].to_i < Time.now.to_i
-          raise ctx.redirect(generic_oauth_error_url(generic_oauth_state_error_url(ctx), "state_mismatch"))
+          raise ctx.redirect(generic_oauth_error_url(generic_oauth_recovered_state_error_url(ctx, parsed), "state_mismatch"))
         end
         return parsed
       else
@@ -509,15 +545,16 @@ module BetterAuth
         if verification
           cookie = ctx.context.create_auth_cookie("state")
           cookie_state = ctx.get_signed_cookie(cookie.name, ctx.context.secret)
+          parsed = JSON.parse(verification.fetch("value"))
+          recovered_error_url = generic_oauth_recovered_state_error_url(ctx, parsed)
           if ctx.request && cookie_state != state
             Cookies.expire_cookie(ctx, cookie)
-            raise ctx.redirect(generic_oauth_error_url(generic_oauth_state_error_url(ctx), "state_mismatch"))
+            raise ctx.redirect(generic_oauth_error_url(recovered_error_url, "state_mismatch"))
           elsif !ctx.request && cookie_state && cookie_state != state
             Cookies.expire_cookie(ctx, cookie)
-            raise ctx.redirect(generic_oauth_error_url(generic_oauth_state_error_url(ctx), "state_mismatch"))
+            raise ctx.redirect(generic_oauth_error_url(recovered_error_url, "state_mismatch"))
           end
 
-          parsed = JSON.parse(verification.fetch("value"))
           Cookies.expire_cookie(ctx, cookie) if ctx.request || cookie_state
           return parsed
         end
@@ -530,6 +567,10 @@ module BetterAuth
 
     def generic_oauth_state_error_url(ctx)
       ctx.context.options.on_api_error[:error_url] || "#{ctx.context.base_url}/error"
+    end
+
+    def generic_oauth_recovered_state_error_url(ctx, state_data)
+      state_data["errorURL"] || state_data["errorCallbackURL"] || generic_oauth_state_error_url(ctx)
     end
 
     def generic_oauth_user_info(provider, tokens)
@@ -686,7 +727,7 @@ module BetterAuth
       response = HTTPClient.request(uri, request)
       return nil unless response.is_a?(Net::HTTPSuccess)
 
-      generic_oauth_normalize_tokens(JSON.parse(response.body))
+      generic_oauth_normalize_tokens(JSON.parse(response.body), access_token_expires_in: provider[:access_token_expires_in])
     rescue
       nil
     end
@@ -704,15 +745,17 @@ module BetterAuth
       nil
     end
 
-    def generic_oauth_normalize_tokens(data)
+    def generic_oauth_normalize_tokens(data, access_token_expires_in: nil)
       token_data = normalize_hash(data)
+      access_token_expires_at = token_data[:access_token_expires_at] || generic_oauth_expiry_time(token_data[:expires_in])
+      access_token_expires_at ||= generic_oauth_expiry_time(access_token_expires_in)
       token_data.merge(
         access_token: token_data[:access_token],
         refresh_token: token_data[:refresh_token],
         id_token: token_data[:id_token],
-        access_token_expires_at: generic_oauth_expiry_time(token_data[:expires_in]),
-        refresh_token_expires_at: generic_oauth_expiry_time(token_data[:refresh_token_expires_in]),
-        scopes: generic_oauth_token_scopes(token_data[:scope]),
+        access_token_expires_at: access_token_expires_at,
+        refresh_token_expires_at: token_data[:refresh_token_expires_at] || generic_oauth_expiry_time(token_data[:refresh_token_expires_in]),
+        scopes: generic_oauth_token_scopes(token_data[:scopes] || token_data[:scope]),
         raw: token_data
       ).compact
     end
@@ -774,7 +817,8 @@ module BetterAuth
         pkce: data[:pkce],
         disable_implicit_sign_up: data[:disable_implicit_sign_up],
         disable_sign_up: data[:disable_sign_up],
-        override_user_info: data[:override_user_info]
+        override_user_info: data[:override_user_info],
+        access_token_expires_in: data[:access_token_expires_in]
       )
       config[:scopes] = data[:scopes] if data[:scopes]
       config.compact
@@ -827,13 +871,18 @@ module BetterAuth
       response = HTTPClient.request(uri, request)
       raise APIError.new("BAD_REQUEST", message: GENERIC_OAUTH_ERROR_CODES["INVALID_OAUTH_CONFIG"]) unless response.is_a?(Net::HTTPSuccess)
 
-      generic_oauth_normalize_tokens(JSON.parse(response.body))
+      generic_oauth_normalize_tokens(JSON.parse(response.body), access_token_expires_in: provider[:access_token_expires_in])
     end
 
-    def generic_oauth_error_url(base_url, error)
+    def generic_oauth_error_url(base_url, error, description = nil)
       uri = URI.parse(base_url.to_s)
       query = URI.decode_www_form(uri.query.to_s)
-      query << ["error", error.to_s]
+      generic_oauth_set_query_param(query, "error", error)
+      if description.to_s.empty?
+        query.delete_if { |name, _value| name == "error_description" }
+      else
+        generic_oauth_set_query_param(query, "error_description", description)
+      end
       uri.query = URI.encode_www_form(query)
       uri.to_s
     end

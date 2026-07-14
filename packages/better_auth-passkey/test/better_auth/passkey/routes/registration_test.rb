@@ -294,6 +294,39 @@ class BetterAuthPasskeyRoutesRegistrationTest < Minitest::Test
     assert_equal "after-route-context", captured.fetch(:after_context)
   end
 
+  def test_registration_name_uses_trimmed_client_then_hook_then_nil_and_runs_hook_once
+    calls = 0
+    hook_name = "  Hook Provider  "
+    auth = build_auth(
+      plugins: [
+        BetterAuth::Plugins.passkey(
+          registration: {
+            after_verification: lambda do |_data|
+              calls += 1
+              {name: hook_name}
+            end
+          }
+        )
+      ]
+    )
+    cookie = sign_up_cookie(auth, email: "registration-name-route@example.com")
+    client = WebAuthn::FakeClient.new(ORIGIN)
+    register = lambda do |name|
+      registration = auth.api.generate_passkey_registration_options(headers: {"cookie" => cookie}, return_headers: true)
+      response = client.create(challenge: registration.fetch(:response).fetch(:challenge), rp_id: "localhost")
+      auth.api.verify_passkey_registration(
+        headers: {"cookie" => [cookie, cookie_header(registration.fetch(:headers).fetch("set-cookie"))].join("; "), "origin" => ORIGIN},
+        body: {name: name, response: response}
+      )
+    end
+
+    assert_equal "Client Label", register.call("  Client Label  ").fetch("name")
+    assert_equal "Hook Provider", register.call("   ").fetch("name")
+    hook_name = "   "
+    assert_nil register.call("   ")["name"]
+    assert_equal 3, calls
+  end
+
   def test_verify_registration_rejects_duplicate_credential_id
     auth = build_auth
     cookie = sign_up_cookie(auth, email: "duplicate-registration-route@example.com")
