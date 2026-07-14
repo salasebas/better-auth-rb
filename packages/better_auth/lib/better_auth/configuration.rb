@@ -49,6 +49,7 @@ module BetterAuth
       :email_and_password,
       :password_hasher,
       :email_verification,
+      :configured_social_provider_ids,
       :social_providers,
       :experimental,
       :secondary_storage,
@@ -61,6 +62,7 @@ module BetterAuth
       :logger
 
     def initialize(options = {})
+      @configured_social_provider_ids = extract_configured_social_provider_ids(options)
       options = symbolize_keys(options)
       @explicit_options = deep_dup(options)
 
@@ -157,7 +159,7 @@ module BetterAuth
       normalized = symbolize_keys(defaults || {})
       normalized.each do |key, value|
         next unless respond_to?(key)
-        next if key == :database_hooks
+        next if key == :database_hooks || key == :configured_social_provider_ids
 
         if key == :trusted_origins
           merge_trusted_origins_default(value)
@@ -364,6 +366,16 @@ module BetterAuth
       symbolize_keys(value || {}).reject do |_id, provider|
         provider.nil? || provider == false || (provider.is_a?(Hash) && provider[:enabled] == false)
       end
+    end
+
+    def extract_configured_social_provider_ids(options)
+      return [].freeze unless options.is_a?(Hash)
+
+      options.each_with_object([]) do |(key, providers), ids|
+        next unless normalize_key(key) == :social_providers && providers.is_a?(Hash)
+
+        ids.concat(providers.keys.map { |provider_id| provider_id.to_s.dup.freeze })
+      end.uniq.freeze
     end
 
     def normalize_trusted_origins(value)

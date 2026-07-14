@@ -20,9 +20,13 @@ module BetterAuth
       remove = operation_name == "remove"
       normalized = "/" + path.to_s.sub(%r{\A/+}, "").tr(".", "/")
       case normalized
+      when "/active"
+        update[:banned] = value == false || value.to_s == "false" unless remove
       when "/userName"
         new_value = value.to_s.downcase
-        update[:email] = new_value if scim_patch_should_apply?(user["email"], new_value, operation_name)
+        if scim_patch_should_apply?(user["email"], new_value, operation_name)
+          update[:email] = new_value
+        end
       when "/externalId"
         account_update[:accountId] = value unless remove
       when "/name/formatted"

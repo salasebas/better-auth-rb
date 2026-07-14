@@ -66,6 +66,7 @@ module SCIMTestHelper
   def scim_schema_config(plugins: [BetterAuth::Plugins.scim], **options)
     BetterAuth::Configuration.new(
       {
+        base_url: "http://localhost:3000",
         secret: SECRET,
         database: :memory,
         email_and_password: {enabled: true},
@@ -181,6 +182,30 @@ module SCIMTestHelper
     def delete(key)
       data.delete(key)
       ttls.delete(key)
+    end
+  end
+
+  class NoTransactionAdapter < BetterAuth::Adapters::Base
+    def initialize(delegate)
+      @delegate = delegate
+    end
+
+    def method_missing(name, *arguments, **keywords, &block)
+      return @delegate.public_send(name, *arguments, **keywords, &block) if @delegate.respond_to?(name)
+
+      super
+    end
+
+    def find_one(...)
+      @delegate.find_one(...)
+    end
+
+    def find_many(...)
+      @delegate.find_many(...)
+    end
+
+    def respond_to_missing?(name, include_private = false)
+      @delegate.respond_to?(name, include_private) || super
     end
   end
 end

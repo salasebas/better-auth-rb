@@ -20,6 +20,7 @@ module BetterAuth
         end
         raise APIError.new("BAD_REQUEST", message: BASE_ERROR_CODES["MISSING_FIELD"]) if provider_id.empty?
         raise APIError.new("BAD_REQUEST", message: "Provider id contains forbidden characters") if provider_id.include?(":")
+        scim_assert_provider_id_available!(ctx, provider_id)
         required_roles = scim_required_roles(ctx, config)
         if organization_id && !scim_has_organization_plugin?(ctx)
           raise APIError.new("BAD_REQUEST", message: "Restricting a token to an organization requires the organization plugin")
@@ -33,10 +34,17 @@ module BetterAuth
         end
 
         existing = ctx.context.adapter.find_one(model: "scimProvider", where: [{field: "providerId", value: provider_id}])
-        if existing
-          scim_assert_provider_access!(ctx, session.fetch(:user).fetch("id"), existing, required_roles, config)
-          ctx.context.adapter.delete(model: "scimProvider", where: [{field: "id", value: existing.fetch("id")}])
-        end
+        scim_assert_provider_access!(ctx, session.fetch(:user).fetch("id"), existing, required_roles, config) if existing
+
+        scim_assert_can_generate_token!(
+          config,
+          user: session.fetch(:user),
+          provider_id: provider_id,
+          organization_id: organization_id,
+          member: member
+        )
+
+        ctx.context.adapter.delete(model: "scimProvider", where: [{field: "id", value: existing.fetch("id")}]) if existing
 
         base_token = Crypto.random_string(24)
         token = Base64.urlsafe_encode64([base_token, provider_id, organization_id].compact.join(":"), padding: false)
@@ -99,11 +107,15 @@ module BetterAuth
         provider_id = provider.fetch("providerId")
         email = scim_primary_email(body).downcase
         account_id = scim_account_id(body)
+        scim_assert_active_supported!(ctx, body[:active])
         existing_account = ctx.context.adapter.find_one(model: "account", where: [{field: "accountId", value: account_id}, {field: "providerId", value: provider_id}])
         raise scim_error("CONFLICT", "User already exists", scim_type: "uniqueness") if existing_account
 
         user, account = ctx.context.adapter.transaction do
           user = ctx.context.internal_adapter.find_user_by_email(email)&.fetch(:user)
+          if user && !scim_can_link_existing_user?(ctx, config, user, email, provider)
+            raise scim_error("CONFLICT", "A user with this email already exists", scim_type: "uniqueness")
+          end
           user ||= ctx.context.internal_adapter.create_user(
             email: email,
             name: scim_display_name(body, email)
@@ -116,8 +128,11 @@ module BetterAuth
             refreshToken: ""
           )
           scim_create_org_membership(ctx, user.fetch("id"), provider["organizationId"])
+          active_update = scim_active_update(ctx, body[:active])
+          user = ctx.context.internal_adapter.update_user(user.fetch("id"), active_update.merge(updatedAt: Time.now)) unless active_update.empty?
           [user, account]
         end
+        ctx.context.internal_adapter.delete_user_sessions(user.fetch("id")) if body[:active] == false
         resource = scim_user_resource(user, account, ctx.context.base_url)
         ctx.json(resource, status: 201, headers: {location: resource.fetch(:meta).fetch(:location)})
       end
@@ -128,12 +143,19 @@ module BetterAuth
         user, account = scim_find_user_with_account!(ctx)
         body = normalize_hash(ctx.body)
         scim_validate_user_body!(body)
+        email = scim_primary_email(body).downcase
+        scim_assert_email_available!(ctx, user, email) if email != user.fetch("email").to_s.downcase
+        scim_assert_active_supported!(ctx, body[:active])
+        user_update = scim_user_update(body)
+        user_update[:emailVerified] = false if email != user.fetch("email").to_s.downcase
+        user_update.merge!(scim_active_update(ctx, body[:active]))
         updated, updated_account = ctx.context.adapter.transaction do
           [
-            ctx.context.internal_adapter.update_user(user.fetch("id"), scim_user_update(body)),
+            ctx.context.internal_adapter.update_user(user.fetch("id"), user_update),
             ctx.context.internal_adapter.update_account(account.fetch("id"), accountId: scim_account_id(body), updatedAt: Time.now)
           ]
         end
+        ctx.context.internal_adapter.delete_user_sessions(user.fetch("id")) if body[:active] == false
         ctx.json(scim_user_resource(updated, updated_account, ctx.context.base_url))
       end
     end
@@ -160,10 +182,22 @@ module BetterAuth
         end
         raise scim_error("BAD_REQUEST", "No valid fields to update") if update.empty? && account_update.empty?
 
+        if update.key?(:email) && update[:email] != user.fetch("email").to_s.downcase
+          scim_assert_email_available!(ctx, user, update[:email])
+          update[:emailVerified] = false
+        end
+        requested_active = update.key?(:banned) ? !update[:banned] : nil
+        scim_assert_active_supported!(ctx, requested_active)
+        if update.key?(:banned)
+          update.delete(:banned)
+          update.merge!(scim_active_update(ctx, requested_active))
+        end
+
         ctx.context.adapter.transaction do
           ctx.context.internal_adapter.update_user(user.fetch("id"), update.merge(updatedAt: Time.now)) unless update.empty?
           ctx.context.internal_adapter.update_account(account.fetch("id"), account_update.merge(updatedAt: Time.now)) unless account_update.empty?
         end
+        ctx.context.internal_adapter.delete_user_sessions(user.fetch("id")) if requested_active == false
         ctx.json(nil, status: 204)
       end
     end
@@ -171,10 +205,38 @@ module BetterAuth
     def scim_delete_user_endpoint(config)
       Endpoint.new(path: "/scim/v2/Users/:userId", method: "DELETE", metadata: scim_hidden_metadata("Delete SCIM user.", [*SCIM_SUPPORTED_MEDIA_TYPES, ""]), use: [scim_auth_middleware(config)]) do |ctx|
         user, account = scim_find_user_with_account!(ctx)
-        ctx.context.adapter.transaction do
-          ctx.context.internal_adapter.delete_account(account.fetch("id"))
-          remaining_accounts = ctx.context.internal_adapter.find_accounts(user.fetch("id"))
-          ctx.context.internal_adapter.delete_user(user.fetch("id")) if remaining_accounts.empty?
+        provider = ctx.context.scim_provider
+        organization_id = provider["organizationId"]
+        if organization_id
+          raise scim_error("BAD_REQUEST", "Organization plugin is required for organization-scoped deprovisioning") unless scim_has_organization_plugin?(ctx)
+
+          member = ctx.context.adapter.find_one(model: "member", where: [{field: "organizationId", value: organization_id}, {field: "userId", value: user.fetch("id")}])
+          organization = organization_by_id(ctx, organization_id)
+          raise scim_error("NOT_FOUND", "User not found") unless member && organization
+
+          organization_config = scim_organization_plugin(ctx).options || {}
+          hook_payload = {member: member_wire(ctx, member), user: user, organization: organization_wire(ctx, organization)}
+          run_org_hook(organization_config, :before_remove_member, hook_payload, ctx)
+          organization_transaction(ctx) do |adapter|
+            adapter.delete(model: "member", where: [{field: "id", value: member.fetch("id")}])
+            if org_truthy?(normalize_hash(organization_config).dig(:teams, :enabled))
+              team_ids = adapter.find_many(model: "team", where: [{field: "organizationId", value: organization_id}]).map { |team| team.fetch("id") }
+              adapter.delete_many(model: "teamMember", where: [{field: "userId", value: user.fetch("id")}, {field: "teamId", value: team_ids, operator: "in"}]) if team_ids.any?
+            end
+            adapter.delete(model: "account", where: [{field: "id", value: account.fetch("id")}])
+          end
+          run_org_hook(organization_config, :after_remove_member, hook_payload, ctx)
+        else
+          remaining_accounts = ctx.context.internal_adapter.find_accounts(user.fetch("id")).reject { |candidate| candidate.fetch("id") == account.fetch("id") }
+          if remaining_accounts.empty?
+            ctx.context.internal_adapter.delete_user_sessions(user.fetch("id"))
+            deleted = ctx.context.internal_adapter.delete_user(user.fetch("id"))
+            if deleted == false || ctx.context.internal_adapter.find_user_by_id(user.fetch("id"))
+              raise scim_error("BAD_REQUEST", "Failed to delete SCIM user")
+            end
+          else
+            ctx.context.internal_adapter.delete_account(account.fetch("id"))
+          end
         end
         ctx.json(nil, status: 204)
       end

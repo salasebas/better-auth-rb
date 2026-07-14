@@ -129,6 +129,29 @@ class BetterAuthConfigurationTest < Minitest::Test
     assert_equal({enabled: true, debug: true}, config.telemetry)
   end
 
+  def test_configured_social_provider_ids_preserve_raw_keys_without_exposing_values
+    config = BetterAuth::Configuration.new(
+      secret: SECRET,
+      social_providers: {
+        "enabled-provider" => {client_id: "public-client-id"},
+        "disabled-custom-provider" => {enabled: false, client_secret: "private-provider-secret"},
+        :false_provider => false,
+        "nilProvider" => nil
+      }
+    )
+
+    assert_equal %w[enabled-provider disabled-custom-provider false_provider nilProvider], config.configured_social_provider_ids
+    assert_predicate config.configured_social_provider_ids, :frozen?
+    assert_raises(FrozenError) { config.configured_social_provider_ids << "another-provider" }
+    assert_equal({enabled_provider: {client_id: "public-client-id"}}, config.social_providers)
+    assert_equal config.social_providers, config.to_h[:social_providers]
+    refute config.to_h.key?(:configured_social_provider_ids)
+    refute_includes config.to_h[:social_providers].inspect, "private-provider-secret"
+
+    config.merge_defaults!(configured_social_provider_ids: ["plugin-default"])
+    refute_includes config.configured_social_provider_ids, "plugin-default"
+  end
+
   def test_base_url_base_path_env_and_protocol_match_upstream_context_cases
     with_env("BETTER_AUTH_URL" => "http://localhost:5147") do
       config = BetterAuth::Configuration.new(secret: SECRET)

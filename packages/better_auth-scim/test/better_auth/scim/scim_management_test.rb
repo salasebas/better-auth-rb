@@ -5,6 +5,125 @@ require_relative "../scim_test_helper"
 class BetterAuthPluginsScimManagementTest < Minitest::Test
   include SCIMTestHelper
 
+  def test_scim_can_generate_token_receives_personal_payload_and_can_deny
+    payloads = []
+    auth = build_auth(can_generate_token: lambda do |payload|
+      payloads << payload
+      payload.fetch(:provider_id) == "allowed"
+    end)
+    cookie = sign_up_cookie(auth)
+
+    token = auth.api.generate_scim_token(headers: {"cookie" => cookie}, body: {providerId: "allowed"})
+    assert_kind_of String, token.fetch(:scimToken)
+    assert_nil payloads.first.fetch(:member)
+    assert_nil payloads.first.fetch(:organization_id)
+
+    error = assert_raises(BetterAuth::APIError) do
+      auth.api.generate_scim_token(headers: {"cookie" => cookie}, body: {providerId: "denied"})
+    end
+    assert_equal 403, error.status_code
+    assert_nil auth.context.adapter.find_one(model: "scimProvider", where: [{field: "providerId", value: "denied"}])
+  end
+
+  def test_scim_unauthorized_rotation_is_rejected_before_can_generate_token
+    callback_calls = 0
+    auth = build_auth(can_generate_token: lambda do |_payload|
+      callback_calls += 1
+      true
+    end)
+    owner_cookie = sign_up_cookie(auth, "rotation-owner@example.com")
+    other_cookie = sign_up_cookie(auth, "rotation-other@example.com")
+    auth.api.generate_scim_token(headers: {"cookie" => owner_cookie}, body: {providerId: "owned-rotation"})
+    assert_equal 1, callback_calls
+
+    error = assert_raises(BetterAuth::APIError) do
+      auth.api.generate_scim_token(headers: {"cookie" => other_cookie}, body: {providerId: "owned-rotation"})
+    end
+    assert_equal 403, error.status_code
+    assert_equal 1, callback_calls
+  end
+
+  def test_scim_rejects_fixed_configured_and_resolved_provider_namespaces
+    auth = BetterAuth.auth(
+      base_url: "http://localhost:3000",
+      secret: SECRET,
+      database: :memory,
+      email_and_password: {enabled: true},
+      social_providers: {
+        "disabled-custom-provider" => {enabled: false},
+        :custom_social => {id: "resolved-social"}
+      },
+      plugins: [BetterAuth::Plugins.scim]
+    )
+    cookie = sign_up_cookie(auth)
+
+    reserved_provider_ids = BetterAuth::Plugins::SCIM_BUILT_IN_ACCOUNT_PROVIDER_IDS +
+      %w[disabled-custom-provider custom_social resolved-social]
+    reserved_provider_ids.each do |provider_id|
+      error = assert_raises(BetterAuth::APIError) do
+        auth.api.generate_scim_token(headers: {"cookie" => cookie}, body: {providerId: provider_id})
+      end
+      assert_equal 400, error.status_code
+    end
+
+    token = auth.api.generate_scim_token(headers: {"cookie" => cookie}, body: {providerId: "discord"})
+    assert_kind_of String, token.fetch(:scimToken)
+  end
+
+  def test_scim_can_generate_token_receives_org_payload_and_cannot_bypass_roles
+    payload = nil
+    callback_calls = 0
+    scim = BetterAuth::Plugins.scim(can_generate_token: lambda do |value|
+      callback_calls += 1
+      payload = value
+      true
+    end)
+    auth = build_auth(plugins: [BetterAuth::Plugins.organization, scim])
+    owner_cookie = sign_up_cookie(auth)
+    member_cookie = sign_up_cookie(auth, "plain-member@example.com")
+    member_user = auth.api.get_session(headers: {"cookie" => member_cookie}).fetch(:user)
+    organization = auth.api.create_organization(headers: {"cookie" => owner_cookie}, body: {name: "Token Org", slug: "token-org"})
+    auth.api.add_member(headers: {"cookie" => owner_cookie}, body: {organizationId: organization.fetch("id"), userId: member_user.fetch("id"), role: "member"})
+
+    auth.api.generate_scim_token(headers: {"cookie" => owner_cookie}, body: {providerId: "org-token", organizationId: organization.fetch("id")})
+    assert_equal organization.fetch("id"), payload.fetch(:organization_id)
+    assert_equal "org-token", payload.fetch(:provider_id)
+    assert_equal "owner", payload.fetch(:member).fetch("role")
+
+    assert_raises(BetterAuth::APIError) do
+      auth.api.generate_scim_token(headers: {"cookie" => member_cookie}, body: {providerId: "cannot-bypass", organizationId: organization.fetch("id")})
+    end
+    assert_equal 1, callback_calls
+  end
+
+  def test_scim_rejects_default_and_persisted_sso_provider_namespaces
+    sso = BetterAuth::Plugin.new(
+      id: "sso",
+      options: {default_sso: [{provider_id: "default-enterprise"}]},
+      schema: {
+        ssoProvider: {
+          model_name: "sso_providers",
+          fields: {
+            issuer: {type: "string", required: true},
+            userId: {type: "string", required: true},
+            providerId: {type: "string", required: true, unique: true},
+            domain: {type: "string", required: true}
+          }
+        }
+      }
+    )
+    auth = build_auth(plugins: [sso, BetterAuth::Plugins.scim])
+    cookie = sign_up_cookie(auth)
+    auth.context.adapter.create(model: "ssoProvider", data: {issuer: "https://issuer.example.com", userId: auth.api.get_session(headers: {"cookie" => cookie}).fetch(:user).fetch("id"), providerId: "persisted-enterprise", domain: "example.com"})
+
+    %w[default-enterprise persisted-enterprise].each do |provider_id|
+      error = assert_raises(BetterAuth::APIError) do
+        auth.api.generate_scim_token(headers: {"cookie" => cookie}, body: {providerId: provider_id})
+      end
+      assert_equal 400, error.status_code
+    end
+  end
+
   def test_generates_plain_hashed_and_custom_scim_tokens
     plain = build_auth(store_scim_token: "plain")
     plain_cookie = sign_up_cookie(plain)

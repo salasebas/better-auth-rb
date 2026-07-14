@@ -11,7 +11,7 @@ module BetterAuth
         userName: user.fetch("email"),
         externalId: account&.fetch("accountId", nil),
         displayName: user["name"],
-        active: true,
+        active: user["banned"] != true,
         name: {formatted: user["name"]},
         emails: [{primary: true, value: user.fetch("email")}],
         meta: {

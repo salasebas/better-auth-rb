@@ -5,6 +5,289 @@ require_relative "../scim_test_helper"
 class BetterAuthPluginsScimUsersTest < Minitest::Test
   include SCIMTestHelper
 
+  def test_scim_existing_user_linking_is_fail_closed_by_default_and_can_be_enabled
+    auth = build_auth
+    owner_cookie = sign_up_cookie(auth)
+    sign_up_cookie(auth, "existing@example.com")
+    token = auth.api.generate_scim_token(headers: {"cookie" => owner_cookie}, body: {providerId: "okta"}).fetch(:scimToken)
+
+    error = assert_raises(BetterAuth::APIError) do
+      auth.api.create_scim_user(headers: bearer(token), body: {userName: "Existing@Example.com"})
+    end
+    assert_equal 409, error.status_code
+    assert_equal "uniqueness", error.body.fetch(:scimType)
+
+    linking_auth = build_auth(link_existing_users: true)
+    linking_owner_cookie = sign_up_cookie(linking_auth)
+    sign_up_cookie(linking_auth, "existing@example.com")
+    linking_token = linking_auth.api.generate_scim_token(headers: {"cookie" => linking_owner_cookie}, body: {providerId: "okta"}).fetch(:scimToken)
+    linked = linking_auth.api.create_scim_user(headers: bearer(linking_token), body: {userName: "Existing@Example.com"})
+
+    assert_equal "existing@example.com", linked.fetch(:userName)
+  end
+
+  def test_scim_existing_user_linking_policy_requires_and_checks_constraints
+    callback_payload = nil
+    auth = build_auth(
+      link_existing_users: {
+        trusted_domains: ["EXAMPLE.COM"],
+        should_link_user: lambda do |payload|
+          callback_payload = payload
+          payload.fetch(:email) == "allowed@example.com"
+        end
+      }
+    )
+    owner_cookie = sign_up_cookie(auth)
+    sign_up_cookie(auth, "allowed@example.com")
+    sign_up_cookie(auth, "denied@other.test")
+    token = auth.api.generate_scim_token(headers: {"cookie" => owner_cookie}, body: {providerId: "okta"}).fetch(:scimToken)
+
+    linked = auth.api.create_scim_user(headers: bearer(token), body: {userName: "Allowed@Example.Com"})
+    assert_equal "allowed@example.com", linked.fetch(:userName)
+    assert_equal "allowed@example.com", callback_payload.fetch(:email)
+    assert_equal({provider_id: "okta"}, callback_payload.fetch(:provider))
+
+    error = assert_raises(BetterAuth::APIError) do
+      auth.api.create_scim_user(headers: bearer(token), body: {userName: "denied@other.test"})
+    end
+    assert_equal 409, error.status_code
+
+    empty_policy_auth = build_auth(link_existing_users: {})
+    empty_owner_cookie = sign_up_cookie(empty_policy_auth)
+    sign_up_cookie(empty_policy_auth, "empty@example.com")
+    empty_token = empty_policy_auth.api.generate_scim_token(headers: {"cookie" => empty_owner_cookie}, body: {providerId: "empty"}).fetch(:scimToken)
+    assert_raises(BetterAuth::APIError) do
+      empty_policy_auth.api.create_scim_user(headers: bearer(empty_token), body: {userName: "empty@example.com"})
+    end
+  end
+
+  def test_scim_existing_user_linking_can_require_existing_organization_membership
+    scim = BetterAuth::Plugins.scim(link_existing_users: {require_existing_org_membership: true})
+    auth = build_auth(plugins: [BetterAuth::Plugins.organization, scim])
+    owner_cookie = sign_up_cookie(auth)
+    member_cookie = sign_up_cookie(auth, "member@example.com")
+    outsider_cookie = sign_up_cookie(auth, "outsider@example.com")
+    member_user = auth.api.get_session(headers: {"cookie" => member_cookie}).fetch(:user)
+    outsider_user = auth.api.get_session(headers: {"cookie" => outsider_cookie}).fetch(:user)
+    organization = auth.api.create_organization(headers: {"cookie" => owner_cookie}, body: {name: "SCIM Org", slug: "scim-org"})
+    auth.api.add_member(headers: {"cookie" => owner_cookie}, body: {organizationId: organization.fetch("id"), userId: member_user.fetch("id"), role: "member"})
+    token = auth.api.generate_scim_token(headers: {"cookie" => owner_cookie}, body: {providerId: "org-okta", organizationId: organization.fetch("id")}).fetch(:scimToken)
+
+    linked = auth.api.create_scim_user(headers: bearer(token), body: {userName: "member@example.com"})
+    assert_equal member_user.fetch("id"), linked.fetch(:id)
+    assert_raises(BetterAuth::APIError) do
+      auth.api.create_scim_user(headers: bearer(token), body: {userName: "outsider@example.com"})
+    end
+    refute auth.context.adapter.find_one(model: "member", where: [{field: "organizationId", value: organization.fetch("id")}, {field: "userId", value: outsider_user.fetch("id")}])
+  end
+
+  def test_scim_put_email_changes_are_unique_and_reset_verification
+    auth = build_auth
+    cookie = sign_up_cookie(auth)
+    token = auth.api.generate_scim_token(headers: {"cookie" => cookie}, body: {providerId: "email-safe"}).fetch(:scimToken)
+    first = auth.api.create_scim_user(headers: bearer(token), body: {userName: "first@example.com"})
+    auth.api.create_scim_user(headers: bearer(token), body: {userName: "second@example.com"})
+    auth.context.internal_adapter.update_user(first.fetch(:id), emailVerified: true)
+
+    unchanged = auth.api.update_scim_user(headers: bearer(token), params: {userId: first.fetch(:id)}, body: {userName: "FIRST@EXAMPLE.COM"})
+    assert_equal "first@example.com", unchanged.fetch(:userName)
+    assert_equal true, auth.context.internal_adapter.find_user_by_id(first.fetch(:id)).fetch("emailVerified")
+
+    error = assert_raises(BetterAuth::APIError) do
+      auth.api.update_scim_user(headers: bearer(token), params: {userId: first.fetch(:id)}, body: {userName: "SECOND@EXAMPLE.COM"})
+    end
+    assert_equal 409, error.status_code
+
+    auth.api.update_scim_user(headers: bearer(token), params: {userId: first.fetch(:id)}, body: {userName: "changed@example.com"})
+    assert_equal false, auth.context.internal_adapter.find_user_by_id(first.fetch(:id)).fetch("emailVerified")
+  end
+
+  def test_scim_active_requires_admin_and_tracks_real_banned_state
+    without_admin = build_auth
+    cookie = sign_up_cookie(without_admin)
+    token = without_admin.api.generate_scim_token(headers: {"cookie" => cookie}, body: {providerId: "no-admin"}).fetch(:scimToken)
+    error = assert_raises(BetterAuth::APIError) do
+      without_admin.api.create_scim_user(headers: bearer(token), body: {userName: "inactive@example.com", active: false})
+    end
+    assert_equal 400, error.status_code
+    assert_nil without_admin.context.internal_adapter.find_user_by_email("inactive@example.com")
+
+    existing = without_admin.api.create_scim_user(headers: bearer(token), body: {userName: "existing-active@example.com"})
+    assert_raises(BetterAuth::APIError) do
+      without_admin.api.update_scim_user(headers: bearer(token), params: {userId: existing.fetch(:id)}, body: {userName: "existing-active@example.com", active: false})
+    end
+    assert_raises(BetterAuth::APIError) do
+      without_admin.api.patch_scim_user(headers: bearer(token), params: {userId: existing.fetch(:id)}, body: {schemas: [PATCH_SCHEMA], Operations: [{op: "replace", path: "active", value: false}]})
+    end
+    assert_equal true, without_admin.api.get_scim_user(headers: bearer(token), params: {userId: existing.fetch(:id)}).fetch(:active)
+
+    auth = build_auth(plugins: [BetterAuth::Plugins.admin, BetterAuth::Plugins.scim])
+    admin_cookie = sign_up_cookie(auth)
+    admin_token = auth.api.generate_scim_token(headers: {"cookie" => admin_cookie}, body: {providerId: "admin-active"}).fetch(:scimToken)
+    created = auth.api.create_scim_user(headers: bearer(admin_token), body: {userName: "managed@example.com", active: false})
+    assert_equal false, created.fetch(:active)
+    assert_equal true, auth.context.internal_adapter.find_user_by_id(created.fetch(:id)).fetch("banned")
+
+    auth.api.patch_scim_user(
+      headers: bearer(admin_token),
+      params: {userId: created.fetch(:id)},
+      body: {schemas: [PATCH_SCHEMA], Operations: [{op: "replace", path: "active", value: true}]}
+    )
+    assert_equal true, auth.api.get_scim_user(headers: bearer(admin_token), params: {userId: created.fetch(:id)}).fetch(:active)
+  end
+
+  def test_scim_put_active_revokes_secondary_sessions_and_can_reactivate
+    storage = SecondaryStorage.new
+    auth = BetterAuth.auth(
+      base_url: "http://localhost:3000",
+      secret: SECRET,
+      database: :memory,
+      secondary_storage: storage,
+      email_and_password: {enabled: true},
+      plugins: [BetterAuth::Plugins.admin, BetterAuth::Plugins.scim]
+    )
+    cookie = sign_up_cookie(auth)
+    token = auth.api.generate_scim_token(headers: {"cookie" => cookie}, body: {providerId: "active-secondary"}).fetch(:scimToken)
+    created = auth.api.create_scim_user(headers: bearer(token), body: {userName: "secondary-active@example.com"})
+    session = auth.context.internal_adapter.create_session(created.fetch(:id))
+    active_key = "active-sessions-#{created.fetch(:id)}"
+    assert storage.get(session.fetch("token"))
+    assert storage.get(active_key)
+
+    deactivated = auth.api.update_scim_user(headers: bearer(token), params: {userId: created.fetch(:id)}, body: {userName: "secondary-active@example.com", active: false})
+    assert_equal false, deactivated.fetch(:active)
+    assert_nil storage.get(session.fetch("token"))
+    assert_nil storage.get(active_key)
+
+    reactivated = auth.api.update_scim_user(headers: bearer(token), params: {userId: created.fetch(:id)}, body: {userName: "secondary-active@example.com", active: true})
+    assert_equal true, reactivated.fetch(:active)
+    user = auth.context.internal_adapter.find_user_by_id(created.fetch(:id))
+    assert_nil user["banReason"]
+    assert_nil user["banExpires"]
+  end
+
+  def test_scim_organization_delete_removes_only_org_boundaries_and_runs_hooks
+    calls = []
+    organization_plugin = BetterAuth::Plugins.organization(
+      teams: {enabled: true},
+      organization_hooks: {
+        before_remove_member: ->(data, _ctx) { calls << [:before, data[:user].fetch("email")] },
+        after_remove_member: ->(data, _ctx) { calls << [:after, data[:organization].fetch("slug")] }
+      }
+    )
+    auth = build_auth(plugins: [organization_plugin, BetterAuth::Plugins.scim])
+    owner_cookie = sign_up_cookie(auth)
+    organization = auth.api.create_organization(headers: {"cookie" => owner_cookie}, body: {name: "Delete Org", slug: "delete-org"})
+    token = auth.api.generate_scim_token(headers: {"cookie" => owner_cookie}, body: {providerId: "org-delete", organizationId: organization.fetch("id")}).fetch(:scimToken)
+    created = auth.api.create_scim_user(headers: bearer(token), body: {userName: "org-user@example.com"})
+    team = auth.api.create_team(headers: {"cookie" => owner_cookie}, body: {organizationId: organization.fetch("id"), name: "SCIM Team"})
+    auth.api.add_team_member(headers: {"cookie" => owner_cookie}, body: {teamId: team.fetch("id"), userId: created.fetch(:id)})
+
+    assert_equal 204, auth.api.delete_scim_user(headers: bearer(token), params: {userId: created.fetch(:id)}, return_status: true).fetch(:status)
+    assert auth.context.internal_adapter.find_user_by_id(created.fetch(:id))
+    assert_nil auth.context.adapter.find_one(model: "member", where: [{field: "organizationId", value: organization.fetch("id")}, {field: "userId", value: created.fetch(:id)}])
+    assert_nil auth.context.adapter.find_one(model: "teamMember", where: [{field: "teamId", value: team.fetch("id")}, {field: "userId", value: created.fetch(:id)}])
+    assert_nil auth.context.adapter.find_one(model: "account", where: [{field: "providerId", value: "org-delete"}, {field: "userId", value: created.fetch(:id)}])
+    assert_equal [[:before, "org-user@example.com"], [:after, "delete-org"]], calls
+  end
+
+  def test_scim_organization_delete_rolls_back_mutation_failure_and_skips_after_hook
+    calls = []
+    organization_plugin = BetterAuth::Plugins.organization(
+      teams: {enabled: true},
+      organization_hooks: {
+        before_remove_member: ->(_data, _ctx) { calls << :before },
+        after_remove_member: ->(_data, _ctx) { calls << :after }
+      }
+    )
+    auth = build_auth(plugins: [organization_plugin, BetterAuth::Plugins.scim])
+    owner_cookie = sign_up_cookie(auth)
+    organization = auth.api.create_organization(headers: {"cookie" => owner_cookie}, body: {name: "Rollback Org", slug: "rollback-org"})
+    token = auth.api.generate_scim_token(headers: {"cookie" => owner_cookie}, body: {providerId: "rollback-provider", organizationId: organization.fetch("id")}).fetch(:scimToken)
+    created = auth.api.create_scim_user(headers: bearer(token), body: {userName: "rollback-user@example.com"})
+    team = auth.api.create_team(headers: {"cookie" => owner_cookie}, body: {organizationId: organization.fetch("id"), name: "Rollback Team"})
+    auth.api.add_team_member(headers: {"cookie" => owner_cookie}, body: {teamId: team.fetch("id"), userId: created.fetch(:id)})
+    adapter = auth.context.adapter
+    original_delete = adapter.method(:delete)
+    adapter.define_singleton_method(:delete) do |model:, where:|
+      raise "forced account deletion failure" if model == "account"
+
+      original_delete.call(model: model, where: where)
+    end
+
+    assert_raises(RuntimeError) do
+      auth.api.delete_scim_user(headers: bearer(token), params: {userId: created.fetch(:id)})
+    end
+
+    assert_equal [:before], calls
+    assert adapter.find_one(model: "member", where: [{field: "organizationId", value: organization.fetch("id")}, {field: "userId", value: created.fetch(:id)}])
+    assert adapter.find_one(model: "teamMember", where: [{field: "teamId", value: team.fetch("id")}, {field: "userId", value: created.fetch(:id)}])
+    assert adapter.find_one(model: "account", where: [{field: "providerId", value: "rollback-provider"}, {field: "userId", value: created.fetch(:id)}])
+  ensure
+    adapter&.singleton_class&.send(:remove_method, :delete) if original_delete
+  end
+
+  def test_scim_organization_delete_fails_closed_without_real_transaction_support
+    auth = build_auth(plugins: [BetterAuth::Plugins.organization, BetterAuth::Plugins.scim])
+    owner_cookie = sign_up_cookie(auth)
+    organization = auth.api.create_organization(headers: {"cookie" => owner_cookie}, body: {name: "No Transaction", slug: "no-transaction"})
+    token = auth.api.generate_scim_token(headers: {"cookie" => owner_cookie}, body: {providerId: "no-transaction-provider", organizationId: organization.fetch("id")}).fetch(:scimToken)
+    created = auth.api.create_scim_user(headers: bearer(token), body: {userName: "no-transaction@example.com"})
+    real_adapter = auth.context.adapter
+    auth.context.set_adapter(NoTransactionAdapter.new(real_adapter))
+
+    error = assert_raises(BetterAuth::Error) do
+      auth.api.delete_scim_user(headers: bearer(token), params: {userId: created.fetch(:id)})
+    end
+    assert_match(/real transaction support/, error.message)
+    assert real_adapter.find_one(model: "member", where: [{field: "organizationId", value: organization.fetch("id")}, {field: "userId", value: created.fetch(:id)}])
+    assert real_adapter.find_one(model: "account", where: [{field: "providerId", value: "no-transaction-provider"}, {field: "userId", value: created.fetch(:id)}])
+  ensure
+    auth&.context&.set_adapter(real_adapter) if real_adapter
+  end
+
+  def test_scim_sole_identity_delete_revokes_sessions_even_when_user_delete_is_vetoed
+    storage = SecondaryStorage.new
+    auth = BetterAuth.auth(
+      base_url: "http://localhost:3000",
+      secret: SECRET,
+      database: :memory,
+      secondary_storage: storage,
+      email_and_password: {enabled: true},
+      plugins: [BetterAuth::Plugins.scim]
+    )
+    cookie = sign_up_cookie(auth)
+    token = auth.api.generate_scim_token(headers: {"cookie" => cookie}, body: {providerId: "veto-delete"}).fetch(:scimToken)
+    created = auth.api.create_scim_user(headers: bearer(token), body: {userName: "veto-delete@example.com"})
+    session = auth.context.internal_adapter.create_session(created.fetch(:id))
+    active_key = "active-sessions-#{created.fetch(:id)}"
+    internal_adapter = auth.context.internal_adapter
+    internal_adapter.define_singleton_method(:delete_user) { |_user_id| false }
+
+    error = assert_raises(BetterAuth::APIError) do
+      auth.api.delete_scim_user(headers: bearer(token), params: {userId: created.fetch(:id)})
+    end
+    assert_equal 400, error.status_code
+    assert_nil storage.get(session.fetch("token"))
+    assert_nil storage.get(active_key)
+    assert internal_adapter.find_user_by_id(created.fetch(:id))
+    assert auth.context.adapter.find_one(model: "account", where: [{field: "providerId", value: "veto-delete"}, {field: "userId", value: created.fetch(:id)}])
+  ensure
+    internal_adapter&.singleton_class&.send(:remove_method, :delete_user)
+  end
+
+  def test_scim_provider_connection_delete_retains_provisioned_accounts
+    auth = build_auth
+    cookie = sign_up_cookie(auth)
+    token = auth.api.generate_scim_token(headers: {"cookie" => cookie}, body: {providerId: "retain-provider"}).fetch(:scimToken)
+    created = auth.api.create_scim_user(headers: bearer(token), body: {userName: "retained@example.com"})
+
+    auth.api.delete_scim_provider_connection(headers: {"cookie" => cookie}, body: {providerId: "retain-provider"})
+
+    assert auth.context.adapter.find_one(model: "account", where: [{field: "providerId", value: "retain-provider"}, {field: "userId", value: created.fetch(:id)}])
+    assert auth.context.internal_adapter.find_user_by_id(created.fetch(:id))
+  end
+
   def test_scim_user_crud_filter_patch_and_delete
     auth = build_auth
     cookie = sign_up_cookie(auth)
@@ -293,7 +576,7 @@ class BetterAuthPluginsScimUsersTest < Minitest::Test
   end
 
   def test_scim_delete_unlinks_only_current_provider_when_user_has_other_accounts
-    auth = build_auth
+    auth = build_auth(link_existing_users: true)
     cookie = sign_up_cookie(auth)
     token_a = auth.api.generate_scim_token(headers: {"cookie" => cookie}, body: {providerId: "provider-a"}).fetch(:scimToken)
     token_b = auth.api.generate_scim_token(headers: {"cookie" => cookie}, body: {providerId: "provider-b"}).fetch(:scimToken)

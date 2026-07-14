@@ -14,7 +14,7 @@ module BetterAuth
           {name: "id", type: "string", multiValued: false, description: "Unique opaque identifier for the User", required: false, caseExact: true, mutability: "readOnly", returned: "default", uniqueness: "server"},
           {name: "userName", type: "string", multiValued: false, description: "Unique identifier for the User, typically used by the user to directly authenticate to the service provider", required: true, caseExact: false, mutability: "readWrite", returned: "default", uniqueness: "server"},
           {name: "displayName", type: "string", multiValued: false, description: "The name of the User, suitable for display to end-users.  The name SHOULD be the full name of the User being described, if known.", required: false, caseExact: true, mutability: "readOnly", returned: "default", uniqueness: "none"},
-          {name: "active", type: "boolean", multiValued: false, description: "A Boolean value indicating the User's administrative status.", required: false, mutability: "readOnly", returned: "default"},
+          {name: "active", type: "boolean", multiValued: false, description: "A Boolean value indicating the User's administrative status.", required: false, mutability: "readWrite", returned: "default"},
           {
             name: "name",
             type: "complex",

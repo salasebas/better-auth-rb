@@ -13,6 +13,7 @@ module BetterAuth
       raise scim_error("BAD_REQUEST", BASE_ERROR_CODES["VALIDATION_ERROR"]) if body.key?(:external_id) && !body[:external_id].is_a?(String)
       raise scim_error("BAD_REQUEST", BASE_ERROR_CODES["VALIDATION_ERROR"]) if body.key?(:name) && !body[:name].is_a?(Hash)
       raise scim_error("BAD_REQUEST", BASE_ERROR_CODES["VALIDATION_ERROR"]) if body.key?(:emails) && !body[:emails].is_a?(Array)
+      raise scim_error("BAD_REQUEST", BASE_ERROR_CODES["VALIDATION_ERROR"]) if body.key?(:active) && ![true, false].include?(body[:active])
       normalize_hash(body[:name] || {}).each_value do |value|
         raise scim_error("BAD_REQUEST", BASE_ERROR_CODES["VALIDATION_ERROR"]) unless value.is_a?(String)
       end

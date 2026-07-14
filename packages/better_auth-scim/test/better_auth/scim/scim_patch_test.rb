@@ -5,6 +5,50 @@ require_relative "../scim_test_helper"
 class BetterAuthPluginsScimPatchTest < Minitest::Test
   include SCIMTestHelper
 
+  def test_scim_patch_email_is_unique_and_resets_verification_only_on_real_change
+    auth = build_auth
+    cookie = sign_up_cookie(auth)
+    token = auth.api.generate_scim_token(headers: {"cookie" => cookie}, body: {providerId: "patch-email-safe"}).fetch(:scimToken)
+    first = auth.api.create_scim_user(headers: bearer(token), body: {userName: "patch-first@example.com"})
+    auth.api.create_scim_user(headers: bearer(token), body: {userName: "patch-second@example.com"})
+    auth.context.internal_adapter.update_user(first.fetch(:id), emailVerified: true)
+
+    auth.api.patch_scim_user(headers: bearer(token), params: {userId: first.fetch(:id)}, body: {schemas: [PATCH_SCHEMA], Operations: [{op: "replace", path: "userName", value: "PATCH-FIRST@EXAMPLE.COM"}]})
+    assert_equal true, auth.context.internal_adapter.find_user_by_id(first.fetch(:id)).fetch("emailVerified")
+
+    error = assert_raises(BetterAuth::APIError) do
+      auth.api.patch_scim_user(headers: bearer(token), params: {userId: first.fetch(:id)}, body: {schemas: [PATCH_SCHEMA], Operations: [{op: "replace", path: "userName", value: "PATCH-SECOND@EXAMPLE.COM"}]})
+    end
+    assert_equal 409, error.status_code
+
+    auth.api.patch_scim_user(headers: bearer(token), params: {userId: first.fetch(:id)}, body: {schemas: [PATCH_SCHEMA], Operations: [{op: "replace", path: "userName", value: "patch-changed@example.com"}]})
+    assert_equal false, auth.context.internal_adapter.find_user_by_id(first.fetch(:id)).fetch("emailVerified")
+  end
+
+  def test_scim_patch_email_change_then_revert_preserves_verification
+    auth = build_auth
+    cookie = sign_up_cookie(auth)
+    token = auth.api.generate_scim_token(headers: {"cookie" => cookie}, body: {providerId: "patch-email-revert"}).fetch(:scimToken)
+    created = auth.api.create_scim_user(headers: bearer(token), body: {userName: "original@example.com"})
+    auth.context.internal_adapter.update_user(created.fetch(:id), emailVerified: true)
+
+    auth.api.patch_scim_user(
+      headers: bearer(token),
+      params: {userId: created.fetch(:id)},
+      body: {
+        schemas: [PATCH_SCHEMA],
+        Operations: [
+          {op: "replace", path: "userName", value: "temporary@example.com"},
+          {op: "replace", path: "userName", value: "ORIGINAL@EXAMPLE.COM"}
+        ]
+      }
+    )
+
+    user = auth.context.internal_adapter.find_user_by_id(created.fetch(:id))
+    assert_equal "original@example.com", user.fetch("email")
+    assert_equal true, user.fetch("emailVerified")
+  end
+
   def test_scim_patch_matches_upstream_supported_operations
     auth = build_auth
     cookie = sign_up_cookie(auth)
