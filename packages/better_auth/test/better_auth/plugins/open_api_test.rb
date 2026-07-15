@@ -330,6 +330,7 @@ class BetterAuthPluginsOpenAPITest < Minitest::Test
       },
       BetterAuth::Plugins.siwe => {
         get_siwe_nonce: "getSiweNonce",
+        get_nonce: "getNonce",
         verify_siwe_message: "verifySiweMessage"
       }
     }.each do |plugin, routes|

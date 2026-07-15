@@ -1,11 +1,45 @@
 # frozen_string_literal: true
 
 require "json"
+require "rack/mock"
 require_relative "../../test_helper"
 
 class BetterAuthPluginsSiweTest < Minitest::Test
   SECRET = "phase-eight-secret-with-enough-entropy-123"
   WALLET = "0x000000000000000000000000000000000000dEaD"
+
+  def test_get_nonce_upstream_route_alias_matches_nonce_route
+    auth = build_auth
+    request = Rack::MockRequest.new(auth)
+
+    nonce_response = request.post(
+      "/api/auth/siwe/nonce",
+      "CONTENT_TYPE" => "application/json",
+      :input => JSON.generate(walletAddress: WALLET, chainId: 137)
+    )
+    get_nonce_response = request.post(
+      "/api/auth/siwe/get-nonce",
+      "CONTENT_TYPE" => "application/json",
+      :input => JSON.generate(address: WALLET, chainId: 137)
+    )
+
+    assert_equal 200, nonce_response.status
+    assert_equal 200, get_nonce_response.status
+    assert_equal({"nonce" => "nonce-1"}, JSON.parse(nonce_response.body))
+    assert_equal({"nonce" => "nonce-2"}, JSON.parse(get_nonce_response.body))
+    assert_equal({nonce: "nonce-3"}, auth.api.get_nonce(body: {address: WALLET, chainId: 137}))
+
+    missing_address_response = request.post(
+      "/api/auth/siwe/get-nonce",
+      "CONTENT_TYPE" => "application/json",
+      :input => JSON.generate({})
+    )
+    assert_equal 400, missing_address_response.status
+    assert_equal "walletAddress or address is required", JSON.parse(missing_address_response.body).fetch("message")
+
+    stored = auth.context.internal_adapter.find_verification_value("siwe:#{WALLET}:137")
+    assert_equal "nonce-3", stored["value"]
+  end
 
   def test_nonce_is_stored_per_wallet_and_chain
     auth = build_auth
@@ -16,6 +50,7 @@ class BetterAuthPluginsSiweTest < Minitest::Test
     stored = auth.context.internal_adapter.find_verification_value("siwe:#{WALLET}:137")
     refute_nil stored
     assert_equal "nonce-1", stored["value"]
+    assert_in_delta Time.now + (15 * 60), stored["expiresAt"], 2
   end
 
   def test_verify_creates_wallet_user_account_session_and_consumes_nonce

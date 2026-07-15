@@ -20,8 +20,7 @@ class BetterAuthEndpointRegistryParityTest < Minitest::Test
   REGISTRY_PATH = File.expand_path("../../../../reference/upstream-endpoint-registry.json", __dir__)
   SKIP_PLUGINS = %w[mcp electron oidc-provider].freeze
   KNOWN_GAPS = [
-    ["oauth-popup", "GET", "/oauth-popup/start"],
-    ["siwe", "POST", "/siwe/get-nonce"]
+    ["oauth-popup", "GET", "/oauth-popup/start"]
   ].freeze
   PASSKEY_METHOD_OVERRIDES = {
     "GET /passkey/generate-authenticate-options" => "POST",

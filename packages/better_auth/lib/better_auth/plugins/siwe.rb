@@ -19,29 +19,30 @@ module BetterAuth
         id: "siwe",
         schema: siwe_schema(config[:schema]),
         endpoints: {
-          get_siwe_nonce: get_siwe_nonce_endpoint(config),
+          get_siwe_nonce: get_siwe_nonce_endpoint(config, path: "/siwe/nonce", operation_id: "getSiweNonce"),
+          get_nonce: get_siwe_nonce_endpoint(config, path: "/siwe/get-nonce", operation_id: "getNonce"),
           verify_siwe_message: verify_siwe_message_endpoint(config)
         },
         options: config
       )
     end
 
-    def get_siwe_nonce_endpoint(config)
+    def get_siwe_nonce_endpoint(config, path:, operation_id:)
       Endpoint.new(
-        path: "/siwe/nonce",
+        path: path,
         method: "POST",
         body_schema: ->(body) { siwe_nonce_body(body) },
         metadata: {
           openapi: {
-            operationId: "getSiweNonce",
+            operationId: operation_id,
             description: "Generate a nonce for Sign-In with Ethereum",
             requestBody: OpenAPI.json_request_body(
               OpenAPI.object_schema(
                 {
+                  address: {type: "string"},
                   walletAddress: {type: "string"},
                   chainId: {type: ["number", "string", "null"]}
-                },
-                required: ["walletAddress"]
+                }
               )
             ),
             responses: {
@@ -59,7 +60,7 @@ module BetterAuth
         }
       ) do |ctx|
         body = normalize_hash(ctx.body)
-        wallet_address = siwe_normalize_wallet!(body[:wallet_address])
+        wallet_address = siwe_normalize_wallet!(body[:wallet_address] || body[:address])
         chain_id = siwe_chain_id(body[:chain_id])
         nonce_callback = config[:get_nonce]
         raise APIError.new("INTERNAL_SERVER_ERROR", message: "SIWE nonce callback is required") unless nonce_callback.respond_to?(:call)
@@ -191,7 +192,12 @@ module BetterAuth
 
     def siwe_nonce_body(body)
       data = normalize_hash(body)
-      siwe_normalize_wallet!(data[:wallet_address])
+      wallet_address = data[:wallet_address] || data[:address]
+      if wallet_address.to_s.empty?
+        raise APIError.new("BAD_REQUEST", message: "walletAddress or address is required")
+      end
+
+      siwe_normalize_wallet!(wallet_address)
       data[:chain_id] = siwe_chain_id(data[:chain_id])
       data
     end

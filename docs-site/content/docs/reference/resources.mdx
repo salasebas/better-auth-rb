@@ -10,7 +10,7 @@ Do not edit the generated endpoint reference by hand; update the Ruby source of 
 
 Generated configuration: supported Ruby plugin set, email/password auth, database-backed rate limiting, and optional schema-bearing supported plugin features. Actual app schemas and endpoints may differ when plugins are disabled or names and fields are customized.
 
-Generated count: 180 operations across 175 paths.
+Generated count: 181 operations across 176 paths.
 
 ## Official
 
@@ -266,7 +266,8 @@ Endpoint metadata is generated from the auth API OpenAPI schema method using a d
 
 | Method | Path | Operation | Summary | Auth | Request body | Response |
 | --- | --- | --- | --- | --- | --- | --- |
-| `POST` | `/api/auth/siwe/nonce` | `getSiweNonce` | Generate a nonce for Sign-In with Ethereum | bearerAuth | application/json: object: chainId, walletAddress; required: walletAddress | 200 - SIWE nonce - object: nonce; required: nonce |
+| `POST` | `/api/auth/siwe/get-nonce` | `getNonce` | Generate a nonce for Sign-In with Ethereum | bearerAuth | application/json: object: address, chainId, walletAddress | 200 - SIWE nonce - object: nonce; required: nonce |
+| `POST` | `/api/auth/siwe/nonce` | `getSiweNonce` | Generate a nonce for Sign-In with Ethereum | bearerAuth | application/json: object: address, chainId, walletAddress | 200 - SIWE nonce - object: nonce; required: nonce |
 | `POST` | `/api/auth/siwe/verify` | `verifySiweMessage` | Verify a Sign-In with Ethereum message | bearerAuth | application/json: object: chainId, email, message, signature, walletAddress; required: message, signature, walletAddress | 200 - SIWE message verified - object: success, token, user; required: success, token, user |
 
 ### Sso

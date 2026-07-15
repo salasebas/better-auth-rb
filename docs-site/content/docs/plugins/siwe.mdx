@@ -69,6 +69,22 @@ nonce = auth.api.get_siwe_nonce(
 nonce[:nonce]
 ```
 
+For compatibility with upstream Better Auth clients, the plugin also exposes
+`POST /api/auth/siwe/get-nonce`. Its direct Ruby API accepts the upstream
+`address` field as an alias for `walletAddress`:
+
+```ruby title="server.rb"
+nonce = auth.api.get_nonce(
+  body: {
+    address: "0x000000000000000000000000000000000000dEaD",
+    chainId: 1
+  }
+)
+```
+
+Both nonce endpoints accept either address field and use the same validation,
+15-minute storage lifetime, and `{ nonce: ... }` response.
+
 ### Sign In with Ethereum
 
 After generating a nonce and creating a SIWE message, verify the signature to authenticate:
