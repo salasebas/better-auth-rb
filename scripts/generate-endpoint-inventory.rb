@@ -71,12 +71,17 @@ module EndpointInventory
     line = node.location.start_line
     rel_file = file.delete_prefix("#{ROOT}/")
 
+    endpoint_key = infer_endpoint_key(source, line)
+    if rel_file.end_with?("better_auth-sso/lib/better_auth/sso/plugin/endpoints.rb")
+      endpoint_key = endpoint_key&.delete_prefix("sso_")
+    end
+
     {
       path: path,
       methods: methods,
       file: rel_file,
       line: line,
-      endpoint_key: infer_endpoint_key(source, line),
+      endpoint_key: endpoint_key,
       plugin_hint: infer_plugin_hint(rel_file),
       body_fields: extract_openapi_body_fields(node),
       query_params: extract_openapi_parameters(node, "query"),
@@ -149,15 +154,15 @@ module EndpointInventory
   end
 
   def infer_endpoint_key(source, line)
-    prefix = source.lines[0...line - 1].reverse.find { |entry| entry.match?(/\A\s*(?:def\s+self\.)?[a-z0-9_]+_endpoint\s*\(/i) }
+    prefix = source.lines[0...line - 1].reverse.find { |entry| entry.match?(/\A\s*(?:def\s+(?:self\.)?)?[a-z0-9_]+_endpoint\s*\(/i) }
     if prefix
-      return prefix[/\A\s*(?:def\s+self\.)?([a-z0-9_]+)_endpoint\s*\(/i, 1]
+      return prefix[/\A\s*(?:def\s+(?:self\.)?)?([a-z0-9_]+)_endpoint\s*\(/i, 1]
     end
 
-    prefix = source.lines[0...line - 1].reverse.find { |entry| entry.match?(/\A\s*(?:def\s+self\.)?[a-z0-9_]+(?:_endpoint)?\s*\(/i) }
+    prefix = source.lines[0...line - 1].reverse.find { |entry| entry.match?(/\A\s*(?:def\s+(?:self\.)?)?[a-z0-9_]+(?:_endpoint)?\s*\(/i) }
     return nil unless prefix
 
-    prefix[/\A\s*(?:def\s+self\.)?([a-z0-9_]+)/i, 1]
+    prefix[/\A\s*(?:def\s+(?:self\.)?)?([a-z0-9_]+)/i, 1]
   end
 
   def infer_plugin_hint(file)

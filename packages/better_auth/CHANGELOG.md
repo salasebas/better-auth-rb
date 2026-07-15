@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Hardened existing-identity linking, authoritative session checks, single-use
+  state consumption, and rate-limit behavior with regression coverage.
+- Made verification state atomic where the configured adapter supports the
+  required primitives, while retaining documented adapter compatibility paths.
+
+### Changed
+
+- Added a checked upstream server-test inventory for the pinned v1.6.23
+  reference; it distinguishes covered, adapted, not-applicable, and planned
+  behavior rather than asserting blanket version parity.
+
 ## [0.10.0] - 2026-05-21
 
 ### Fixed

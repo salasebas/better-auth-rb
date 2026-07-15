@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Honored plugin migration controls in MongoDB schema/index generation and
+  added regression coverage for the supported generator path.
+
 ## 0.10.0 - 2026-05-21
 
 - Rename the canonical Ruby gem to `better_auth-mongodb` while keeping

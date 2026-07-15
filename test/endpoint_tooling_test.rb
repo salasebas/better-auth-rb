@@ -64,6 +64,132 @@ class EndpointToolingTest < Minitest::Test
     assert_equal "generatePasskeyAuthenticationOptions", entries.fetch("generatePasskeyAuthenticationOptions")
   end
 
+  def test_recursively_expands_local_endpoint_object_spreads
+    source = <<~TYPESCRIPT
+      const subscriptionEndpoints = {
+        upgradeSubscription: upgradeSubscription(options),
+        cancelSubscription: cancelSubscription(options),
+      };
+      const endpoints = {
+        webhook: webhook(options),
+        ...((enabled ? subscriptionEndpoints : {}) as typeof subscriptionEndpoints),
+      };
+    TYPESCRIPT
+
+    blocks = UpstreamEndpointRegistry.endpoint_object_blocks(source)
+    entries = UpstreamEndpointRegistry.parse_endpoint_block_entries(
+      blocks.fetch("endpoints"),
+      object_blocks: blocks
+    )
+
+    assert_equal %w[cancelSubscription upgradeSubscription webhook], entries.map(&:first).sort
+  end
+
+  def test_rejects_an_unresolved_supported_endpoint_spread
+    error = assert_raises(UpstreamEndpointRegistry::UnresolvedSpreadError) do
+      UpstreamEndpointRegistry.parse_endpoint_block_entries(
+        "{ ...unknownEndpoints }",
+        source_file: "fixture/plugin.ts"
+      )
+    end
+
+    assert_includes error.message, "unknownEndpoints"
+    assert_includes error.message, "fixture/plugin.ts"
+  end
+
+  def test_only_exact_known_dynamic_spreads_are_accounted
+    accounted = []
+    entries = UpstreamEndpointRegistry.parse_endpoint_block_entries(
+      "{ ...totp.endpoints }",
+      accounted_spreads: accounted,
+      source_file: "reference/upstream-src/1.6.23/repository/packages/better-auth/src/plugins/two-factor/index.ts"
+    )
+
+    assert_empty entries
+    assert_equal "totp.endpoints", accounted.fetch(0).fetch(:expression)
+
+    assert_raises(UpstreamEndpointRegistry::UnresolvedSpreadError) do
+      UpstreamEndpointRegistry.parse_endpoint_block_entries(
+        "{ ...api }",
+        source_file: "fixture/plugin.ts"
+      )
+    end
+    assert_raises(UpstreamEndpointRegistry::UnresolvedSpreadError) do
+      UpstreamEndpointRegistry.parse_endpoint_block_entries(
+        "{ ...unknown.endpoints }",
+        source_file: "reference/upstream-src/1.6.23/repository/packages/better-auth/src/plugins/two-factor/index.ts"
+      )
+    end
+  end
+
+  def test_extracts_two_factor_endpoints_from_a_returned_plugin_object
+    source = <<~TYPESCRIPT
+      export const twoFactor = () => {
+        return {
+          id: "two-factor",
+          endpoints: {
+            verifyTOTP: createAuthEndpoint(
+              "/two-factor/verify-totp",
+              { method: "POST" },
+              handler,
+            ),
+          },
+        };
+      };
+    TYPESCRIPT
+
+    mappings = UpstreamEndpointRegistry.parse_endpoint_mappings(source, "two-factor", "fixture.ts")
+    rows, unresolved = UpstreamEndpointRegistry.resolve_entries(mappings, {})
+
+    assert_empty unresolved
+    assert_equal [["verifyTOTP", "/two-factor/verify-totp", "POST"]],
+      rows.map { |row| [row.fetch(:registry_key), row.fetch(:path), row.fetch(:method)] }
+  end
+
+  def test_extracts_endpoint_factory_returned_directly_as_endpoints
+    source = <<~TYPESCRIPT
+      function returnedEndpoints() {
+        return {
+          directEndpoint: createAuthEndpoint(
+            "/direct-return",
+            { method: "GET" },
+            handler,
+          ),
+        };
+      }
+
+      export function plugin() {
+        return {
+          id: "fixture",
+          endpoints: returnedEndpoints(),
+        };
+      }
+    TYPESCRIPT
+
+    mappings = UpstreamEndpointRegistry.parse_endpoint_mappings(source, "fixture", "fixture.ts")
+    rows, unresolved = UpstreamEndpointRegistry.resolve_entries(mappings, {})
+
+    assert_empty unresolved
+    assert_equal ["directEndpoint"], rows.map { |row| row.fetch(:registry_key) }
+    assert_equal "/direct-return", rows.fetch(0).fetch(:path)
+  end
+
+  def test_generated_registry_contains_all_real_spread_endpoints_without_loss
+    registry = JSON.parse(File.read(File.expand_path("../reference/upstream-endpoint-registry.json", __dir__)))
+    keys = registry.fetch("entries").map { |entry| entry.fetch("registry_key") }
+
+    assert_equal 0, registry.fetch("extraction_loss_count")
+    assert_equal 0, registry.fetch("unresolved_mapping_count")
+    assert_empty %w[
+      upgradeSubscription cancelSubscription restoreSubscription
+      listActiveSubscriptions subscriptionSuccess createBillingPortal
+      createTeam listOrganizationTeams removeTeam updateTeam setActiveTeam
+      listUserTeams listTeamMembers addTeamMember removeTeamMember
+      createOrgRole deleteOrgRole listOrgRoles getOrgRole updateOrgRole
+      requestDomainVerification verifyDomain
+    ] - keys
+  end
+
   def test_expands_method_arrays_when_resolving_entries
     route_definition = UpstreamEndpointRegistry.parse_endpoint_definition(<<~TYPESCRIPT)
       export const userinfo = createAuthEndpoint(

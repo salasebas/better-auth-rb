@@ -1,10 +1,9 @@
 # better_auth-telemetry
 
-Opt-in telemetry package for Better Auth Ruby. Ports the upstream
-`@better-auth/telemetry` package (upstream reference at
-`reference/upstream-src/1.6.9/repository/packages/telemetry/`, fetch with
-`./scripts/fetch-upstream-better-auth.sh`) using only Ruby's standard
-library.
+Opt-in telemetry package for Better Auth Ruby. It implements the supported
+server-side telemetry contract using only Ruby's standard library. The
+repository's pinned Better Auth source is a reproducible implementation
+reference, not a claim of complete package parity.
 
 Telemetry is **disabled by default**. The package never sends data unless an
 operator explicitly opts in, and it is automatically skipped when the host

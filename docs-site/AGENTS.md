@@ -10,4 +10,4 @@
 - Never port client-only sections (`createAuthClient`, framework JS integrations).
 - Never document unsupported plugins as supported: `mcp`, upstream
   `oidc-provider`, `test-utils`, non-Stripe payment plugins.
-- Verify with `cd docs-site && pnpm lint && pnpm build`.
+- Verify with `cd docs-site && pnpm docs:parity-check && pnpm format:check && pnpm lint && NEXT_PUBLIC_URL=https://example.com pnpm build`.

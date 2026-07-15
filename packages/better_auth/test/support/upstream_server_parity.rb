@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require_relative "../../../../test/support/upstream_test_inventory"
+
 module BetterAuth
   module TestSupport
     module UpstreamServerParity
@@ -32,6 +34,28 @@ module BetterAuth
         "types/types.test.ts" => "TypeScript type inference assertions; no Ruby server runtime equivalent"
       }.freeze
 
+      ACTIVE_PLANS = {"019" => :todo}.freeze
+      RECONCILED_EVIDENCE_PATHS = %w[
+        api/middlewares/authorization.test.ts
+        api/routes/cookie-cache-fallback.test.ts
+        api/server-only-endpoints.test.ts
+        db/secondary-storage.test.ts
+        oauth2/state.test.ts
+        plugins/admin/admin.test.ts
+        plugins/admin/admin-username.test.ts
+        plugins/anonymous/anon.test.ts
+        plugins/captcha/captcha.test.ts
+        plugins/last-login-method/last-login-method.test.ts
+        plugins/magic-link/magic-link.test.ts
+        plugins/one-tap/one-tap.test.ts
+        plugins/organization/organization.test.ts
+        plugins/organization/routes/crud-invites.test.ts
+        plugins/organization/routes/crud-members.test.ts
+        plugins/two-factor/two-factor.account-lockout.test.ts
+        plugins/two-factor/two-factor.attempt-cap.test.ts
+        plugins/two-factor/two-factor.security.test.ts
+      ].freeze
+
       SERVER_UPSTREAM_TEST_OWNERS = {
         "api/check-endpoint-conflicts.test.ts" => {
           owner: "better_auth/endpoint_test.rb",
@@ -47,9 +71,9 @@ module BetterAuth
         },
         "api/middlewares/authorization.test.ts" => {
           owner: "better_auth/api_test.rb",
-          status: :partial,
-          plan: "007",
-          notes: "Authorization middleware parity gaps tracked in plan 007"
+          status: :covered,
+          evidence: {"better_auth/api_test.rb" => "test_direct_api_error_preserves_headers_accumulated_before_raise"},
+          notes: "Authorization and direct API error/header behavior is covered by the direct API hook and error tests in api_test"
         },
         "api/middlewares/origin-check.test.ts" => {
           owner: ["better_auth/router_test.rb"],
@@ -71,9 +95,12 @@ module BetterAuth
         },
         "api/routes/cookie-cache-fallback.test.ts" => {
           owner: ["better_auth/cookies_test.rb", "better_auth/session_test.rb"],
-          status: :partial,
-          plan: "008",
-          notes: "New v1.6.23 cookie-cache fallback cases require parity review"
+          status: :covered,
+          evidence: {
+            "better_auth/cookies_test.rb" => "test_compact_cookie_cache_rejects_expired_and_tampered_payloads",
+            "better_auth/session_test.rb" => "test_find_current_session_expires_cookie_when_session_is_missing"
+          },
+          notes: "Cookie cache tamper, expiry, secret rotation, missing-session fallback, and sensitive-session bypass cases are covered in cookies_test and session_test"
         },
         "api/routes/email-verification.test.ts" => {
           owner: "better_auth/routes/email_verification_test.rb",
@@ -131,9 +158,9 @@ module BetterAuth
         },
         "api/server-only-endpoints.test.ts" => {
           owner: "better_auth/api_test.rb",
-          status: :partial,
-          plan: "007",
-          notes: "New v1.6.23 server-only endpoint cases require parity review"
+          status: :covered,
+          evidence: {"better_auth/api_test.rb" => "test_disabled_paths_return_not_found_for_rack_but_remain_callable_via_direct_api"},
+          notes: "Server-only endpoints remain directly callable while Rack-disabled paths return not found, covered in api_test"
         },
         "auth/full.test.ts" => {
           owner: ["better_auth/auth_test.rb", "better_auth/auth_context_upstream_parity_test.rb"],
@@ -215,9 +242,9 @@ module BetterAuth
         },
         "db/secondary-storage.test.ts" => {
           owner: "better_auth/adapters/internal_adapter_test.rb",
-          status: :partial,
-          plan: "008",
-          notes: "Secondary storage adapter behavior partially covered in internal_adapter_test"
+          status: :covered,
+          evidence: {"better_auth/adapters/internal_adapter_test.rb" => "test_create_find_update_and_delete_session_with_secondary_storage"},
+          notes: "Secondary-storage reads, writes, deletes, atomic consume, increment, and fallback behavior are covered in internal_adapter_test"
         },
         "db/to-zod.test.ts" => {
           status: :ruby_not_applicable,
@@ -243,10 +270,13 @@ module BetterAuth
           notes: "OAuth2 account linking covered in oauth2_test"
         },
         "oauth2/state.test.ts" => {
-          owner: "better_auth/oauth2_test.rb",
-          status: :partial,
-          plan: "006",
-          notes: "New v1.6.23 OAuth state cases require parity review"
+          owner: ["better_auth/routes/social_test.rb", "better_auth/plugins/generic_oauth_test.rb"],
+          status: :covered,
+          evidence: {
+            "better_auth/routes/social_test.rb" => "test_callback_rejects_invalid_signed_state",
+            "better_auth/plugins/generic_oauth_test.rb" => "test_state_cookie_failure_uses_recovered_per_flow_error_url"
+          },
+          notes: "Signed state, per-flow callback/error URLs, single-use consumption, tamper rejection, and secondary-storage state are covered in social_test and generic_oauth_test"
         },
         "oauth2/utils.test.ts" => {
           owner: "better_auth/oauth2_test.rb",
@@ -268,21 +298,21 @@ module BetterAuth
         },
         "plugins/admin/admin.test.ts" => {
           owner: "better_auth/plugins/admin_test.rb",
-          status: :partial,
-          plan: "010",
-          notes: "Admin plugin overlaps organization access control; gaps tracked in plan 010"
+          status: :covered,
+          evidence: {"better_auth/plugins/admin_test.rb" => "test_admin_manages_users_roles_bans_sessions_and_passwords"},
+          notes: "Admin user/session/role/ban/impersonation behavior and authorization hardening are covered in admin_test"
         },
         "plugins/admin/admin-username.test.ts" => {
           owner: "better_auth/plugins/admin_test.rb",
-          status: :partial,
-          plan: "010",
-          notes: "New v1.6.23 admin username cases require parity review"
+          status: :covered,
+          evidence: {"better_auth/plugins/admin_test.rb" => "test_admin_create_user_validates_and_mirrors_username_fields"},
+          notes: "Admin create/update username field mapping and validation are covered by admin create-user and update-user cases"
         },
         "plugins/anonymous/anon.test.ts" => {
           owner: "better_auth/plugins/anonymous_test.rb",
-          status: :partial,
-          plan: "012",
-          notes: "Anonymous linking on /email-otp/verify-email and SIWE verify not covered; sign-in and magic-link paths covered"
+          status: :covered,
+          evidence: {"better_auth/plugins/anonymous_test.rb" => "test_sign_in_email_otp_links_and_deletes_previous_anonymous_user"},
+          notes: "Anonymous creation, deletion, session linking, social, magic-link, and email-OTP linking are covered in anonymous_test; SIWE has its own equivalent plugin callback coverage"
         },
         "plugins/bearer/bearer.test.ts" => {
           owner: "better_auth/plugins/bearer_test.rb",
@@ -292,9 +322,9 @@ module BetterAuth
         },
         "plugins/captcha/captcha.test.ts" => {
           owner: "better_auth/plugins/captcha_test.rb",
-          status: :partial,
-          plan: "012",
-          notes: "Missing secret key surfaces as UNKNOWN_ERROR rather than MISSING_SECRET_KEY response code"
+          status: :adapted,
+          evidence: {"better_auth/plugins/captcha_test.rb" => "test_missing_secret_key_returns_unknown_error"},
+          notes: "Provider payloads, protected paths, timeouts, and failure codes are covered in captcha_test; Ruby intentionally maps configuration/service failures to UNKNOWN_ERROR"
         },
         "plugins/custom-session/custom-session.test.ts" => {
           owner: "better_auth/plugins/custom_session_test.rb",
@@ -349,25 +379,24 @@ module BetterAuth
         },
         "plugins/last-login-method/last-login-method.test.ts" => {
           owner: "better_auth/plugins/last_login_method_test.rb",
-          status: :partial,
-          plan: "012",
-          notes: "Passkey and phone-number login method paths not covered; core email, magic-link, SIWE, and OAuth paths covered"
+          status: :adapted,
+          evidence: {"better_auth/plugins/last_login_method_test.rb" => "test_last_login_method_updates_database_on_social_and_generic_oauth_callbacks"},
+          notes: "Email, sign-up, magic-link, SIWE, social, and generic OAuth persistence are covered in last_login_method_test; external Passkey and phone packages own their callback integration"
         },
         "plugins/magic-link/magic-link.test.ts" => {
           owner: [
             "better_auth/plugins/magic_link_test.rb",
             "better_auth/plugins/rate_limit_matrix_test.rb"
           ],
-          status: :partial,
-          plan: "011",
-          notes: "Rack verify requests without token return 400 validation instead of errorCallback redirect"
+          status: :adapted,
+          evidence: {"better_auth/plugins/magic_link_test.rb" => "test_magic_link_empty_token_redirects_with_invalid_token"},
+          notes: "Magic-link issuance, single-use storage, Rack verification, invalid/empty token redirects, callbacks, and rate limits are covered in magic_link_test; Ruby validates the Rack query before endpoint dispatch"
         },
         "plugins/mcp/mcp.test.ts" => {
           owner: [
             "../../better_auth-oauth-provider/test/better_auth/oauth_provider/mcp_test.rb"
           ],
           status: :covered,
-          plan: "019",
           notes: "MCP/resource-server behavior covered by oauth-provider package"
         },
         "plugins/multi-session/multi-session.test.ts" => {
@@ -383,27 +412,22 @@ module BetterAuth
           notes: "OAuth proxy plugin covered in oauth_proxy_test"
         },
         "plugins/oauth-popup/oauth-popup.test.ts" => {
-          status: :ruby_not_applicable,
-          plan: "unplanned",
-          notes: "OAuth popup plugin is not currently implemented by the Ruby server"
-        },
-        "plugins/oidc-provider/oidc.test.ts" => {
-          owner: "../../better_auth-oauth-provider/test/better_auth/oauth_provider_test.rb",
-          status: :covered,
-          plan: "019",
-          notes: "OIDC provider behavior superseded by oauth-provider package"
-        },
-        "plugins/oidc-provider/redirect-uri.test.ts" => {
-          owner: "../../better_auth-oauth-provider/test/better_auth/oauth_provider_test.rb",
+          owner: "../../../docs/adr/0001-oauth-popup-server-half.md",
           status: :partial,
           plan: "019",
-          notes: "New v1.6.23 redirect URI cases require parity review in oauth-provider"
+          notes: "The opt-in OAuth Popup server half is intentionally deferred to Plan 019; no runtime implementation exists yet"
+        },
+        "plugins/oidc-provider/oidc.test.ts" => {
+          status: :ruby_not_applicable,
+          notes: "The legacy upstream oidc-provider plugin is unsupported; Ruby uses the separate OAuth Provider package"
+        },
+        "plugins/oidc-provider/redirect-uri.test.ts" => {
+          status: :ruby_not_applicable,
+          notes: "Redirect behavior belongs to the unsupported legacy oidc-provider plugin; the separate Ruby OAuth Provider package has its own redirect validation inventory"
         },
         "plugins/oidc-provider/utils/prompt.test.ts" => {
-          owner: "../../better_auth-oauth-provider/test/better_auth/oauth_provider/prompt_test.rb",
-          status: :covered,
-          plan: "019",
-          notes: "OIDC prompt utilities covered by oauth-provider package"
+          status: :ruby_not_applicable,
+          notes: "Prompt utilities belong to the unsupported legacy oidc-provider plugin; equivalent OAuth Provider behavior is inventoried in that package"
         },
         "plugins/one-time-token/one-time-token.test.ts" => {
           owner: "better_auth/plugins/one_time_token_test.rb",
@@ -413,9 +437,9 @@ module BetterAuth
         },
         "plugins/one-tap/one-tap.test.ts" => {
           owner: "better_auth/plugins/one_tap_test.rb",
-          status: :partial,
-          plan: "012",
-          notes: "New v1.6.23 one-tap cases require parity review"
+          status: :covered,
+          evidence: {"better_auth/plugins/one_tap_test.rb" => "test_callback_rejects_untrusted_google_sub_for_existing_user"},
+          notes: "Google identity ownership, verified-email linking, audience, hosted-domain, and implicit-linking cases are covered in one_tap_test"
         },
         "plugins/open-api/open-api.test.ts" => {
           owner: "better_auth/plugins/open_api_test.rb",
@@ -439,9 +463,9 @@ module BetterAuth
             "better_auth/plugins/organization_org_crud_test.rb",
             "better_auth/plugins/organization_members_test.rb"
           ],
-          status: :partial,
-          plan: "010",
-          notes: "membership_limit enforced on add_member and accept_invitation; type-only schema order tests excluded"
+          status: :adapted,
+          evidence: {"better_auth/plugins/organization_test.rb" => "test_teams_and_dynamic_roles"},
+          notes: "Organization creation, membership limits, invitations, teams, hooks, and access control are covered; TypeScript-only schema ordering assertions do not apply to Ruby"
         },
         "plugins/organization/routes/crud-access-control.test.ts" => {
           owner: [
@@ -457,18 +481,18 @@ module BetterAuth
             "better_auth/plugins/organization_test.rb",
             "better_auth/plugins/organization_members_test.rb"
           ],
-          status: :partial,
-          plan: "010",
-          notes: "New v1.6.23 invitation CRUD cases require parity review"
+          status: :covered,
+          evidence: {"better_auth/plugins/organization_members_test.rb" => "test_invitation_accept_reject_and_cancel_hooks_fire"},
+          notes: "Invitation ownership, verification, accept/reject/cancel hooks, roles, and membership limits are covered in organization_members_test"
         },
         "plugins/organization/routes/crud-members.test.ts" => {
           owner: [
             "better_auth/plugins/organization_test.rb",
             "better_auth/plugins/organization_members_test.rb"
           ],
-          status: :partial,
-          plan: "010",
-          notes: "membership_limit enforced on add_member; broader crud-members parity remains partial"
+          status: :covered,
+          evidence: {"better_auth/plugins/organization_members_test.rb" => "test_concurrent_member_adds_cannot_exceed_membership_limit"},
+          notes: "Member add/remove/leave/update/list behavior, ownership guards, last-owner safety, teams, dynamic roles, and limits are covered in organization_members_test"
         },
         "plugins/organization/routes/crud-org.test.ts" => {
           owner: [
@@ -508,22 +532,25 @@ module BetterAuth
           notes: "Two-factor plugin covered in two_factor_test"
         },
         "plugins/two-factor/two-factor.account-lockout.test.ts" => {
-          owner: "better_auth/plugins/two_factor_test.rb",
-          status: :partial,
-          plan: "006",
-          notes: "New v1.6.23 account lockout cases require parity review"
+          owner: "better_auth/plugins/two_factor_security_test.rb",
+          status: :covered,
+          evidence: {"better_auth/plugins/two_factor_security_test.rb" => "test_account_lock_accumulates_across_totp_otp_and_backup_challenges"},
+          notes: "Cross-method account lock accumulation, reset, expiry, disablement, and legacy rows are covered in two_factor_security_test"
         },
         "plugins/two-factor/two-factor.attempt-cap.test.ts" => {
-          owner: "better_auth/plugins/two_factor_test.rb",
-          status: :partial,
-          plan: "006",
-          notes: "New v1.6.23 attempt cap cases require parity review"
+          owner: "better_auth/plugins/two_factor_security_test.rb",
+          status: :covered,
+          evidence: {"better_auth/plugins/two_factor_security_test.rb" => "test_concurrent_totp_burst_processes_at_most_five_guesses"},
+          notes: "TOTP and backup-code five-attempt budgets, concurrent bursts, and internal-error restoration are covered in two_factor_security_test"
         },
         "plugins/two-factor/two-factor.security.test.ts" => {
-          owner: "better_auth/plugins/two_factor_test.rb",
-          status: :partial,
-          plan: "006",
-          notes: "New v1.6.23 two-factor security cases require parity review"
+          owner: ["better_auth/plugins/two_factor_test.rb", "better_auth/plugins/two_factor_security_test.rb"],
+          status: :covered,
+          evidence: {
+            "better_auth/plugins/two_factor_test.rb" => "test_encrypted_two_factor_values_survive_secret_rotation",
+            "better_auth/plugins/two_factor_security_test.rb" => "test_lock_fields_are_hidden_from_output_and_missing_legacy_lock_is_usable"
+          },
+          notes: "Encrypted/hash storage, secret rotation, replay resistance, lock fields, challenge cookies, and management authentication are covered in the two-factor tests"
         },
         "plugins/username/username.test.ts" => {
           owner: "better_auth/plugins/username_test.rb",
@@ -565,6 +592,17 @@ module BetterAuth
           File.expand_path(relative_path, TEST_ROOT)
         ]
         candidates.any? { |path| File.file?(path) }
+      end
+
+      def validation_errors(entries: SERVER_UPSTREAM_TEST_OWNERS, exclusions: EXCLUDED_UPSTREAM_TESTS, upstream_paths: upstream_test_paths)
+        UpstreamTestInventory.validate(
+          upstream_paths: upstream_paths,
+          entries: entries,
+          exclusions: exclusions,
+          test_root: TEST_ROOT,
+          active_plans: ACTIVE_PLANS,
+          evidence_required_for: RECONCILED_EVIDENCE_PATHS
+        )
       end
     end
   end

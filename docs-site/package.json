@@ -12,7 +12,9 @@
     "lint:fix": "pnpm -w biome check docs/ --fix --unsafe",
     "sync-beta": "node scripts/sync-beta-content.ts",
     "format:md": "remark . --ext md,mdx --output --quiet",
-    "format:check": "remark . --ext md,mdx --quiet --frail"
+    "format:check": "remark . --ext md,mdx --quiet --frail",
+    "docs:parity-generate": "node scripts/generate-docs-parity-manifest.mjs --write",
+    "docs:parity-check": "node scripts/docs-parity-test.mjs && node scripts/generate-docs-parity-manifest.mjs --check"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.1",

@@ -18,6 +18,8 @@ on:
       - '.ruby-version'
       - 'scripts/**'
       - 'test/**'
+      - 'reference/upstream-better-auth/**'
+      - 'docs/**'
       - 'docs-site/**'
       - '.github/workflows/ci.yml'
   push:
@@ -34,8 +36,9 @@ on:
       - '.ruby-version'
       - 'scripts/**'
       - 'test/**'
+      - 'reference/upstream-better-auth/**'
+      - 'docs/**'
       - 'docs-site/**'
-      - '.docs/**'
       - '.github/workflows/ci.yml'
   merge_group:
 
@@ -204,6 +207,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Fetch upstream Better Auth sources
+        run: ./scripts/fetch-upstream-better-auth.sh
+
       - name: Set up Ruby
         uses: ruby/setup-ruby@v1
         with:
@@ -243,6 +249,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
+      - name: Fetch upstream Better Auth sources
+        run: ./scripts/fetch-upstream-better-auth.sh
 
       - name: Set up Ruby
         uses: ruby/setup-ruby@v1
@@ -354,6 +363,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Fetch upstream Better Auth sources
+        run: ./scripts/fetch-upstream-better-auth.sh
+
       - name: Set up Ruby
         uses: ruby/setup-ruby@v1
         with:
@@ -371,6 +383,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
+      - name: Fetch upstream Better Auth sources
+        run: ./scripts/fetch-upstream-better-auth.sh
 
       - name: Set up Ruby
         uses: ruby/setup-ruby@v1
@@ -426,6 +441,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Fetch upstream Better Auth sources
+        run: ./scripts/fetch-upstream-better-auth.sh
+
       - name: Set up Ruby
         uses: ruby/setup-ruby@v1
         with:
@@ -480,6 +498,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Fetch upstream Better Auth sources
+        run: ./scripts/fetch-upstream-better-auth.sh
+
       - name: Set up Ruby
         uses: ruby/setup-ruby@v1
         with:
@@ -497,6 +518,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
+      - name: Fetch upstream Better Auth sources
+        run: ./scripts/fetch-upstream-better-auth.sh
 
       - name: Set up Ruby
         uses: ruby/setup-ruby@v1
@@ -536,6 +560,9 @@ jobs:
         working-directory: docs-site
     steps:
       - uses: actions/checkout@v4
+      - name: Fetch upstream Better Auth sources
+        working-directory: .
+        run: ./scripts/fetch-upstream-better-auth.sh
       - uses: pnpm/action-setup@v4
         with:
           version: 10
@@ -545,10 +572,10 @@ jobs:
           cache: pnpm
           cache-dependency-path: docs-site/pnpm-lock.yaml
       - run: pnpm install --frozen-lockfile
+      - run: pnpm docs:parity-check
+      - run: pnpm format:check
       - run: pnpm lint
-      - run: pnpm build
-        env:
-          NEXT_PUBLIC_URL: https://example.com
+      - run: NEXT_PUBLIC_URL=https://example.com pnpm build
 
   ci:
     name: CI

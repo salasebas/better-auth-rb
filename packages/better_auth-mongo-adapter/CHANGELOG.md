@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Kept the compatibility adapter aligned with MongoDB migration-control
+  behavior and its generator coverage.
+
 ## 0.10.0 - 2026-05-21
 
 - Deprecated this package in favor of `better_auth-mongodb`.

@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+- Improved server-side authenticator metadata and management-route parity with
+  targeted regression coverage.
+- Added a checked upstream test inventory for Passkey server behavior.
+
 ## [0.10.0] - 2026-05-21
 
 - Improved passkey challenge handling, management routes, rate limits, and adapter coverage.

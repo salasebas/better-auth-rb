@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-07-14T07:49:53Z",
+  "generated_at": "2026-07-15T20:21:57Z",
   "route_count": 220,
   "routes": [
     {
@@ -3694,6 +3694,9 @@
       "method": "POST",
       "ruby_api_method": "add_team_member",
       "ruby_api_call": "auth.api.add_team_member",
+      "upstream_registry_key": "addTeamMember",
+      "upstream_api_call": "auth.api.addTeamMember",
+      "upstream_client_call": "authClient.organization.addTeamMember",
       "plugin_id": "organization",
       "operation_id": "addTeamMember"
     },
@@ -3860,6 +3863,9 @@
       "method": "POST",
       "ruby_api_method": "create_org_role",
       "ruby_api_call": "auth.api.create_org_role",
+      "upstream_registry_key": "createOrgRole",
+      "upstream_api_call": "auth.api.createOrgRole",
+      "upstream_client_call": null,
       "plugin_id": "organization",
       "operation_id": "createOrganizationRole"
     },
@@ -3893,6 +3899,9 @@
       "method": "POST",
       "ruby_api_method": "create_team",
       "ruby_api_call": "auth.api.create_team",
+      "upstream_registry_key": "createTeam",
+      "upstream_api_call": "auth.api.createTeam",
+      "upstream_client_call": "authClient.organization.createTeam",
       "plugin_id": "organization",
       "operation_id": "createOrganizationTeam"
     },
@@ -3972,6 +3981,9 @@
       "method": "POST",
       "ruby_api_method": "delete_org_role",
       "ruby_api_call": "auth.api.delete_org_role",
+      "upstream_registry_key": "deleteOrgRole",
+      "upstream_api_call": "auth.api.deleteOrgRole",
+      "upstream_client_call": null,
       "plugin_id": "organization",
       "operation_id": "deleteOrganizationRole"
     },
@@ -4094,6 +4106,9 @@
       "method": "GET",
       "ruby_api_method": "get_org_role",
       "ruby_api_call": "auth.api.get_org_role",
+      "upstream_registry_key": "getOrgRole",
+      "upstream_api_call": "auth.api.getOrgRole",
+      "upstream_client_call": null,
       "plugin_id": "organization",
       "operation_id": "getOrganizationRole"
     },
@@ -4319,6 +4334,9 @@
       "method": "GET",
       "ruby_api_method": "list_org_roles",
       "ruby_api_call": "auth.api.list_org_roles",
+      "upstream_registry_key": "listOrgRoles",
+      "upstream_api_call": "auth.api.listOrgRoles",
+      "upstream_client_call": null,
       "plugin_id": "organization",
       "operation_id": "listOrganizationRoles"
     },
@@ -4341,6 +4359,9 @@
       "method": "GET",
       "ruby_api_method": "list_team_members",
       "ruby_api_call": "auth.api.list_team_members",
+      "upstream_registry_key": "listTeamMembers",
+      "upstream_api_call": "auth.api.listTeamMembers",
+      "upstream_client_call": "authClient.organization.listTeamMembers",
       "plugin_id": "organization",
       "operation_id": "listTeamMembers"
     },
@@ -4363,6 +4384,9 @@
       "method": "GET",
       "ruby_api_method": "list_organization_teams",
       "ruby_api_call": "auth.api.list_organization_teams",
+      "upstream_registry_key": "listOrganizationTeams",
+      "upstream_api_call": "auth.api.listOrganizationTeams",
+      "upstream_client_call": "authClient.organization.listTeams",
       "plugin_id": "organization",
       "operation_id": "listOrganizationTeams"
     },
@@ -4410,6 +4434,9 @@
       "method": "GET",
       "ruby_api_method": "list_user_teams",
       "ruby_api_call": "auth.api.list_user_teams",
+      "upstream_registry_key": "listUserTeams",
+      "upstream_api_call": "auth.api.listUserTeams",
+      "upstream_client_call": "authClient.organization.listUserTeams",
       "plugin_id": "organization",
       "operation_id": "listUserTeams"
     },
@@ -4510,6 +4537,9 @@
       "method": "POST",
       "ruby_api_method": "remove_team",
       "ruby_api_call": "auth.api.remove_team",
+      "upstream_registry_key": "removeTeam",
+      "upstream_api_call": "auth.api.removeTeam",
+      "upstream_client_call": "authClient.organization.removeTeam",
       "plugin_id": "organization",
       "operation_id": "removeOrganizationTeam"
     },
@@ -4543,6 +4573,9 @@
       "method": "POST",
       "ruby_api_method": "remove_team_member",
       "ruby_api_call": "auth.api.remove_team_member",
+      "upstream_registry_key": "removeTeamMember",
+      "upstream_api_call": "auth.api.removeTeamMember",
+      "upstream_client_call": "authClient.organization.removeTeamMember",
       "plugin_id": "organization",
       "operation_id": "removeTeamMember"
     },
@@ -4607,6 +4640,9 @@
       "method": "POST",
       "ruby_api_method": "set_active_team",
       "ruby_api_call": "auth.api.set_active_team",
+      "upstream_registry_key": "setActiveTeam",
+      "upstream_api_call": "auth.api.setActiveTeam",
+      "upstream_client_call": "authClient.organization.setActiveTeam",
       "plugin_id": "organization",
       "operation_id": "setActiveOrganizationTeam"
     },
@@ -4772,6 +4808,9 @@
       "method": "POST",
       "ruby_api_method": "update_org_role",
       "ruby_api_call": "auth.api.update_org_role",
+      "upstream_registry_key": "updateOrgRole",
+      "upstream_api_call": "auth.api.updateOrgRole",
+      "upstream_client_call": null,
       "plugin_id": "organization",
       "operation_id": "updateOrganizationRole"
     },
@@ -4805,6 +4844,9 @@
       "method": "POST",
       "ruby_api_method": "update_team",
       "ruby_api_call": "auth.api.update_team",
+      "upstream_registry_key": "updateTeam",
+      "upstream_api_call": "auth.api.updateTeam",
+      "upstream_client_call": "authClient.organization.updateTeam",
       "plugin_id": "organization",
       "operation_id": "updateOrganizationTeam"
     },
@@ -6706,7 +6748,7 @@
       ],
       "file": "packages/better_auth-sso/lib/better_auth/sso/plugin/endpoints.rb",
       "line": 98,
-      "endpoint_key": "sso_redirect",
+      "endpoint_key": "request_domain_verification",
       "plugin_hint": "better_auth/sso/plugin",
       "body_fields": [],
       "query_params": [],
@@ -6716,8 +6758,11 @@
       "server_only": false,
       "source": "static",
       "method": "POST",
-      "ruby_api_method": "sso_redirect",
-      "ruby_api_call": "auth.api.sso_redirect"
+      "ruby_api_method": "request_domain_verification",
+      "ruby_api_call": "auth.api.request_domain_verification",
+      "upstream_registry_key": "requestDomainVerification",
+      "upstream_api_call": "auth.api.requestDomainVerification",
+      "upstream_client_call": null
     },
     {
       "path": "/sso/saml2/callback/:providerId",
@@ -7135,7 +7180,7 @@
       ],
       "file": "packages/better_auth-sso/lib/better_auth/sso/plugin/endpoints.rb",
       "line": 120,
-      "endpoint_key": "sso_redirect",
+      "endpoint_key": "verify_domain",
       "plugin_hint": "better_auth/sso/plugin",
       "body_fields": [],
       "query_params": [],
@@ -7145,8 +7190,11 @@
       "server_only": false,
       "source": "static",
       "method": "POST",
-      "ruby_api_method": "sso_redirect",
-      "ruby_api_call": "auth.api.sso_redirect"
+      "ruby_api_method": "verify_domain",
+      "ruby_api_call": "auth.api.verify_domain",
+      "upstream_registry_key": "verifyDomain",
+      "upstream_api_call": "auth.api.verifyDomain",
+      "upstream_client_call": null
     },
     {
       "path": "/stripe/webhook",
@@ -7213,7 +7261,10 @@
       "source": "runtime",
       "method": "POST",
       "ruby_api_method": "create_billing_portal",
-      "ruby_api_call": "auth.api.create_billing_portal"
+      "ruby_api_call": "auth.api.create_billing_portal",
+      "upstream_registry_key": "createBillingPortal",
+      "upstream_api_call": "auth.api.createBillingPortal",
+      "upstream_client_call": null
     },
     {
       "path": "/subscription/cancel",
@@ -7258,7 +7309,10 @@
       "source": "runtime",
       "method": "POST",
       "ruby_api_method": "cancel_subscription",
-      "ruby_api_call": "auth.api.cancel_subscription"
+      "ruby_api_call": "auth.api.cancel_subscription",
+      "upstream_registry_key": "cancelSubscription",
+      "upstream_api_call": "auth.api.cancelSubscription",
+      "upstream_client_call": "authClient.subscription.cancel"
     },
     {
       "path": "/subscription/cancel/callback",
@@ -7318,7 +7372,10 @@
       "source": "runtime",
       "method": "GET",
       "ruby_api_method": "list_active_subscriptions",
-      "ruby_api_call": "auth.api.list_active_subscriptions"
+      "ruby_api_call": "auth.api.list_active_subscriptions",
+      "upstream_registry_key": "listActiveSubscriptions",
+      "upstream_api_call": "auth.api.listActiveSubscriptions",
+      "upstream_client_call": "authClient.subscription.list"
     },
     {
       "path": "/subscription/restore",
@@ -7353,7 +7410,10 @@
       "source": "runtime",
       "method": "POST",
       "ruby_api_method": "restore_subscription",
-      "ruby_api_call": "auth.api.restore_subscription"
+      "ruby_api_call": "auth.api.restore_subscription",
+      "upstream_registry_key": "restoreSubscription",
+      "upstream_api_call": "auth.api.restoreSubscription",
+      "upstream_client_call": null
     },
     {
       "path": "/subscription/success",
@@ -7383,7 +7443,10 @@
       "source": "runtime",
       "method": "GET",
       "ruby_api_method": "subscription_success",
-      "ruby_api_call": "auth.api.subscription_success"
+      "ruby_api_call": "auth.api.subscription_success",
+      "upstream_registry_key": "subscriptionSuccess",
+      "upstream_api_call": "auth.api.subscriptionSuccess",
+      "upstream_client_call": null
     },
     {
       "path": "/subscription/upgrade",
@@ -7468,7 +7531,10 @@
       "source": "runtime",
       "method": "POST",
       "ruby_api_method": "upgrade_subscription",
-      "ruby_api_call": "auth.api.upgrade_subscription"
+      "ruby_api_call": "auth.api.upgrade_subscription",
+      "upstream_registry_key": "upgradeSubscription",
+      "upstream_api_call": "auth.api.upgradeSubscription",
+      "upstream_client_call": "authClient.subscription.upgrade"
     },
     {
       "path": "/token",

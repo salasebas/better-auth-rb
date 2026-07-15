@@ -1,7 +1,55 @@
 {
-  "generated_at": "2026-07-14T07:49:50Z",
+  "generated_at": "2026-07-15T20:21:53Z",
   "upstream_version": "1.6.23",
   "upstream_commit": "9dfceee14021fc15a2fb93023f39635f25b0b5ba",
+  "extraction_loss_count": 0,
+  "extraction_losses": [],
+  "accounted_spread_count": 5,
+  "accounted_spreads": [
+    {
+      "source_file": "reference/upstream-src/1.6.23/repository/packages/better-auth/src/api/index.ts",
+      "expression": "pluginEndpoints",
+      "resolution": "runtime plugin endpoint aggregate; plugin declarations are scanned independently",
+      "expected_keys": []
+    },
+    {
+      "source_file": "reference/upstream-src/1.6.23/repository/packages/better-auth/src/plugins/organization/organization.ts",
+      "expression": "(api as OrganizationEndpoints<O>)",
+      "resolution": "typed wrapper around the local endpoint object; the underlying endpoint object is scanned directly",
+      "expected_keys": [
+        "hasPermission"
+      ]
+    },
+    {
+      "source_file": "reference/upstream-src/1.6.23/repository/packages/better-auth/src/plugins/two-factor/index.ts",
+      "expression": "totp.endpoints",
+      "resolution": "nested TOTP plugin endpoints scanned at their declaration",
+      "expected_keys": [
+        "generateTOTP",
+        "getTOTPURI",
+        "verifyTOTP"
+      ]
+    },
+    {
+      "source_file": "reference/upstream-src/1.6.23/repository/packages/better-auth/src/plugins/two-factor/index.ts",
+      "expression": "otp.endpoints",
+      "resolution": "nested OTP plugin endpoints scanned at their declaration",
+      "expected_keys": [
+        "sendTwoFactorOTP",
+        "verifyTwoFactorOTP"
+      ]
+    },
+    {
+      "source_file": "reference/upstream-src/1.6.23/repository/packages/better-auth/src/plugins/two-factor/index.ts",
+      "expression": "backupCode.endpoints",
+      "resolution": "nested backup-code plugin endpoints scanned at their declaration",
+      "expected_keys": [
+        "generateBackupCodes",
+        "viewBackupCodes",
+        "verifyBackupCode"
+      ]
+    }
+  ],
   "unresolved_mapping_count": 0,
   "unresolved_mappings": [],
   "entries": [
@@ -1762,6 +1810,21 @@
     },
     {
       "plugin_id": "organization",
+      "registry_key": "addTeamMember",
+      "ruby_registry_key": "add_team_member",
+      "path": "/organization/add-team-member",
+      "method": "POST",
+      "upstream_api": "auth.api.addTeamMember",
+      "ruby_api": "auth.api.add_team_member",
+      "upstream_client": "authClient.organization.addTeamMember",
+      "deprecated": false,
+      "server_only": false,
+      "exposure": "http",
+      "client_visibility": "documented",
+      "source_file": "reference/upstream-src/1.6.23/repository/packages/better-auth/src/plugins/organization/routes/crud-team.ts"
+    },
+    {
+      "plugin_id": "organization",
       "registry_key": "cancelInvitation",
       "ruby_registry_key": "cancel_invitation",
       "path": "/organization/cancel-invitation",
@@ -1807,6 +1870,36 @@
     },
     {
       "plugin_id": "organization",
+      "registry_key": "createOrgRole",
+      "ruby_registry_key": "create_org_role",
+      "path": "/organization/create-role",
+      "method": "POST",
+      "upstream_api": "auth.api.createOrgRole",
+      "ruby_api": "auth.api.create_org_role",
+      "upstream_client": null,
+      "deprecated": false,
+      "server_only": false,
+      "exposure": "http",
+      "client_visibility": "undocumented",
+      "source_file": "reference/upstream-src/1.6.23/repository/packages/better-auth/src/plugins/organization/routes/crud-access-control.ts"
+    },
+    {
+      "plugin_id": "organization",
+      "registry_key": "createTeam",
+      "ruby_registry_key": "create_team",
+      "path": "/organization/create-team",
+      "method": "POST",
+      "upstream_api": "auth.api.createTeam",
+      "ruby_api": "auth.api.create_team",
+      "upstream_client": "authClient.organization.createTeam",
+      "deprecated": false,
+      "server_only": false,
+      "exposure": "http",
+      "client_visibility": "documented",
+      "source_file": "reference/upstream-src/1.6.23/repository/packages/better-auth/src/plugins/organization/routes/crud-team.ts"
+    },
+    {
+      "plugin_id": "organization",
       "registry_key": "deleteOrganization",
       "ruby_registry_key": "delete_organization",
       "path": "/organization/delete",
@@ -1819,6 +1912,21 @@
       "exposure": "http",
       "client_visibility": "documented",
       "source_file": "reference/upstream-src/1.6.23/repository/packages/better-auth/src/plugins/organization/routes/crud-org.ts"
+    },
+    {
+      "plugin_id": "organization",
+      "registry_key": "deleteOrgRole",
+      "ruby_registry_key": "delete_org_role",
+      "path": "/organization/delete-role",
+      "method": "POST",
+      "upstream_api": "auth.api.deleteOrgRole",
+      "ruby_api": "auth.api.delete_org_role",
+      "upstream_client": null,
+      "deprecated": false,
+      "server_only": false,
+      "exposure": "http",
+      "client_visibility": "undocumented",
+      "source_file": "reference/upstream-src/1.6.23/repository/packages/better-auth/src/plugins/organization/routes/crud-access-control.ts"
     },
     {
       "plugin_id": "organization",
@@ -1879,6 +1987,21 @@
       "exposure": "http",
       "client_visibility": "documented",
       "source_file": "reference/upstream-src/1.6.23/repository/packages/better-auth/src/plugins/organization/routes/crud-invites.ts"
+    },
+    {
+      "plugin_id": "organization",
+      "registry_key": "getOrgRole",
+      "ruby_registry_key": "get_org_role",
+      "path": "/organization/get-role",
+      "method": "GET",
+      "upstream_api": "auth.api.getOrgRole",
+      "ruby_api": "auth.api.get_org_role",
+      "upstream_client": null,
+      "deprecated": false,
+      "server_only": false,
+      "exposure": "http",
+      "client_visibility": "undocumented",
+      "source_file": "reference/upstream-src/1.6.23/repository/packages/better-auth/src/plugins/organization/routes/crud-access-control.ts"
     },
     {
       "plugin_id": "organization",
@@ -1972,6 +2095,51 @@
     },
     {
       "plugin_id": "organization",
+      "registry_key": "listOrgRoles",
+      "ruby_registry_key": "list_org_roles",
+      "path": "/organization/list-roles",
+      "method": "GET",
+      "upstream_api": "auth.api.listOrgRoles",
+      "ruby_api": "auth.api.list_org_roles",
+      "upstream_client": null,
+      "deprecated": false,
+      "server_only": false,
+      "exposure": "http",
+      "client_visibility": "undocumented",
+      "source_file": "reference/upstream-src/1.6.23/repository/packages/better-auth/src/plugins/organization/routes/crud-access-control.ts"
+    },
+    {
+      "plugin_id": "organization",
+      "registry_key": "listTeamMembers",
+      "ruby_registry_key": "list_team_members",
+      "path": "/organization/list-team-members",
+      "method": "GET",
+      "upstream_api": "auth.api.listTeamMembers",
+      "ruby_api": "auth.api.list_team_members",
+      "upstream_client": "authClient.organization.listTeamMembers",
+      "deprecated": false,
+      "server_only": false,
+      "exposure": "http",
+      "client_visibility": "documented",
+      "source_file": "reference/upstream-src/1.6.23/repository/packages/better-auth/src/plugins/organization/routes/crud-team.ts"
+    },
+    {
+      "plugin_id": "organization",
+      "registry_key": "listOrganizationTeams",
+      "ruby_registry_key": "list_organization_teams",
+      "path": "/organization/list-teams",
+      "method": "GET",
+      "upstream_api": "auth.api.listOrganizationTeams",
+      "ruby_api": "auth.api.list_organization_teams",
+      "upstream_client": "authClient.organization.listTeams",
+      "deprecated": false,
+      "server_only": false,
+      "exposure": "http",
+      "client_visibility": "documented",
+      "source_file": "reference/upstream-src/1.6.23/repository/packages/better-auth/src/plugins/organization/routes/crud-team.ts"
+    },
+    {
+      "plugin_id": "organization",
       "registry_key": "listUserInvitations",
       "ruby_registry_key": "list_user_invitations",
       "path": "/organization/list-user-invitations",
@@ -1984,6 +2152,21 @@
       "exposure": "http",
       "client_visibility": "undocumented",
       "source_file": "reference/upstream-src/1.6.23/repository/packages/better-auth/src/plugins/organization/routes/crud-invites.ts"
+    },
+    {
+      "plugin_id": "organization",
+      "registry_key": "listUserTeams",
+      "ruby_registry_key": "list_user_teams",
+      "path": "/organization/list-user-teams",
+      "method": "GET",
+      "upstream_api": "auth.api.listUserTeams",
+      "ruby_api": "auth.api.list_user_teams",
+      "upstream_client": "authClient.organization.listUserTeams",
+      "deprecated": false,
+      "server_only": false,
+      "exposure": "http",
+      "client_visibility": "documented",
+      "source_file": "reference/upstream-src/1.6.23/repository/packages/better-auth/src/plugins/organization/routes/crud-team.ts"
     },
     {
       "plugin_id": "organization",
@@ -2017,6 +2200,36 @@
     },
     {
       "plugin_id": "organization",
+      "registry_key": "removeTeam",
+      "ruby_registry_key": "remove_team",
+      "path": "/organization/remove-team",
+      "method": "POST",
+      "upstream_api": "auth.api.removeTeam",
+      "ruby_api": "auth.api.remove_team",
+      "upstream_client": "authClient.organization.removeTeam",
+      "deprecated": false,
+      "server_only": false,
+      "exposure": "http",
+      "client_visibility": "documented",
+      "source_file": "reference/upstream-src/1.6.23/repository/packages/better-auth/src/plugins/organization/routes/crud-team.ts"
+    },
+    {
+      "plugin_id": "organization",
+      "registry_key": "removeTeamMember",
+      "ruby_registry_key": "remove_team_member",
+      "path": "/organization/remove-team-member",
+      "method": "POST",
+      "upstream_api": "auth.api.removeTeamMember",
+      "ruby_api": "auth.api.remove_team_member",
+      "upstream_client": "authClient.organization.removeTeamMember",
+      "deprecated": false,
+      "server_only": false,
+      "exposure": "http",
+      "client_visibility": "documented",
+      "source_file": "reference/upstream-src/1.6.23/repository/packages/better-auth/src/plugins/organization/routes/crud-team.ts"
+    },
+    {
+      "plugin_id": "organization",
       "registry_key": "setActiveOrganization",
       "ruby_registry_key": "set_active_organization",
       "path": "/organization/set-active",
@@ -2029,6 +2242,21 @@
       "exposure": "http",
       "client_visibility": "documented",
       "source_file": "reference/upstream-src/1.6.23/repository/packages/better-auth/src/plugins/organization/routes/crud-org.ts"
+    },
+    {
+      "plugin_id": "organization",
+      "registry_key": "setActiveTeam",
+      "ruby_registry_key": "set_active_team",
+      "path": "/organization/set-active-team",
+      "method": "POST",
+      "upstream_api": "auth.api.setActiveTeam",
+      "ruby_api": "auth.api.set_active_team",
+      "upstream_client": "authClient.organization.setActiveTeam",
+      "deprecated": false,
+      "server_only": false,
+      "exposure": "http",
+      "client_visibility": "documented",
+      "source_file": "reference/upstream-src/1.6.23/repository/packages/better-auth/src/plugins/organization/routes/crud-team.ts"
     },
     {
       "plugin_id": "organization",
@@ -2059,6 +2287,36 @@
       "exposure": "http",
       "client_visibility": "documented",
       "source_file": "reference/upstream-src/1.6.23/repository/packages/better-auth/src/plugins/organization/routes/crud-members.ts"
+    },
+    {
+      "plugin_id": "organization",
+      "registry_key": "updateOrgRole",
+      "ruby_registry_key": "update_org_role",
+      "path": "/organization/update-role",
+      "method": "POST",
+      "upstream_api": "auth.api.updateOrgRole",
+      "ruby_api": "auth.api.update_org_role",
+      "upstream_client": null,
+      "deprecated": false,
+      "server_only": false,
+      "exposure": "http",
+      "client_visibility": "undocumented",
+      "source_file": "reference/upstream-src/1.6.23/repository/packages/better-auth/src/plugins/organization/routes/crud-access-control.ts"
+    },
+    {
+      "plugin_id": "organization",
+      "registry_key": "updateTeam",
+      "ruby_registry_key": "update_team",
+      "path": "/organization/update-team",
+      "method": "POST",
+      "upstream_api": "auth.api.updateTeam",
+      "ruby_api": "auth.api.update_team",
+      "upstream_client": "authClient.organization.updateTeam",
+      "deprecated": false,
+      "server_only": false,
+      "exposure": "http",
+      "client_visibility": "documented",
+      "source_file": "reference/upstream-src/1.6.23/repository/packages/better-auth/src/plugins/organization/routes/crud-team.ts"
     },
     {
       "plugin_id": "passkey",
@@ -2872,6 +3130,21 @@
     },
     {
       "plugin_id": "sso",
+      "registry_key": "requestDomainVerification",
+      "ruby_registry_key": "request_domain_verification",
+      "path": "/sso/request-domain-verification",
+      "method": "POST",
+      "upstream_api": "auth.api.requestDomainVerification",
+      "ruby_api": "auth.api.request_domain_verification",
+      "upstream_client": null,
+      "deprecated": false,
+      "server_only": false,
+      "exposure": "http",
+      "client_visibility": "undocumented",
+      "source_file": "reference/upstream-src/1.6.23/repository/packages/sso/src/routes/domain-verification.ts"
+    },
+    {
+      "plugin_id": "sso",
       "registry_key": "callbackSSOSAML",
       "ruby_registry_key": "callback_sso_saml",
       "path": "/sso/saml2/callback/:providerId",
@@ -2991,6 +3264,21 @@
       "source_file": "reference/upstream-src/1.6.23/repository/packages/sso/src/routes/providers.ts"
     },
     {
+      "plugin_id": "sso",
+      "registry_key": "verifyDomain",
+      "ruby_registry_key": "verify_domain",
+      "path": "/sso/verify-domain",
+      "method": "POST",
+      "upstream_api": "auth.api.verifyDomain",
+      "ruby_api": "auth.api.verify_domain",
+      "upstream_client": null,
+      "deprecated": false,
+      "server_only": false,
+      "exposure": "http",
+      "client_visibility": "undocumented",
+      "source_file": "reference/upstream-src/1.6.23/repository/packages/sso/src/routes/domain-verification.ts"
+    },
+    {
       "plugin_id": "stripe",
       "registry_key": "stripeWebhook",
       "ruby_registry_key": "stripe_webhook",
@@ -3003,6 +3291,96 @@
       "server_only": false,
       "exposure": "http_hidden_metadata",
       "client_visibility": "hidden_metadata",
+      "source_file": "reference/upstream-src/1.6.23/repository/packages/stripe/src/routes.ts"
+    },
+    {
+      "plugin_id": "stripe",
+      "registry_key": "createBillingPortal",
+      "ruby_registry_key": "create_billing_portal",
+      "path": "/subscription/billing-portal",
+      "method": "POST",
+      "upstream_api": "auth.api.createBillingPortal",
+      "ruby_api": "auth.api.create_billing_portal",
+      "upstream_client": null,
+      "deprecated": false,
+      "server_only": false,
+      "exposure": "http",
+      "client_visibility": "undocumented",
+      "source_file": "reference/upstream-src/1.6.23/repository/packages/stripe/src/routes.ts"
+    },
+    {
+      "plugin_id": "stripe",
+      "registry_key": "cancelSubscription",
+      "ruby_registry_key": "cancel_subscription",
+      "path": "/subscription/cancel",
+      "method": "POST",
+      "upstream_api": "auth.api.cancelSubscription",
+      "ruby_api": "auth.api.cancel_subscription",
+      "upstream_client": "authClient.subscription.cancel",
+      "deprecated": false,
+      "server_only": false,
+      "exposure": "http",
+      "client_visibility": "documented",
+      "source_file": "reference/upstream-src/1.6.23/repository/packages/stripe/src/routes.ts"
+    },
+    {
+      "plugin_id": "stripe",
+      "registry_key": "listActiveSubscriptions",
+      "ruby_registry_key": "list_active_subscriptions",
+      "path": "/subscription/list",
+      "method": "GET",
+      "upstream_api": "auth.api.listActiveSubscriptions",
+      "ruby_api": "auth.api.list_active_subscriptions",
+      "upstream_client": "authClient.subscription.list",
+      "deprecated": false,
+      "server_only": false,
+      "exposure": "http",
+      "client_visibility": "documented",
+      "source_file": "reference/upstream-src/1.6.23/repository/packages/stripe/src/routes.ts"
+    },
+    {
+      "plugin_id": "stripe",
+      "registry_key": "restoreSubscription",
+      "ruby_registry_key": "restore_subscription",
+      "path": "/subscription/restore",
+      "method": "POST",
+      "upstream_api": "auth.api.restoreSubscription",
+      "ruby_api": "auth.api.restore_subscription",
+      "upstream_client": null,
+      "deprecated": false,
+      "server_only": false,
+      "exposure": "http",
+      "client_visibility": "undocumented",
+      "source_file": "reference/upstream-src/1.6.23/repository/packages/stripe/src/routes.ts"
+    },
+    {
+      "plugin_id": "stripe",
+      "registry_key": "subscriptionSuccess",
+      "ruby_registry_key": "subscription_success",
+      "path": "/subscription/success",
+      "method": "GET",
+      "upstream_api": "auth.api.subscriptionSuccess",
+      "ruby_api": "auth.api.subscription_success",
+      "upstream_client": null,
+      "deprecated": false,
+      "server_only": false,
+      "exposure": "http",
+      "client_visibility": "undocumented",
+      "source_file": "reference/upstream-src/1.6.23/repository/packages/stripe/src/routes.ts"
+    },
+    {
+      "plugin_id": "stripe",
+      "registry_key": "upgradeSubscription",
+      "ruby_registry_key": "upgrade_subscription",
+      "path": "/subscription/upgrade",
+      "method": "POST",
+      "upstream_api": "auth.api.upgradeSubscription",
+      "ruby_api": "auth.api.upgrade_subscription",
+      "upstream_client": "authClient.subscription.upgrade",
+      "deprecated": false,
+      "server_only": false,
+      "exposure": "http",
+      "client_visibility": "documented",
       "source_file": "reference/upstream-src/1.6.23/repository/packages/stripe/src/routes.ts"
     },
     {

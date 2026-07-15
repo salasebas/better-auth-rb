@@ -1,0 +1,1192 @@
+{
+  "upstream_tag": "v1.6.23",
+  "upstream_commit": "9dfceee14021fc15a2fb93023f39635f25b0b5ba",
+  "pages": [
+    {
+      "slug": "adapters/community-adapters.mdx",
+      "action": "port",
+      "supported": true
+    },
+    {
+      "slug": "adapters/drizzle.mdx",
+      "action": "merge_into_other_relational",
+      "supported": false,
+      "merge_target": "adapters/other-relational-databases.mdx",
+      "reason": "Merged into Ruby relational adapter documentation"
+    },
+    {
+      "slug": "adapters/mongo.mdx",
+      "action": "port",
+      "supported": true,
+      "ruby_source": "packages/better_auth-mongodb/test/better_auth/adapters/mongodb_upstream_parity_test.rb"
+    },
+    {
+      "slug": "adapters/mssql.mdx",
+      "action": "port",
+      "supported": true,
+      "ruby_source": "packages/better_auth/test/better_auth/adapters/mssql_test.rb"
+    },
+    {
+      "slug": "adapters/mysql.mdx",
+      "action": "port",
+      "supported": true,
+      "ruby_source": "packages/better_auth/test/better_auth/adapters/mysql_test.rb"
+    },
+    {
+      "slug": "adapters/other-relational-databases.mdx",
+      "action": "merge_local",
+      "supported": true,
+      "ruby_source": "packages/better_auth-rails/spec/better_auth/rails/active_record_adapter_spec.rb"
+    },
+    {
+      "slug": "adapters/postgresql.mdx",
+      "action": "port",
+      "supported": true,
+      "ruby_source": "packages/better_auth/test/better_auth/adapters/postgres_test.rb"
+    },
+    {
+      "slug": "adapters/prisma.mdx",
+      "action": "merge_into_other_relational",
+      "supported": false,
+      "merge_target": "adapters/other-relational-databases.mdx",
+      "reason": "Merged into Ruby relational adapter documentation"
+    },
+    {
+      "slug": "adapters/sqlite.mdx",
+      "action": "port",
+      "supported": true,
+      "ruby_source": "packages/better_auth/test/better_auth/adapters/sqlite_test.rb"
+    },
+    {
+      "slug": "ai-resources/index.mdx",
+      "action": "skip_upstream_product",
+      "supported": false,
+      "reason": "Hosted Better Auth infrastructure product is outside RubyAuth scope"
+    },
+    {
+      "slug": "ai-resources/mcp.mdx",
+      "action": "skip_upstream_product",
+      "supported": false,
+      "reason": "Hosted Better Auth infrastructure product is outside RubyAuth scope"
+    },
+    {
+      "slug": "ai-resources/skills.mdx",
+      "action": "skip_upstream_product",
+      "supported": false,
+      "reason": "Hosted Better Auth infrastructure product is outside RubyAuth scope"
+    },
+    {
+      "slug": "authentication/apple.mdx",
+      "action": "port",
+      "supported": true,
+      "ruby_source": "packages/better_auth/test/better_auth/social_providers_test.rb"
+    },
+    {
+      "slug": "authentication/atlassian.mdx",
+      "action": "port",
+      "supported": true,
+      "ruby_source": "packages/better_auth/test/better_auth/social_providers_test.rb"
+    },
+    {
+      "slug": "authentication/cognito.mdx",
+      "action": "port",
+      "supported": true,
+      "ruby_source": "packages/better_auth/test/better_auth/social_providers_test.rb"
+    },
+    {
+      "slug": "authentication/discord.mdx",
+      "action": "port",
+      "supported": true,
+      "ruby_source": "packages/better_auth/test/better_auth/social_providers_test.rb"
+    },
+    {
+      "slug": "authentication/dropbox.mdx",
+      "action": "port",
+      "supported": true,
+      "ruby_source": "packages/better_auth/test/better_auth/social_providers_test.rb"
+    },
+    {
+      "slug": "authentication/email-password.mdx",
+      "action": "port",
+      "supported": true,
+      "ruby_source": "packages/better_auth/test/better_auth/routes/sign_in_test.rb"
+    },
+    {
+      "slug": "authentication/facebook.mdx",
+      "action": "port",
+      "supported": true,
+      "ruby_source": "packages/better_auth/test/better_auth/social_providers_test.rb"
+    },
+    {
+      "slug": "authentication/figma.mdx",
+      "action": "port",
+      "supported": true,
+      "ruby_source": "packages/better_auth/test/better_auth/social_providers_test.rb"
+    },
+    {
+      "slug": "authentication/github.mdx",
+      "action": "port",
+      "supported": true,
+      "ruby_source": "packages/better_auth/test/better_auth/social_providers_test.rb"
+    },
+    {
+      "slug": "authentication/gitlab.mdx",
+      "action": "port",
+      "supported": true,
+      "ruby_source": "packages/better_auth/test/better_auth/social_providers_test.rb"
+    },
+    {
+      "slug": "authentication/google.mdx",
+      "action": "port",
+      "supported": true,
+      "ruby_source": "packages/better_auth/test/better_auth/social_providers_test.rb"
+    },
+    {
+      "slug": "authentication/huggingface.mdx",
+      "action": "port",
+      "supported": true,
+      "ruby_source": "packages/better_auth/test/better_auth/social_providers_test.rb"
+    },
+    {
+      "slug": "authentication/kakao.mdx",
+      "action": "port",
+      "supported": true,
+      "ruby_source": "packages/better_auth/test/better_auth/social_providers_test.rb"
+    },
+    {
+      "slug": "authentication/kick.mdx",
+      "action": "port",
+      "supported": true,
+      "ruby_source": "packages/better_auth/test/better_auth/social_providers_test.rb"
+    },
+    {
+      "slug": "authentication/line.mdx",
+      "action": "port",
+      "supported": true,
+      "ruby_source": "packages/better_auth/test/better_auth/social_providers_test.rb"
+    },
+    {
+      "slug": "authentication/linear.mdx",
+      "action": "port",
+      "supported": true,
+      "ruby_source": "packages/better_auth/test/better_auth/social_providers_test.rb"
+    },
+    {
+      "slug": "authentication/linkedin.mdx",
+      "action": "port",
+      "supported": true,
+      "ruby_source": "packages/better_auth/test/better_auth/social_providers_test.rb"
+    },
+    {
+      "slug": "authentication/microsoft.mdx",
+      "action": "port",
+      "supported": true,
+      "ruby_source": "packages/better_auth/test/better_auth/social_providers_test.rb"
+    },
+    {
+      "slug": "authentication/naver.mdx",
+      "action": "port",
+      "supported": true,
+      "ruby_source": "packages/better_auth/test/better_auth/social_providers_test.rb"
+    },
+    {
+      "slug": "authentication/notion.mdx",
+      "action": "port",
+      "supported": true,
+      "ruby_source": "packages/better_auth/test/better_auth/social_providers_test.rb"
+    },
+    {
+      "slug": "authentication/other-social-providers.mdx",
+      "action": "port",
+      "supported": true,
+      "ruby_source": "packages/better_auth/test/better_auth/social_providers_test.rb"
+    },
+    {
+      "slug": "authentication/paybin.mdx",
+      "action": "port",
+      "supported": true,
+      "ruby_source": "packages/better_auth/test/better_auth/social_providers_test.rb"
+    },
+    {
+      "slug": "authentication/paypal.mdx",
+      "action": "port",
+      "supported": true,
+      "ruby_source": "packages/better_auth/test/better_auth/social_providers_test.rb"
+    },
+    {
+      "slug": "authentication/polar.mdx",
+      "action": "port",
+      "supported": true,
+      "ruby_source": "packages/better_auth/test/better_auth/social_providers_test.rb"
+    },
+    {
+      "slug": "authentication/railway.mdx",
+      "action": "port",
+      "supported": true,
+      "ruby_source": "packages/better_auth/test/better_auth/social_providers_test.rb"
+    },
+    {
+      "slug": "authentication/reddit.mdx",
+      "action": "port",
+      "supported": true,
+      "ruby_source": "packages/better_auth/test/better_auth/social_providers_test.rb"
+    },
+    {
+      "slug": "authentication/roblox.mdx",
+      "action": "port",
+      "supported": true,
+      "ruby_source": "packages/better_auth/test/better_auth/social_providers_test.rb"
+    },
+    {
+      "slug": "authentication/salesforce.mdx",
+      "action": "port",
+      "supported": true,
+      "ruby_source": "packages/better_auth/test/better_auth/social_providers_test.rb"
+    },
+    {
+      "slug": "authentication/slack.mdx",
+      "action": "port",
+      "supported": true,
+      "ruby_source": "packages/better_auth/test/better_auth/social_providers_test.rb"
+    },
+    {
+      "slug": "authentication/spotify.mdx",
+      "action": "port",
+      "supported": true,
+      "ruby_source": "packages/better_auth/test/better_auth/social_providers_test.rb"
+    },
+    {
+      "slug": "authentication/tiktok.mdx",
+      "action": "port",
+      "supported": true,
+      "ruby_source": "packages/better_auth/test/better_auth/social_providers_test.rb"
+    },
+    {
+      "slug": "authentication/twitch.mdx",
+      "action": "port",
+      "supported": true,
+      "ruby_source": "packages/better_auth/test/better_auth/social_providers_test.rb"
+    },
+    {
+      "slug": "authentication/twitter.mdx",
+      "action": "port",
+      "supported": true,
+      "ruby_source": "packages/better_auth/test/better_auth/social_providers_test.rb"
+    },
+    {
+      "slug": "authentication/vercel.mdx",
+      "action": "port",
+      "supported": true,
+      "ruby_source": "packages/better_auth/test/better_auth/social_providers_test.rb"
+    },
+    {
+      "slug": "authentication/vk.mdx",
+      "action": "port",
+      "supported": true,
+      "ruby_source": "packages/better_auth/test/better_auth/social_providers_test.rb"
+    },
+    {
+      "slug": "authentication/wechat.mdx",
+      "action": "port",
+      "supported": true,
+      "ruby_source": "packages/better_auth/test/better_auth/social_providers_test.rb"
+    },
+    {
+      "slug": "authentication/zoom.mdx",
+      "action": "port",
+      "supported": true,
+      "ruby_source": "packages/better_auth/test/better_auth/social_providers_test.rb"
+    },
+    {
+      "slug": "basic-usage.mdx",
+      "action": "merge_local",
+      "supported": true
+    },
+    {
+      "slug": "comparison.mdx",
+      "action": "port",
+      "supported": true
+    },
+    {
+      "slug": "concepts/api.mdx",
+      "action": "port",
+      "supported": true
+    },
+    {
+      "slug": "concepts/cli.mdx",
+      "action": "port",
+      "supported": true,
+      "ruby_source": "packages/better_auth-cli/test/better_auth/cli_generate_parity_test.rb"
+    },
+    {
+      "slug": "concepts/client.mdx",
+      "action": "skip_client",
+      "supported": false,
+      "reason": "TypeScript/JavaScript client or framework integration is outside Ruby server-side scope"
+    },
+    {
+      "slug": "concepts/cookies.mdx",
+      "action": "port",
+      "supported": true,
+      "ruby_source": "packages/better_auth/test/better_auth/cookies_test.rb"
+    },
+    {
+      "slug": "concepts/database.mdx",
+      "action": "port",
+      "supported": true,
+      "ruby_source": "packages/better_auth/test/better_auth/schema/sql_test.rb"
+    },
+    {
+      "slug": "concepts/email.mdx",
+      "action": "port",
+      "supported": true
+    },
+    {
+      "slug": "concepts/hooks.mdx",
+      "action": "port",
+      "supported": true,
+      "ruby_source": "packages/better_auth/test/better_auth/plugin_test.rb"
+    },
+    {
+      "slug": "concepts/oauth.mdx",
+      "action": "port",
+      "supported": true,
+      "ruby_source": "packages/better_auth/test/better_auth/oauth2_test.rb"
+    },
+    {
+      "slug": "concepts/plugins.mdx",
+      "action": "port",
+      "supported": true,
+      "ruby_source": "packages/better_auth/test/better_auth/plugin_test.rb"
+    },
+    {
+      "slug": "concepts/rate-limit.mdx",
+      "action": "port",
+      "supported": true,
+      "ruby_source": "packages/better_auth/test/better_auth/rate_limiter_test.rb"
+    },
+    {
+      "slug": "concepts/session-management.mdx",
+      "action": "port",
+      "supported": true,
+      "ruby_source": "packages/better_auth/test/better_auth/session_test.rb"
+    },
+    {
+      "slug": "concepts/typescript.mdx",
+      "action": "skip_client",
+      "supported": false,
+      "reason": "TypeScript/JavaScript client or framework integration is outside Ruby server-side scope"
+    },
+    {
+      "slug": "concepts/users-accounts.mdx",
+      "action": "port",
+      "supported": true,
+      "ruby_source": "packages/better_auth/test/better_auth/routes/user_routes_test.rb"
+    },
+    {
+      "slug": "examples/astro.mdx",
+      "action": "skip_client",
+      "supported": false,
+      "reason": "TypeScript/JavaScript client or framework integration is outside Ruby server-side scope"
+    },
+    {
+      "slug": "examples/next-js.mdx",
+      "action": "skip_client",
+      "supported": false,
+      "reason": "TypeScript/JavaScript client or framework integration is outside Ruby server-side scope"
+    },
+    {
+      "slug": "examples/nuxt.mdx",
+      "action": "skip_client",
+      "supported": false,
+      "reason": "TypeScript/JavaScript client or framework integration is outside Ruby server-side scope"
+    },
+    {
+      "slug": "examples/react-router.mdx",
+      "action": "skip_client",
+      "supported": false,
+      "reason": "TypeScript/JavaScript client or framework integration is outside Ruby server-side scope"
+    },
+    {
+      "slug": "examples/svelte-kit.mdx",
+      "action": "skip_client",
+      "supported": false,
+      "reason": "TypeScript/JavaScript client or framework integration is outside Ruby server-side scope"
+    },
+    {
+      "slug": "guides/1-7-upgrade-guide.mdx",
+      "action": "skip_version",
+      "supported": false,
+      "reason": "future-version/out-of-target"
+    },
+    {
+      "slug": "guides/auth0-migration-guide.mdx",
+      "action": "port",
+      "supported": true
+    },
+    {
+      "slug": "guides/browser-extension-guide.mdx",
+      "action": "port",
+      "supported": true
+    },
+    {
+      "slug": "guides/clerk-migration-guide.mdx",
+      "action": "port",
+      "supported": true
+    },
+    {
+      "slug": "guides/create-a-db-adapter.mdx",
+      "action": "port",
+      "supported": true,
+      "ruby_source": "packages/better_auth/test/better_auth/adapters/internal_adapter_test.rb"
+    },
+    {
+      "slug": "guides/dynamic-base-url.mdx",
+      "action": "port",
+      "supported": true
+    },
+    {
+      "slug": "guides/next-auth-migration-guide.mdx",
+      "action": "port",
+      "supported": true
+    },
+    {
+      "slug": "guides/optimizing-for-performance.mdx",
+      "action": "port",
+      "supported": true
+    },
+    {
+      "slug": "guides/saml-sso-with-okta.mdx",
+      "action": "port",
+      "supported": true
+    },
+    {
+      "slug": "guides/supabase-migration-guide.mdx",
+      "action": "port",
+      "supported": true
+    },
+    {
+      "slug": "guides/workos-migration-guide.mdx",
+      "action": "port",
+      "supported": true
+    },
+    {
+      "slug": "guides/your-first-plugin.mdx",
+      "action": "port",
+      "supported": true
+    },
+    {
+      "slug": "infrastructure/getting-started.mdx",
+      "action": "skip_upstream_product",
+      "supported": false,
+      "reason": "Hosted Better Auth infrastructure product is outside RubyAuth scope"
+    },
+    {
+      "slug": "infrastructure/introduction.mdx",
+      "action": "skip_upstream_product",
+      "supported": false,
+      "reason": "Hosted Better Auth infrastructure product is outside RubyAuth scope"
+    },
+    {
+      "slug": "infrastructure/plugins/audit-logs.mdx",
+      "action": "skip_upstream_product",
+      "supported": false,
+      "reason": "Hosted Better Auth infrastructure product is outside RubyAuth scope"
+    },
+    {
+      "slug": "infrastructure/plugins/dash.mdx",
+      "action": "skip_upstream_product",
+      "supported": false,
+      "reason": "Hosted Better Auth infrastructure product is outside RubyAuth scope"
+    },
+    {
+      "slug": "infrastructure/plugins/dashboard.mdx",
+      "action": "skip_upstream_product",
+      "supported": false,
+      "reason": "Hosted Better Auth infrastructure product is outside RubyAuth scope"
+    },
+    {
+      "slug": "infrastructure/plugins/sentinel.mdx",
+      "action": "skip_upstream_product",
+      "supported": false,
+      "reason": "Hosted Better Auth infrastructure product is outside RubyAuth scope"
+    },
+    {
+      "slug": "infrastructure/services/email.mdx",
+      "action": "skip_upstream_product",
+      "supported": false,
+      "reason": "Hosted Better Auth infrastructure product is outside RubyAuth scope"
+    },
+    {
+      "slug": "infrastructure/services/sms.mdx",
+      "action": "skip_upstream_product",
+      "supported": false,
+      "reason": "Hosted Better Auth infrastructure product is outside RubyAuth scope"
+    },
+    {
+      "slug": "installation.mdx",
+      "action": "merge_local",
+      "supported": true,
+      "ruby_source": "packages/better_auth-cli/test/better_auth/cli_init_parity_test.rb"
+    },
+    {
+      "slug": "integrations/astro.mdx",
+      "action": "skip_client",
+      "supported": false,
+      "reason": "TypeScript/JavaScript client or framework integration is outside Ruby server-side scope"
+    },
+    {
+      "slug": "integrations/convex.mdx",
+      "action": "skip_client",
+      "supported": false,
+      "reason": "TypeScript/JavaScript client or framework integration is outside Ruby server-side scope"
+    },
+    {
+      "slug": "integrations/electron.mdx",
+      "action": "skip_client",
+      "supported": false,
+      "reason": "TypeScript/JavaScript client or framework integration is outside Ruby server-side scope"
+    },
+    {
+      "slug": "integrations/elysia.mdx",
+      "action": "skip_client",
+      "supported": false,
+      "reason": "TypeScript/JavaScript client or framework integration is outside Ruby server-side scope"
+    },
+    {
+      "slug": "integrations/encore.mdx",
+      "action": "skip_client",
+      "supported": false,
+      "reason": "TypeScript/JavaScript client or framework integration is outside Ruby server-side scope"
+    },
+    {
+      "slug": "integrations/expo.mdx",
+      "action": "skip_client",
+      "supported": false,
+      "reason": "TypeScript/JavaScript client or framework integration is outside Ruby server-side scope"
+    },
+    {
+      "slug": "integrations/express.mdx",
+      "action": "skip_client",
+      "supported": false,
+      "reason": "TypeScript/JavaScript client or framework integration is outside Ruby server-side scope"
+    },
+    {
+      "slug": "integrations/fastify.mdx",
+      "action": "skip_client",
+      "supported": false,
+      "reason": "TypeScript/JavaScript client or framework integration is outside Ruby server-side scope"
+    },
+    {
+      "slug": "integrations/grape.mdx",
+      "action": "keep_local",
+      "supported": true
+    },
+    {
+      "slug": "integrations/hanami.mdx",
+      "action": "keep_local",
+      "supported": true
+    },
+    {
+      "slug": "integrations/hono.mdx",
+      "action": "skip_client",
+      "supported": false,
+      "reason": "TypeScript/JavaScript client or framework integration is outside Ruby server-side scope"
+    },
+    {
+      "slug": "integrations/lynx.mdx",
+      "action": "skip_client",
+      "supported": false,
+      "reason": "TypeScript/JavaScript client or framework integration is outside Ruby server-side scope"
+    },
+    {
+      "slug": "integrations/nestjs.mdx",
+      "action": "skip_client",
+      "supported": false,
+      "reason": "TypeScript/JavaScript client or framework integration is outside Ruby server-side scope"
+    },
+    {
+      "slug": "integrations/next.mdx",
+      "action": "skip_client",
+      "supported": false,
+      "reason": "TypeScript/JavaScript client or framework integration is outside Ruby server-side scope"
+    },
+    {
+      "slug": "integrations/nitro.mdx",
+      "action": "skip_client",
+      "supported": false,
+      "reason": "TypeScript/JavaScript client or framework integration is outside Ruby server-side scope"
+    },
+    {
+      "slug": "integrations/nuxt.mdx",
+      "action": "skip_client",
+      "supported": false,
+      "reason": "TypeScript/JavaScript client or framework integration is outside Ruby server-side scope"
+    },
+    {
+      "slug": "integrations/rack.mdx",
+      "action": "keep_local",
+      "supported": true
+    },
+    {
+      "slug": "integrations/rails.mdx",
+      "action": "keep_local",
+      "supported": true
+    },
+    {
+      "slug": "integrations/react-router.mdx",
+      "action": "skip_client",
+      "supported": false,
+      "reason": "TypeScript/JavaScript client or framework integration is outside Ruby server-side scope"
+    },
+    {
+      "slug": "integrations/roda.mdx",
+      "action": "keep_local",
+      "supported": true
+    },
+    {
+      "slug": "integrations/sinatra.mdx",
+      "action": "keep_local",
+      "supported": true
+    },
+    {
+      "slug": "integrations/solid-start.mdx",
+      "action": "skip_client",
+      "supported": false,
+      "reason": "TypeScript/JavaScript client or framework integration is outside Ruby server-side scope"
+    },
+    {
+      "slug": "integrations/svelte-kit.mdx",
+      "action": "skip_client",
+      "supported": false,
+      "reason": "TypeScript/JavaScript client or framework integration is outside Ruby server-side scope"
+    },
+    {
+      "slug": "integrations/tanstack.mdx",
+      "action": "skip_client",
+      "supported": false,
+      "reason": "TypeScript/JavaScript client or framework integration is outside Ruby server-side scope"
+    },
+    {
+      "slug": "integrations/waku.mdx",
+      "action": "skip_client",
+      "supported": false,
+      "reason": "TypeScript/JavaScript client or framework integration is outside Ruby server-side scope"
+    },
+    {
+      "slug": "introduction.mdx",
+      "action": "port",
+      "supported": true
+    },
+    {
+      "slug": "plugins/2fa.mdx",
+      "action": "port",
+      "supported": true,
+      "ruby_source": "packages/better_auth/test/better_auth/plugins/two_factor_test.rb",
+      "ruby_plugin": "BetterAuth::Plugins.two_factor",
+      "gem": "better_auth"
+    },
+    {
+      "slug": "plugins/admin.mdx",
+      "action": "port",
+      "supported": true,
+      "ruby_source": "packages/better_auth/test/better_auth/plugins/admin_test.rb",
+      "ruby_plugin": "BetterAuth::Plugins.admin",
+      "gem": "better_auth"
+    },
+    {
+      "slug": "plugins/agent-auth.mdx",
+      "action": "skip_unported",
+      "supported": false,
+      "reason": "Plugin is not implemented by RubyAuth"
+    },
+    {
+      "slug": "plugins/anonymous.mdx",
+      "action": "port",
+      "supported": true,
+      "ruby_source": "packages/better_auth/test/better_auth/plugins/anonymous_test.rb",
+      "ruby_plugin": "BetterAuth::Plugins.anonymous",
+      "gem": "better_auth"
+    },
+    {
+      "slug": "plugins/api-key/advanced.mdx",
+      "action": "port",
+      "supported": true,
+      "ruby_source": "packages/better_auth-api-key/test/better_auth/api_key/plugin_test.rb",
+      "ruby_plugin": "BetterAuth::Plugins.api_key",
+      "gem": "better_auth-api-key",
+      "require_path": "better_auth/api_key"
+    },
+    {
+      "slug": "plugins/api-key/index.mdx",
+      "action": "port",
+      "supported": true,
+      "ruby_source": "packages/better_auth-api-key/test/better_auth/api_key_test.rb",
+      "ruby_plugin": "BetterAuth::Plugins.api_key",
+      "gem": "better_auth-api-key",
+      "require_path": "better_auth/api_key"
+    },
+    {
+      "slug": "plugins/api-key/reference.mdx",
+      "action": "port",
+      "supported": true,
+      "ruby_source": "packages/better_auth-api-key/test/better_auth/api_key/routes/index_test.rb",
+      "ruby_plugin": "BetterAuth::Plugins.api_key",
+      "gem": "better_auth-api-key",
+      "require_path": "better_auth/api_key"
+    },
+    {
+      "slug": "plugins/autumn.mdx",
+      "action": "skip_unported",
+      "supported": false,
+      "reason": "Plugin is not implemented by RubyAuth"
+    },
+    {
+      "slug": "plugins/bearer.mdx",
+      "action": "port",
+      "supported": true,
+      "ruby_source": "packages/better_auth/test/better_auth/plugins/bearer_test.rb",
+      "ruby_plugin": "BetterAuth::Plugins.bearer",
+      "gem": "better_auth"
+    },
+    {
+      "slug": "plugins/captcha.mdx",
+      "action": "port",
+      "supported": true,
+      "ruby_source": "packages/better_auth/test/better_auth/plugins/captcha_test.rb",
+      "ruby_plugin": "BetterAuth::Plugins.captcha",
+      "gem": "better_auth"
+    },
+    {
+      "slug": "plugins/chargebee.mdx",
+      "action": "skip_unported",
+      "supported": false,
+      "reason": "Plugin is not implemented by RubyAuth"
+    },
+    {
+      "slug": "plugins/commet.mdx",
+      "action": "skip_external",
+      "supported": false,
+      "reason": "external non-Stripe payment plugin"
+    },
+    {
+      "slug": "plugins/community-plugins.mdx",
+      "action": "port",
+      "supported": true,
+      "gem": "better_auth"
+    },
+    {
+      "slug": "plugins/creem.mdx",
+      "action": "skip_unported",
+      "supported": false,
+      "reason": "Plugin is not implemented by RubyAuth"
+    },
+    {
+      "slug": "plugins/device-authorization.mdx",
+      "action": "port",
+      "supported": true,
+      "ruby_source": "packages/better_auth/test/better_auth/plugins/device_authorization_test.rb",
+      "ruby_plugin": "BetterAuth::Plugins.device_authorization",
+      "gem": "better_auth"
+    },
+    {
+      "slug": "plugins/dodopayments.mdx",
+      "action": "skip_unported",
+      "supported": false,
+      "reason": "Plugin is not implemented by RubyAuth"
+    },
+    {
+      "slug": "plugins/dub.mdx",
+      "action": "port",
+      "supported": true,
+      "ruby_source": "packages/better_auth/test/better_auth/plugins/dub_test.rb",
+      "ruby_plugin": "BetterAuth::Plugins.dub",
+      "gem": "better_auth"
+    },
+    {
+      "slug": "plugins/email-otp.mdx",
+      "action": "port",
+      "supported": true,
+      "ruby_source": "packages/better_auth/test/better_auth/plugins/email_otp_test.rb",
+      "ruby_plugin": "BetterAuth::Plugins.email_otp",
+      "gem": "better_auth"
+    },
+    {
+      "slug": "plugins/generic-oauth.mdx",
+      "action": "port",
+      "supported": true,
+      "ruby_source": "packages/better_auth/test/better_auth/plugins/generic_oauth_test.rb",
+      "ruby_plugin": "BetterAuth::Plugins.generic_oauth",
+      "gem": "better_auth"
+    },
+    {
+      "slug": "plugins/have-i-been-pwned.mdx",
+      "action": "port",
+      "supported": true,
+      "ruby_source": "packages/better_auth/test/better_auth/plugins/have_i_been_pwned_test.rb",
+      "ruby_plugin": "BetterAuth::Plugins.have_i_been_pwned",
+      "gem": "better_auth"
+    },
+    {
+      "slug": "plugins/i18n.mdx",
+      "action": "port",
+      "supported": true,
+      "ruby_source": "packages/better_auth/test/better_auth/plugins/i18n_test.rb",
+      "ruby_plugin": "BetterAuth::Plugins.i18n",
+      "gem": "better_auth"
+    },
+    {
+      "slug": "plugins/index.mdx",
+      "action": "port",
+      "supported": true,
+      "gem": "better_auth"
+    },
+    {
+      "slug": "plugins/jwt.mdx",
+      "action": "port",
+      "supported": true,
+      "ruby_source": "packages/better_auth/test/better_auth/plugins/jwt_test.rb",
+      "ruby_plugin": "BetterAuth::Plugins.jwt",
+      "gem": "better_auth"
+    },
+    {
+      "slug": "plugins/last-login-method.mdx",
+      "action": "port",
+      "supported": true,
+      "ruby_source": "packages/better_auth/test/better_auth/plugins/last_login_method_test.rb",
+      "ruby_plugin": "BetterAuth::Plugins.last_login_method",
+      "gem": "better_auth"
+    },
+    {
+      "slug": "plugins/magic-link.mdx",
+      "action": "port",
+      "supported": true,
+      "ruby_source": "packages/better_auth/test/better_auth/plugins/magic_link_test.rb",
+      "ruby_plugin": "BetterAuth::Plugins.magic_link",
+      "gem": "better_auth"
+    },
+    {
+      "slug": "plugins/mcp.mdx",
+      "action": "remove_if_local",
+      "supported": false,
+      "reason": "Unsupported upstream plugin is not documented by RubyAuth"
+    },
+    {
+      "slug": "plugins/multi-session.mdx",
+      "action": "port",
+      "supported": true,
+      "ruby_source": "packages/better_auth/test/better_auth/plugins/multi_session_test.rb",
+      "ruby_plugin": "BetterAuth::Plugins.multi_session",
+      "gem": "better_auth"
+    },
+    {
+      "slug": "plugins/oauth-provider.mdx",
+      "action": "port",
+      "supported": true,
+      "ruby_source": "packages/better_auth-oauth-provider/test/better_auth/oauth_provider_test.rb",
+      "ruby_plugin": "BetterAuth::Plugins.oauth_provider",
+      "gem": "better_auth-oauth-provider",
+      "require_path": "better_auth/oauth_provider"
+    },
+    {
+      "slug": "plugins/oauth-proxy.mdx",
+      "action": "port",
+      "supported": true,
+      "ruby_source": "packages/better_auth/test/better_auth/plugins/oauth_proxy_test.rb",
+      "ruby_plugin": "BetterAuth::Plugins.oauth_proxy",
+      "gem": "better_auth"
+    },
+    {
+      "slug": "plugins/oidc-provider.mdx",
+      "action": "remove_if_local",
+      "supported": false,
+      "reason": "Unsupported upstream plugin is not documented by RubyAuth"
+    },
+    {
+      "slug": "plugins/one-tap.mdx",
+      "action": "port",
+      "supported": true,
+      "ruby_source": "packages/better_auth/test/better_auth/plugins/one_tap_test.rb",
+      "ruby_plugin": "BetterAuth::Plugins.one_tap",
+      "gem": "better_auth"
+    },
+    {
+      "slug": "plugins/one-time-token.mdx",
+      "action": "port",
+      "supported": true,
+      "ruby_source": "packages/better_auth/test/better_auth/plugins/one_time_token_test.rb",
+      "ruby_plugin": "BetterAuth::Plugins.one_time_token",
+      "gem": "better_auth"
+    },
+    {
+      "slug": "plugins/open-api.mdx",
+      "action": "port",
+      "supported": true,
+      "ruby_source": "packages/better_auth/test/better_auth/plugins/open_api_test.rb",
+      "ruby_plugin": "BetterAuth::Plugins.open_api",
+      "gem": "better_auth"
+    },
+    {
+      "slug": "plugins/organization.mdx",
+      "action": "port",
+      "supported": true,
+      "ruby_source": "packages/better_auth/test/better_auth/plugins/organization_test.rb",
+      "ruby_plugin": "BetterAuth::Plugins.organization",
+      "gem": "better_auth"
+    },
+    {
+      "slug": "plugins/passkey.mdx",
+      "action": "port",
+      "supported": true,
+      "ruby_source": "packages/better_auth-passkey/test/better_auth/passkey_test.rb",
+      "ruby_plugin": "BetterAuth::Plugins.passkey",
+      "gem": "better_auth-passkey",
+      "require_path": "better_auth/passkey"
+    },
+    {
+      "slug": "plugins/phone-number.mdx",
+      "action": "port",
+      "supported": true,
+      "ruby_source": "packages/better_auth/test/better_auth/plugins/phone_number_test.rb",
+      "ruby_plugin": "BetterAuth::Plugins.phone_number",
+      "gem": "better_auth"
+    },
+    {
+      "slug": "plugins/polar.mdx",
+      "action": "skip_unported",
+      "supported": false,
+      "reason": "Plugin is not implemented by RubyAuth"
+    },
+    {
+      "slug": "plugins/scim.mdx",
+      "action": "port",
+      "supported": true,
+      "ruby_source": "packages/better_auth-scim/test/better_auth/scim/scim_test.rb",
+      "ruby_plugin": "BetterAuth::Plugins.scim",
+      "gem": "better_auth-scim",
+      "require_path": "better_auth/scim"
+    },
+    {
+      "slug": "plugins/siwe.mdx",
+      "action": "port",
+      "supported": true,
+      "ruby_source": "packages/better_auth/test/better_auth/plugins/siwe_test.rb",
+      "ruby_plugin": "BetterAuth::Plugins.siwe",
+      "gem": "better_auth"
+    },
+    {
+      "slug": "plugins/sso.mdx",
+      "action": "port",
+      "supported": true,
+      "ruby_source": "packages/better_auth-sso/test/better_auth/sso_test.rb",
+      "ruby_plugin": "BetterAuth::Plugins.sso",
+      "gem": "better_auth-sso",
+      "require_path": "better_auth/sso"
+    },
+    {
+      "slug": "plugins/stripe.mdx",
+      "action": "port",
+      "supported": true,
+      "ruby_source": "packages/better_auth-stripe/test/better_auth/plugins/stripe_test.rb",
+      "ruby_plugin": "BetterAuth::Plugins.stripe",
+      "gem": "better_auth-stripe",
+      "require_path": "better_auth/stripe"
+    },
+    {
+      "slug": "plugins/test-utils.mdx",
+      "action": "skip_unported",
+      "supported": false,
+      "reason": "The existing RubyAuth page is an explicitly under-development placeholder for an unsupported, unported test-utilities plugin"
+    },
+    {
+      "slug": "plugins/username.mdx",
+      "action": "port",
+      "supported": true,
+      "ruby_source": "packages/better_auth/test/better_auth/plugins/username_test.rb",
+      "ruby_plugin": "BetterAuth::Plugins.username",
+      "gem": "better_auth"
+    },
+    {
+      "slug": "reference/contributing.mdx",
+      "action": "port",
+      "supported": true
+    },
+    {
+      "slug": "reference/database-schemas.mdx",
+      "action": "keep_local",
+      "supported": true,
+      "reason": "Ruby-specific database schema reference"
+    },
+    {
+      "slug": "reference/errors/account_already_linked_to_different_user.mdx",
+      "action": "port",
+      "supported": true
+    },
+    {
+      "slug": "reference/errors/account_not_linked.mdx",
+      "action": "port",
+      "supported": true
+    },
+    {
+      "slug": "reference/errors/email_doesn't_match.mdx",
+      "action": "port",
+      "supported": true
+    },
+    {
+      "slug": "reference/errors/email_not_found.mdx",
+      "action": "port",
+      "supported": true
+    },
+    {
+      "slug": "reference/errors/email_not_verified.mdx",
+      "action": "keep_local",
+      "supported": true,
+      "reason": "Ruby-specific error reference"
+    },
+    {
+      "slug": "reference/errors/index.mdx",
+      "action": "port",
+      "supported": true
+    },
+    {
+      "slug": "reference/errors/internal_server_error.mdx",
+      "action": "port",
+      "supported": true
+    },
+    {
+      "slug": "reference/errors/invalid_callback_request.mdx",
+      "action": "port",
+      "supported": true
+    },
+    {
+      "slug": "reference/errors/invalid_code.mdx",
+      "action": "port",
+      "supported": true
+    },
+    {
+      "slug": "reference/errors/invalid_email.mdx",
+      "action": "keep_local",
+      "supported": true,
+      "reason": "Ruby-specific error reference"
+    },
+    {
+      "slug": "reference/errors/invalid_token.mdx",
+      "action": "keep_local",
+      "supported": true,
+      "reason": "Ruby-specific error reference"
+    },
+    {
+      "slug": "reference/errors/no_callback_url.mdx",
+      "action": "port",
+      "supported": true
+    },
+    {
+      "slug": "reference/errors/no_code.mdx",
+      "action": "port",
+      "supported": true
+    },
+    {
+      "slug": "reference/errors/oauth_provider_not_found.mdx",
+      "action": "port",
+      "supported": true
+    },
+    {
+      "slug": "reference/errors/please_restart_the_process.mdx",
+      "action": "keep_local",
+      "supported": true
+    },
+    {
+      "slug": "reference/errors/signup_disabled.mdx",
+      "action": "port",
+      "supported": true
+    },
+    {
+      "slug": "reference/errors/state_invalid.mdx",
+      "action": "port",
+      "supported": true
+    },
+    {
+      "slug": "reference/errors/state_mismatch.mdx",
+      "action": "port",
+      "supported": true
+    },
+    {
+      "slug": "reference/errors/state_not_found.mdx",
+      "action": "port",
+      "supported": true
+    },
+    {
+      "slug": "reference/errors/unable_to_create_session.mdx",
+      "action": "port",
+      "supported": true
+    },
+    {
+      "slug": "reference/errors/unable_to_create_user.mdx",
+      "action": "port",
+      "supported": true
+    },
+    {
+      "slug": "reference/errors/unable_to_get_user_info.mdx",
+      "action": "port",
+      "supported": true
+    },
+    {
+      "slug": "reference/errors/unable_to_link_account.mdx",
+      "action": "port",
+      "supported": true
+    },
+    {
+      "slug": "reference/errors/unknown.mdx",
+      "action": "port",
+      "supported": true
+    },
+    {
+      "slug": "reference/faq.mdx",
+      "action": "port",
+      "supported": true
+    },
+    {
+      "slug": "reference/instrumentation.mdx",
+      "action": "port",
+      "supported": true
+    },
+    {
+      "slug": "reference/options.mdx",
+      "action": "port",
+      "supported": true
+    },
+    {
+      "slug": "reference/redis-storage.mdx",
+      "action": "keep_local",
+      "supported": true,
+      "reason": "Ruby-specific Redis storage reference"
+    },
+    {
+      "slug": "reference/resources.mdx",
+      "action": "port",
+      "supported": true
+    },
+    {
+      "slug": "reference/rubyauth-gap-inventory.mdx",
+      "action": "keep_local",
+      "supported": true,
+      "reason": "Ruby compatibility gap inventory"
+    },
+    {
+      "slug": "reference/security.mdx",
+      "action": "port",
+      "supported": true
+    },
+    {
+      "slug": "reference/telemetry.mdx",
+      "action": "port",
+      "supported": true
+    },
+    {
+      "slug": "supported-features.mdx",
+      "action": "keep_local",
+      "supported": true,
+      "reason": "Ruby-supported feature matrix"
+    }
+  ]
+}

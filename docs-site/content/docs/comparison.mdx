@@ -7,19 +7,19 @@ description: How RubyAuth relates to other Ruby auth approaches and the upstream
 
 ## Design inspiration
 
-RubyAuth implements the Better Auth **server** design in idiomatic Ruby: Rack handler, cookie sessions, plugin hooks, and HTTP routes such as `/api/auth/sign-in/email`. It targets parity with Better Auth v1.6.9 where tests and adapters exist in this repo.
+RubyAuth implements the Better Auth **server** design in idiomatic Ruby: Rack handler, cookie sessions, plugin hooks, and HTTP routes such as `/api/auth/sign-in/email`. A pinned upstream release provides a reproducible reference, while the package documentation and tests define which behavior is implemented or intentionally adapted.
 
 It is **not** a port of the Better Auth JavaScript client, hosted dashboard, or npm toolchain.
 
 ## Compared to Devise-only setups
 
-| Topic | Devise (typical) | RubyAuth |
-|-------|------------------|----------|
-| Scope | Rails-focused, Warden-based | Rack-first; Rails/Hanami/Sinatra/Roda/Grape adapters |
-| API shape | Controllers + helpers | HTTP auth routes + optional `auth.api` |
-| OAuth / social | Via OmniAuth add-ons | Built-in provider configuration |
-| Plugins | Community gems | First-party plugin modules (2FA, orgs, JWT, …) |
-| Schema | Devise generators | Better Auth schema via CLI or Rails generators |
+| Topic          | Devise (typical)            | RubyAuth                                             |
+| -------------- | --------------------------- | ---------------------------------------------------- |
+| Scope          | Rails-focused, Warden-based | Rack-first; Rails/Hanami/Sinatra/Roda/Grape adapters |
+| API shape      | Controllers + helpers       | HTTP auth routes + optional `auth.api`               |
+| OAuth / social | Via OmniAuth add-ons        | Built-in provider configuration                      |
+| Plugins        | Community gems              | First-party plugin modules (2FA, orgs, JWT, …)       |
+| Schema         | Devise generators           | Better Auth schema via CLI or Rails generators       |
 
 Many teams keep Devise for legacy apps. RubyAuth fits greenfield Ruby services that want Better Auth–style routes and plugins without a Node auth server.
 
@@ -29,11 +29,11 @@ RubyAuth gives you session handling, CSRF/origin checks, rate limiting hooks, an
 
 ## When RubyAuth may not fit
 
-- You need the official Better Auth **browser client** or React hooks — use HTTP from your frontend or wait for community clients.
-- You require 100% upstream feature parity — check plugin docs; some areas are marked **Under development**.
-- You want a batteries-included Rails-only DSL with years of Stack Overflow answers — Devise remains the default Rails choice.
+* You need the official Better Auth **browser client** or React hooks — use HTTP from your frontend or wait for community clients.
+* You require 100% upstream feature parity — check plugin docs; some areas are marked **Under development**.
+* You want a batteries-included Rails-only DSL with years of Stack Overflow answers — Devise remains the default Rails choice.
 
 ## Next steps
 
-- [Installation](/docs/installation)
-- [Plugins](/docs/plugins)
+* [Installation](/docs/installation)
+* [Plugins](/docs/plugins)

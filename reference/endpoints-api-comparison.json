@@ -1,14 +1,15 @@
 {
-  "generated_at": "2026-07-14T07:49:53Z",
-  "upstream_route_count": 214,
-  "upstream_http_route_count": 200,
+  "generated_at": "2026-07-15T20:21:57Z",
+  "upstream_route_count": 236,
+  "upstream_http_route_count": 222,
   "upstream_server_only_count": 14,
   "ruby_route_count": 220,
-  "aligned_count": 179,
+  "aligned_count": 201,
   "registry_key_mismatch_count": 0,
   "api_name_mismatch_count": 0,
   "missing_ruby_count": 0,
-  "missing_upstream_count": 39,
+  "missing_upstream_count": 0,
+  "ruby_only_classified_count": 17,
   "deprecated_pair_count": 0,
   "excluded_unsupported_count": 18,
   "excluded_unsupported_plugins": [
@@ -1597,6 +1598,25 @@
     },
     {
       "plugin_id": "organization",
+      "registry_key": "addTeamMember",
+      "ruby_registry_key": "add_team_member",
+      "path": "/organization/add-team-member",
+      "method": "POST",
+      "upstream_api": "auth.api.addTeamMember",
+      "ruby_api": "auth.api.add_team_member",
+      "upstream_client": "authClient.organization.addTeamMember",
+      "deprecated": false,
+      "server_only": false,
+      "exposure": "http",
+      "client_visibility": "documented",
+      "source_file": "reference/upstream-src/1.6.23/repository/packages/better-auth/src/plugins/organization/routes/crud-team.ts",
+      "ruby_endpoint_key": "add_team_member",
+      "ruby_api_method": "add_team_member",
+      "ruby_api_call": "auth.api.add_team_member",
+      "ruby_plugin": "organization"
+    },
+    {
+      "plugin_id": "organization",
       "registry_key": "cancelInvitation",
       "ruby_registry_key": "cancel_invitation",
       "path": "/organization/cancel-invitation",
@@ -1654,6 +1674,44 @@
     },
     {
       "plugin_id": "organization",
+      "registry_key": "createOrgRole",
+      "ruby_registry_key": "create_org_role",
+      "path": "/organization/create-role",
+      "method": "POST",
+      "upstream_api": "auth.api.createOrgRole",
+      "ruby_api": "auth.api.create_org_role",
+      "upstream_client": null,
+      "deprecated": false,
+      "server_only": false,
+      "exposure": "http",
+      "client_visibility": "undocumented",
+      "source_file": "reference/upstream-src/1.6.23/repository/packages/better-auth/src/plugins/organization/routes/crud-access-control.ts",
+      "ruby_endpoint_key": "create_org_role",
+      "ruby_api_method": "create_org_role",
+      "ruby_api_call": "auth.api.create_org_role",
+      "ruby_plugin": "organization"
+    },
+    {
+      "plugin_id": "organization",
+      "registry_key": "createTeam",
+      "ruby_registry_key": "create_team",
+      "path": "/organization/create-team",
+      "method": "POST",
+      "upstream_api": "auth.api.createTeam",
+      "ruby_api": "auth.api.create_team",
+      "upstream_client": "authClient.organization.createTeam",
+      "deprecated": false,
+      "server_only": false,
+      "exposure": "http",
+      "client_visibility": "documented",
+      "source_file": "reference/upstream-src/1.6.23/repository/packages/better-auth/src/plugins/organization/routes/crud-team.ts",
+      "ruby_endpoint_key": "create_team",
+      "ruby_api_method": "create_team",
+      "ruby_api_call": "auth.api.create_team",
+      "ruby_plugin": "organization"
+    },
+    {
+      "plugin_id": "organization",
       "registry_key": "deleteOrganization",
       "ruby_registry_key": "delete_organization",
       "path": "/organization/delete",
@@ -1669,6 +1727,25 @@
       "ruby_endpoint_key": "delete_organization",
       "ruby_api_method": "delete_organization",
       "ruby_api_call": "auth.api.delete_organization",
+      "ruby_plugin": "organization"
+    },
+    {
+      "plugin_id": "organization",
+      "registry_key": "deleteOrgRole",
+      "ruby_registry_key": "delete_org_role",
+      "path": "/organization/delete-role",
+      "method": "POST",
+      "upstream_api": "auth.api.deleteOrgRole",
+      "ruby_api": "auth.api.delete_org_role",
+      "upstream_client": null,
+      "deprecated": false,
+      "server_only": false,
+      "exposure": "http",
+      "client_visibility": "undocumented",
+      "source_file": "reference/upstream-src/1.6.23/repository/packages/better-auth/src/plugins/organization/routes/crud-access-control.ts",
+      "ruby_endpoint_key": "delete_org_role",
+      "ruby_api_method": "delete_org_role",
+      "ruby_api_call": "auth.api.delete_org_role",
       "ruby_plugin": "organization"
     },
     {
@@ -1745,6 +1822,25 @@
       "ruby_endpoint_key": "get_invitation",
       "ruby_api_method": "get_invitation",
       "ruby_api_call": "auth.api.get_invitation",
+      "ruby_plugin": "organization"
+    },
+    {
+      "plugin_id": "organization",
+      "registry_key": "getOrgRole",
+      "ruby_registry_key": "get_org_role",
+      "path": "/organization/get-role",
+      "method": "GET",
+      "upstream_api": "auth.api.getOrgRole",
+      "ruby_api": "auth.api.get_org_role",
+      "upstream_client": null,
+      "deprecated": false,
+      "server_only": false,
+      "exposure": "http",
+      "client_visibility": "undocumented",
+      "source_file": "reference/upstream-src/1.6.23/repository/packages/better-auth/src/plugins/organization/routes/crud-access-control.ts",
+      "ruby_endpoint_key": "get_org_role",
+      "ruby_api_method": "get_org_role",
+      "ruby_api_call": "auth.api.get_org_role",
       "ruby_plugin": "organization"
     },
     {
@@ -1863,6 +1959,63 @@
     },
     {
       "plugin_id": "organization",
+      "registry_key": "listOrgRoles",
+      "ruby_registry_key": "list_org_roles",
+      "path": "/organization/list-roles",
+      "method": "GET",
+      "upstream_api": "auth.api.listOrgRoles",
+      "ruby_api": "auth.api.list_org_roles",
+      "upstream_client": null,
+      "deprecated": false,
+      "server_only": false,
+      "exposure": "http",
+      "client_visibility": "undocumented",
+      "source_file": "reference/upstream-src/1.6.23/repository/packages/better-auth/src/plugins/organization/routes/crud-access-control.ts",
+      "ruby_endpoint_key": "list_org_roles",
+      "ruby_api_method": "list_org_roles",
+      "ruby_api_call": "auth.api.list_org_roles",
+      "ruby_plugin": "organization"
+    },
+    {
+      "plugin_id": "organization",
+      "registry_key": "listTeamMembers",
+      "ruby_registry_key": "list_team_members",
+      "path": "/organization/list-team-members",
+      "method": "GET",
+      "upstream_api": "auth.api.listTeamMembers",
+      "ruby_api": "auth.api.list_team_members",
+      "upstream_client": "authClient.organization.listTeamMembers",
+      "deprecated": false,
+      "server_only": false,
+      "exposure": "http",
+      "client_visibility": "documented",
+      "source_file": "reference/upstream-src/1.6.23/repository/packages/better-auth/src/plugins/organization/routes/crud-team.ts",
+      "ruby_endpoint_key": "list_team_members",
+      "ruby_api_method": "list_team_members",
+      "ruby_api_call": "auth.api.list_team_members",
+      "ruby_plugin": "organization"
+    },
+    {
+      "plugin_id": "organization",
+      "registry_key": "listOrganizationTeams",
+      "ruby_registry_key": "list_organization_teams",
+      "path": "/organization/list-teams",
+      "method": "GET",
+      "upstream_api": "auth.api.listOrganizationTeams",
+      "ruby_api": "auth.api.list_organization_teams",
+      "upstream_client": "authClient.organization.listTeams",
+      "deprecated": false,
+      "server_only": false,
+      "exposure": "http",
+      "client_visibility": "documented",
+      "source_file": "reference/upstream-src/1.6.23/repository/packages/better-auth/src/plugins/organization/routes/crud-team.ts",
+      "ruby_endpoint_key": "list_organization_teams",
+      "ruby_api_method": "list_organization_teams",
+      "ruby_api_call": "auth.api.list_organization_teams",
+      "ruby_plugin": "organization"
+    },
+    {
+      "plugin_id": "organization",
       "registry_key": "listUserInvitations",
       "ruby_registry_key": "list_user_invitations",
       "path": "/organization/list-user-invitations",
@@ -1878,6 +2031,25 @@
       "ruby_endpoint_key": "list_user_invitations",
       "ruby_api_method": "list_user_invitations",
       "ruby_api_call": "auth.api.list_user_invitations",
+      "ruby_plugin": "organization"
+    },
+    {
+      "plugin_id": "organization",
+      "registry_key": "listUserTeams",
+      "ruby_registry_key": "list_user_teams",
+      "path": "/organization/list-user-teams",
+      "method": "GET",
+      "upstream_api": "auth.api.listUserTeams",
+      "ruby_api": "auth.api.list_user_teams",
+      "upstream_client": "authClient.organization.listUserTeams",
+      "deprecated": false,
+      "server_only": false,
+      "exposure": "http",
+      "client_visibility": "documented",
+      "source_file": "reference/upstream-src/1.6.23/repository/packages/better-auth/src/plugins/organization/routes/crud-team.ts",
+      "ruby_endpoint_key": "list_user_teams",
+      "ruby_api_method": "list_user_teams",
+      "ruby_api_call": "auth.api.list_user_teams",
       "ruby_plugin": "organization"
     },
     {
@@ -1920,6 +2092,44 @@
     },
     {
       "plugin_id": "organization",
+      "registry_key": "removeTeam",
+      "ruby_registry_key": "remove_team",
+      "path": "/organization/remove-team",
+      "method": "POST",
+      "upstream_api": "auth.api.removeTeam",
+      "ruby_api": "auth.api.remove_team",
+      "upstream_client": "authClient.organization.removeTeam",
+      "deprecated": false,
+      "server_only": false,
+      "exposure": "http",
+      "client_visibility": "documented",
+      "source_file": "reference/upstream-src/1.6.23/repository/packages/better-auth/src/plugins/organization/routes/crud-team.ts",
+      "ruby_endpoint_key": "remove_team",
+      "ruby_api_method": "remove_team",
+      "ruby_api_call": "auth.api.remove_team",
+      "ruby_plugin": "organization"
+    },
+    {
+      "plugin_id": "organization",
+      "registry_key": "removeTeamMember",
+      "ruby_registry_key": "remove_team_member",
+      "path": "/organization/remove-team-member",
+      "method": "POST",
+      "upstream_api": "auth.api.removeTeamMember",
+      "ruby_api": "auth.api.remove_team_member",
+      "upstream_client": "authClient.organization.removeTeamMember",
+      "deprecated": false,
+      "server_only": false,
+      "exposure": "http",
+      "client_visibility": "documented",
+      "source_file": "reference/upstream-src/1.6.23/repository/packages/better-auth/src/plugins/organization/routes/crud-team.ts",
+      "ruby_endpoint_key": "remove_team_member",
+      "ruby_api_method": "remove_team_member",
+      "ruby_api_call": "auth.api.remove_team_member",
+      "ruby_plugin": "organization"
+    },
+    {
+      "plugin_id": "organization",
       "registry_key": "setActiveOrganization",
       "ruby_registry_key": "set_active_organization",
       "path": "/organization/set-active",
@@ -1935,6 +2145,25 @@
       "ruby_endpoint_key": "set_active_organization",
       "ruby_api_method": "set_active_organization",
       "ruby_api_call": "auth.api.set_active_organization",
+      "ruby_plugin": "organization"
+    },
+    {
+      "plugin_id": "organization",
+      "registry_key": "setActiveTeam",
+      "ruby_registry_key": "set_active_team",
+      "path": "/organization/set-active-team",
+      "method": "POST",
+      "upstream_api": "auth.api.setActiveTeam",
+      "ruby_api": "auth.api.set_active_team",
+      "upstream_client": "authClient.organization.setActiveTeam",
+      "deprecated": false,
+      "server_only": false,
+      "exposure": "http",
+      "client_visibility": "documented",
+      "source_file": "reference/upstream-src/1.6.23/repository/packages/better-auth/src/plugins/organization/routes/crud-team.ts",
+      "ruby_endpoint_key": "set_active_team",
+      "ruby_api_method": "set_active_team",
+      "ruby_api_call": "auth.api.set_active_team",
       "ruby_plugin": "organization"
     },
     {
@@ -1973,6 +2202,44 @@
       "ruby_endpoint_key": "update_member_role",
       "ruby_api_method": "update_member_role",
       "ruby_api_call": "auth.api.update_member_role",
+      "ruby_plugin": "organization"
+    },
+    {
+      "plugin_id": "organization",
+      "registry_key": "updateOrgRole",
+      "ruby_registry_key": "update_org_role",
+      "path": "/organization/update-role",
+      "method": "POST",
+      "upstream_api": "auth.api.updateOrgRole",
+      "ruby_api": "auth.api.update_org_role",
+      "upstream_client": null,
+      "deprecated": false,
+      "server_only": false,
+      "exposure": "http",
+      "client_visibility": "undocumented",
+      "source_file": "reference/upstream-src/1.6.23/repository/packages/better-auth/src/plugins/organization/routes/crud-access-control.ts",
+      "ruby_endpoint_key": "update_org_role",
+      "ruby_api_method": "update_org_role",
+      "ruby_api_call": "auth.api.update_org_role",
+      "ruby_plugin": "organization"
+    },
+    {
+      "plugin_id": "organization",
+      "registry_key": "updateTeam",
+      "ruby_registry_key": "update_team",
+      "path": "/organization/update-team",
+      "method": "POST",
+      "upstream_api": "auth.api.updateTeam",
+      "ruby_api": "auth.api.update_team",
+      "upstream_client": "authClient.organization.updateTeam",
+      "deprecated": false,
+      "server_only": false,
+      "exposure": "http",
+      "client_visibility": "documented",
+      "source_file": "reference/upstream-src/1.6.23/repository/packages/better-auth/src/plugins/organization/routes/crud-team.ts",
+      "ruby_endpoint_key": "update_team",
+      "ruby_api_method": "update_team",
+      "ruby_api_call": "auth.api.update_team",
       "ruby_plugin": "organization"
     },
     {
@@ -2984,6 +3251,25 @@
     },
     {
       "plugin_id": "sso",
+      "registry_key": "requestDomainVerification",
+      "ruby_registry_key": "request_domain_verification",
+      "path": "/sso/request-domain-verification",
+      "method": "POST",
+      "upstream_api": "auth.api.requestDomainVerification",
+      "ruby_api": "auth.api.request_domain_verification",
+      "upstream_client": null,
+      "deprecated": false,
+      "server_only": false,
+      "exposure": "http",
+      "client_visibility": "undocumented",
+      "source_file": "reference/upstream-src/1.6.23/repository/packages/sso/src/routes/domain-verification.ts",
+      "ruby_endpoint_key": "request_domain_verification",
+      "ruby_api_method": "request_domain_verification",
+      "ruby_api_call": "auth.api.request_domain_verification",
+      "ruby_plugin": "better_auth/sso/plugin"
+    },
+    {
+      "plugin_id": "sso",
       "registry_key": "callbackSSOSAML",
       "ruby_registry_key": "callback_sso_saml",
       "path": "/sso/saml2/callback/:providerId",
@@ -3135,6 +3421,25 @@
       "ruby_plugin": "sso"
     },
     {
+      "plugin_id": "sso",
+      "registry_key": "verifyDomain",
+      "ruby_registry_key": "verify_domain",
+      "path": "/sso/verify-domain",
+      "method": "POST",
+      "upstream_api": "auth.api.verifyDomain",
+      "ruby_api": "auth.api.verify_domain",
+      "upstream_client": null,
+      "deprecated": false,
+      "server_only": false,
+      "exposure": "http",
+      "client_visibility": "undocumented",
+      "source_file": "reference/upstream-src/1.6.23/repository/packages/sso/src/routes/domain-verification.ts",
+      "ruby_endpoint_key": "verify_domain",
+      "ruby_api_method": "verify_domain",
+      "ruby_api_call": "auth.api.verify_domain",
+      "ruby_plugin": "better_auth/sso/plugin"
+    },
+    {
       "plugin_id": "stripe",
       "registry_key": "stripeWebhook",
       "ruby_registry_key": "stripe_webhook",
@@ -3151,6 +3456,120 @@
       "ruby_endpoint_key": "stripe_webhook",
       "ruby_api_method": "stripe_webhook",
       "ruby_api_call": "auth.api.stripe_webhook",
+      "ruby_plugin": "stripe"
+    },
+    {
+      "plugin_id": "stripe",
+      "registry_key": "createBillingPortal",
+      "ruby_registry_key": "create_billing_portal",
+      "path": "/subscription/billing-portal",
+      "method": "POST",
+      "upstream_api": "auth.api.createBillingPortal",
+      "ruby_api": "auth.api.create_billing_portal",
+      "upstream_client": null,
+      "deprecated": false,
+      "server_only": false,
+      "exposure": "http",
+      "client_visibility": "undocumented",
+      "source_file": "reference/upstream-src/1.6.23/repository/packages/stripe/src/routes.ts",
+      "ruby_endpoint_key": "create_billing_portal",
+      "ruby_api_method": "create_billing_portal",
+      "ruby_api_call": "auth.api.create_billing_portal",
+      "ruby_plugin": "stripe"
+    },
+    {
+      "plugin_id": "stripe",
+      "registry_key": "cancelSubscription",
+      "ruby_registry_key": "cancel_subscription",
+      "path": "/subscription/cancel",
+      "method": "POST",
+      "upstream_api": "auth.api.cancelSubscription",
+      "ruby_api": "auth.api.cancel_subscription",
+      "upstream_client": "authClient.subscription.cancel",
+      "deprecated": false,
+      "server_only": false,
+      "exposure": "http",
+      "client_visibility": "documented",
+      "source_file": "reference/upstream-src/1.6.23/repository/packages/stripe/src/routes.ts",
+      "ruby_endpoint_key": "cancel_subscription",
+      "ruby_api_method": "cancel_subscription",
+      "ruby_api_call": "auth.api.cancel_subscription",
+      "ruby_plugin": "stripe"
+    },
+    {
+      "plugin_id": "stripe",
+      "registry_key": "listActiveSubscriptions",
+      "ruby_registry_key": "list_active_subscriptions",
+      "path": "/subscription/list",
+      "method": "GET",
+      "upstream_api": "auth.api.listActiveSubscriptions",
+      "ruby_api": "auth.api.list_active_subscriptions",
+      "upstream_client": "authClient.subscription.list",
+      "deprecated": false,
+      "server_only": false,
+      "exposure": "http",
+      "client_visibility": "documented",
+      "source_file": "reference/upstream-src/1.6.23/repository/packages/stripe/src/routes.ts",
+      "ruby_endpoint_key": "list_active_subscriptions",
+      "ruby_api_method": "list_active_subscriptions",
+      "ruby_api_call": "auth.api.list_active_subscriptions",
+      "ruby_plugin": "stripe"
+    },
+    {
+      "plugin_id": "stripe",
+      "registry_key": "restoreSubscription",
+      "ruby_registry_key": "restore_subscription",
+      "path": "/subscription/restore",
+      "method": "POST",
+      "upstream_api": "auth.api.restoreSubscription",
+      "ruby_api": "auth.api.restore_subscription",
+      "upstream_client": null,
+      "deprecated": false,
+      "server_only": false,
+      "exposure": "http",
+      "client_visibility": "undocumented",
+      "source_file": "reference/upstream-src/1.6.23/repository/packages/stripe/src/routes.ts",
+      "ruby_endpoint_key": "restore_subscription",
+      "ruby_api_method": "restore_subscription",
+      "ruby_api_call": "auth.api.restore_subscription",
+      "ruby_plugin": "stripe"
+    },
+    {
+      "plugin_id": "stripe",
+      "registry_key": "subscriptionSuccess",
+      "ruby_registry_key": "subscription_success",
+      "path": "/subscription/success",
+      "method": "GET",
+      "upstream_api": "auth.api.subscriptionSuccess",
+      "ruby_api": "auth.api.subscription_success",
+      "upstream_client": null,
+      "deprecated": false,
+      "server_only": false,
+      "exposure": "http",
+      "client_visibility": "undocumented",
+      "source_file": "reference/upstream-src/1.6.23/repository/packages/stripe/src/routes.ts",
+      "ruby_endpoint_key": "subscription_success",
+      "ruby_api_method": "subscription_success",
+      "ruby_api_call": "auth.api.subscription_success",
+      "ruby_plugin": "stripe"
+    },
+    {
+      "plugin_id": "stripe",
+      "registry_key": "upgradeSubscription",
+      "ruby_registry_key": "upgrade_subscription",
+      "path": "/subscription/upgrade",
+      "method": "POST",
+      "upstream_api": "auth.api.upgradeSubscription",
+      "ruby_api": "auth.api.upgrade_subscription",
+      "upstream_client": "authClient.subscription.upgrade",
+      "deprecated": false,
+      "server_only": false,
+      "exposure": "http",
+      "client_visibility": "documented",
+      "source_file": "reference/upstream-src/1.6.23/repository/packages/stripe/src/routes.ts",
+      "ruby_endpoint_key": "upgrade_subscription",
+      "ruby_api_method": "upgrade_subscription",
+      "ruby_api_call": "auth.api.upgrade_subscription",
       "ruby_plugin": "stripe"
     },
     {
@@ -3423,7 +3842,8 @@
   "registry_key_mismatches": [],
   "api_name_mismatches": [],
   "missing_ruby": [],
-  "missing_upstream": [
+  "missing_upstream": [],
+  "ruby_only_classified": [
     {
       "path": "/admin/oauth2/create-client",
       "methods": [
@@ -3447,7 +3867,8 @@
       "upstream_api_call": "auth.api.adminCreateOAuthClient",
       "upstream_client_call": null,
       "plugin_id": "oauth-provider",
-      "operation_id": null
+      "operation_id": null,
+      "reason": "Ruby OAuth Provider administrative management endpoint"
     },
     {
       "path": "/admin/oauth2/update-client",
@@ -3472,7 +3893,8 @@
       "upstream_api_call": "auth.api.adminUpdateOAuthClient",
       "upstream_client_call": null,
       "plugin_id": "oauth-provider",
-      "operation_id": null
+      "operation_id": null,
+      "reason": "Ruby OAuth Provider administrative management endpoint"
     },
     {
       "path": "/api-key/delete-all-expired-api-keys",
@@ -3491,7 +3913,8 @@
       "source": "runtime",
       "method": "POST",
       "ruby_api_method": "delete_all_expired_api_keys",
-      "ruby_api_call": "auth.api.delete_all_expired_api_keys"
+      "ruby_api_call": "auth.api.delete_all_expired_api_keys",
+      "reason": "Ruby exposes upstream cleanup behavior as an explicit maintenance endpoint"
     },
     {
       "path": "/api-key/verify",
@@ -3526,7 +3949,8 @@
       "source": "runtime",
       "method": "POST",
       "ruby_api_method": "verify_api_key",
-      "ruby_api_call": "auth.api.verify_api_key"
+      "ruby_api_call": "auth.api.verify_api_key",
+      "reason": "Ruby exposes API-key verification over HTTP as well as direct server calls"
     },
     {
       "path": "/dub/link",
@@ -3559,7 +3983,8 @@
       "ruby_api_method": "dub_link",
       "ruby_api_call": "auth.api.dub_link",
       "plugin_id": "dub",
-      "operation_id": "dubLink"
+      "operation_id": "dubLink",
+      "reason": "Ruby Dub integration endpoint"
     },
     {
       "path": "/error",
@@ -3581,7 +4006,8 @@
       "ruby_api_method": "error",
       "ruby_api_call": "auth.api.error",
       "plugin_id": "core",
-      "operation_id": "getError"
+      "operation_id": "getError",
+      "reason": "Ruby core diagnostic route intentionally omitted from the upstream public registry"
     },
     {
       "path": "/oauth2/consent",
@@ -3601,7 +4027,8 @@
       "source": "static",
       "method": "DELETE",
       "ruby_api_method": "oauth_find_user_consent",
-      "ruby_api_call": "auth.api.oauth_find_user_consent"
+      "ruby_api_call": "auth.api.oauth_find_user_consent",
+      "reason": "Ruby OAuth Provider REST adaptation for consent management"
     },
     {
       "path": "/oauth2/consent",
@@ -3621,7 +4048,8 @@
       "source": "static",
       "method": "GET",
       "ruby_api_method": "oauth_find_user_consent",
-      "ruby_api_call": "auth.api.oauth_find_user_consent"
+      "ruby_api_call": "auth.api.oauth_find_user_consent",
+      "reason": "Ruby OAuth Provider REST adaptation for consent management"
     },
     {
       "path": "/oauth2/consent",
@@ -3641,7 +4069,8 @@
       "source": "static",
       "method": "PATCH",
       "ruby_api_method": "oauth_find_user_consent",
-      "ruby_api_call": "auth.api.oauth_find_user_consent"
+      "ruby_api_call": "auth.api.oauth_find_user_consent",
+      "reason": "Ruby OAuth Provider REST adaptation for consent management"
     },
     {
       "path": "/oauth2/consents",
@@ -3661,7 +4090,8 @@
       "source": "static",
       "method": "GET",
       "ruby_api_method": "oauth_find_user_consent",
-      "ruby_api_call": "auth.api.oauth_find_user_consent"
+      "ruby_api_call": "auth.api.oauth_find_user_consent",
+      "reason": "Ruby OAuth Provider REST adaptation for consent management"
     },
     {
       "path": "/oauth2/end-session",
@@ -3725,7 +4155,8 @@
       "ruby_api_method": "oauth2_end_session",
       "ruby_api_call": "auth.api.oauth2_end_session",
       "plugin_id": "oauth-provider",
-      "operation_id": "getOauth2EndSession"
+      "operation_id": "getOauth2EndSession",
+      "reason": "Ruby OAuth Provider accepts POST in addition to the upstream registered form"
     },
     {
       "path": "/ok",
@@ -3747,7 +4178,8 @@
       "ruby_api_method": "ok",
       "ruby_api_call": "auth.api.ok",
       "plugin_id": "core",
-      "operation_id": "getOk"
+      "operation_id": "getOk",
+      "reason": "Ruby core health route intentionally omitted from the upstream public registry"
     },
     {
       "path": "/organization/add-member",
@@ -3785,454 +4217,8 @@
       "ruby_api_method": "add_member",
       "ruby_api_call": "auth.api.add_member",
       "plugin_id": "organization",
-      "operation_id": "addOrganizationMember"
-    },
-    {
-      "path": "/organization/add-team-member",
-      "methods": [
-        "POST"
-      ],
-      "file": "packages/better_auth/lib/better_auth/plugins/organization.rb",
-      "line": 819,
-      "endpoint_key": "add_team_member",
-      "plugin_hint": "organization",
-      "body_fields": [
-        {
-          "name": "teamId",
-          "required": false,
-          "type": "string"
-        },
-        {
-          "name": "userId",
-          "required": false,
-          "type": "string"
-        }
-      ],
-      "query_params": [],
-      "path_params": [],
-      "header_params": [],
-      "disable_body": false,
-      "server_only": false,
-      "source": "static+runtime",
-      "method": "POST",
-      "ruby_api_method": "add_team_member",
-      "ruby_api_call": "auth.api.add_team_member",
-      "plugin_id": "organization",
-      "operation_id": "addTeamMember"
-    },
-    {
-      "path": "/organization/create-role",
-      "methods": [
-        "POST"
-      ],
-      "file": "packages/better_auth/lib/better_auth/plugins/organization.rb",
-      "line": 862,
-      "endpoint_key": "create_org_role",
-      "plugin_hint": "organization",
-      "body_fields": [
-        {
-          "name": "organizationId",
-          "required": false,
-          "type": "string"
-        },
-        {
-          "name": "permission",
-          "required": false,
-          "type": "object"
-        },
-        {
-          "name": "permissions",
-          "required": false,
-          "type": "object"
-        },
-        {
-          "name": "role",
-          "required": false,
-          "type": "string"
-        },
-        {
-          "name": "roleName",
-          "required": false,
-          "type": "string"
-        }
-      ],
-      "query_params": [],
-      "path_params": [],
-      "header_params": [],
-      "disable_body": false,
-      "server_only": false,
-      "source": "static+runtime",
-      "method": "POST",
-      "ruby_api_method": "create_org_role",
-      "ruby_api_call": "auth.api.create_org_role",
-      "plugin_id": "organization",
-      "operation_id": "createOrganizationRole"
-    },
-    {
-      "path": "/organization/create-team",
-      "methods": [
-        "POST"
-      ],
-      "file": "packages/better_auth/lib/better_auth/plugins/organization.rb",
-      "line": 696,
-      "endpoint_key": "create_team",
-      "plugin_hint": "organization",
-      "body_fields": [
-        {
-          "name": "name",
-          "required": false,
-          "type": "string"
-        },
-        {
-          "name": "organizationId",
-          "required": false,
-          "type": "string"
-        }
-      ],
-      "query_params": [],
-      "path_params": [],
-      "header_params": [],
-      "disable_body": false,
-      "server_only": false,
-      "source": "static+runtime",
-      "method": "POST",
-      "ruby_api_method": "create_team",
-      "ruby_api_call": "auth.api.create_team",
-      "plugin_id": "organization",
-      "operation_id": "createOrganizationTeam"
-    },
-    {
-      "path": "/organization/delete-role",
-      "methods": [
-        "POST"
-      ],
-      "file": "packages/better_auth/lib/better_auth/plugins/organization.rb",
-      "line": 929,
-      "endpoint_key": "delete_org_role",
-      "plugin_hint": "organization",
-      "body_fields": [
-        {
-          "name": "organizationId",
-          "required": false,
-          "type": "string"
-        },
-        {
-          "name": "role",
-          "required": false,
-          "type": "string"
-        },
-        {
-          "name": "roleId",
-          "required": false,
-          "type": "string"
-        },
-        {
-          "name": "roleName",
-          "required": false,
-          "type": "string"
-        }
-      ],
-      "query_params": [],
-      "path_params": [],
-      "header_params": [],
-      "disable_body": false,
-      "server_only": false,
-      "source": "static+runtime",
-      "method": "POST",
-      "ruby_api_method": "delete_org_role",
-      "ruby_api_call": "auth.api.delete_org_role",
-      "plugin_id": "organization",
-      "operation_id": "deleteOrganizationRole"
-    },
-    {
-      "path": "/organization/get-role",
-      "methods": [
-        "GET"
-      ],
-      "file": "packages/better_auth/lib/better_auth/plugins/organization.rb",
-      "line": 892,
-      "endpoint_key": "get_org_role",
-      "plugin_hint": "organization",
-      "body_fields": [],
-      "query_params": [],
-      "path_params": [],
-      "header_params": [],
-      "disable_body": false,
-      "server_only": false,
-      "source": "static+runtime",
-      "method": "GET",
-      "ruby_api_method": "get_org_role",
-      "ruby_api_call": "auth.api.get_org_role",
-      "plugin_id": "organization",
-      "operation_id": "getOrganizationRole"
-    },
-    {
-      "path": "/organization/list-roles",
-      "methods": [
-        "GET"
-      ],
-      "file": "packages/better_auth/lib/better_auth/plugins/organization.rb",
-      "line": 881,
-      "endpoint_key": "list_org_roles",
-      "plugin_hint": "organization",
-      "body_fields": [],
-      "query_params": [],
-      "path_params": [],
-      "header_params": [],
-      "disable_body": false,
-      "server_only": false,
-      "source": "static+runtime",
-      "method": "GET",
-      "ruby_api_method": "list_org_roles",
-      "ruby_api_call": "auth.api.list_org_roles",
-      "plugin_id": "organization",
-      "operation_id": "listOrganizationRoles"
-    },
-    {
-      "path": "/organization/list-team-members",
-      "methods": [
-        "GET"
-      ],
-      "file": "packages/better_auth/lib/better_auth/plugins/organization.rb",
-      "line": 807,
-      "endpoint_key": "list_team_members",
-      "plugin_hint": "organization",
-      "body_fields": [],
-      "query_params": [],
-      "path_params": [],
-      "header_params": [],
-      "disable_body": false,
-      "server_only": false,
-      "source": "static+runtime",
-      "method": "GET",
-      "ruby_api_method": "list_team_members",
-      "ruby_api_call": "auth.api.list_team_members",
-      "plugin_id": "organization",
-      "operation_id": "listTeamMembers"
-    },
-    {
-      "path": "/organization/list-teams",
-      "methods": [
-        "GET"
-      ],
-      "file": "packages/better_auth/lib/better_auth/plugins/organization.rb",
-      "line": 720,
-      "endpoint_key": "list_organization_teams",
-      "plugin_hint": "organization",
-      "body_fields": [],
-      "query_params": [],
-      "path_params": [],
-      "header_params": [],
-      "disable_body": false,
-      "server_only": false,
-      "source": "static+runtime",
-      "method": "GET",
-      "ruby_api_method": "list_organization_teams",
-      "ruby_api_call": "auth.api.list_organization_teams",
-      "plugin_id": "organization",
-      "operation_id": "listOrganizationTeams"
-    },
-    {
-      "path": "/organization/list-user-teams",
-      "methods": [
-        "GET"
-      ],
-      "file": "packages/better_auth/lib/better_auth/plugins/organization.rb",
-      "line": 799,
-      "endpoint_key": "list_user_teams",
-      "plugin_hint": "organization",
-      "body_fields": [],
-      "query_params": [],
-      "path_params": [],
-      "header_params": [],
-      "disable_body": false,
-      "server_only": false,
-      "source": "static+runtime",
-      "method": "GET",
-      "ruby_api_method": "list_user_teams",
-      "ruby_api_call": "auth.api.list_user_teams",
-      "plugin_id": "organization",
-      "operation_id": "listUserTeams"
-    },
-    {
-      "path": "/organization/remove-team",
-      "methods": [
-        "POST"
-      ],
-      "file": "packages/better_auth/lib/better_auth/plugins/organization.rb",
-      "line": 746,
-      "endpoint_key": "remove_team",
-      "plugin_hint": "organization",
-      "body_fields": [
-        {
-          "name": "teamId",
-          "required": false,
-          "type": "string"
-        }
-      ],
-      "query_params": [],
-      "path_params": [],
-      "header_params": [],
-      "disable_body": false,
-      "server_only": false,
-      "source": "static+runtime",
-      "method": "POST",
-      "ruby_api_method": "remove_team",
-      "ruby_api_call": "auth.api.remove_team",
-      "plugin_id": "organization",
-      "operation_id": "removeOrganizationTeam"
-    },
-    {
-      "path": "/organization/remove-team-member",
-      "methods": [
-        "POST"
-      ],
-      "file": "packages/better_auth/lib/better_auth/plugins/organization.rb",
-      "line": 844,
-      "endpoint_key": "remove_team_member",
-      "plugin_hint": "organization",
-      "body_fields": [
-        {
-          "name": "teamId",
-          "required": false,
-          "type": "string"
-        },
-        {
-          "name": "userId",
-          "required": false,
-          "type": "string"
-        }
-      ],
-      "query_params": [],
-      "path_params": [],
-      "header_params": [],
-      "disable_body": false,
-      "server_only": false,
-      "source": "static+runtime",
-      "method": "POST",
-      "ruby_api_method": "remove_team_member",
-      "ruby_api_call": "auth.api.remove_team_member",
-      "plugin_id": "organization",
-      "operation_id": "removeTeamMember"
-    },
-    {
-      "path": "/organization/set-active-team",
-      "methods": [
-        "POST"
-      ],
-      "file": "packages/better_auth/lib/better_auth/plugins/organization.rb",
-      "line": 776,
-      "endpoint_key": "set_active_team",
-      "plugin_hint": "organization",
-      "body_fields": [
-        {
-          "name": "teamId",
-          "required": false,
-          "type": "string"
-        }
-      ],
-      "query_params": [],
-      "path_params": [],
-      "header_params": [],
-      "disable_body": false,
-      "server_only": false,
-      "source": "static+runtime",
-      "method": "POST",
-      "ruby_api_method": "set_active_team",
-      "ruby_api_call": "auth.api.set_active_team",
-      "plugin_id": "organization",
-      "operation_id": "setActiveOrganizationTeam"
-    },
-    {
-      "path": "/organization/update-role",
-      "methods": [
-        "POST"
-      ],
-      "file": "packages/better_auth/lib/better_auth/plugins/organization.rb",
-      "line": 904,
-      "endpoint_key": "update_org_role",
-      "plugin_hint": "organization",
-      "body_fields": [
-        {
-          "name": "data",
-          "required": false,
-          "type": "object"
-        },
-        {
-          "name": "organizationId",
-          "required": false,
-          "type": "string"
-        },
-        {
-          "name": "permission",
-          "required": false,
-          "type": "object"
-        },
-        {
-          "name": "permissions",
-          "required": false,
-          "type": "object"
-        },
-        {
-          "name": "role",
-          "required": false,
-          "type": "string"
-        },
-        {
-          "name": "roleId",
-          "required": false,
-          "type": "string"
-        },
-        {
-          "name": "roleName",
-          "required": false,
-          "type": "string"
-        }
-      ],
-      "query_params": [],
-      "path_params": [],
-      "header_params": [],
-      "disable_body": false,
-      "server_only": false,
-      "source": "static+runtime",
-      "method": "POST",
-      "ruby_api_method": "update_org_role",
-      "ruby_api_call": "auth.api.update_org_role",
-      "plugin_id": "organization",
-      "operation_id": "updateOrganizationRole"
-    },
-    {
-      "path": "/organization/update-team",
-      "methods": [
-        "POST"
-      ],
-      "file": "packages/better_auth/lib/better_auth/plugins/organization.rb",
-      "line": 730,
-      "endpoint_key": "update_team",
-      "plugin_hint": "organization",
-      "body_fields": [
-        {
-          "name": "name",
-          "required": false,
-          "type": "string"
-        },
-        {
-          "name": "teamId",
-          "required": false,
-          "type": "string"
-        }
-      ],
-      "query_params": [],
-      "path_params": [],
-      "header_params": [],
-      "disable_body": false,
-      "server_only": false,
-      "source": "static+runtime",
-      "method": "POST",
-      "ruby_api_method": "update_team",
-      "ruby_api_call": "auth.api.update_team",
-      "plugin_id": "organization",
-      "operation_id": "updateOrganizationTeam"
+      "operation_id": "addOrganizationMember",
+      "reason": "Ruby exposes the upstream server-side organization operation over HTTP"
     },
     {
       "path": "/reference",
@@ -4251,7 +4237,8 @@
       "source": "runtime",
       "method": "GET",
       "ruby_api_method": "open_api_reference",
-      "ruby_api_call": "auth.api.open_api_reference"
+      "ruby_api_call": "auth.api.open_api_reference",
+      "reason": "Ruby OpenAPI reference UI route"
     },
     {
       "path": "/set-password",
@@ -4279,137 +4266,8 @@
       "ruby_api_method": "set_password",
       "ruby_api_call": "auth.api.set_password",
       "plugin_id": "core",
-      "operation_id": "setPassword"
-    },
-    {
-      "path": "/sso/request-domain-verification",
-      "methods": [
-        "POST"
-      ],
-      "file": "packages/better_auth-sso/lib/better_auth/sso/plugin/endpoints.rb",
-      "line": 98,
-      "endpoint_key": "sso_redirect",
-      "plugin_hint": "better_auth/sso/plugin",
-      "body_fields": [],
-      "query_params": [],
-      "path_params": [],
-      "header_params": [],
-      "disable_body": false,
-      "server_only": false,
-      "source": "static",
-      "method": "POST",
-      "ruby_api_method": "sso_redirect",
-      "ruby_api_call": "auth.api.sso_redirect"
-    },
-    {
-      "path": "/sso/verify-domain",
-      "methods": [
-        "POST"
-      ],
-      "file": "packages/better_auth-sso/lib/better_auth/sso/plugin/endpoints.rb",
-      "line": 120,
-      "endpoint_key": "sso_redirect",
-      "plugin_hint": "better_auth/sso/plugin",
-      "body_fields": [],
-      "query_params": [],
-      "path_params": [],
-      "header_params": [],
-      "disable_body": false,
-      "server_only": false,
-      "source": "static",
-      "method": "POST",
-      "ruby_api_method": "sso_redirect",
-      "ruby_api_call": "auth.api.sso_redirect"
-    },
-    {
-      "path": "/subscription/billing-portal",
-      "methods": [
-        "POST"
-      ],
-      "plugin_id": "stripe",
-      "endpoint_key": "create_billing_portal",
-      "body_fields": [
-        {
-          "name": "customerType",
-          "required": false,
-          "type": "string"
-        },
-        {
-          "name": "disableRedirect",
-          "required": false,
-          "type": "boolean"
-        },
-        {
-          "name": "locale",
-          "required": false,
-          "type": "string"
-        },
-        {
-          "name": "referenceId",
-          "required": false,
-          "type": "string"
-        },
-        {
-          "name": "returnUrl",
-          "required": false,
-          "type": "string"
-        }
-      ],
-      "query_params": [],
-      "path_params": [],
-      "header_params": [],
-      "disable_body": false,
-      "server_only": false,
-      "operation_id": "createBillingPortal",
-      "source": "runtime",
-      "method": "POST",
-      "ruby_api_method": "create_billing_portal",
-      "ruby_api_call": "auth.api.create_billing_portal"
-    },
-    {
-      "path": "/subscription/cancel",
-      "methods": [
-        "POST"
-      ],
-      "plugin_id": "stripe",
-      "endpoint_key": "cancel_subscription",
-      "body_fields": [
-        {
-          "name": "customerType",
-          "required": false,
-          "type": "string"
-        },
-        {
-          "name": "disableRedirect",
-          "required": false,
-          "type": "boolean"
-        },
-        {
-          "name": "referenceId",
-          "required": false,
-          "type": "string"
-        },
-        {
-          "name": "returnUrl",
-          "required": false,
-          "type": "string"
-        },
-        {
-          "name": "subscriptionId",
-          "required": false,
-          "type": "string"
-        }
-      ],
-      "query_params": [],
-      "path_params": [],
-      "header_params": [],
-      "disable_body": false,
-      "server_only": false,
-      "operation_id": "cancelSubscription",
-      "source": "runtime",
-      "method": "POST",
-      "ruby_api_method": "cancel_subscription",
-      "ruby_api_call": "auth.api.cancel_subscription"
+      "operation_id": "setPassword",
+      "reason": "Ruby exposes the upstream server-side password operation over HTTP"
     },
     {
       "path": "/subscription/cancel/callback",
@@ -4439,187 +4297,8 @@
       "source": "runtime",
       "method": "GET",
       "ruby_api_method": "cancel_subscription_callback",
-      "ruby_api_call": "auth.api.cancel_subscription_callback"
-    },
-    {
-      "path": "/subscription/list",
-      "methods": [
-        "GET"
-      ],
-      "plugin_id": "stripe",
-      "endpoint_key": "list_active_subscriptions",
-      "body_fields": [],
-      "query_params": [
-        {
-          "name": "customerType",
-          "required": false,
-          "type": "string"
-        },
-        {
-          "name": "referenceId",
-          "required": false,
-          "type": "string"
-        }
-      ],
-      "path_params": [],
-      "header_params": [],
-      "disable_body": false,
-      "server_only": false,
-      "operation_id": "listActiveSubscriptions",
-      "source": "runtime",
-      "method": "GET",
-      "ruby_api_method": "list_active_subscriptions",
-      "ruby_api_call": "auth.api.list_active_subscriptions"
-    },
-    {
-      "path": "/subscription/restore",
-      "methods": [
-        "POST"
-      ],
-      "plugin_id": "stripe",
-      "endpoint_key": "restore_subscription",
-      "body_fields": [
-        {
-          "name": "customerType",
-          "required": false,
-          "type": "string"
-        },
-        {
-          "name": "referenceId",
-          "required": false,
-          "type": "string"
-        },
-        {
-          "name": "subscriptionId",
-          "required": false,
-          "type": "string"
-        }
-      ],
-      "query_params": [],
-      "path_params": [],
-      "header_params": [],
-      "disable_body": false,
-      "server_only": false,
-      "operation_id": "restoreSubscription",
-      "source": "runtime",
-      "method": "POST",
-      "ruby_api_method": "restore_subscription",
-      "ruby_api_call": "auth.api.restore_subscription"
-    },
-    {
-      "path": "/subscription/success",
-      "methods": [
-        "GET"
-      ],
-      "plugin_id": "stripe",
-      "endpoint_key": "subscription_success",
-      "body_fields": [],
-      "query_params": [
-        {
-          "name": "callbackURL",
-          "required": false,
-          "type": "string"
-        },
-        {
-          "name": "checkoutSessionId",
-          "required": false,
-          "type": "string"
-        }
-      ],
-      "path_params": [],
-      "header_params": [],
-      "disable_body": false,
-      "server_only": false,
-      "operation_id": "subscriptionSuccess",
-      "source": "runtime",
-      "method": "GET",
-      "ruby_api_method": "subscription_success",
-      "ruby_api_call": "auth.api.subscription_success"
-    },
-    {
-      "path": "/subscription/upgrade",
-      "methods": [
-        "POST"
-      ],
-      "plugin_id": "stripe",
-      "endpoint_key": "upgrade_subscription",
-      "body_fields": [
-        {
-          "name": "annual",
-          "required": false,
-          "type": "boolean"
-        },
-        {
-          "name": "cancelUrl",
-          "required": false,
-          "type": "string"
-        },
-        {
-          "name": "customerType",
-          "required": false,
-          "type": "string"
-        },
-        {
-          "name": "disableRedirect",
-          "required": false,
-          "type": "boolean"
-        },
-        {
-          "name": "locale",
-          "required": false,
-          "type": "string"
-        },
-        {
-          "name": "metadata",
-          "required": false,
-          "type": "object"
-        },
-        {
-          "name": "plan",
-          "required": true,
-          "type": "string"
-        },
-        {
-          "name": "referenceId",
-          "required": false,
-          "type": "string"
-        },
-        {
-          "name": "returnUrl",
-          "required": false,
-          "type": "string"
-        },
-        {
-          "name": "scheduleAtPeriodEnd",
-          "required": false,
-          "type": "boolean"
-        },
-        {
-          "name": "seats",
-          "required": false,
-          "type": "integer"
-        },
-        {
-          "name": "subscriptionId",
-          "required": false,
-          "type": "string"
-        },
-        {
-          "name": "successUrl",
-          "required": false,
-          "type": "string"
-        }
-      ],
-      "query_params": [],
-      "path_params": [],
-      "header_params": [],
-      "disable_body": false,
-      "server_only": false,
-      "operation_id": "upgradeSubscription",
-      "source": "runtime",
-      "method": "POST",
-      "ruby_api_method": "upgrade_subscription",
-      "ruby_api_call": "auth.api.upgrade_subscription"
+      "ruby_api_call": "auth.api.cancel_subscription_callback",
+      "reason": "Ruby Stripe callback adaptation for redirect completion"
     },
     {
       "path": "/totp/generate",
@@ -4647,7 +4326,8 @@
       "ruby_api_method": "generate_totp",
       "ruby_api_call": "auth.api.generate_totp",
       "plugin_id": "two-factor",
-      "operation_id": "generateTOTP"
+      "operation_id": "generateTOTP",
+      "reason": "Ruby exposes the upstream server-side TOTP generation operation over HTTP"
     }
   ],
   "deprecated_pairs": [],

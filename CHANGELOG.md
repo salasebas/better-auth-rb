@@ -10,6 +10,11 @@ release notes live in each package's `CHANGELOG.md`.
   documentation generators and root Hanami stub.
 - Added a valid relative `LICENSE.md` to every publishable gem.
 - Removed the defensive `better_auth_rails` alias gem and compatibility require.
+- Added maintained upstream test and endpoint inventories so the v1.6.23 server
+  reference can be checked without treating generated artifacts as proof on
+  their own.
+- Recorded the OAuth Popup server half as a future opt-in experimental plugin;
+  it is not included in the current runtime surface.
 
 ## 2026-05-21
 

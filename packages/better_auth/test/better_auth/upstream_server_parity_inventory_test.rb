@@ -4,55 +4,56 @@ require_relative "../test_helper"
 require_relative "../support/upstream_server_parity"
 
 class BetterAuthUpstreamServerParityInventoryTest < Minitest::Test
-  HIGH_GAP_PLAN_EXPECTATIONS = {}.freeze
+  PARITY = BetterAuth::TestSupport::UpstreamServerParity
 
-  def test_every_upstream_test_file_is_classified
-    upstream_tests = BetterAuth::TestSupport::UpstreamServerParity.upstream_test_paths
-    classified = BetterAuth::TestSupport::UpstreamServerParity::EXCLUDED_UPSTREAM_TESTS.keys +
-      BetterAuth::TestSupport::UpstreamServerParity::SERVER_UPSTREAM_TEST_OWNERS.keys
+  def test_real_inventory_is_valid
+    assert_empty PARITY.validation_errors
 
-    unclassified = upstream_tests.reject { |path| classified.include?(path) }
-    stale = classified.reject { |path| upstream_tests.include?(path) }
-
-    assert_empty unclassified, "Unclassified upstream tests: #{unclassified.join(", ")}"
-    assert_empty stale, "Stale inventory entries: #{stale.join(", ")}"
+    popup = PARITY::SERVER_UPSTREAM_TEST_OWNERS.fetch("plugins/oauth-popup/oauth-popup.test.ts")
+    assert_equal "../../../docs/adr/0001-oauth-popup-server-half.md", popup.fetch(:owner)
+    assert File.file?(File.expand_path(popup.fetch(:owner), PARITY::TEST_ROOT))
   end
 
-  def test_excluded_upstream_tests_include_reasons
-    BetterAuth::TestSupport::UpstreamServerParity::EXCLUDED_UPSTREAM_TESTS.each do |path, note|
-      assert note.is_a?(String) && !note.strip.empty?, "Missing exclusion note for #{path}"
-    end
-  end
+  def test_validator_rejects_unplanned_partial_and_invalid_metadata
+    path = "api/middlewares/authorization.test.ts"
+    entries = PARITY::SERVER_UPSTREAM_TEST_OWNERS.merge(
+      path => {owner: "better_auth/api_test.rb", status: :partial, notes: "fixture gap"}
+    )
+    errors = PARITY.validation_errors(entries: entries)
+    assert_includes errors, "Missing current plan for partial #{path}"
 
-  def test_server_owner_paths_exist_for_applicable_entries
-    BetterAuth::TestSupport::UpstreamServerParity::SERVER_UPSTREAM_TEST_OWNERS.each do |upstream_path, entry|
-      next if entry[:status] == :ruby_not_applicable
+    done_entries = PARITY::SERVER_UPSTREAM_TEST_OWNERS.merge(
+      path => {owner: "better_auth/api_test.rb", status: :partial, plan: "019", notes: "fixture gap"}
+    )
+    done_errors = UpstreamTestInventory.validate(
+      upstream_paths: PARITY.upstream_test_paths,
+      entries: done_entries,
+      exclusions: PARITY::EXCLUDED_UPSTREAM_TESTS,
+      test_root: PARITY::TEST_ROOT,
+      active_plans: {"019" => :done}
+    )
+    assert_includes done_errors, "Plan 019 is DONE for partial #{path}"
 
-      BetterAuth::TestSupport::UpstreamServerParity.owner_paths(entry).each do |owner_path|
-        assert BetterAuth::TestSupport::UpstreamServerParity.owner_exists?(owner_path),
-          "Missing Ruby owner #{owner_path} for #{upstream_path}"
-        refute owner_path.start_with?("reference/upstream-src"),
-          "Owner must not point into upstream source tree: #{owner_path}"
-      end
-    end
-  end
+    invalid_path = "api/check-endpoint-conflicts.test.ts"
+    invalid_entries = PARITY::SERVER_UPSTREAM_TEST_OWNERS.merge(
+      invalid_path => {status: :unknown, notes: "fixture"}
+    )
+    invalid_errors = PARITY.validation_errors(entries: invalid_entries)
+    assert invalid_errors.any? { |error| error.include?("Invalid status") }
+    assert invalid_errors.any? { |error| error.include?("Missing Ruby owner") }
 
-  def test_no_server_owner_points_into_upstream_source_tree
-    BetterAuth::TestSupport::UpstreamServerParity::SERVER_UPSTREAM_TEST_OWNERS.each_value do |entry|
-      BetterAuth::TestSupport::UpstreamServerParity.owner_paths(entry).each do |owner_path|
-        refute_includes owner_path, "reference/upstream-src"
-      end
-    end
-  end
+    na_entries = PARITY::SERVER_UPSTREAM_TEST_OWNERS.merge(
+      invalid_path => {status: :ruby_not_applicable}
+    )
+    assert_includes PARITY.validation_errors(entries: na_entries), "Missing Ruby N/A reason for #{invalid_path}"
 
-  def test_high_gap_upstream_files_map_to_expected_plans
-    HIGH_GAP_PLAN_EXPECTATIONS.each do |upstream_path, expected_plan|
-      entry = BetterAuth::TestSupport::UpstreamServerParity::SERVER_UPSTREAM_TEST_OWNERS.fetch(upstream_path)
-      assert_equal expected_plan, entry.fetch(:plan),
-        "Expected plan #{expected_plan} for #{upstream_path}, got #{entry.fetch(:plan)}"
-      assert_equal :partial, entry.fetch(:status),
-        "Expected partial status for #{upstream_path}"
-    end
+    missing_evidence = PARITY::SERVER_UPSTREAM_TEST_OWNERS.merge(
+      path => PARITY::SERVER_UPSTREAM_TEST_OWNERS.fetch(path).merge(
+        evidence: {"better_auth/api_test.rb" => "test_does_not_exist"}
+      )
+    )
+    evidence_errors = PARITY.validation_errors(entries: missing_evidence)
+    assert evidence_errors.any? { |error| error.include?("Missing named test test_does_not_exist") }
   end
 
   def test_auth_test_helpers_are_available_from_test_helper

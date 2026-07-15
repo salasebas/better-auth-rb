@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- Honored plugin migration controls in generated schema and Mongo index
+  commands.
+
 ## 0.10.0
 
 - Improved CLI error handling and expanded command coverage.

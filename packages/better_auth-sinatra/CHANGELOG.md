@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Honored plugin migration controls in the Sinatra migration integration.
+
 ## 0.10.0 - 2026-05-21
 
 - Removed obsolete helper wiring and expanded mounted app, migration, and routing coverage.

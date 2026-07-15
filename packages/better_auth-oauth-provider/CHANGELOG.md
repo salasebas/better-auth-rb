@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Hardened provider authorization, grant, post-login, and client-validation
+  paths, with explicit Ruby adaptations documented in tests where applicable.
+- Added a checked upstream test inventory for OAuth Provider server behavior.
+
 ## 0.10.0 - 2026-05-21
 
 - Changed OAuth provider defaults to hash stored client secrets and opaque OAuth tokens, with `store_tokens` support for custom token hashing.

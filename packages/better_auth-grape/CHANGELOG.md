@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Honored plugin migration controls in the Grape migration integration.
+
 ## 0.10.0
 
 - Improved cookie handling for mounted Grape apps.

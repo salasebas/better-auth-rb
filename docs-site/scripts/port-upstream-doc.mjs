@@ -39,6 +39,8 @@ const blockedActions = new Set([
 	"skip_client",
 	"skip_upstream_product",
 	"skip_unported",
+	"skip_version",
+	"skip_external",
 	"remove_if_local",
 	"merge_into_other_relational",
 ]);

@@ -26,6 +26,40 @@ module UpstreamEndpointRegistry
     api/to-auth-endpoints.ts
   ].freeze
   INTERNAL_ENDPOINT_KEYS = %w[ok error].freeze
+  ACCOUNTED_DYNAMIC_SPREADS = [
+    {
+      source_suffix: "packages/better-auth/src/api/index.ts",
+      expression: "pluginEndpoints",
+      resolution: "runtime plugin endpoint aggregate; plugin declarations are scanned independently",
+      expected_keys: []
+    },
+    {
+      source_suffix: "packages/better-auth/src/plugins/organization/organization.ts",
+      expression: "(api as OrganizationEndpoints<O>)",
+      resolution: "typed wrapper around the local endpoint object; the underlying endpoint object is scanned directly",
+      expected_keys: %w[hasPermission]
+    },
+    {
+      source_suffix: "packages/better-auth/src/plugins/two-factor/index.ts",
+      expression: "totp.endpoints",
+      resolution: "nested TOTP plugin endpoints scanned at their declaration",
+      expected_keys: %w[generateTOTP getTOTPURI verifyTOTP]
+    },
+    {
+      source_suffix: "packages/better-auth/src/plugins/two-factor/index.ts",
+      expression: "otp.endpoints",
+      resolution: "nested OTP plugin endpoints scanned at their declaration",
+      expected_keys: %w[sendTwoFactorOTP verifyTwoFactorOTP]
+    },
+    {
+      source_suffix: "packages/better-auth/src/plugins/two-factor/index.ts",
+      expression: "backupCode.endpoints",
+      resolution: "nested backup-code plugin endpoints scanned at their declaration",
+      expected_keys: %w[generateBackupCodes viewBackupCodes verifyBackupCode]
+    }
+  ].freeze
+
+  class UnresolvedSpreadError < StandardError; end
 
   module_function
 
@@ -33,8 +67,15 @@ module UpstreamEndpointRegistry
     metadata = upstream_metadata
     upstream_packages = validate_upstream!(metadata)
     route_index = build_route_index(scan_route_files(upstream_packages))
-    mappings = collect_endpoint_mappings(endpoint_mapping_files(upstream_packages))
+    mappings, spread_accounting = collect_endpoint_mappings(endpoint_mapping_files(upstream_packages))
     entries, unresolved = resolve_entries(mappings, route_index)
+    extracted_keys = entries.map { |entry| entry[:registry_key] }
+    missing_accounted_keys = spread_accounting.flat_map do |spread|
+      spread.fetch(:expected_keys) - extracted_keys
+    end.uniq
+    unless missing_accounted_keys.empty?
+      raise "Accounted endpoint spreads lost expected keys: #{missing_accounted_keys.join(", ")}"
+    end
     unexpected = unresolved.reject { |row| UNSUPPORTED_PLUGINS.include?(row[:plugin_id].to_s) }
     unless unexpected.empty?
       details = unexpected.map { |row| "#{row[:plugin_id]}:#{row[:registry_key]} (#{row[:target]})" }.join(", ")
@@ -45,6 +86,10 @@ module UpstreamEndpointRegistry
       generated_at: Time.now.utc.iso8601,
       upstream_version: metadata.fetch(:version),
       upstream_commit: metadata.fetch(:commit),
+      extraction_loss_count: 0,
+      extraction_losses: [],
+      accounted_spread_count: spread_accounting.length,
+      accounted_spreads: spread_accounting,
       unresolved_mapping_count: unresolved.length,
       unresolved_mappings: unresolved,
       entries: entries.sort_by { |entry| [entry[:path].to_s, entry[:method].to_s, entry[:registry_key]] }
@@ -218,9 +263,11 @@ module UpstreamEndpointRegistry
   end
 
   def collect_endpoint_mappings(files)
-    files.flat_map do |file|
-      parse_endpoint_mappings(File.read(file), plugin_id_for(file), file)
+    accounted_spreads = []
+    mappings = files.flat_map do |file|
+      parse_endpoint_mappings(File.read(file), plugin_id_for(file), file, accounted_spreads: accounted_spreads)
     end
+    [mappings, accounted_spreads.uniq]
   end
 
   def endpoint_mapping_files(upstream_packages)
@@ -232,15 +279,21 @@ module UpstreamEndpointRegistry
     end
   end
 
-  def parse_endpoint_mappings(source, plugin_id, file)
+  def parse_endpoint_mappings(source, plugin_id, file, accounted_spreads: [])
     masked = mask_non_code(source)
+    object_blocks = endpoint_object_blocks(source)
     mappings = []
     masked.to_enum(:scan, /(?:endpoints|baseEndpoints)\s*[:=]\s*\{/).each do
       brace_start = masked.index("{", Regexp.last_match.begin(0))
       block = extract_balanced(source, brace_start, "{", "}")
       next unless block
 
-      parse_endpoint_block_entries(block).each do |registry_key, target, comment|
+      parse_endpoint_block_entries(
+        block,
+        object_blocks: object_blocks,
+        accounted_spreads: accounted_spreads,
+        source_file: relative_path(file)
+      ).each do |registry_key, target, comment|
         if target[:inline] && target[:path].nil? && target[:path_variable]
           target = target.merge(path: path_variable_default(source, target[:path_variable]))
         end
@@ -253,15 +306,71 @@ module UpstreamEndpointRegistry
         }
       end
     end
+
+    endpoint_value_expressions(source).each do |expression|
+      symbol = referenced_symbol(expression)
+      next unless symbol && object_blocks[symbol]
+
+      parse_endpoint_block_entries(
+        object_blocks.fetch(symbol),
+        object_blocks: object_blocks,
+        accounted_spreads: accounted_spreads,
+        source_file: relative_path(file),
+        spread_stack: [symbol]
+      ).each do |registry_key, target, comment|
+        mappings << {
+          registry_key: registry_key,
+          target: target,
+          comment: comment,
+          plugin_id: plugin_id,
+          source_file: relative_path(file)
+        }
+      end
+    end
     mappings
   end
 
-  def parse_endpoint_block_entries(block)
+  def parse_endpoint_block_entries(block, object_blocks: {}, accounted_spreads: [], source_file: "fixture.ts", spread_stack: [])
     body = block.start_with?("{") ? block[1...-1] : block
-    split_top_level_expressions(body).filter_map do |raw_entry|
+    split_top_level_expressions(body).flat_map do |raw_entry|
       comment = adjacent_docblock(raw_entry)
       entry = raw_entry.sub(/\A\s*(?:\/\*[\s\S]*?\*\/\s*)+/, "").strip
-      next if entry.empty? || entry.start_with?("...")
+      next [] if entry.empty?
+
+      if entry.start_with?("...")
+        expression = entry.delete_prefix("...").strip
+        normalized_expression = expression.gsub(/\s+/, " ").strip
+        dynamic = ACCOUNTED_DYNAMIC_SPREADS.find do |known|
+          source_file.end_with?(known.fetch(:source_suffix)) &&
+            normalized_expression == known.fetch(:expression)
+        end
+        if dynamic
+          accounted_spreads << {
+            source_file: source_file,
+            expression: normalized_expression,
+            resolution: dynamic.fetch(:resolution),
+            expected_keys: dynamic.fetch(:expected_keys)
+          }
+          next []
+        end
+
+        symbols = object_blocks.keys.select { |name| expression.match?(/\b#{Regexp.escape(name)}\b/) }
+        symbols -= spread_stack
+        unless symbols.empty?
+          next symbols.flat_map do |symbol|
+            parse_endpoint_block_entries(
+              object_blocks.fetch(symbol),
+              object_blocks: object_blocks,
+              accounted_spreads: accounted_spreads,
+              source_file: source_file,
+              spread_stack: spread_stack + [symbol]
+            )
+          end
+        end
+
+        raise UnresolvedSpreadError,
+          "Unresolved supported endpoint spread in #{source_file}: #{expression.gsub(/\s+/, " ")[0, 200]}"
+      end
 
       colon = top_level_character_index(entry, ":")
       if colon
@@ -271,9 +380,9 @@ module UpstreamEndpointRegistry
         registry_key = entry
         expression = entry
       else
-        next
+        next []
       end
-      next if INTERNAL_ENDPOINT_KEYS.include?(registry_key)
+      next [] if INTERNAL_ENDPOINT_KEYS.include?(registry_key)
 
       route = parse_endpoint_definition(expression)
       target = if route
@@ -283,7 +392,52 @@ module UpstreamEndpointRegistry
       else
         {inline: false, unresolved: true, expression: expression.gsub(/\s+/, " ")[0, 200]}
       end
-      [registry_key, target, comment]
+      [[registry_key, target, comment]]
+    end
+  end
+
+  def endpoint_object_blocks(source)
+    blocks = {}
+    masked = mask_non_code(source)
+    masked.to_enum(:scan, /\b(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=\s*\{/).each do
+      name = Regexp.last_match[1]
+      brace = masked.index("{", Regexp.last_match.begin(0))
+      block = extract_balanced(source, brace, "{", "}")
+      blocks[name] ||= block if block
+    end
+
+    declaration_chunks(source).each do |name, chunk|
+      returned = last_returned_object(chunk)
+      blocks[name] ||= returned if returned
+    end
+    blocks
+  end
+
+  def last_returned_object(source)
+    masked = mask_non_code(source)
+    positions = masked.to_enum(:scan, /\breturn\s*\{/).map { Regexp.last_match.begin(0) }
+    position = positions.last
+    return nil unless position
+
+    brace = masked.index("{", position)
+    extract_balanced(source, brace, "{", "}")
+  end
+
+  def endpoint_value_expressions(source)
+    declaration_chunks(source).filter_map do |_name, chunk|
+      returned = last_returned_object(chunk)
+      next unless returned
+
+      body = returned[1...-1]
+      raw = split_top_level_expressions(body).find do |entry|
+        cleaned = entry.sub(/\A\s*(?:\/\*[\s\S]*?\*\/\s*)+/, "").strip
+        cleaned.match?(/\Aendpoints\s*:/)
+      end
+      next unless raw
+
+      cleaned = raw.sub(/\A\s*(?:\/\*[\s\S]*?\*\/\s*)+/, "").strip
+      colon = top_level_character_index(cleaned, ":")
+      cleaned[(colon + 1)..].strip if colon
     end
   end
 

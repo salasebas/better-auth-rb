@@ -6,270 +6,244 @@ description: Install RubyAuth gems, configure your app, mount the Rack handler, 
 <RubyAuthDisclaimer />
 
 <Steps>
+  ### Install gems
 
-### Install gems
+  Add the core gem and the integration for your framework:
 
-Add the core gem and the integration for your framework:
+  ```ruby title="Gemfile"
+  gem "better_auth"
+  gem "better_auth-rails"   # Rails
+  # gem "better_auth-hanami"  # Hanami
+  # gem "better_auth-sinatra" # Sinatra
+  # gem "better_auth-roda"    # Roda
+  # gem "better_auth-grape"   # Grape API
+  ```
 
-```ruby title="Gemfile"
-gem "better_auth"
-gem "better_auth-rails"   # Rails
-# gem "better_auth-hanami"  # Hanami
-# gem "better_auth-sinatra" # Sinatra
-# gem "better_auth-roda"    # Roda
-# gem "better_auth-grape"   # Grape API
-```
+  Then install:
 
-Then install:
+  ```bash
+  bundle install
+  ```
 
-```bash
-bundle install
-```
+  For a new app you can also add the core gem with Bundler:
 
-For a new app you can also add the core gem with Bundler:
+  ```bash
+  bundle add better_auth
+  ```
 
-```bash
-bundle add better_auth
-```
+  Then add the integration gem that matches your framework, for example:
 
-Then add the integration gem that matches your framework, for example:
+  ```bash
+  bundle add better_auth-rails
+  ```
 
-```bash
-bundle add better_auth-rails
-```
+  | Framework  | Gem                   | Notes                                        |
+  | ---------- | --------------------- | -------------------------------------------- |
+  | Rails      | `better_auth-rails`   | Generators, controller helpers, route helper |
+  | Hanami     | `better_auth-hanami`  | Hanami slice integration                     |
+  | Sinatra    | `better_auth-sinatra` | Rack mount helpers                           |
+  | Roda       | `better_auth-roda`    | Plugin-style mount                           |
+  | Grape      | `better_auth-grape`   | Mount inside Grape apps                      |
+  | Plain Rack | `better_auth` only    | Build and `run` the auth app directly        |
 
-| Framework | Gem | Notes |
-|-----------|-----|-------|
-| Rails | `better_auth-rails` | Generators, controller helpers, route helper |
-| Hanami | `better_auth-hanami` | Hanami slice integration |
-| Sinatra | `better_auth-sinatra` | Rack mount helpers |
-| Roda | `better_auth-roda` | Plugin-style mount |
-| Grape | `better_auth-grape` | Mount inside Grape apps |
-| Plain Rack | `better_auth` only | Build and `run` the auth app directly |
+  For Rails, you can scaffold with:
+
+  ```bash
+  bin/rails generate better_auth:install
+  # or
+  bundle exec better-auth init --cwd . --framework rails
+  ```
+
+  For a non-Rails app, create a config file yourself and point CLI commands at it with `--config`.
+
+  ### Environment variables
 
-For Rails, you can scaffold with:
+  RubyAuth reads configuration from your initializer and environment:
 
-```bash
-bin/rails generate better_auth:install
-# or
-bundle exec better-auth init --cwd . --framework rails
-```
-
-For a non-Rails app, create a config file yourself and point CLI commands at it with `--config`.
-
-### Environment variables
-
-RubyAuth reads configuration from your initializer and environment:
-
-```bash title=".env"
-BETTER_AUTH_SECRET=your-secret-at-least-32-characters-long
-BETTER_AUTH_URL=http://localhost:3000
-```
-
-Generate a production-ready secret:
-
-```bash
-bundle exec better-auth secret
-```
-
-<Callout type="info">
-  `BETTER_AUTH_SECRET` must have enough entropy for signing sessions and tokens. Never commit secrets to source control.
-</Callout>
-
-### Configure
-
-<Tabs items={["Rails", "Plain Rack"]}>
-
-<Tab value="Rails">
-
-After `better_auth:install`, edit `config/initializers/better_auth.rb`:
-
-```ruby title="config/initializers/better_auth.rb"
-BetterAuth::Rails.configure do |config|
-  config.secret = ENV.fetch("BETTER_AUTH_SECRET")
-  config.base_url = ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000")
-  config.base_path = "/api/auth"
-
-  config.email_and_password do |email_and_password|
-    email_and_password.enabled = true
-  end
-end
-```
-
-Include controller helpers in `ApplicationController`:
-
-```ruby title="app/controllers/application_controller.rb"
-class ApplicationController < ActionController::Base
-  include BetterAuth::Rails::ControllerHelpers
-end
-```
-
-</Tab>
-
-<Tab value="Plain Rack">
-
-```ruby title="config.ru"
-require "better_auth"
-
-auth = BetterAuth.auth(
-  base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
-  secret: ENV.fetch("BETTER_AUTH_SECRET"),
-  database: :postgres,
-  email_and_password: { enabled: true }
-)
-
-run auth
-```
-
-For Sinatra, Roda, or Hanami, use the matching integration gem — each provides a mount helper instead of wiring `config.ru` by hand. See [Integrations](/docs/integrations/rails) for framework-specific guides.
-
-</Tab>
-
-</Tabs>
-
-RubyAuth configuration is just Ruby. Keep shared auth behavior in the core config and add plugin gems only for features your app uses.
-
-### Mount routes
-
-<Tabs items={["Rails", "Plain Rack"]}>
-
-<Tab value="Rails">
-
-```ruby title="config/routes.rb"
-Rails.application.routes.draw do
-  better_auth
-end
-```
-
-This mounts at `/api/auth` by default. Customize the path:
-
-```ruby
-Rails.application.routes.draw do
-  better_auth at: "/auth"
-end
-```
-
-</Tab>
-
-<Tab value="Plain Rack">
-
-When using `run auth` in `config.ru`, auth routes are served at the app root with `base_path` (default `/api/auth`). In a larger Rack stack, map the handler:
-
-```ruby
-map "/api/auth" do
-  run auth
-end
-```
-
-</Tab>
-
-</Tabs>
-
-All examples in these docs assume the default auth base path `/api/auth`. If you mount somewhere else, keep the same route suffixes under your chosen base path.
-
-### Database
-
-RubyAuth stores users, sessions, accounts, and verification tokens in your database. Pick an adapter:
-
-<Tabs items={["PostgreSQL", "MySQL", "SQLite", "SQL Server", "In-memory"]}>
-
-<Tab value="PostgreSQL">
-
-```ruby
-BetterAuth.auth(
-  database: :postgres,
-  # or pass a connection URL:
-  # database: ENV.fetch("DATABASE_URL")
-)
-```
-
-</Tab>
-
-<Tab value="MySQL">
-
-```ruby
-BetterAuth.auth(
-  database: :mysql
-)
-```
-
-</Tab>
-
-<Tab value="SQLite">
-
-```ruby
-BetterAuth.auth(
-  database: :sqlite
-)
-```
-
-</Tab>
-
-<Tab value="SQL Server">
-
-```ruby
-BetterAuth.auth(
-  database: :mssql
-)
-```
-
-</Tab>
-
-<Tab value="In-memory">
-
-Useful for tests and local spikes only:
-
-```ruby
-BetterAuth.auth(
-  database: :memory
-)
-```
-
-</Tab>
-
-</Tabs>
-
-MongoDB is supported via the MongoDB adapter gem. See [MongoDB adapter](/docs/adapters/mongo) for setup.
-
-<Callout type="info">
-  RubyAuth does not use Prisma, Drizzle, or other JavaScript ORMs. Schema is managed through the Ruby CLI or Rails generators.
-</Callout>
-
-### Migrations
-
-Generate and apply the Better Auth schema:
-
-```bash
-bundle exec better-auth generate \
-  --cwd . \
-  --config config/better_auth.rb \
-  --dialect postgres \
-  --output db/better_auth/schema.sql
-
-bundle exec better-auth migrate --cwd . --config config/better_auth.rb --yes
-```
-
-On Rails, prefer the built-in generators after changing plugins or additional fields:
-
-```bash
-bin/rails generate better_auth:migration
-bin/rails db:migrate
-```
-
-Check migration status or diagnose setup issues:
-
-```bash
-bundle exec better-auth migrate status --cwd . --config config/better_auth.rb
-bundle exec better-auth doctor --cwd . --config config/better_auth.rb
-```
-
-Run the generate or migrate command again after adding plugins, changing plugin schema, or adding core additional fields.
-
+  ```bash title=".env"
+  BETTER_AUTH_SECRET=your-secret-at-least-32-characters-long
+  BETTER_AUTH_URL=http://localhost:3000
+  ```
+
+  Generate a production-ready secret:
+
+  ```bash
+  bundle exec better-auth secret
+  ```
+
+  <Callout type="info">
+    `BETTER_AUTH_SECRET` must have enough entropy for signing sessions and tokens. Never commit secrets to source control.
+  </Callout>
+
+  ### Configure
+
+  <Tabs items={["Rails", "Plain Rack"]}>
+    <Tab value="Rails">
+      After `better_auth:install`, edit `config/initializers/better_auth.rb`:
+
+      ```ruby title="config/initializers/better_auth.rb"
+      BetterAuth::Rails.configure do |config|
+        config.secret = ENV.fetch("BETTER_AUTH_SECRET")
+        config.base_url = ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000")
+        config.base_path = "/api/auth"
+
+        config.email_and_password do |email_and_password|
+          email_and_password.enabled = true
+        end
+      end
+      ```
+
+      Include controller helpers in `ApplicationController`:
+
+      ```ruby title="app/controllers/application_controller.rb"
+      class ApplicationController < ActionController::Base
+        include BetterAuth::Rails::ControllerHelpers
+      end
+      ```
+    </Tab>
+
+    <Tab value="Plain Rack">
+      ```ruby title="config.ru"
+      require "better_auth"
+
+      auth = BetterAuth.auth(
+        base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
+        secret: ENV.fetch("BETTER_AUTH_SECRET"),
+        database: :postgres,
+        email_and_password: { enabled: true }
+      )
+
+      run auth
+      ```
+
+      For Sinatra, Roda, or Hanami, use the matching integration gem — each provides a mount helper instead of wiring `config.ru` by hand. See [Integrations](/docs/integrations/rails) for framework-specific guides.
+    </Tab>
+  </Tabs>
+
+  RubyAuth configuration is just Ruby. Keep shared auth behavior in the core config and add plugin gems only for features your app uses.
+
+  ### Mount routes
+
+  <Tabs items={["Rails", "Plain Rack"]}>
+    <Tab value="Rails">
+      ```ruby title="config/routes.rb"
+      Rails.application.routes.draw do
+        better_auth
+      end
+      ```
+
+      This mounts at `/api/auth` by default. Customize the path:
+
+      ```ruby
+      Rails.application.routes.draw do
+        better_auth at: "/auth"
+      end
+      ```
+    </Tab>
+
+    <Tab value="Plain Rack">
+      When using `run auth` in `config.ru`, auth routes are served at the app root with `base_path` (default `/api/auth`). In a larger Rack stack, map the handler:
+
+      ```ruby
+      map "/api/auth" do
+        run auth
+      end
+      ```
+    </Tab>
+  </Tabs>
+
+  All examples in these docs assume the default auth base path `/api/auth`. If you mount somewhere else, keep the same route suffixes under your chosen base path.
+
+  ### Database
+
+  RubyAuth stores users, sessions, accounts, and verification tokens in your database. Pick an adapter:
+
+  <Tabs items={["PostgreSQL", "MySQL", "SQLite", "SQL Server", "In-memory"]}>
+    <Tab value="PostgreSQL">
+      ```ruby
+      BetterAuth.auth(
+        database: :postgres,
+        # or pass a connection URL:
+        # database: ENV.fetch("DATABASE_URL")
+      )
+      ```
+    </Tab>
+
+    <Tab value="MySQL">
+      ```ruby
+      BetterAuth.auth(
+        database: :mysql
+      )
+      ```
+    </Tab>
+
+    <Tab value="SQLite">
+      ```ruby
+      BetterAuth.auth(
+        database: :sqlite
+      )
+      ```
+    </Tab>
+
+    <Tab value="SQL Server">
+      ```ruby
+      BetterAuth.auth(
+        database: :mssql
+      )
+      ```
+    </Tab>
+
+    <Tab value="In-memory">
+      Useful for tests and local spikes only:
+
+      ```ruby
+      BetterAuth.auth(
+        database: :memory
+      )
+      ```
+    </Tab>
+  </Tabs>
+
+  MongoDB is supported via the MongoDB adapter gem. See [MongoDB adapter](/docs/adapters/mongo) for setup.
+
+  <Callout type="info">
+    RubyAuth does not use Prisma, Drizzle, or other JavaScript ORMs. Schema is managed through the Ruby CLI or Rails generators.
+  </Callout>
+
+  ### Migrations
+
+  Generate and apply the Better Auth schema:
+
+  ```bash
+  bundle exec better-auth generate \
+    --cwd . \
+    --config config/better_auth.rb \
+    --dialect postgres \
+    --output db/better_auth/schema.sql
+
+  bundle exec better-auth migrate --cwd . --config config/better_auth.rb --yes
+  ```
+
+  On Rails, prefer the built-in generators after changing plugins or additional fields:
+
+  ```bash
+  bin/rails generate better_auth:migration
+  bin/rails db:migrate
+  ```
+
+  Check migration status or diagnose setup issues:
+
+  ```bash
+  bundle exec better-auth migrate status --cwd . --config config/better_auth.rb
+  bundle exec better-auth doctor --cwd . --config config/better_auth.rb
+  ```
+
+  Run the generate or migrate command again after adding plugins, changing plugin schema, or adding core additional fields.
 </Steps>
 
 ## Next steps
 
-- [Basic usage](/docs/basic-usage) — sign up, sign in, and read sessions over HTTP
-- [Integrations](/docs/integrations/rails) — Rails, Hanami, Sinatra, Roda, Grape, Rack
-- [CLI](/docs/concepts/cli) — init, generate, migrate, and doctor commands
-- [Database](/docs/concepts/database) — adapters, core tables, and plugin schema
+* [Basic usage](/docs/basic-usage) — sign up, sign in, and read sessions over HTTP
+* [Integrations](/docs/integrations/rails) — Rails, Hanami, Sinatra, Roda, Grape, Rack
+* [CLI](/docs/concepts/cli) — init, generate, migrate, and doctor commands
+* [Database](/docs/concepts/database) — adapters, core tables, and plugin schema

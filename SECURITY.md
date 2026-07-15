@@ -31,6 +31,7 @@ We only support the latest version of each major/minor release line. Older patch
 Better Auth Ruby handles sensitive authentication data. When contributing:
 
 - Never log passwords, tokens, or session secrets
-- Use `bcrypt` for password hashing (already a core dependency)
+- Use the default `scrypt` password hasher. `bcrypt` is an optional supported
+  alternative and requires the `bcrypt` gem.
 - Use constant-time comparison for token validation
 - Follow the same security patterns as the upstream TypeScript implementation

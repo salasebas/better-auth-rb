@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Added a checked upstream test inventory for the Redis storage reference
+  surface, including explicit Ruby-specific classifications.
+
 ## 0.10.0 - 2026-05-21
 
 - Released in sync with the full Better Auth package set.

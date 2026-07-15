@@ -2,10 +2,11 @@
 
 Redis secondary storage package for Better Auth Ruby.
 
-This gem tracks the server-side behavior of upstream `@better-auth/redis-storage`
-pinned at Better Auth `v1.6.9`. The Ruby gem versions independently from the
-upstream npm package; `BetterAuth::RedisStorage::VERSION` is the Ruby gem
-version.
+This gem follows the documented server-side contract of upstream
+`@better-auth/redis-storage` where supported. The repository's pinned upstream
+release is a reproducible reference, not a claim of complete parity. The Ruby
+gem versions independently from the upstream npm package;
+`BetterAuth::RedisStorage::VERSION` is the Ruby gem version.
 
 ## Installation
 

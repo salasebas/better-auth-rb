@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Hardened SCIM provisioning, identity linking, deprovisioning, and PATCH/PUT
+  handling with regression coverage for supported adapters.
+- Added a checked upstream test inventory for the SCIM plugin surface.
+
 ## 0.10.0 - 2026-05-21
 
 - Improved SCIM route, adapter, user, and rate-limit coverage.

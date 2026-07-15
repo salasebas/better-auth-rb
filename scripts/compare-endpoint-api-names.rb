@@ -33,6 +33,25 @@ module EndpointApiComparison
     "GET /passkey/generate-authenticate-options" => "POST",
     "GET /passkey/generate-register-options" => "POST"
   }.freeze
+  RUBY_ONLY_ROUTES = [
+    ["POST", "/admin/oauth2/create-client", "Ruby OAuth Provider administrative management endpoint"],
+    ["PATCH", "/admin/oauth2/update-client", "Ruby OAuth Provider administrative management endpoint"],
+    ["POST", "/api-key/delete-all-expired-api-keys", "Ruby exposes upstream cleanup behavior as an explicit maintenance endpoint"],
+    ["POST", "/api-key/verify", "Ruby exposes API-key verification over HTTP as well as direct server calls"],
+    ["POST", "/dub/link", "Ruby Dub integration endpoint"],
+    ["GET", "/error", "Ruby core diagnostic route intentionally omitted from the upstream public registry"],
+    ["DELETE", "/oauth2/consent", "Ruby OAuth Provider REST adaptation for consent management"],
+    ["GET", "/oauth2/consent", "Ruby OAuth Provider REST adaptation for consent management"],
+    ["PATCH", "/oauth2/consent", "Ruby OAuth Provider REST adaptation for consent management"],
+    ["GET", "/oauth2/consents", "Ruby OAuth Provider REST adaptation for consent management"],
+    ["POST", "/oauth2/end-session", "Ruby OAuth Provider accepts POST in addition to the upstream registered form"],
+    ["GET", "/ok", "Ruby core health route intentionally omitted from the upstream public registry"],
+    ["POST", "/organization/add-member", "Ruby exposes the upstream server-side organization operation over HTTP"],
+    ["GET", "/reference", "Ruby OpenAPI reference UI route"],
+    ["POST", "/set-password", "Ruby exposes the upstream server-side password operation over HTTP"],
+    ["GET", "/subscription/cancel/callback", "Ruby Stripe callback adaptation for redirect completion"],
+    ["POST", "/totp/generate", "Ruby exposes the upstream server-side TOTP generation operation over HTTP"]
+  ].map { |method, path, reason| {method: method, path: path, reason: reason} }.freeze
 
   module_function
 
@@ -41,11 +60,16 @@ module EndpointApiComparison
     write_markdown(report)
     write_json(report)
     print_summary(report)
-    exit(1) if report[:registry_key_mismatch_count].positive? || report[:missing_ruby_count].positive?
+    exit(1) if report[:registry_key_mismatch_count].positive? ||
+      report[:missing_ruby_count].positive? ||
+      report[:missing_upstream_count].positive?
   end
 
   def load_upstream_registry
     registry = JSON.parse(File.read(UPSTREAM_REGISTRY))
+    losses = registry.fetch("extraction_loss_count", 0)
+    raise "Upstream endpoint registry has #{losses} unexplained extraction losses" if losses.positive?
+
     registry.fetch("entries").map do |row|
       row.transform_keys(&:to_sym).merge(
         ruby_registry_key: row["ruby_registry_key"] || EndpointNaming.upstream_registry_key_to_ruby(row["registry_key"])
@@ -97,9 +121,13 @@ module EndpointApiComparison
       end
     end
 
-    missing_upstream = ruby_rows.reject do |ruby|
+    missing_upstream_candidates = ruby_rows.reject do |ruby|
       http_upstream.any? { |upstream| routes_match?(upstream, ruby) }
     end
+    ruby_only_classified, missing_upstream = missing_upstream_candidates.partition do |ruby|
+      ruby_only_definition(ruby)
+    end
+    ruby_only_classified = ruby_only_classified.map { |ruby| ruby.merge(ruby_only_definition(ruby)) }
 
     email_otp_focus = (aligned + registry_key_mismatches + deprecated_pairs + missing_ruby)
       .select { |row| row[:path].to_s.include?("email-otp") || row[:path].to_s.include?("forget-password") }
@@ -117,6 +145,7 @@ module EndpointApiComparison
       api_name_mismatch_count: registry_key_mismatches.length,
       missing_ruby_count: missing_ruby.length,
       missing_upstream_count: missing_upstream.length,
+      ruby_only_classified_count: ruby_only_classified.length,
       deprecated_pair_count: deprecated_pairs.length,
       excluded_unsupported_count: excluded_unsupported.length,
       excluded_unsupported_plugins: UNSUPPORTED_PLUGINS,
@@ -126,6 +155,7 @@ module EndpointApiComparison
       api_name_mismatches: registry_key_mismatches,
       missing_ruby: missing_ruby,
       missing_upstream: missing_upstream,
+      ruby_only_classified: ruby_only_classified,
       deprecated_pairs: deprecated_pairs,
       excluded_unsupported: excluded_unsupported,
       known_gaps: known_gaps.map { |row| row.merge(known_gap_definition(row)) },
@@ -170,6 +200,12 @@ module EndpointApiComparison
     EndpointNaming.registry_keys_equivalent?(upstream[:registry_key], ruby[:endpoint_key])
   end
 
+  def ruby_only_definition(row)
+    RUBY_ONLY_ROUTES.find do |definition|
+      definition[:method] == row[:method].to_s.upcase && definition[:path] == row[:path]
+    end
+  end
+
   def write_markdown(report)
     lines = []
     lines << "# Upstream vs RubyAuth API naming comparison"
@@ -186,7 +222,8 @@ module EndpointApiComparison
     lines << "- **Missing in Ruby inventory**: #{report[:missing_ruby_count]}"
     lines << "- **Known gaps**: #{report[:known_gap_count]}"
     lines << "- **Excluded unsupported plugin routes**: #{report[:excluded_unsupported_count]} (#{report[:excluded_unsupported_plugins].join(", ")})"
-    lines << "- **Ruby-only / not found upstream**: #{report[:missing_upstream_count]}"
+    lines << "- **Classified Ruby extensions**: #{report[:ruby_only_classified_count]}"
+    lines << "- **Unexplained Ruby-only / not found upstream**: #{report[:missing_upstream_count]}"
     lines << "- **Deprecated upstream pairs still in Ruby**: #{report[:deprecated_pair_count]}"
     lines << ""
     lines << "Naming policy: `reference/ruby-api-naming-policy.md`"
@@ -209,6 +246,14 @@ module EndpointApiComparison
     lines << "| --- | --- | --- | --- |"
     report[:excluded_unsupported].each do |row|
       lines << "| #{row[:method]} | `#{row[:path]}` | `#{row[:plugin_id]}` | `#{row[:registry_key]}` |"
+    end
+    lines << ""
+    lines << "## Classified Ruby extensions"
+    lines << ""
+    lines << "| Method | Path | Ruby endpoint key | Reason |"
+    lines << "| --- | --- | --- | --- |"
+    report[:ruby_only_classified].each do |row|
+      lines << "| #{row[:method]} | `#{row[:path]}` | `#{row[:endpoint_key] || "-"}` | #{row[:reason]} |"
     end
     lines << ""
     lines << "## Email OTP password reset focus"

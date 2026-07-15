@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+- Hardened subscription selection, organization scoping, and callback handling
+  with targeted lifecycle regression coverage.
+- Added a checked upstream test inventory for the Stripe plugin surface.
+
 ## [0.10.0] - 2026-05-21
 
 - Improved Stripe metadata, utility behavior, adapter coverage, and rate-limit coverage.

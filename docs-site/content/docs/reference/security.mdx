@@ -23,7 +23,14 @@ See the [`secrets` option](/docs/reference/options#secrets) for configuration de
 
 ### Session Expiration
 
-RubyAuth uses secure session management to protect user data. Sessions are stored in the database or a secondary storage, if configured, to prevent unauthorized access. By default, sessions expire after 7 days, but you can customize this value in the configuration. Additionally, each time a session is used, if it reaches the `update_age` threshold, the expiration date is extended, which by default is set to 1 day.
+RubyAuth uses secure session management to protect user data. Stateful
+deployments store sessions in the configured database or secondary storage;
+stateless deployments use the signed session cookie as their authority and
+therefore cannot revoke that cookie through a server-side session store. By
+default, sessions expire after 7 days, but you can customize this value in the
+configuration. Additionally, each time a session is used, if it reaches the
+`update_age` threshold, the expiration date is extended, which by default is
+set to 1 day.
 
 ### Session Revocation
 
@@ -70,13 +77,10 @@ RubyAuth includes multiple safeguards to prevent Cross-Site Request Forgery (CSR
 
 ### Disabling Security Checks
 
-RubyAuth provides two separate options to disable security checks. These options control different aspects of security:
+RubyAuth exposes two advanced escape hatches. Both weaken request validation and
+should be limited to narrowly understood compatibility cases.
 
 #### `disable_csrf_check`
-
-<UnderDevelopment>
-  RubyAuth does not expose a supported production switch for disabling CSRF checks. Keep this only as upstream context.
-</UnderDevelopment>
 
 Disables **all CSRF protection**, including:
 
@@ -91,8 +95,7 @@ auth = BetterAuth.auth(
   secret: ENV.fetch("BETTER_AUTH_SECRET"),
   base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
   database: :postgres,
-  trusted_origins: ["https://app.example.com"],
-  rate_limit: { enabled: true, window: 10, max: 100 }
+  advanced: { disable_csrf_check: true }
 )
 ```
 
@@ -101,10 +104,6 @@ auth = BetterAuth.auth(
 </Callout>
 
 #### `disable_origin_check`
-
-<UnderDevelopment>
-  RubyAuth does not expose a supported production switch for disabling origin checks. Keep this only as upstream context.
-</UnderDevelopment>
 
 Disables **URL validation** against `trusted_origins`, including:
 
@@ -120,8 +119,7 @@ auth = BetterAuth.auth(
   secret: ENV.fetch("BETTER_AUTH_SECRET"),
   base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
   database: :postgres,
-  trusted_origins: ["https://app.example.com"],
-  rate_limit: { enabled: true, window: 10, max: 100 }
+  advanced: { disable_origin_check: true, disable_csrf_check: false }
 )
 ```
 
@@ -130,19 +128,31 @@ auth = BetterAuth.auth(
 </Callout>
 
 <Callout type="info">
-  For backward compatibility, `disable_origin_check: true` also disables CSRF protection. If you only want to disable URL validation without affecting CSRF protection, this is not currently possible - both checks are disabled together when using this option.
+  For backward compatibility, `disable_origin_check: true` also disables CSRF
+  protection only when `disable_csrf_check` is omitted. Set
+  `disable_csrf_check: false` explicitly to keep CSRF validation enabled. An
+  array value such as `disable_origin_check: ["/public"]` skips ordinary origin
+  and redirect-URL validation for matching path prefixes. Fetch Metadata still
+  blocks a first-login cross-site navigation on those paths unless
+  `disable_csrf_check: true` disables that protection globally.
 </Callout>
 
 #### Summary
 
 | Option               | What it disables                                                       |
 | -------------------- | ---------------------------------------------------------------------- |
-| `disable_csrf_check`   | CSRF protection only (origin header validation, Fetch Metadata checks) |
-| `disable_origin_check` | URL validation AND CSRF protection (for backward compatibility)        |
+| `disable_csrf_check` | CSRF origin and Fetch Metadata checks |
+| `disable_origin_check` | Callback/redirect URL validation; also CSRF checks only under the deprecated omitted-`disable_csrf_check` compatibility behavior |
 
 ## OAuth State and PKCE
 
-To secure OAuth flows, RubyAuth stores the OAuth state and PKCE (Proof Key for Code Exchange) in the database. The state helps prevent CSRF attacks, while PKCE protects against code injection threats. Once the OAuth process completes, these values are removed from the database.
+OAuth state prevents CSRF and PKCE protects the authorization-code exchange.
+By default (`account.store_state_strategy: "cookie"`), RubyAuth stores encrypted
+state data and the PKCE verifier in a short-lived cookie and consumes that
+cookie during the callback. With the database strategy, RubyAuth stores the
+state package as a short-lived verification record and also checks a signed
+state cookie when a browser request is available. Successful reads consume the
+stored state so it cannot be replayed.
 
 ## Cookies
 
@@ -175,7 +185,7 @@ auth = BetterAuth.auth(
   secret: ENV.fetch("BETTER_AUTH_SECRET"),
   base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
   database: :postgres,
-  trusted_origins: ["https://app.example.com"],
+  trusted_origins: ["https://*.example.com"],
   advanced: {
     ip_address: {
       ip_address_headers: ["x-real-ip"]
@@ -271,7 +281,7 @@ auth = BetterAuth.auth(
   secret: ENV.fetch("BETTER_AUTH_SECRET"),
   base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
   database: :postgres,
-  trusted_origins: ["https://app.example.com"],
+  trusted_origins: ["https://*.example.com"],
   rate_limit: { enabled: true, window: 10, max: 100 }
 )
 ```
@@ -302,7 +312,7 @@ auth = BetterAuth.auth(
   secret: ENV.fetch("BETTER_AUTH_SECRET"),
   base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
   database: :postgres,
-  trusted_origins: ["https://app.example.com"],
+  trusted_origins: ["myapp://auth-callback"],
   rate_limit: { enabled: true, window: 10, max: 100 }
 )
 ```
@@ -314,11 +324,15 @@ You can also dynamically set the list of trusted origins by providing a function
 ```ruby
 require "better_auth"
 
+trusted_for_request = lambda do |request|
+  request.get_header("HTTP_X_TENANT") == "acme" ? ["https://acme.example.com"] : []
+end
+
 auth = BetterAuth.auth(
   secret: ENV.fetch("BETTER_AUTH_SECRET"),
   base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
   database: :postgres,
-  trusted_origins: ["https://app.example.com"],
+  trusted_origins: trusted_for_request,
   rate_limit: { enabled: true, window: 10, max: 100 }
 )
 ```
@@ -335,4 +349,4 @@ See [Email and Password — Email Enumeration Protection](/docs/authentication/e
 
 ## Reporting Vulnerabilities
 
-If you discover a security vulnerability in RubyAuth, please report it to us at [security@better-auth.com](mailto:security@better-auth.com). We address all reports promptly, and credits will be given for validated discoveries.
+If you discover a security vulnerability in RubyAuth, please report it to us at [security@openparcel.dev](mailto:security@openparcel.dev). We address all reports promptly, and credits will be given for validated discoveries.

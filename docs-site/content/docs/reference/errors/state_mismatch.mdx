@@ -20,7 +20,7 @@ has its own failure modes. This page covers every state-related error code, why 
 | ------------------------- | ------------------------------------- | -------- | --------------------------------------------------------------------------------------------- |
 | `state_mismatch`          | verification not found                | Database | The verification record for this state does not exist in the database (or secondary storage). |
 | `state_mismatch`          | auth state cookie not found           | Cookie   | The encrypted state cookie was not sent back with the callback request.                       |
-| `state_mismatch`          | request expired                       | Both     | The state data was found but its `expires_at` timestamp is in the past.                        |
+| `state_mismatch`          | request expired                       | Both     | The state data was found but its `expires_at` timestamp is in the past.                       |
 | `state_invalid`           | Failed to decrypt or parse auth state | Cookie   | The state cookie exists but cannot be decrypted or parsed (e.g. secret changed).              |
 | `state_security_mismatch` | State not persisted correctly         | Database | The signed state cookie is missing or does not match the state from the callback URL.         |
 | `state_generation_error`  | Unable to create verification         | Database | The verification record could not be written when starting the flow.                          |
@@ -199,7 +199,7 @@ triggers, and what to do about it.
 | **Medium**    | Signed cookie expired (5 min) while DB record is still valid (10 min) | `state_security_mismatch`                                       | The cookie has a shorter TTL than the DB record; users between 5–10 min will hit this |
 | **Low**       | Secret rotation mid-flow                                              | `state_invalid` (cookie) or `state_mismatch` (DB + hashed)      | Rotate secrets during low-traffic windows                                             |
 | **Low**       | OAuth provider altered the state parameter                            | `state_mismatch` (DB)                                           | Verify the provider preserves `state` exactly; check for URL encoding issues          |
-| **Low**       | Missing verification table / migration not run                        | `state_generation_error`                                        | Run `bundle exec better-auth migrate --cwd . --config config/better_auth.rb --yes`     |
+| **Low**       | Missing verification table / migration not run                        | `state_generation_error`                                        | Run `bundle exec better-auth migrate --cwd . --config config/better_auth.rb --yes`    |
 | **Very low**  | Clock skew between server instances                                   | request expired                                                 | Enable NTP on all servers                                                             |
 
 ***

@@ -4,6 +4,9 @@
 
 - **Breaking:** SAML is no longer a transitive dependency. Add `gem "better_auth-saml"` when using SAML providers.
 - Split protocol code into `better_auth-oidc` and `better_auth-saml`; this gem is now the convenience facade.
+- Hardened provider/domain lifecycle and SAML/OIDC request validation, with
+  regression coverage for the supported Ruby protocol paths.
+- Added a checked upstream test inventory for the SSO plugin surface.
 
 ## 0.10.0 - 2026-05-21
 

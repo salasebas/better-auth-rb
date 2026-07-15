@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Hardened API-key verification and counter updates where authoritative adapter
+  operations are available, with regression coverage for stale-write cases.
+- Added a checked upstream test inventory for this plugin's pinned reference
+  files.
+
 ## 0.10.0 - 2026-05-21
 
 - Improved adapter coverage and Redis-backed storage behavior for API key flows.
