@@ -94,7 +94,7 @@ module BetterAuth
           context[transaction_context_key] = previous
         else
           context&.delete(transaction_context_key)
-          Thread.current[TRANSACTION_CONTEXT_KEY] = nil if context&.empty?
+          Thread.current[TRANSACTION_CONTEXT_KEY] = nil if context && context.empty?
         end
       end
 
