@@ -412,10 +412,10 @@ module BetterAuth
           notes: "OAuth proxy plugin covered in oauth_proxy_test"
         },
         "plugins/oauth-popup/oauth-popup.test.ts" => {
-          owner: "../../../docs/adr/0001-oauth-popup-server-half.md",
-          status: :partial,
-          plan: "019",
-          notes: "The opt-in OAuth Popup server half is intentionally deferred to Plan 019; no runtime implementation exists yet"
+          owner: "better_auth/plugins/oauth_popup_test.rb",
+          status: :covered,
+          plan: "020",
+          notes: "OAuth popup server behavior covered; the upstream browser client remains explicitly excluded"
         },
         "plugins/oidc-provider/oidc.test.ts" => {
           status: :ruby_not_applicable,

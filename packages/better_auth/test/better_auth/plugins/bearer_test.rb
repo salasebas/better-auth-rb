@@ -173,6 +173,29 @@ class BetterAuthPluginsBearerTest < Minitest::Test
     refute ctx.response_headers.key?("set-auth-token")
   end
 
+  def test_bearer_finds_session_cookie_in_array_with_expires_and_other_cookies
+    auth = build_auth(plugins: [BetterAuth::Plugins.bearer])
+    cookie_name = auth.context.auth_cookies[:session_token].name
+    ctx = BetterAuth::Endpoint::Context.new(
+      path: "/sign-up/email",
+      method: "POST",
+      query: {},
+      body: {},
+      params: {},
+      headers: {},
+      context: auth.context
+    )
+    ctx.response_headers["set-cookie"] = [
+      "preference=dark; Expires=Wed, 09 Jun 2027 10:18:14 GMT; Path=/",
+      "#{cookie_name}=signed.token; Path=/; HttpOnly",
+      "#{cookie_name}=later.token; Path=/; HttpOnly"
+    ]
+
+    BetterAuth::Plugins.expose_auth_token(ctx)
+
+    assert_equal "signed.token", ctx.response_headers.fetch("set-auth-token")
+  end
+
   private
 
   def build_auth(options = {})

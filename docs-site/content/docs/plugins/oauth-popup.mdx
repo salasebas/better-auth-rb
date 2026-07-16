@@ -1,0 +1,109 @@
+---
+title: OAuth Popup
+description: Experimental popup-based OAuth sign-in for embedded applications using the Ruby server and upstream JavaScript client.
+---
+
+<RubyAuthDisclaimer />
+
+<Callout type="warn">
+  OAuth Popup is experimental. For a normal top-level application, prefer the
+  ordinary social or Generic OAuth redirect flow. Use a popup when a top-level
+  redirect is unavailable, such as a cross-site embedded application or iframe.
+</Callout>
+
+RubyAuth implements the server half of Better Auth's OAuth Popup plugin. The
+OAuth flow runs in a first-party popup, then the callback returns a
+Content-Security-Policy-constrained page that posts the signed session token to
+the exact trusted opener origin. RubyAuth does not ship a Ruby browser client;
+frontends use the upstream Better Auth JavaScript client.
+
+## Server setup
+
+Register OAuth Popup together with Bearer and list every opener origin in
+`trusted_origins`:
+
+```ruby title="config/auth.rb"
+require "better_auth"
+
+auth = BetterAuth.auth(
+  secret: ENV.fetch("BETTER_AUTH_SECRET"),
+  base_url: ENV.fetch("BETTER_AUTH_URL"),
+  trusted_origins: ["https://app.example.com"],
+  plugins: [
+    BetterAuth::Plugins.oauth_popup,
+    BetterAuth::Plugins.bearer
+  ]
+)
+```
+
+The plugin supports configured built-in social providers and providers added by
+[`generic_oauth`](/docs/plugins/generic-oauth). It adds the reachable
+`GET /oauth-popup/start` route. That internal orchestration endpoint is
+intentionally hidden from generated OpenAPI documents.
+
+Bearer is recommended rather than a hard plugin dependency. The stock upstream
+client needs it to authenticate an embedded cross-site application with the
+token returned by the popup. Without Bearer, the server still completes the
+popup flow and logs one warning, but the embedded client cannot use that token
+for authenticated requests.
+
+## Frontend client
+
+Use the upstream Better Auth JavaScript client and its OAuth Popup client
+plugin, pointed at the Ruby server:
+
+```ts title="auth-client.ts"
+import { createAuthClient } from "better-auth/client";
+import { oauthPopupClient } from "better-auth/client/plugins";
+
+export const authClient = createAuthClient({
+  baseURL: "https://auth.example.com",
+  basePath: "/api/auth",
+  plugins: [oauthPopupClient()],
+});
+```
+
+Start a built-in provider with `provider`:
+
+```ts
+await authClient.signIn.popup({
+  provider: "github",
+  callbackURL: "/dashboard",
+});
+```
+
+Use `providerId` for a Generic OAuth provider. Both forms also accept
+`errorCallbackURL`, `newUserCallbackURL`, `requestSignUp`, `scopes`, and
+`additionalData`.
+
+## Trusted origins and redirects
+
+`popupOrigin` is produced by the upstream client from `window.location.origin`.
+The Ruby server accepts only a trusted absolute HTTP(S) origin, canonicalizes an
+optional root slash, and rejects credentials, non-root paths, query strings,
+fragments, custom schemes, and wildcard origin input. The completion page uses
+that exact canonical origin as the `postMessage` target.
+
+Callback, error, and new-user URLs must also match the server's trusted-origin
+policy. Relative application paths are supported. Untrusted callback inputs are
+returned to the trusted opener as safe completion errors; an untrusted popup
+origin is rejected with `403 INVALID_ORIGIN` before the popup marker is set.
+
+## Browser security requirements
+
+The top-level page that opens the popup must allow the opener relationship. If
+it sets Cross-Origin-Opener-Policy, use
+`Cross-Origin-Opener-Policy: same-origin-allow-popups`. The auth callback must
+not send a COOP policy that swaps the browsing context group. COOP does not
+apply to an iframe in the same way, but the top-level opener and callback
+headers still matter when a real popup is used.
+
+The upstream embedded client stores the handed-off token in `localStorage` and
+sends it as `Authorization: Bearer`. Treat it as a session credential: an XSS
+on the trusted application origin can read it. Keep the application free of
+script injection, use a restrictive CSP, and choose session lifetimes
+appropriate for bearer-token exposure.
+
+The upstream browser-client test is not ported to Ruby; it remains part of the
+JavaScript client package. Ruby coverage exercises the server route, state and
+PKCE validation, cookies, callback transformation, CSP, and Bearer handoff.

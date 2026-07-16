@@ -5,6 +5,9 @@ release notes live in each package's `CHANGELOG.md`.
 
 ## Unreleased
 
+- Added the experimental OAuth Popup server plugin with built-in and Generic
+  OAuth support, strict trusted-origin targeting, CSP-constrained completion,
+  and Bearer token handoff for the upstream JavaScript client.
 - Removed the 18 OpenAuth alias packages and the `openauth` executable.
 - Consolidated repository tooling under `scripts/` and removed the one-off
   documentation generators and root Hanami stub.

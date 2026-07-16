@@ -62,6 +62,25 @@ class BetterAuthCookiesTest < Minitest::Test
     assert_equal "secure", BetterAuth::Cookies.get_session_cookie(header)
   end
 
+  def test_set_cookie_splitter_accepts_rack_header_forms_without_splitting_expires
+    first = "first=one; Path=/; Expires=Wed, 09 Jun 2027 10:18:14 GMT"
+    second = "second=two; Path=/; HttpOnly"
+
+    assert_equal [first], BetterAuth::Cookies.split_set_cookie_header(first)
+    assert_equal [first, second], BetterAuth::Cookies.split_set_cookie_header("#{first}\n#{second}")
+    assert_equal [first, second], BetterAuth::Cookies.split_set_cookie_header([first, second])
+    assert_equal [first, second], BetterAuth::Cookies.split_set_cookie_header("#{first}, #{second}")
+    assert_empty BetterAuth::Cookies.split_set_cookie_header(nil)
+  end
+
+  def test_set_cookie_parser_preserves_duplicate_names_in_header_order
+    lines = BetterAuth::Cookies.split_set_cookie_header("session=first; Path=/\nsession=second; Path=/")
+    parsed = lines.map { |line| BetterAuth::Cookies.parse_set_cookie(line) }
+
+    assert_equal ["first", "second"], parsed.map { |cookie| cookie.fetch(:value) }
+    assert_equal({"path" => "/"}, parsed.first.fetch(:attributes))
+  end
+
   def test_expiring_cookie_scrubs_prior_same_name_and_chunked_set_cookie_entries
     auth = BetterAuth.auth(secret: SECRET, session: {cookie_cache: {enabled: true}})
     ctx = endpoint_context(auth)

@@ -125,6 +125,32 @@ class BetterAuthPluginsOpenAPITest < Minitest::Test
     refute exposes_operation
   end
 
+  def test_oauth_popup_start_is_http_reachable_but_hidden_from_open_api
+    auth = build_auth(
+      trusted_origins: ["http://localhost:3000"],
+      plugins: [
+        BetterAuth::Plugins.oauth_popup,
+        BetterAuth::Plugins.open_api
+      ]
+    )
+
+    schema = auth.api.generate_openapi_schema
+    status, headers, body = auth.call(
+      "REQUEST_METHOD" => "GET",
+      "PATH_INFO" => "/api/auth/oauth-popup/start",
+      "QUERY_STRING" => URI.encode_www_form(provider: "missing", popupOrigin: "http://localhost:3000"),
+      "SERVER_NAME" => "localhost",
+      "SERVER_PORT" => "3000",
+      "rack.url_scheme" => "http",
+      "rack.input" => StringIO.new("")
+    )
+
+    refute_includes schema[:paths].keys, "/oauth-popup/start"
+    assert_equal 200, status
+    assert_equal "text/html; charset=utf-8", headers.fetch("content-type")
+    assert_includes body.join, "provider_not_found"
+  end
+
   def test_open_api_base_routes_have_upstream_rich_schemas
     auth = build_auth(plugins: [BetterAuth::Plugins.open_api])
 

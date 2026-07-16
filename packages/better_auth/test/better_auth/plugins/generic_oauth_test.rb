@@ -580,6 +580,59 @@ class BetterAuthPluginsGenericOAuthTest < Minitest::Test
     assert_includes state_cookie, "Max-Age=0"
   end
 
+  def test_internal_popup_authorization_start_uses_database_state_and_supplied_verifier
+    auth = build_auth(provider_overrides: {pkce: true})
+    ctx = endpoint_context(auth)
+    provider = auth.context.social_providers.fetch(:custom)
+    verifier = "v" * 128
+
+    url = provider.fetch(:oauth_popup_authorization_url).call(
+      ctx,
+      callbackURL: "/dashboard",
+      errorCallbackURL: "/error",
+      newUserCallbackURL: "/welcome",
+      requestSignUp: true,
+      scopes: ["calendar"],
+      additionalData: {tenant: "acme"},
+      codeVerifier: verifier
+    )
+    params = Rack::Utils.parse_query(URI.parse(url).query)
+    verification = auth.context.internal_adapter.find_verification_value(params.fetch("state"))
+    state_data = JSON.parse(verification.fetch("value"))
+
+    assert_equal verifier, state_data.fetch("codeVerifier")
+    assert_equal "/dashboard", state_data.fetch("callbackURL")
+    assert_equal "/error", state_data.fetch("errorURL")
+    assert_equal "/welcome", state_data.fetch("newUserURL")
+    assert_equal true, state_data.fetch("requestSignUp")
+    assert_equal "acme", state_data.fetch("tenant")
+    assert_includes ctx.response_headers.fetch("set-cookie"), "better-auth.state="
+    assert_equal "S256", params.fetch("code_challenge_method")
+  end
+
+  def test_internal_popup_authorization_start_uses_cookie_state_and_supplied_verifier
+    auth = build_auth(account: {store_state_strategy: "cookie"}, provider_overrides: {pkce: true})
+    ctx = endpoint_context(auth)
+    provider = auth.context.social_providers.fetch(:custom)
+    verifier = "w" * 128
+
+    url = provider.fetch(:oauth_popup_authorization_url).call(
+      ctx,
+      callbackURL: "/dashboard",
+      scopes: ["calendar"],
+      codeVerifier: verifier
+    )
+    params = Rack::Utils.parse_query(URI.parse(url).query)
+    cookie_name = auth.context.create_auth_cookie("oauth_state").name
+    encrypted = BetterAuth::Cookies.parse_cookies(cookie_header(ctx.response_headers.fetch("set-cookie"))).fetch(cookie_name)
+    state_data = JSON.parse(BetterAuth::Crypto.symmetric_decrypt(key: auth.context.secret_config, data: encrypted))
+
+    assert_equal params.fetch("state"), state_data.fetch("state")
+    assert_equal verifier, state_data.fetch("codeVerifier")
+    assert_equal "/dashboard", state_data.fetch("callbackURL")
+    assert_equal "S256", params.fetch("code_challenge_method")
+  end
+
   def test_cookie_state_strategy_survives_secret_rotation
     old_auth = build_auth(
       account: {store_state_strategy: "cookie"},
@@ -1562,6 +1615,18 @@ class BetterAuthPluginsGenericOAuthTest < Minitest::Test
           )
         ]
       }.merge(extra_options)
+    )
+  end
+
+  def endpoint_context(auth)
+    BetterAuth::Endpoint::Context.new(
+      path: "/oauth-popup/start",
+      method: "GET",
+      query: {},
+      body: {},
+      params: {},
+      headers: {},
+      context: auth.context
     )
   end
 

@@ -12,15 +12,7 @@ module EndpointApiComparison
   OUTPUT_MD = File.join(ROOT, "reference", "endpoints-api-comparison.md")
   OUTPUT_JSON = File.join(ROOT, "reference", "endpoints-api-comparison.json")
   UNSUPPORTED_PLUGINS = %w[mcp electron oidc-provider].freeze
-  KNOWN_GAPS = [
-    {
-      plugin_id: "oauth-popup",
-      path: "/oauth-popup/start",
-      method: "GET",
-      reason: "unimplemented_plugin",
-      details: "Actual OAuth popup functionality is absent in Ruby"
-    }
-  ].freeze
+  KNOWN_GAPS = [].freeze
   PASSKEY_METHOD_OVERRIDES = {
     "GET /passkey/generate-authenticate-options" => "POST",
     "GET /passkey/generate-register-options" => "POST"

@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-07-15T23:57:21Z",
-  "route_count": 221,
+  "generated_at": "2026-07-16T01:00:10Z",
+  "route_count": 222,
   "routes": [
     {
       "path": "/.well-known/oauth-authorization-server",
@@ -2187,6 +2187,31 @@
       "upstream_client_call": "authClient.multiSession.setActive",
       "plugin_id": "multi-session",
       "operation_id": "setActiveSession"
+    },
+    {
+      "path": "/oauth-popup/start",
+      "methods": [
+        "GET"
+      ],
+      "file": "packages/better_auth/lib/better_auth/plugins/oauth_popup.rb",
+      "line": 78,
+      "endpoint_key": "oauth_popup_start",
+      "plugin_hint": "oauth_popup",
+      "body_fields": [],
+      "query_params": [],
+      "path_params": [],
+      "header_params": [],
+      "disable_body": false,
+      "server_only": false,
+      "source": "static+runtime",
+      "method": "GET",
+      "ruby_api_method": "oauth_popup_start",
+      "ruby_api_call": "auth.api.oauth_popup_start",
+      "upstream_registry_key": "oauthPopupStart",
+      "upstream_api_call": "auth.api.oauthPopupStart",
+      "upstream_client_call": null,
+      "plugin_id": "oauth-popup",
+      "operation_id": null
     },
     {
       "path": "/oauth-proxy-callback",

@@ -42,6 +42,7 @@ module InventoryAuth
             scopes: ["profile", "email"]
           }]
         ),
+        BetterAuth::Plugins.oauth_popup,
         BetterAuth::Plugins.one_tap(
           client_id: "example-google-client",
           verify_id_token: ->(_token, _ctx, **_opts) { {sub: "1", email: "one-tap@example.test", email_verified: true, name: "One Tap"} }

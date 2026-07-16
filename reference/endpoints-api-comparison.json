@@ -1,10 +1,10 @@
 {
-  "generated_at": "2026-07-15T23:57:22Z",
+  "generated_at": "2026-07-16T01:00:11Z",
   "upstream_route_count": 236,
   "upstream_http_route_count": 222,
   "upstream_server_only_count": 14,
-  "ruby_route_count": 221,
-  "aligned_count": 202,
+  "ruby_route_count": 222,
+  "aligned_count": 203,
   "registry_key_mismatch_count": 0,
   "api_name_mismatch_count": 0,
   "missing_ruby_count": 0,
@@ -17,7 +17,7 @@
     "electron",
     "oidc-provider"
   ],
-  "known_gap_count": 1,
+  "known_gap_count": 0,
   "aligned": [
     {
       "plugin_id": "core",
@@ -1025,6 +1025,25 @@
       "ruby_api_method": "set_active_session",
       "ruby_api_call": "auth.api.set_active_session",
       "ruby_plugin": "multi-session"
+    },
+    {
+      "plugin_id": "oauth-popup",
+      "registry_key": "oauthPopupStart",
+      "ruby_registry_key": "oauth_popup_start",
+      "path": "/oauth-popup/start",
+      "method": "GET",
+      "upstream_api": "auth.api.oauthPopupStart",
+      "ruby_api": "auth.api.oauth_popup_start",
+      "upstream_client": null,
+      "deprecated": false,
+      "server_only": false,
+      "exposure": "http_hidden_metadata",
+      "client_visibility": "hidden_metadata",
+      "source_file": "reference/upstream-src/1.6.23/repository/packages/better-auth/src/plugins/oauth-popup/index.ts",
+      "ruby_endpoint_key": "oauth_popup_start",
+      "ruby_api_method": "oauth_popup_start",
+      "ruby_api_call": "auth.api.oauth_popup_start",
+      "ruby_plugin": "oauth-popup"
     },
     {
       "plugin_id": "oauth-proxy",
@@ -4622,25 +4641,7 @@
       "source_file": "reference/upstream-src/1.6.23/repository/packages/better-auth/src/plugins/oidc-provider/index.ts"
     }
   ],
-  "known_gaps": [
-    {
-      "plugin_id": "oauth-popup",
-      "registry_key": "oauthPopupStart",
-      "ruby_registry_key": "oauth_popup_start",
-      "path": "/oauth-popup/start",
-      "method": "GET",
-      "upstream_api": "auth.api.oauthPopupStart",
-      "ruby_api": "auth.api.oauth_popup_start",
-      "upstream_client": null,
-      "deprecated": false,
-      "server_only": false,
-      "exposure": "http_hidden_metadata",
-      "client_visibility": "hidden_metadata",
-      "source_file": "reference/upstream-src/1.6.23/repository/packages/better-auth/src/plugins/oauth-popup/index.ts",
-      "reason": "unimplemented_plugin",
-      "details": "Actual OAuth popup functionality is absent in Ruby"
-    }
-  ],
+  "known_gaps": [],
   "email_otp_focus": [
     {
       "plugin_id": "email-otp",

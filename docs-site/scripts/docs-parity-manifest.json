@@ -656,7 +656,7 @@
       "ruby_source": "packages/better_auth/test/better_auth/plugin_test.rb",
       "local_exists": true,
       "upstream_exists": true,
-      "current_local_lines": 498,
+      "current_local_lines": 499,
       "upstream_lines": 674,
       "status": "thin"
     },
@@ -1596,6 +1596,20 @@
       "status": "thin"
     },
     {
+      "slug": "plugins/oauth-popup.mdx",
+      "action": "keep_local",
+      "supported": true,
+      "reason": "Ruby server documentation for the upstream OAuth Popup client integration",
+      "ruby_source": "packages/better_auth/test/better_auth/plugins/oauth_popup_test.rb",
+      "ruby_plugin": "BetterAuth::Plugins.oauth_popup",
+      "gem": "better_auth",
+      "local_exists": true,
+      "upstream_exists": false,
+      "current_local_lines": 109,
+      "upstream_lines": 0,
+      "status": "keep_local"
+    },
+    {
       "slug": "plugins/oauth-provider.mdx",
       "action": "port",
       "supported": true,
@@ -2155,7 +2169,7 @@
       "reason": "Ruby-supported feature matrix",
       "local_exists": true,
       "upstream_exists": false,
-      "current_local_lines": 95,
+      "current_local_lines": 96,
       "upstream_lines": 0,
       "status": "keep_local"
     }

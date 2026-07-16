@@ -399,12 +399,12 @@ module BetterAuth
       )
     end
 
-    def generic_oauth_authorization_url(ctx, provider, body, link:)
+    def generic_oauth_authorization_url(ctx, provider, body, link:, code_verifier: nil)
       authorization_url = provider[:authorization_url] || generic_oauth_discovery(provider)["authorization_endpoint"]
       token_url = provider[:token_url] || generic_oauth_discovery(provider)["token_endpoint"]
       raise APIError.new("BAD_REQUEST", message: GENERIC_OAUTH_ERROR_CODES["INVALID_OAUTH_CONFIGURATION"]) if authorization_url.to_s.empty? || token_url.to_s.empty?
 
-      code_verifier = Crypto.random_string(43)
+      code_verifier ||= Crypto.random_string(43)
       state_data = normalize_hash(body[:additional_data] || body[:additionalData]).transform_keys(&:to_s).merge(
         "callbackURL" => body[:callback_url] || body[:callbackURL] || "/",
         "errorURL" => body[:error_callback_url] || body[:errorCallbackURL],
@@ -831,7 +831,17 @@ module BetterAuth
           id: provider_id,
           name: provider_id,
           get_user_info: ->(tokens) { generic_oauth_provider_user_info(provider, tokens) },
-          refresh_access_token: ->(refresh_token) { generic_oauth_refresh_access_token(context, provider, refresh_token) }
+          refresh_access_token: ->(refresh_token) { generic_oauth_refresh_access_token(context, provider, refresh_token) },
+          oauth_popup_authorization_url: lambda do |ctx, data|
+            normalized = normalize_hash(data)
+            generic_oauth_authorization_url(
+              ctx,
+              provider,
+              normalized,
+              link: nil,
+              code_verifier: normalized[:code_verifier]
+            )
+          end
         }
       end
     end

@@ -249,6 +249,25 @@ export const authClient = createAuthClient({
 });
 ```
 
+For experimental popup-based OAuth in an embedded application, register the
+server plugin with Bearer and configure the opener as a trusted origin:
+
+```ruby
+auth = BetterAuth.auth(
+  base_url: "https://auth.example.com",
+  secret: ENV.fetch("BETTER_AUTH_SECRET"),
+  trusted_origins: ["https://app.example.com"],
+  plugins: [
+    BetterAuth::Plugins.oauth_popup,
+    BetterAuth::Plugins.bearer
+  ]
+)
+```
+
+Use the upstream JavaScript `oauthPopupClient` against this Ruby server. The
+Ruby package provides the server route and callback handling, not a browser
+client. Prefer the ordinary redirect flow for top-level applications.
+
 ### Rails Integration
 
 Add to your Gemfile:
