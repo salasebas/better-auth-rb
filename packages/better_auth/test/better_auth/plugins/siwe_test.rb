@@ -7,38 +7,68 @@ require_relative "../../test_helper"
 class BetterAuthPluginsSiweTest < Minitest::Test
   SECRET = "phase-eight-secret-with-enough-entropy-123"
   WALLET = "0x000000000000000000000000000000000000dEaD"
+  OTHER_WALLET = "0x000000000000000000000000000000000000bEEF"
+  NONCE_PATHS = ["/api/auth/siwe/nonce", "/api/auth/siwe/get-nonce"].freeze
 
-  def test_get_nonce_upstream_route_alias_matches_nonce_route
+  def test_nonce_routes_accept_both_single_field_address_aliases
     auth = build_auth
     request = Rack::MockRequest.new(auth)
 
-    nonce_response = request.post(
-      "/api/auth/siwe/nonce",
-      "CONTENT_TYPE" => "application/json",
-      :input => JSON.generate(walletAddress: WALLET, chainId: 137)
-    )
-    get_nonce_response = request.post(
-      "/api/auth/siwe/get-nonce",
-      "CONTENT_TYPE" => "application/json",
-      :input => JSON.generate(address: WALLET, chainId: 137)
-    )
+    NONCE_PATHS.product([{walletAddress: WALLET}, {address: WALLET}]).each_with_index do |(path, body), index|
+      chain_id = 100 + index
+      response = post_json(request, path, body.merge(chainId: chain_id))
 
-    assert_equal 200, nonce_response.status
-    assert_equal 200, get_nonce_response.status
-    assert_equal({"nonce" => "nonce-1"}, JSON.parse(nonce_response.body))
-    assert_equal({"nonce" => "nonce-2"}, JSON.parse(get_nonce_response.body))
-    assert_equal({nonce: "nonce-3"}, auth.api.get_nonce(body: {address: WALLET, chainId: 137}))
+      assert_equal 200, response.status
+      assert_equal({"nonce" => "nonce-#{index + 1}"}, JSON.parse(response.body))
+      stored = auth.context.internal_adapter.find_verification_value("siwe:#{WALLET}:#{chain_id}")
+      assert_equal "nonce-#{index + 1}", stored["value"]
+    end
 
-    missing_address_response = request.post(
-      "/api/auth/siwe/get-nonce",
-      "CONTENT_TYPE" => "application/json",
-      :input => JSON.generate({})
-    )
-    assert_equal 400, missing_address_response.status
-    assert_equal "walletAddress or address is required", JSON.parse(missing_address_response.body).fetch("message")
+    assert_equal({nonce: "nonce-5"}, auth.api.get_nonce(body: {address: WALLET, chainId: 137}))
 
-    stored = auth.context.internal_adapter.find_verification_value("siwe:#{WALLET}:137")
-    assert_equal "nonce-3", stored["value"]
+    NONCE_PATHS.each do |path|
+      response = post_json(request, path, {})
+      assert_equal 400, response.status
+      assert_equal "walletAddress or address is required", JSON.parse(response.body).fetch("message")
+    end
+  end
+
+  def test_nonce_routes_reject_each_invalid_present_address_alias
+    auth = build_auth
+    request = Rack::MockRequest.new(auth)
+    cases = [
+      [NONCE_PATHS.fetch(0), {walletAddress: WALLET, address: "invalid", chainId: 201}],
+      [NONCE_PATHS.fetch(1), {walletAddress: WALLET, address: nil, chainId: 202}],
+      [NONCE_PATHS.fetch(0), {walletAddress: nil, chainId: 203}]
+    ]
+
+    cases.each do |path, body|
+      response = post_json(request, path, body)
+
+      assert_equal 400, response.status
+      assert_equal "Invalid walletAddress", JSON.parse(response.body).fetch("message")
+      assert_nil auth.context.internal_adapter.find_verification_value("siwe:#{WALLET}:#{body.fetch(:chainId)}")
+    end
+  end
+
+  def test_nonce_routes_prefer_wallet_address_when_both_aliases_are_valid
+    auth = build_auth
+    request = Rack::MockRequest.new(auth)
+
+    NONCE_PATHS.each_with_index do |path, index|
+      chain_id = 300 + index
+      response = post_json(
+        request,
+        path,
+        {walletAddress: WALLET, address: OTHER_WALLET, chainId: chain_id}
+      )
+
+      assert_equal 200, response.status
+      assert_equal({"nonce" => "nonce-#{index + 1}"}, JSON.parse(response.body))
+      selected = auth.context.internal_adapter.find_verification_value("siwe:#{WALLET}:#{chain_id}")
+      assert_equal "nonce-#{index + 1}", selected["value"]
+      assert_nil auth.context.internal_adapter.find_verification_value("siwe:#{OTHER_WALLET}:#{chain_id}")
+    end
   end
 
   def test_nonce_is_stored_per_wallet_and_chain
@@ -385,6 +415,14 @@ class BetterAuthPluginsSiweTest < Minitest::Test
   end
 
   private
+
+  def post_json(request, path, body)
+    request.post(
+      path,
+      "CONTENT_TYPE" => "application/json",
+      :input => JSON.generate(body)
+    )
+  end
 
   def siwe_message(nonce:, domain: "example.com", address: WALLET, chain_id: 1, expiration_time: nil, not_before: nil)
     lines = [

@@ -192,12 +192,12 @@ module BetterAuth
 
     def siwe_nonce_body(body)
       data = normalize_hash(body)
-      wallet_address = data[:wallet_address] || data[:address]
-      if wallet_address.to_s.empty?
+      wallet_address_keys = [:wallet_address, :address].select { |key| data.key?(key) }
+      if wallet_address_keys.empty?
         raise APIError.new("BAD_REQUEST", message: "walletAddress or address is required")
       end
 
-      siwe_normalize_wallet!(wallet_address)
+      wallet_address_keys.each { |key| siwe_normalize_wallet!(data[key]) }
       data[:chain_id] = siwe_chain_id(data[:chain_id])
       data
     end
