@@ -19,14 +19,6 @@ module EndpointApiComparison
       method: "GET",
       reason: "unimplemented_plugin",
       details: "Actual OAuth popup functionality is absent in Ruby"
-    },
-    {
-      plugin_id: "siwe",
-      path: "/siwe/get-nonce",
-      method: "POST",
-      reason: "wire_alias_missing",
-      details: "The upstream URL alias is absent, while equivalent Ruby functionality exists",
-      ruby_equivalent: {method: "POST", path: "/siwe/nonce"}
     }
   ].freeze
   PASSKEY_METHOD_OVERRIDES = {

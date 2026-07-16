@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-07-15T20:21:57Z",
-  "route_count": 220,
+  "generated_at": "2026-07-15T23:57:21Z",
+  "route_count": 221,
   "routes": [
     {
       "path": "/.well-known/oauth-authorization-server",
@@ -6467,15 +6467,18 @@
       "operation_id": "signUpWithEmailAndPassword"
     },
     {
-      "path": "/siwe/nonce",
+      "path": "/siwe/get-nonce",
       "methods": [
         "POST"
       ],
-      "file": "packages/better_auth/lib/better_auth/plugins/siwe.rb",
-      "line": 30,
-      "endpoint_key": "get_siwe_nonce",
-      "plugin_hint": "siwe",
+      "plugin_id": "siwe",
+      "endpoint_key": "get_nonce",
       "body_fields": [
+        {
+          "name": "address",
+          "required": false,
+          "type": "string"
+        },
         {
           "name": "chainId",
           "required": false,
@@ -6483,7 +6486,7 @@
         },
         {
           "name": "walletAddress",
-          "required": true,
+          "required": false,
           "type": "string"
         }
       ],
@@ -6492,15 +6495,52 @@
       "header_params": [],
       "disable_body": false,
       "server_only": false,
-      "source": "static+runtime",
+      "operation_id": "getNonce",
+      "source": "runtime",
+      "method": "POST",
+      "ruby_api_method": "get_nonce",
+      "ruby_api_call": "auth.api.get_nonce",
+      "upstream_registry_key": "getNonce",
+      "upstream_api_call": "auth.api.getNonce",
+      "upstream_client_call": null
+    },
+    {
+      "path": "/siwe/nonce",
+      "methods": [
+        "POST"
+      ],
+      "plugin_id": "siwe",
+      "endpoint_key": "get_siwe_nonce",
+      "body_fields": [
+        {
+          "name": "address",
+          "required": false,
+          "type": "string"
+        },
+        {
+          "name": "chainId",
+          "required": false,
+          "type": "number | string | null"
+        },
+        {
+          "name": "walletAddress",
+          "required": false,
+          "type": "string"
+        }
+      ],
+      "query_params": [],
+      "path_params": [],
+      "header_params": [],
+      "disable_body": false,
+      "server_only": false,
+      "operation_id": "getSiweNonce",
+      "source": "runtime",
       "method": "POST",
       "ruby_api_method": "get_siwe_nonce",
       "ruby_api_call": "auth.api.get_siwe_nonce",
       "upstream_registry_key": "getSiweNonce",
       "upstream_api_call": "auth.api.getSiweNonce",
-      "upstream_client_call": null,
-      "plugin_id": "siwe",
-      "operation_id": "getSiweNonce"
+      "upstream_client_call": null
     },
     {
       "path": "/siwe/verify",
@@ -6508,7 +6548,7 @@
         "POST"
       ],
       "file": "packages/better_auth/lib/better_auth/plugins/siwe.rb",
-      "line": 78,
+      "line": 79,
       "endpoint_key": "verify_siwe_message",
       "plugin_hint": "siwe",
       "body_fields": [

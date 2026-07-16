@@ -207,7 +207,7 @@ The table metadata below comes from `BetterAuth::Schema.auth_tables(auth.context
 | `refreshId` | `refresh_id` | string | no |  | yes | oauthRefreshToken.id, on delete cascade |  |  |  |
 | `revoked` | `revoked` | date | no |  |  |  |  |  |  |
 | `scopes` | `scopes` | string[] | yes |  |  |  |  |  |  |
-| `sessionId` | `session_id` | string | no |  |  | session.id, on delete set null |  |  |  |
+| `sessionId` | `session_id` | string | no |  | yes | session.id, on delete set null |  |  |  |
 | `token` | `token` | string | yes | yes |  |  |  |  |  |
 | `updatedAt` | `updated_at` | date | yes |  |  |  | generated |  |  |
 | `userId` | `user_id` | string | no |  | yes | user.id, on delete cascade |  |  |  |
@@ -281,7 +281,7 @@ The table metadata below comes from `BetterAuth::Schema.auth_tables(auth.context
 | `referenceId` | `reference_id` | string | no |  | yes |  |  |  |  |
 | `revoked` | `revoked` | date | no |  |  |  |  |  |  |
 | `scopes` | `scopes` | string[] | yes |  |  |  |  |  |  |
-| `sessionId` | `session_id` | string | no |  |  | session.id, on delete set null |  |  |  |
+| `sessionId` | `session_id` | string | no |  | yes | session.id, on delete set null |  |  |  |
 | `token` | `token` | string | yes |  |  |  |  |  |  |
 | `userId` | `user_id` | string | no |  | yes | user.id, on delete cascade |  |  |  |
 
@@ -435,7 +435,9 @@ The table metadata below comes from `BetterAuth::Schema.auth_tables(auth.context
 | Logical field | Physical field | Type | Required | Unique | Index | Reference | Default | Returned | Input |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | `backupCodes` | `backup_codes` | string | yes |  |  |  |  | no |  |
+| `failedVerificationCount` | `failed_verification_count` | number | no |  |  |  | 0 | no | no |
 | `id` | `id` | string | yes |  |  |  |  |  |  |
+| `lockedUntil` | `locked_until` | date | no |  |  |  |  | no | no |
 | `secret` | `secret` | string | yes |  | yes |  |  | no |  |
 | `userId` | `user_id` | string | yes |  | yes | user.id, on delete cascade |  | no |  |
 | `verified` | `verified` | boolean | no |  |  |  | yes |  | no |
@@ -527,6 +529,8 @@ CREATE TABLE IF NOT EXISTS "two_factors" (
   "backup_codes" text NOT NULL,
   "user_id" text NOT NULL,
   "verified" boolean DEFAULT true,
+  "failed_verification_count" integer DEFAULT 0,
+  "locked_until" timestamptz,
   FOREIGN KEY ("user_id") REFERENCES "users" ("id") ON DELETE CASCADE
 );
 
@@ -857,6 +861,8 @@ CREATE INDEX IF NOT EXISTS "index_oauth_clients_on_reference_id" ON "oauth_clien
 
 CREATE INDEX IF NOT EXISTS "index_oauth_refresh_tokens_on_client_id" ON "oauth_refresh_tokens" ("client_id");
 
+CREATE INDEX IF NOT EXISTS "index_oauth_refresh_tokens_on_session_id" ON "oauth_refresh_tokens" ("session_id");
+
 CREATE INDEX IF NOT EXISTS "index_oauth_refresh_tokens_on_user_id" ON "oauth_refresh_tokens" ("user_id");
 
 CREATE INDEX IF NOT EXISTS "index_oauth_refresh_tokens_on_reference_id" ON "oauth_refresh_tokens" ("reference_id");
@@ -864,6 +870,8 @@ CREATE INDEX IF NOT EXISTS "index_oauth_refresh_tokens_on_reference_id" ON "oaut
 CREATE INDEX IF NOT EXISTS "index_oauth_access_tokens_on_client_id" ON "oauth_access_tokens" ("client_id");
 
 CREATE INDEX IF NOT EXISTS "index_oauth_access_tokens_on_user_id" ON "oauth_access_tokens" ("user_id");
+
+CREATE INDEX IF NOT EXISTS "index_oauth_access_tokens_on_session_id" ON "oauth_access_tokens" ("session_id");
 
 CREATE INDEX IF NOT EXISTS "index_oauth_access_tokens_on_refresh_id" ON "oauth_access_tokens" ("refresh_id");
 
@@ -945,6 +953,8 @@ CREATE TABLE IF NOT EXISTS `two_factors` (
   `backup_codes` text NOT NULL,
   `user_id` varchar(191) NOT NULL,
   `verified` tinyint(1) DEFAULT 1,
+  `failed_verification_count` integer DEFAULT 0,
+  `locked_until` datetime(6),
   CONSTRAINT `fk_two_factors_user_id` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
@@ -1275,6 +1285,8 @@ CREATE INDEX `index_oauth_clients_on_reference_id` ON `oauth_clients` (`referenc
 
 CREATE INDEX `index_oauth_refresh_tokens_on_client_id` ON `oauth_refresh_tokens` (`client_id`);
 
+CREATE INDEX `index_oauth_refresh_tokens_on_session_id` ON `oauth_refresh_tokens` (`session_id`);
+
 CREATE INDEX `index_oauth_refresh_tokens_on_user_id` ON `oauth_refresh_tokens` (`user_id`);
 
 CREATE INDEX `index_oauth_refresh_tokens_on_reference_id` ON `oauth_refresh_tokens` (`reference_id`);
@@ -1282,6 +1294,8 @@ CREATE INDEX `index_oauth_refresh_tokens_on_reference_id` ON `oauth_refresh_toke
 CREATE INDEX `index_oauth_access_tokens_on_client_id` ON `oauth_access_tokens` (`client_id`);
 
 CREATE INDEX `index_oauth_access_tokens_on_user_id` ON `oauth_access_tokens` (`user_id`);
+
+CREATE INDEX `index_oauth_access_tokens_on_session_id` ON `oauth_access_tokens` (`session_id`);
 
 CREATE INDEX `index_oauth_access_tokens_on_refresh_id` ON `oauth_access_tokens` (`refresh_id`);
 
@@ -1363,6 +1377,8 @@ CREATE TABLE IF NOT EXISTS "two_factors" (
   "backup_codes" text NOT NULL,
   "user_id" text NOT NULL,
   "verified" integer DEFAULT 1,
+  "failed_verification_count" integer DEFAULT 0,
+  "locked_until" date,
   FOREIGN KEY ("user_id") REFERENCES "users" ("id") ON DELETE CASCADE
 );
 
@@ -1693,6 +1709,8 @@ CREATE INDEX IF NOT EXISTS "index_oauth_clients_on_reference_id" ON "oauth_clien
 
 CREATE INDEX IF NOT EXISTS "index_oauth_refresh_tokens_on_client_id" ON "oauth_refresh_tokens" ("client_id");
 
+CREATE INDEX IF NOT EXISTS "index_oauth_refresh_tokens_on_session_id" ON "oauth_refresh_tokens" ("session_id");
+
 CREATE INDEX IF NOT EXISTS "index_oauth_refresh_tokens_on_user_id" ON "oauth_refresh_tokens" ("user_id");
 
 CREATE INDEX IF NOT EXISTS "index_oauth_refresh_tokens_on_reference_id" ON "oauth_refresh_tokens" ("reference_id");
@@ -1700,6 +1718,8 @@ CREATE INDEX IF NOT EXISTS "index_oauth_refresh_tokens_on_reference_id" ON "oaut
 CREATE INDEX IF NOT EXISTS "index_oauth_access_tokens_on_client_id" ON "oauth_access_tokens" ("client_id");
 
 CREATE INDEX IF NOT EXISTS "index_oauth_access_tokens_on_user_id" ON "oauth_access_tokens" ("user_id");
+
+CREATE INDEX IF NOT EXISTS "index_oauth_access_tokens_on_session_id" ON "oauth_access_tokens" ("session_id");
 
 CREATE INDEX IF NOT EXISTS "index_oauth_access_tokens_on_refresh_id" ON "oauth_access_tokens" ("refresh_id");
 
@@ -1819,6 +1839,8 @@ CREATE TABLE [two_factors] (
   [backup_codes] varchar(8000) NOT NULL,
   [user_id] varchar(255) NOT NULL,
   [verified] smallint NULL DEFAULT 1,
+  [failed_verification_count] integer NULL DEFAULT 0,
+  [locked_until] datetime2(3) NULL,
   CONSTRAINT [fk_two_factors_user_id] FOREIGN KEY ([user_id]) REFERENCES [users] ([id]) ON DELETE CASCADE
 );
 
@@ -2480,6 +2502,15 @@ SET ANSI_PADDING ON;
 SET CONCAT_NULL_YIELDS_NULL ON;
 SET ARITHABORT ON;
 SET NUMERIC_ROUNDABORT OFF;
+IF NOT EXISTS (SELECT name FROM sys.indexes WHERE name = 'index_oauth_refresh_tokens_on_session_id' AND object_id = OBJECT_ID(N'[oauth_refresh_tokens]')) CREATE INDEX [index_oauth_refresh_tokens_on_session_id] ON [oauth_refresh_tokens] ([session_id]);
+
+SET ANSI_NULLS ON;
+SET QUOTED_IDENTIFIER ON;
+SET ANSI_WARNINGS ON;
+SET ANSI_PADDING ON;
+SET CONCAT_NULL_YIELDS_NULL ON;
+SET ARITHABORT ON;
+SET NUMERIC_ROUNDABORT OFF;
 IF NOT EXISTS (SELECT name FROM sys.indexes WHERE name = 'index_oauth_refresh_tokens_on_user_id' AND object_id = OBJECT_ID(N'[oauth_refresh_tokens]')) CREATE INDEX [index_oauth_refresh_tokens_on_user_id] ON [oauth_refresh_tokens] ([user_id]);
 
 SET ANSI_NULLS ON;
@@ -2508,6 +2539,15 @@ SET CONCAT_NULL_YIELDS_NULL ON;
 SET ARITHABORT ON;
 SET NUMERIC_ROUNDABORT OFF;
 IF NOT EXISTS (SELECT name FROM sys.indexes WHERE name = 'index_oauth_access_tokens_on_user_id' AND object_id = OBJECT_ID(N'[oauth_access_tokens]')) CREATE INDEX [index_oauth_access_tokens_on_user_id] ON [oauth_access_tokens] ([user_id]);
+
+SET ANSI_NULLS ON;
+SET QUOTED_IDENTIFIER ON;
+SET ANSI_WARNINGS ON;
+SET ANSI_PADDING ON;
+SET CONCAT_NULL_YIELDS_NULL ON;
+SET ARITHABORT ON;
+SET NUMERIC_ROUNDABORT OFF;
+IF NOT EXISTS (SELECT name FROM sys.indexes WHERE name = 'index_oauth_access_tokens_on_session_id' AND object_id = OBJECT_ID(N'[oauth_access_tokens]')) CREATE INDEX [index_oauth_access_tokens_on_session_id] ON [oauth_access_tokens] ([session_id]);
 
 SET ANSI_NULLS ON;
 SET QUOTED_IDENTIFIER ON;

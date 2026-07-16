@@ -262,16 +262,14 @@ class EndpointToolingTest < Minitest::Test
     report = EndpointApiComparison.build_report(
       [
         upstream_row("/oauth-popup/start", "GET", "oauthPopupStart", plugin_id: "oauth-popup"),
-        upstream_row("/siwe/get-nonce", "POST", "getNonce", plugin_id: "siwe"),
         upstream_row("/mcp/token", "POST", "mcpOAuthToken", plugin_id: "mcp")
       ],
       []
     )
 
-    assert_equal 2, report.fetch(:known_gap_count)
+    assert_equal 1, report.fetch(:known_gap_count)
     assert_equal [
-      ["/oauth-popup/start", "unimplemented_plugin", nil],
-      ["/siwe/get-nonce", "wire_alias_missing", {method: "POST", path: "/siwe/nonce"}]
+      ["/oauth-popup/start", "unimplemented_plugin", nil]
     ], report.fetch(:known_gaps).map { |row| [row.fetch(:path), row.fetch(:reason), row[:ruby_equivalent]] }
     assert_equal 1, report.fetch(:excluded_unsupported_count)
     assert_equal "mcp", report.fetch(:excluded_unsupported).fetch(0).fetch(:plugin_id)

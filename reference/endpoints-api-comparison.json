@@ -1,10 +1,10 @@
 {
-  "generated_at": "2026-07-15T20:21:57Z",
+  "generated_at": "2026-07-15T23:57:22Z",
   "upstream_route_count": 236,
   "upstream_http_route_count": 222,
   "upstream_server_only_count": 14,
-  "ruby_route_count": 220,
-  "aligned_count": 201,
+  "ruby_route_count": 221,
+  "aligned_count": 202,
   "registry_key_mismatch_count": 0,
   "api_name_mismatch_count": 0,
   "missing_ruby_count": 0,
@@ -17,7 +17,7 @@
     "electron",
     "oidc-provider"
   ],
-  "known_gap_count": 2,
+  "known_gap_count": 1,
   "aligned": [
     {
       "plugin_id": "core",
@@ -3099,6 +3099,25 @@
     },
     {
       "plugin_id": "siwe",
+      "registry_key": "getNonce",
+      "ruby_registry_key": "get_nonce",
+      "path": "/siwe/get-nonce",
+      "method": "POST",
+      "upstream_api": "auth.api.getNonce",
+      "ruby_api": "auth.api.get_nonce",
+      "upstream_client": null,
+      "deprecated": false,
+      "server_only": false,
+      "exposure": "http",
+      "client_visibility": "undocumented",
+      "source_file": "reference/upstream-src/1.6.23/repository/packages/better-auth/src/plugins/siwe/index.ts",
+      "ruby_endpoint_key": "get_nonce",
+      "ruby_api_method": "get_nonce",
+      "ruby_api_call": "auth.api.get_nonce",
+      "ruby_plugin": "siwe"
+    },
+    {
+      "plugin_id": "siwe",
       "registry_key": "getSiweNonce",
       "ruby_registry_key": "get_siwe_nonce",
       "path": "/siwe/nonce",
@@ -4620,27 +4639,6 @@
       "source_file": "reference/upstream-src/1.6.23/repository/packages/better-auth/src/plugins/oauth-popup/index.ts",
       "reason": "unimplemented_plugin",
       "details": "Actual OAuth popup functionality is absent in Ruby"
-    },
-    {
-      "plugin_id": "siwe",
-      "registry_key": "getNonce",
-      "ruby_registry_key": "get_nonce",
-      "path": "/siwe/get-nonce",
-      "method": "POST",
-      "upstream_api": "auth.api.getNonce",
-      "ruby_api": "auth.api.get_nonce",
-      "upstream_client": null,
-      "deprecated": false,
-      "server_only": false,
-      "exposure": "http",
-      "client_visibility": "undocumented",
-      "source_file": "reference/upstream-src/1.6.23/repository/packages/better-auth/src/plugins/siwe/index.ts",
-      "reason": "wire_alias_missing",
-      "details": "The upstream URL alias is absent, while equivalent Ruby functionality exists",
-      "ruby_equivalent": {
-        "method": "POST",
-        "path": "/siwe/nonce"
-      }
     }
   ],
   "email_otp_focus": [
