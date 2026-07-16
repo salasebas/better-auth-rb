@@ -10,7 +10,8 @@ class BetterAuthUpstreamServerParityInventoryTest < Minitest::Test
     assert_empty PARITY.validation_errors
 
     popup = PARITY::SERVER_UPSTREAM_TEST_OWNERS.fetch("plugins/oauth-popup/oauth-popup.test.ts")
-    assert_equal "../../../docs/adr/0001-oauth-popup-server-half.md", popup.fetch(:owner)
+    assert_equal "better_auth/plugins/oauth_popup_test.rb", popup.fetch(:owner)
+    assert_equal :covered, popup.fetch(:status)
     assert File.file?(File.expand_path(popup.fetch(:owner), PARITY::TEST_ROOT))
   end
 

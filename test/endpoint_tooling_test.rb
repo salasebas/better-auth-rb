@@ -264,17 +264,31 @@ class EndpointToolingTest < Minitest::Test
         upstream_row("/oauth-popup/start", "GET", "oauthPopupStart", plugin_id: "oauth-popup"),
         upstream_row("/mcp/token", "POST", "mcpOAuthToken", plugin_id: "mcp")
       ],
-      []
+      [ruby_row("/oauth-popup/start", "GET", "oauth_popup_start")]
     )
 
-    assert_equal 1, report.fetch(:known_gap_count)
-    assert_equal [
-      ["/oauth-popup/start", "unimplemented_plugin", nil]
-    ], report.fetch(:known_gaps).map { |row| [row.fetch(:path), row.fetch(:reason), row[:ruby_equivalent]] }
+    assert_equal 0, report.fetch(:known_gap_count)
+    assert_empty report.fetch(:known_gaps)
+    assert_equal ["/oauth-popup/start"], report.fetch(:aligned).map { |row| row.fetch(:path) }
     assert_equal 1, report.fetch(:excluded_unsupported_count)
     assert_equal "mcp", report.fetch(:excluded_unsupported).fetch(0).fetch(:plugin_id)
     assert_equal %w[mcp electron oidc-provider], report.fetch(:excluded_unsupported_plugins)
     assert_equal 0, report.fetch(:missing_ruby_count)
+  end
+
+  def test_reports_hidden_metadata_visibility_mismatches
+    upstream = upstream_row("/oauth-popup/start", "GET", "oauthPopupStart", plugin_id: "oauth-popup").merge(hidden_metadata: true)
+    ruby = ruby_row("/oauth-popup/start", "GET", "oauth_popup_start").merge(hidden: false)
+
+    report = EndpointApiComparison.build_report([upstream], [ruby])
+
+    assert_equal 1, report.fetch(:visibility_mismatch_count)
+    mismatch = report.fetch(:visibility_mismatches).fetch(0)
+    assert_equal true, mismatch.fetch(:upstream_hidden)
+    assert_equal false, mismatch.fetch(:ruby_hidden)
+
+    aligned = EndpointApiComparison.build_report([upstream], [ruby.merge(hidden: true)])
+    assert_equal 0, aligned.fetch(:visibility_mismatch_count)
   end
 
   private

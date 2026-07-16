@@ -889,6 +889,15 @@
       "require_path": "better_auth/oauth_provider"
     },
     {
+      "slug": "plugins/oauth-popup.mdx",
+      "action": "keep_local",
+      "supported": true,
+      "reason": "Ruby server documentation for the upstream OAuth Popup client integration",
+      "ruby_source": "packages/better_auth/test/better_auth/plugins/oauth_popup_test.rb",
+      "ruby_plugin": "BetterAuth::Plugins.oauth_popup",
+      "gem": "better_auth"
+    },
+    {
       "slug": "plugins/oauth-proxy.mdx",
       "action": "port",
       "supported": true,

@@ -78,6 +78,29 @@ module BetterAuth
       end
     end
 
+    def split_set_cookie_header(header)
+      Array(header).flat_map do |value|
+        value.to_s.lines(chomp: true).flat_map do |line|
+          line.split(/,(?=[ \t]*[!#$%&'*+\-.^_`|~0-9A-Za-z]+=)/).map(&:strip)
+        end
+      end.reject(&:empty?)
+    end
+
+    def parse_set_cookie(line)
+      first, *attributes = line.to_s.split(";").map(&:strip)
+      name, value = first.split("=", 2)
+      return unless name && value
+
+      {
+        name: name,
+        value: value,
+        attributes: attributes.each_with_object({}) do |attribute, result|
+          key, attribute_value = attribute.split("=", 2)
+          result[key.to_s.downcase] = attribute_value || true unless key.to_s.empty?
+        end
+      }
+    end
+
     def set_request_cookie(cookie_header, name, value)
       cookies = parse_cookies(cookie_header)
       cookie_name = name.to_s

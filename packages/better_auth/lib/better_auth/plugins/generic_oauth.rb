@@ -31,7 +31,7 @@ module BetterAuth
         init: ->(context) {
           {
             options: {
-              social_providers: generic_oauth_social_providers(config, context).merge(context.social_providers)
+              social_providers: context.social_providers.merge(generic_oauth_social_providers(config, context))
             }
           }
         },
@@ -399,13 +399,20 @@ module BetterAuth
       )
     end
 
-    def generic_oauth_authorization_url(ctx, provider, body, link:)
+    def generic_oauth_authorization_url(ctx, provider, body, link:, code_verifier: nil, preserve_additional_data: false)
       authorization_url = provider[:authorization_url] || generic_oauth_discovery(provider)["authorization_endpoint"]
       token_url = provider[:token_url] || generic_oauth_discovery(provider)["token_endpoint"]
       raise APIError.new("BAD_REQUEST", message: GENERIC_OAUTH_ERROR_CODES["INVALID_OAUTH_CONFIGURATION"]) if authorization_url.to_s.empty? || token_url.to_s.empty?
 
-      code_verifier = Crypto.random_string(43)
-      state_data = normalize_hash(body[:additional_data] || body[:additionalData]).transform_keys(&:to_s).merge(
+      code_verifier ||= Crypto.random_string(43)
+      additional_data = if preserve_additional_data
+        raw = body[:additional_data] || body[:additionalData]
+        raw.is_a?(Hash) ? raw.each_with_object({}) { |(key, value), data| data[key.to_s] = value } : {}
+      else
+        normalize_hash(body[:additional_data] || body[:additionalData]).transform_keys(&:to_s)
+      end
+      additional_data = additional_data.reject { |key, _value| OAuthState::INTERNAL_KEYS.include?(key.to_s) }
+      state_data = additional_data.merge(
         "callbackURL" => body[:callback_url] || body[:callbackURL] || "/",
         "errorURL" => body[:error_callback_url] || body[:errorCallbackURL],
         "newUserURL" => body[:new_user_callback_url] || body[:newUserCallbackURL],
@@ -415,19 +422,6 @@ module BetterAuth
         "expiresAt" => Time.now.to_i + 600
       )
       state = generic_oauth_generate_state(ctx, state_data)
-      legacy_state = Crypto.sign_jwt(
-        {
-          "callbackURL" => body[:callback_url] || body[:callbackURL] || "/",
-          "errorURL" => body[:error_callback_url] || body[:errorCallbackURL],
-          "newUserURL" => body[:new_user_callback_url] || body[:newUserCallbackURL],
-          "requestSignUp" => body[:request_sign_up] || body[:requestSignUp],
-          "codeVerifier" => code_verifier,
-          "link" => link
-        },
-        ctx.context.secret,
-        expires_in: 600
-      )
-      state ||= legacy_state
 
       uri = URI.parse(authorization_url.to_s)
       params = URI.decode_www_form(uri.query.to_s)
@@ -468,25 +462,7 @@ module BetterAuth
     end
 
     def generic_oauth_generate_state(ctx, state_data)
-      strategy = ctx.context.options.account[:store_state_strategy]
-      state = Crypto.random_string(32)
-      if strategy.to_s == "cookie"
-        cookie = ctx.context.create_auth_cookie("oauth_state", max_age: 600)
-        encrypted = Crypto.symmetric_encrypt(key: ctx.context.secret_config, data: JSON.generate(state_data.merge("state" => state)))
-        ctx.set_cookie(cookie.name, encrypted, cookie.attributes)
-        return state
-      end
-
-      cookie = ctx.context.create_auth_cookie("state", max_age: 300)
-      ctx.set_signed_cookie(cookie.name, state, ctx.context.secret, cookie.attributes)
-      ctx.context.internal_adapter.create_verification_value(
-        identifier: state,
-        value: JSON.generate(state_data),
-        expiresAt: Time.now + 600
-      )
-      state
-    rescue
-      nil
+      OAuthState.generate(ctx, state_data)
     end
 
     def generic_oauth_exchange_token(ctx, provider, code, state_data)
@@ -508,61 +484,11 @@ module BetterAuth
     end
 
     def generic_oauth_parse_state(ctx, state)
-      if state.to_s.empty?
-        raise ctx.redirect(generic_oauth_error_url(generic_oauth_state_error_url(ctx), "please_restart_the_process"))
-      end
-
-      if ctx.context.options.account[:store_state_strategy].to_s == "cookie"
-        cookie = ctx.context.create_auth_cookie("oauth_state")
-        encrypted = ctx.get_cookie(cookie.name)
-        unless encrypted
-          raise ctx.redirect(generic_oauth_error_url(generic_oauth_state_error_url(ctx), "state_mismatch"))
-        end
-
-        begin
-          decrypted = Crypto.symmetric_decrypt(key: ctx.context.secret_config, data: encrypted)
-          unless decrypted
-            Cookies.expire_cookie(ctx, cookie)
-            raise ctx.redirect(generic_oauth_error_url(generic_oauth_state_error_url(ctx), "please_restart_the_process"))
-          end
-
-          parsed = JSON.parse(decrypted)
-        rescue JSON::ParserError
-          Cookies.expire_cookie(ctx, cookie)
-          raise ctx.redirect(generic_oauth_error_url(generic_oauth_state_error_url(ctx), "please_restart_the_process"))
-        end
-
-        Cookies.expire_cookie(ctx, cookie)
-        if parsed["state"] != state
-          raise ctx.redirect(generic_oauth_error_url(generic_oauth_recovered_state_error_url(ctx, parsed), "state_mismatch"))
-        end
-        if parsed["expiresAt"].to_i.positive? && parsed["expiresAt"].to_i < Time.now.to_i
-          raise ctx.redirect(generic_oauth_error_url(generic_oauth_recovered_state_error_url(ctx, parsed), "state_mismatch"))
-        end
-        return parsed
-      else
-        verification = ctx.context.internal_adapter.consume_verification_value(state)
-        if verification
-          cookie = ctx.context.create_auth_cookie("state")
-          cookie_state = ctx.get_signed_cookie(cookie.name, ctx.context.secret)
-          parsed = JSON.parse(verification.fetch("value"))
-          recovered_error_url = generic_oauth_recovered_state_error_url(ctx, parsed)
-          if ctx.request && cookie_state != state
-            Cookies.expire_cookie(ctx, cookie)
-            raise ctx.redirect(generic_oauth_error_url(recovered_error_url, "state_mismatch"))
-          elsif !ctx.request && cookie_state && cookie_state != state
-            Cookies.expire_cookie(ctx, cookie)
-            raise ctx.redirect(generic_oauth_error_url(recovered_error_url, "state_mismatch"))
-          end
-
-          Cookies.expire_cookie(ctx, cookie) if ctx.request || cookie_state
-          return parsed
-        end
-      end
-
-      Crypto.verify_jwt(state.to_s, ctx.context.secret) || {}
-    rescue JSON::ParserError
-      {}
+      OAuthState.parse(ctx, state)
+    rescue OAuthState::Error => error
+      code = (error.code == "state_not_found") ? "please_restart_the_process" : error.code
+      error_url = error.error_url || generic_oauth_state_error_url(ctx)
+      raise ctx.redirect(generic_oauth_error_url(error_url, code))
     end
 
     def generic_oauth_state_error_url(ctx)
@@ -831,7 +757,20 @@ module BetterAuth
           id: provider_id,
           name: provider_id,
           get_user_info: ->(tokens) { generic_oauth_provider_user_info(provider, tokens) },
-          refresh_access_token: ->(refresh_token) { generic_oauth_refresh_access_token(context, provider, refresh_token) }
+          refresh_access_token: ->(refresh_token) { generic_oauth_refresh_access_token(context, provider, refresh_token) },
+          oauth_popup_authorization_url: lambda do |ctx, data|
+            additional_data = data[:additionalData] || data["additionalData"] || data[:additional_data] || data["additional_data"]
+            normalized = normalize_hash(data)
+            normalized[:additional_data] = additional_data if additional_data.is_a?(Hash)
+            generic_oauth_authorization_url(
+              ctx,
+              provider,
+              normalized,
+              link: nil,
+              code_verifier: normalized[:code_verifier],
+              preserve_additional_data: true
+            )
+          end
         }
       end
     end

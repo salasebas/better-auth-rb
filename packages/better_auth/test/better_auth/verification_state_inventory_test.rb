@@ -11,7 +11,7 @@ class BetterAuthVerificationStateInventoryTest < Minitest::Test
     "packages/better_auth/lib/better_auth/routes/email_verification.rb" => ["consume_verification_value(identifier)"],
     "packages/better_auth/lib/better_auth/plugins/one_time_token.rb" => ["consume_verification_value(\"one-time-token:\#{stored_token}\")"],
     "packages/better_auth/lib/better_auth/plugins/siwe.rb" => ["consume_verification_value(siwe_identifier(wallet_address, chain_id))"],
-    "packages/better_auth/lib/better_auth/plugins/generic_oauth.rb" => ["consume_verification_value(state)"],
+    "packages/better_auth/lib/better_auth/oauth_state.rb" => ["consume_verification_value(state)"],
     "packages/better_auth/lib/better_auth/plugins/email_otp.rb" => ["consume_verification_value(identifier)"],
     "packages/better_auth/lib/better_auth/plugins/phone_number.rb" => ["consume_verification_value(identifier)", "Custom verify_otp owns single-use and expiry state completely"],
     "packages/better_auth/lib/better_auth/plugins/two_factor.rb" => ["consume_verification_value(identifier)"],

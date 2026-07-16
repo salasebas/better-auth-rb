@@ -142,24 +142,36 @@ module BetterAuth
 
         source = ctx.query
         data = normalize_hash(source)
-        provider = social_provider(ctx.context, provider_id)
         state = data["state"].to_s
-        state_data = state.empty? ? nil : Crypto.verify_jwt(state, ctx.context.secret)
-        error_url = state_data ? (state_data["errorCallbackURL"] || "#{ctx.context.base_url}/error") : "#{ctx.context.base_url}/error"
+        default_error_url = ctx.context.options.on_api_error[:error_url] || "#{ctx.context.base_url}/error"
+        state_data = begin
+          OAuthState.parse(ctx, state)
+        rescue OAuthState::Error => error
+          raise ctx.redirect(oauth_error_url(error.error_url || default_error_url, error.code))
+        end
+        error_url = state_data["errorURL"] || state_data["errorCallbackURL"] || default_error_url
 
         raise ctx.redirect(oauth_error_url(error_url, data["error"], data["errorDescription"] || data["error_description"])) if data["error"]
-        raise ctx.redirect(oauth_error_url(error_url, "oauth_provider_not_found")) unless provider
-        raise ctx.redirect(oauth_error_url(error_url, "state_not_found")) unless state_data
-        raise ctx.redirect(oauth_error_url(error_url, "state_mismatch")) unless valid_oauth_state_cookie?(ctx, state)
         raise ctx.redirect(oauth_error_url(error_url, "no_code")) if data["code"].to_s.empty?
+        provider = social_provider(ctx.context, provider_id)
+        raise ctx.redirect(oauth_error_url(error_url, "oauth_provider_not_found")) unless provider
 
-        tokens = call_provider(provider, :validate_authorization_code, {
-          code: data["code"],
-          codeVerifier: state_data["codeVerifier"],
-          code_verifier: state_data["codeVerifier"],
-          redirectURI: "#{ctx.context.canonical_base_url}/callback/#{provider_id}",
-          redirect_uri: "#{ctx.context.canonical_base_url}/callback/#{provider_id}"
-        })
+        tokens = begin
+          call_provider(provider, :validate_authorization_code, {
+            code: data["code"],
+            codeVerifier: state_data["codeVerifier"],
+            code_verifier: state_data["codeVerifier"],
+            redirectURI: "#{ctx.context.canonical_base_url}/callback/#{provider_id}",
+            redirect_uri: "#{ctx.context.canonical_base_url}/callback/#{provider_id}"
+          })
+        rescue APIError => error
+          raise if error.status == "FOUND"
+
+          nil
+        rescue => error
+          social_log(ctx.context, :error, "OAuth code validation failed: #{error.message}")
+          nil
+        end
         raise ctx.redirect(oauth_error_url(error_url, "invalid_code")) unless tokens
 
         token_data = token_hash(tokens)
@@ -193,7 +205,7 @@ module BetterAuth
         )
         raise ctx.redirect(oauth_error_url(error_url, session_data[:error].tr(" ", "_"))) if session_data[:error]
         Cookies.set_session_cookie(ctx, session_data)
-        callback_url = session_data[:new_user] ? (state_data["newUserCallbackURL"] || state_data["callbackURL"] || "/") : (state_data["callbackURL"] || "/")
+        callback_url = session_data[:new_user] ? (state_data["newUserURL"] || state_data["newUserCallbackURL"] || state_data["callbackURL"] || "/") : (state_data["callbackURL"] || "/")
         raise ctx.redirect(callback_url)
       end
     end

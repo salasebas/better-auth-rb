@@ -7,12 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Added the experimental `oauth_popup` server plugin with built-in and Generic
+  OAuth state validation, strict opener-origin checks, callback cookie
+  preservation, and optional Bearer integration.
+
 ### Fixed
 
 - Hardened existing-identity linking, authoritative session checks, single-use
   state consumption, and rate-limit behavior with regression coverage.
 - Made verification state atomic where the configured adapter supports the
   required primitives, while retaining documented adapter compatibility paths.
+- Aligned OAuth Popup state confidentiality and single-use callback behavior,
+  duplicate session-cookie handling, and hidden endpoint metadata with upstream
+  v1.6.23.
 
 ### Changed
 

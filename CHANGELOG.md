@@ -5,6 +5,9 @@ release notes live in each package's `CHANGELOG.md`.
 
 ## Unreleased
 
+- Added the experimental OAuth Popup server plugin with built-in and Generic
+  OAuth support, strict trusted-origin targeting, CSP-constrained completion,
+  and Bearer token handoff for the upstream JavaScript client.
 - Removed the 18 OpenAuth alias packages and the `openauth` executable.
 - Consolidated repository tooling under `scripts/` and removed the one-off
   documentation generators and root Hanami stub.
@@ -13,8 +16,8 @@ release notes live in each package's `CHANGELOG.md`.
 - Added maintained upstream test and endpoint inventories so the v1.6.23 server
   reference can be checked without treating generated artifacts as proof on
   their own.
-- Recorded the OAuth Popup server half as a future opt-in experimental plugin;
-  it is not included in the current runtime surface.
+- Documented the OAuth Popup server half as an opt-in experimental runtime
+  plugin.
 
 ## 2026-05-21
 

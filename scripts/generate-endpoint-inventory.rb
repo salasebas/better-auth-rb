@@ -89,6 +89,7 @@ module EndpointInventory
       header_params: extract_openapi_parameters(node, "header"),
       disable_body: literal_keyword(node, :disable_body) == true,
       server_only: server_only?(node),
+      hidden: hidden?(node),
       source: "static"
     }
   end
@@ -279,6 +280,13 @@ module EndpointInventory
       metadata["SERVER_ONLY"] == true || metadata["server_only"] == true
   end
 
+  def hidden?(node)
+    metadata = hash_keyword(node, :metadata)
+    return false unless metadata.is_a?(Hash)
+
+    metadata[:hide] == true || metadata["hide"] == true
+  end
+
   def collect_runtime_endpoints
     auth = InventoryAuth.build_inventory_auth
     rows = []
@@ -330,6 +338,7 @@ module EndpointInventory
       header_params: runtime_parameters(openapi, "header"),
       disable_body: endpoint.disable_body,
       server_only: endpoint.metadata[:SERVER_ONLY] == true || endpoint.metadata[:server_only] == true,
+      hidden: endpoint.metadata[:hide] == true || endpoint.metadata["hide"] == true,
       operation_id: openapi[:operationId] || openapi["operationId"],
       source: "runtime"
     }
@@ -512,11 +521,12 @@ module EndpointInventory
     lines << ""
     lines << "## Routes"
     lines << ""
-    lines << "| Method | Path | Ruby API | Plugin | Endpoint key | Query | Body | Path params | Source | Definition |"
-    lines << "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |"
+    lines << "| Method | Path | Ruby API | Plugin | Endpoint key | Visibility | Query | Body | Path params | Source | Definition |"
+    lines << "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |"
 
     rows.each do |row|
-      lines << "| #{row[:method]} | `#{row[:path]}` | #{format_ruby_api(row)} | #{row[:plugin_id] || row[:plugin_hint] || "-"} | #{row[:endpoint_key] || "-"} | #{format_params(row[:query_params])} | #{format_body(row)} | #{format_path_params(row[:path_params])} | #{row[:source]} | #{format_definition(row)} |"
+      visibility = row[:hidden] ? "hidden metadata" : "documented"
+      lines << "| #{row[:method]} | `#{row[:path]}` | #{format_ruby_api(row)} | #{row[:plugin_id] || row[:plugin_hint] || "-"} | #{row[:endpoint_key] || "-"} | #{visibility} | #{format_params(row[:query_params])} | #{format_body(row)} | #{format_path_params(row[:path_params])} | #{row[:source]} | #{format_definition(row)} |"
     end
 
     lines << ""
@@ -526,6 +536,7 @@ module EndpointInventory
     lines << "- **Query** and **Path params** include OpenAPI parameters and `:segments` from the route template."
     lines << "- **Ruby API** maps each route to the in-process server helper on `auth.api`, using the same method names as `BetterAuth::API` (`auth.api.sign_up_email`, etc.)."
     lines << "- **Server-only** endpoints (metadata `SERVER_ONLY`) are intended for `auth.api`, not browser clients."
+    lines << "- **Visibility** records runtime/static metadata `hide`; hidden routes remain HTTP-reachable but are omitted from public OpenAPI."
     lines << "- Re-run: `ruby scripts/generate-endpoint-inventory.rb`"
     lines << ""
 
