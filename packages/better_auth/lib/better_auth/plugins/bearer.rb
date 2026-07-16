@@ -93,14 +93,16 @@ module BetterAuth
 
     def expose_auth_token(ctx)
       token_name = ctx.context.auth_cookies[:session_token].name
-      token = Cookies.split_set_cookie_header(ctx.response_headers["set-cookie"]).filter_map do |line|
+      session_cookie = Cookies.split_set_cookie_header(ctx.response_headers["set-cookie"]).reverse_each.filter_map do |line|
         cookie = Cookies.parse_set_cookie(line)
         next unless cookie && cookie[:name] == token_name
-        next if cookie[:value].empty? || expired_bearer_cookie?(cookie)
 
-        cookie[:value]
+        cookie
       end.first
-      return unless token
+      return unless session_cookie
+      return if session_cookie[:value].empty? || expired_bearer_cookie?(session_cookie)
+
+      token = session_cookie[:value]
 
       exposed = ctx.response_headers["access-control-expose-headers"].to_s.split(",").map(&:strip).reject(&:empty?)
       exposed << "set-auth-token"

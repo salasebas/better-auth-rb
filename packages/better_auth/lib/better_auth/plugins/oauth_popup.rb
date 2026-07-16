@@ -14,15 +14,7 @@ module BetterAuth
       "POPUP_CLOSED" => "Sign-in popup was closed before completing",
       "POPUP_TIMEOUT" => "Sign-in popup timed out"
     }.freeze
-    OAUTH_POPUP_INTERNAL_STATE_KEYS = %w[
-      callbackURL callbackUrl callback_url
-      errorCallbackURL errorCallbackUrl error_callback_url errorURL error_url
-      newUserCallbackURL newUserCallbackUrl new_user_callback_url newUserURL new_user_url
-      requestSignUp request_sign_up
-      codeVerifier code_verifier
-      expiresAt expires_at oauthState oauth_state
-      link userId user_id accountId account_id
-    ].freeze
+    OAUTH_POPUP_INTERNAL_STATE_KEYS = OAuthState::INTERNAL_KEYS
     OAUTH_POPUP_COMPLETE_SCRIPT = [
       "(function () {",
       "\tvar el = document.getElementById(\"better-auth-oauth-popup\");",
@@ -75,7 +67,30 @@ module BetterAuth
     end
 
     def oauth_popup_start_endpoint
-      Endpoint.new(path: "/oauth-popup/start", method: "GET", metadata: {hide: true}) do |ctx|
+      Endpoint.new(
+        path: "/oauth-popup/start",
+        method: "GET",
+        query_schema: Routes.request_query_schema(
+          required_strings: %w[provider popupOrigin],
+          optional_strings: %w[popupNonce callbackURL errorCallbackURL newUserCallbackURL scopes requestSignUp additionalData]
+        ),
+        metadata: {
+          hide: true,
+          openapi: {
+            parameters: [
+              {name: "provider", in: "query", required: true, schema: {type: "string"}},
+              {name: "popupOrigin", in: "query", required: true, schema: {type: "string"}},
+              {name: "popupNonce", in: "query", required: false, schema: {type: "string"}},
+              {name: "callbackURL", in: "query", required: false, schema: {type: "string"}},
+              {name: "errorCallbackURL", in: "query", required: false, schema: {type: "string"}},
+              {name: "newUserCallbackURL", in: "query", required: false, schema: {type: "string"}},
+              {name: "scopes", in: "query", required: false, schema: {type: "string"}},
+              {name: "requestSignUp", in: "query", required: false, schema: {type: "string"}},
+              {name: "additionalData", in: "query", required: false, schema: {type: "string"}}
+            ]
+          }
+        }
+      ) do |ctx|
         query = normalize_hash(ctx.query)
         popup_origin = oauth_popup_validate_origin!(ctx, query[:popup_origin].to_s)
 
@@ -114,14 +129,13 @@ module BetterAuth
           else
             state_data = additional_data.merge(
               "callbackURL" => callback_url,
-              "errorCallbackURL" => query[:error_callback_url],
-              "newUserCallbackURL" => query[:new_user_callback_url],
+              "errorURL" => query[:error_callback_url],
+              "newUserURL" => query[:new_user_callback_url],
               "requestSignUp" => request_sign_up,
               "codeVerifier" => code_verifier,
               "expiresAt" => Time.now.to_i + 600
             ).compact
-            state = Crypto.sign_jwt(state_data, ctx.context.secret, expires_in: 600)
-            Routes.store_oauth_state_cookie(ctx, state)
+            state = OAuthState.generate(ctx, state_data)
             Routes.call_provider(provider, :create_authorization_url, {
               state: state,
               codeVerifier: code_verifier,
@@ -242,7 +256,8 @@ module BetterAuth
       Cookies.split_set_cookie_header(ctx.response_headers["set-cookie"]).each do |line|
         cookie = Cookies.parse_set_cookie(line)
         next unless cookie && cookie[:name] == name
-        next if cookie[:value].empty? || cookie.dig(:attributes, "max-age").to_i == 0
+        max_age = cookie.dig(:attributes, "max-age")
+        next if cookie[:value].empty? || (max_age.to_s.strip.match?(/\A[+-]?\d+\z/) && max_age.to_i == 0)
 
         return URI.decode_uri_component(cookie[:value])
       rescue ArgumentError

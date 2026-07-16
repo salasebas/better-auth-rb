@@ -564,7 +564,7 @@ class BetterAuthRoutesSocialTest < Minitest::Test
     )
 
     assert_equal 302, status
-    assert_includes headers.fetch("location"), "error=state_not_found"
+    assert_includes headers.fetch("location"), "error=state_mismatch"
     refute called
   end
 

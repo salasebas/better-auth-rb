@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-07-16T01:00:11Z",
+  "generated_at": "2026-07-16T01:47:43Z",
   "upstream_route_count": 236,
   "upstream_http_route_count": 222,
   "upstream_server_only_count": 14,
@@ -11,6 +11,7 @@
   "missing_upstream_count": 0,
   "ruby_only_classified_count": 17,
   "deprecated_pair_count": 0,
+  "visibility_mismatch_count": 10,
   "excluded_unsupported_count": 18,
   "excluded_unsupported_plugins": [
     "mcp",
@@ -36,7 +37,9 @@
       "ruby_endpoint_key": "account_info",
       "ruby_api_method": "account_info",
       "ruby_api_call": "auth.api.account_info",
-      "ruby_plugin": "core"
+      "ruby_plugin": "core",
+      "upstream_hidden": false,
+      "ruby_hidden": false
     },
     {
       "plugin_id": "admin",
@@ -55,7 +58,9 @@
       "ruby_endpoint_key": "ban_user",
       "ruby_api_method": "ban_user",
       "ruby_api_call": "auth.api.ban_user",
-      "ruby_plugin": "admin"
+      "ruby_plugin": "admin",
+      "upstream_hidden": false,
+      "ruby_hidden": false
     },
     {
       "plugin_id": "admin",
@@ -74,7 +79,9 @@
       "ruby_endpoint_key": "create_user",
       "ruby_api_method": "create_user",
       "ruby_api_call": "auth.api.create_user",
-      "ruby_plugin": "admin"
+      "ruby_plugin": "admin",
+      "upstream_hidden": false,
+      "ruby_hidden": false
     },
     {
       "plugin_id": "admin",
@@ -93,7 +100,9 @@
       "ruby_endpoint_key": "get_user",
       "ruby_api_method": "get_user",
       "ruby_api_call": "auth.api.get_user",
-      "ruby_plugin": "admin"
+      "ruby_plugin": "admin",
+      "upstream_hidden": false,
+      "ruby_hidden": false
     },
     {
       "plugin_id": "admin",
@@ -112,7 +121,9 @@
       "ruby_endpoint_key": "user_has_permission",
       "ruby_api_method": "user_has_permission",
       "ruby_api_call": "auth.api.user_has_permission",
-      "ruby_plugin": "admin"
+      "ruby_plugin": "admin",
+      "upstream_hidden": false,
+      "ruby_hidden": false
     },
     {
       "plugin_id": "admin",
@@ -131,7 +142,9 @@
       "ruby_endpoint_key": "impersonate_user",
       "ruby_api_method": "impersonate_user",
       "ruby_api_call": "auth.api.impersonate_user",
-      "ruby_plugin": "admin"
+      "ruby_plugin": "admin",
+      "upstream_hidden": false,
+      "ruby_hidden": false
     },
     {
       "plugin_id": "admin",
@@ -150,7 +163,9 @@
       "ruby_endpoint_key": "list_user_sessions",
       "ruby_api_method": "list_user_sessions",
       "ruby_api_call": "auth.api.list_user_sessions",
-      "ruby_plugin": "admin"
+      "ruby_plugin": "admin",
+      "upstream_hidden": false,
+      "ruby_hidden": false
     },
     {
       "plugin_id": "admin",
@@ -169,7 +184,9 @@
       "ruby_endpoint_key": "list_users",
       "ruby_api_method": "list_users",
       "ruby_api_call": "auth.api.list_users",
-      "ruby_plugin": "admin"
+      "ruby_plugin": "admin",
+      "upstream_hidden": false,
+      "ruby_hidden": false
     },
     {
       "plugin_id": "admin",
@@ -188,7 +205,9 @@
       "ruby_endpoint_key": "remove_user",
       "ruby_api_method": "remove_user",
       "ruby_api_call": "auth.api.remove_user",
-      "ruby_plugin": "admin"
+      "ruby_plugin": "admin",
+      "upstream_hidden": false,
+      "ruby_hidden": false
     },
     {
       "plugin_id": "admin",
@@ -207,7 +226,9 @@
       "ruby_endpoint_key": "revoke_user_session",
       "ruby_api_method": "revoke_user_session",
       "ruby_api_call": "auth.api.revoke_user_session",
-      "ruby_plugin": "admin"
+      "ruby_plugin": "admin",
+      "upstream_hidden": false,
+      "ruby_hidden": false
     },
     {
       "plugin_id": "admin",
@@ -226,7 +247,9 @@
       "ruby_endpoint_key": "revoke_user_sessions",
       "ruby_api_method": "revoke_user_sessions",
       "ruby_api_call": "auth.api.revoke_user_sessions",
-      "ruby_plugin": "admin"
+      "ruby_plugin": "admin",
+      "upstream_hidden": false,
+      "ruby_hidden": false
     },
     {
       "plugin_id": "admin",
@@ -245,7 +268,9 @@
       "ruby_endpoint_key": "set_role",
       "ruby_api_method": "set_role",
       "ruby_api_call": "auth.api.set_role",
-      "ruby_plugin": "admin"
+      "ruby_plugin": "admin",
+      "upstream_hidden": false,
+      "ruby_hidden": false
     },
     {
       "plugin_id": "admin",
@@ -264,7 +289,9 @@
       "ruby_endpoint_key": "set_user_password",
       "ruby_api_method": "set_user_password",
       "ruby_api_call": "auth.api.set_user_password",
-      "ruby_plugin": "admin"
+      "ruby_plugin": "admin",
+      "upstream_hidden": false,
+      "ruby_hidden": false
     },
     {
       "plugin_id": "admin",
@@ -283,7 +310,9 @@
       "ruby_endpoint_key": "stop_impersonating",
       "ruby_api_method": "stop_impersonating",
       "ruby_api_call": "auth.api.stop_impersonating",
-      "ruby_plugin": "admin"
+      "ruby_plugin": "admin",
+      "upstream_hidden": false,
+      "ruby_hidden": false
     },
     {
       "plugin_id": "admin",
@@ -302,7 +331,9 @@
       "ruby_endpoint_key": "unban_user",
       "ruby_api_method": "unban_user",
       "ruby_api_call": "auth.api.unban_user",
-      "ruby_plugin": "admin"
+      "ruby_plugin": "admin",
+      "upstream_hidden": false,
+      "ruby_hidden": false
     },
     {
       "plugin_id": "admin",
@@ -321,7 +352,9 @@
       "ruby_endpoint_key": "admin_update_user",
       "ruby_api_method": "admin_update_user",
       "ruby_api_call": "auth.api.admin_update_user",
-      "ruby_plugin": "admin"
+      "ruby_plugin": "admin",
+      "upstream_hidden": false,
+      "ruby_hidden": false
     },
     {
       "plugin_id": "api-key",
@@ -340,7 +373,9 @@
       "ruby_endpoint_key": "create_api_key",
       "ruby_api_method": "create_api_key",
       "ruby_api_call": "auth.api.create_api_key",
-      "ruby_plugin": "api-key"
+      "ruby_plugin": "api-key",
+      "upstream_hidden": false,
+      "ruby_hidden": false
     },
     {
       "plugin_id": "api-key",
@@ -359,7 +394,9 @@
       "ruby_endpoint_key": "delete_api_key",
       "ruby_api_method": "delete_api_key",
       "ruby_api_call": "auth.api.delete_api_key",
-      "ruby_plugin": "api-key"
+      "ruby_plugin": "api-key",
+      "upstream_hidden": false,
+      "ruby_hidden": false
     },
     {
       "plugin_id": "api-key",
@@ -378,7 +415,9 @@
       "ruby_endpoint_key": "get_api_key",
       "ruby_api_method": "get_api_key",
       "ruby_api_call": "auth.api.get_api_key",
-      "ruby_plugin": "api-key"
+      "ruby_plugin": "api-key",
+      "upstream_hidden": false,
+      "ruby_hidden": false
     },
     {
       "plugin_id": "api-key",
@@ -397,7 +436,9 @@
       "ruby_endpoint_key": "list_api_keys",
       "ruby_api_method": "list_api_keys",
       "ruby_api_call": "auth.api.list_api_keys",
-      "ruby_plugin": "api-key"
+      "ruby_plugin": "api-key",
+      "upstream_hidden": false,
+      "ruby_hidden": false
     },
     {
       "plugin_id": "api-key",
@@ -416,7 +457,9 @@
       "ruby_endpoint_key": "update_api_key",
       "ruby_api_method": "update_api_key",
       "ruby_api_call": "auth.api.update_api_key",
-      "ruby_plugin": "api-key"
+      "ruby_plugin": "api-key",
+      "upstream_hidden": false,
+      "ruby_hidden": false
     },
     {
       "plugin_id": "core",
@@ -435,7 +478,9 @@
       "ruby_endpoint_key": "callback_oauth",
       "ruby_api_method": "callback_oauth",
       "ruby_api_call": "auth.api.callback_oauth",
-      "ruby_plugin": "core"
+      "ruby_plugin": "core",
+      "upstream_hidden": true,
+      "ruby_hidden": false
     },
     {
       "plugin_id": "core",
@@ -454,7 +499,9 @@
       "ruby_endpoint_key": "callback_oauth",
       "ruby_api_method": "callback_oauth",
       "ruby_api_call": "auth.api.callback_oauth",
-      "ruby_plugin": "core"
+      "ruby_plugin": "core",
+      "upstream_hidden": true,
+      "ruby_hidden": false
     },
     {
       "plugin_id": "core",
@@ -473,7 +520,9 @@
       "ruby_endpoint_key": "change_email",
       "ruby_api_method": "change_email",
       "ruby_api_call": "auth.api.change_email",
-      "ruby_plugin": "core"
+      "ruby_plugin": "core",
+      "upstream_hidden": false,
+      "ruby_hidden": false
     },
     {
       "plugin_id": "core",
@@ -492,7 +541,9 @@
       "ruby_endpoint_key": "change_password",
       "ruby_api_method": "change_password",
       "ruby_api_call": "auth.api.change_password",
-      "ruby_plugin": "core"
+      "ruby_plugin": "core",
+      "upstream_hidden": false,
+      "ruby_hidden": false
     },
     {
       "plugin_id": "anonymous",
@@ -511,7 +562,9 @@
       "ruby_endpoint_key": "delete_anonymous_user",
       "ruby_api_method": "delete_anonymous_user",
       "ruby_api_call": "auth.api.delete_anonymous_user",
-      "ruby_plugin": "anonymous"
+      "ruby_plugin": "anonymous",
+      "upstream_hidden": false,
+      "ruby_hidden": false
     },
     {
       "plugin_id": "core",
@@ -530,7 +583,9 @@
       "ruby_endpoint_key": "delete_user",
       "ruby_api_method": "delete_user",
       "ruby_api_call": "auth.api.delete_user",
-      "ruby_plugin": "core"
+      "ruby_plugin": "core",
+      "upstream_hidden": false,
+      "ruby_hidden": false
     },
     {
       "plugin_id": "core",
@@ -549,7 +604,9 @@
       "ruby_endpoint_key": "delete_user_callback",
       "ruby_api_method": "delete_user_callback",
       "ruby_api_call": "auth.api.delete_user_callback",
-      "ruby_plugin": "core"
+      "ruby_plugin": "core",
+      "upstream_hidden": false,
+      "ruby_hidden": false
     },
     {
       "plugin_id": "device-authorization",
@@ -568,7 +625,9 @@
       "ruby_endpoint_key": "device_verify",
       "ruby_api_method": "device_verify",
       "ruby_api_call": "auth.api.device_verify",
-      "ruby_plugin": "device-authorization"
+      "ruby_plugin": "device-authorization",
+      "upstream_hidden": false,
+      "ruby_hidden": false
     },
     {
       "plugin_id": "device-authorization",
@@ -587,7 +646,9 @@
       "ruby_endpoint_key": "device_approve",
       "ruby_api_method": "device_approve",
       "ruby_api_call": "auth.api.device_approve",
-      "ruby_plugin": "device-authorization"
+      "ruby_plugin": "device-authorization",
+      "upstream_hidden": false,
+      "ruby_hidden": false
     },
     {
       "plugin_id": "device-authorization",
@@ -606,7 +667,9 @@
       "ruby_endpoint_key": "device_code",
       "ruby_api_method": "device_code",
       "ruby_api_call": "auth.api.device_code",
-      "ruby_plugin": "device-authorization"
+      "ruby_plugin": "device-authorization",
+      "upstream_hidden": false,
+      "ruby_hidden": false
     },
     {
       "plugin_id": "device-authorization",
@@ -625,7 +688,9 @@
       "ruby_endpoint_key": "device_deny",
       "ruby_api_method": "device_deny",
       "ruby_api_call": "auth.api.device_deny",
-      "ruby_plugin": "device-authorization"
+      "ruby_plugin": "device-authorization",
+      "upstream_hidden": false,
+      "ruby_hidden": false
     },
     {
       "plugin_id": "device-authorization",
@@ -644,7 +709,9 @@
       "ruby_endpoint_key": "device_token",
       "ruby_api_method": "device_token",
       "ruby_api_call": "auth.api.device_token",
-      "ruby_plugin": "device-authorization"
+      "ruby_plugin": "device-authorization",
+      "upstream_hidden": false,
+      "ruby_hidden": false
     },
     {
       "plugin_id": "email-otp",
@@ -663,7 +730,9 @@
       "ruby_endpoint_key": "change_email_email_otp",
       "ruby_api_method": "change_email_email_otp",
       "ruby_api_call": "auth.api.change_email_email_otp",
-      "ruby_plugin": "email-otp"
+      "ruby_plugin": "email-otp",
+      "upstream_hidden": false,
+      "ruby_hidden": false
     },
     {
       "plugin_id": "email-otp",
@@ -682,7 +751,9 @@
       "ruby_endpoint_key": "check_verification_otp",
       "ruby_api_method": "check_verification_otp",
       "ruby_api_call": "auth.api.check_verification_otp",
-      "ruby_plugin": "email-otp"
+      "ruby_plugin": "email-otp",
+      "upstream_hidden": false,
+      "ruby_hidden": false
     },
     {
       "plugin_id": "email-otp",
@@ -701,7 +772,9 @@
       "ruby_endpoint_key": "request_email_change_email_otp",
       "ruby_api_method": "request_email_change_email_otp",
       "ruby_api_call": "auth.api.request_email_change_email_otp",
-      "ruby_plugin": "email-otp"
+      "ruby_plugin": "email-otp",
+      "upstream_hidden": false,
+      "ruby_hidden": false
     },
     {
       "plugin_id": "email-otp",
@@ -720,7 +793,9 @@
       "ruby_endpoint_key": "request_password_reset_email_otp",
       "ruby_api_method": "request_password_reset_email_otp",
       "ruby_api_call": "auth.api.request_password_reset_email_otp",
-      "ruby_plugin": "email-otp"
+      "ruby_plugin": "email-otp",
+      "upstream_hidden": false,
+      "ruby_hidden": false
     },
     {
       "plugin_id": "email-otp",
@@ -739,7 +814,9 @@
       "ruby_endpoint_key": "reset_password_email_otp",
       "ruby_api_method": "reset_password_email_otp",
       "ruby_api_call": "auth.api.reset_password_email_otp",
-      "ruby_plugin": "email-otp"
+      "ruby_plugin": "email-otp",
+      "upstream_hidden": false,
+      "ruby_hidden": false
     },
     {
       "plugin_id": "email-otp",
@@ -758,7 +835,9 @@
       "ruby_endpoint_key": "send_verification_otp",
       "ruby_api_method": "send_verification_otp",
       "ruby_api_call": "auth.api.send_verification_otp",
-      "ruby_plugin": "email-otp"
+      "ruby_plugin": "email-otp",
+      "upstream_hidden": false,
+      "ruby_hidden": false
     },
     {
       "plugin_id": "email-otp",
@@ -777,7 +856,9 @@
       "ruby_endpoint_key": "verify_email_otp",
       "ruby_api_method": "verify_email_otp",
       "ruby_api_call": "auth.api.verify_email_otp",
-      "ruby_plugin": "email-otp"
+      "ruby_plugin": "email-otp",
+      "upstream_hidden": false,
+      "ruby_hidden": false
     },
     {
       "plugin_id": "expo",
@@ -796,7 +877,9 @@
       "ruby_endpoint_key": "expo_authorization_proxy",
       "ruby_api_method": "expo_authorization_proxy",
       "ruby_api_call": "auth.api.expo_authorization_proxy",
-      "ruby_plugin": "expo"
+      "ruby_plugin": "expo",
+      "upstream_hidden": true,
+      "ruby_hidden": false
     },
     {
       "plugin_id": "core",
@@ -815,7 +898,9 @@
       "ruby_endpoint_key": "get_access_token",
       "ruby_api_method": "get_access_token",
       "ruby_api_call": "auth.api.get_access_token",
-      "ruby_plugin": "core"
+      "ruby_plugin": "core",
+      "upstream_hidden": false,
+      "ruby_hidden": false
     },
     {
       "plugin_id": "custom-session",
@@ -834,7 +919,9 @@
       "ruby_endpoint_key": "get_session",
       "ruby_api_method": "get_session",
       "ruby_api_call": "auth.api.get_session",
-      "ruby_plugin": "core"
+      "ruby_plugin": "core",
+      "upstream_hidden": false,
+      "ruby_hidden": false
     },
     {
       "plugin_id": "core",
@@ -853,7 +940,9 @@
       "ruby_endpoint_key": "get_session",
       "ruby_api_method": "get_session",
       "ruby_api_call": "auth.api.get_session",
-      "ruby_plugin": "core"
+      "ruby_plugin": "core",
+      "upstream_hidden": false,
+      "ruby_hidden": false
     },
     {
       "plugin_id": "username",
@@ -872,7 +961,9 @@
       "ruby_endpoint_key": "is_username_available",
       "ruby_api_method": "is_username_available",
       "ruby_api_call": "auth.api.is_username_available",
-      "ruby_plugin": "username"
+      "ruby_plugin": "username",
+      "upstream_hidden": false,
+      "ruby_hidden": false
     },
     {
       "plugin_id": "jwt",
@@ -891,7 +982,9 @@
       "ruby_endpoint_key": "get_jwks",
       "ruby_api_method": "get_jwks",
       "ruby_api_call": "auth.api.get_jwks",
-      "ruby_plugin": "jwt"
+      "ruby_plugin": "jwt",
+      "upstream_hidden": false,
+      "ruby_hidden": false
     },
     {
       "plugin_id": "core",
@@ -910,7 +1003,9 @@
       "ruby_endpoint_key": "link_social",
       "ruby_api_method": "link_social",
       "ruby_api_call": "auth.api.link_social",
-      "ruby_plugin": "core"
+      "ruby_plugin": "core",
+      "upstream_hidden": false,
+      "ruby_hidden": false
     },
     {
       "plugin_id": "core",
@@ -929,7 +1024,9 @@
       "ruby_endpoint_key": "list_accounts",
       "ruby_api_method": "list_accounts",
       "ruby_api_call": "auth.api.list_accounts",
-      "ruby_plugin": "core"
+      "ruby_plugin": "core",
+      "upstream_hidden": false,
+      "ruby_hidden": false
     },
     {
       "plugin_id": "core",
@@ -948,7 +1045,9 @@
       "ruby_endpoint_key": "list_sessions",
       "ruby_api_method": "list_sessions",
       "ruby_api_call": "auth.api.list_sessions",
-      "ruby_plugin": "core"
+      "ruby_plugin": "core",
+      "upstream_hidden": false,
+      "ruby_hidden": false
     },
     {
       "plugin_id": "magic-link",
@@ -967,7 +1066,9 @@
       "ruby_endpoint_key": "magic_link_verify",
       "ruby_api_method": "magic_link_verify",
       "ruby_api_call": "auth.api.magic_link_verify",
-      "ruby_plugin": "magic-link"
+      "ruby_plugin": "magic-link",
+      "upstream_hidden": false,
+      "ruby_hidden": false
     },
     {
       "plugin_id": "multi-session",
@@ -986,7 +1087,9 @@
       "ruby_endpoint_key": "list_device_sessions",
       "ruby_api_method": "list_device_sessions",
       "ruby_api_call": "auth.api.list_device_sessions",
-      "ruby_plugin": "multi-session"
+      "ruby_plugin": "multi-session",
+      "upstream_hidden": false,
+      "ruby_hidden": false
     },
     {
       "plugin_id": "multi-session",
@@ -1005,7 +1108,9 @@
       "ruby_endpoint_key": "revoke_device_session",
       "ruby_api_method": "revoke_device_session",
       "ruby_api_call": "auth.api.revoke_device_session",
-      "ruby_plugin": "multi-session"
+      "ruby_plugin": "multi-session",
+      "upstream_hidden": false,
+      "ruby_hidden": false
     },
     {
       "plugin_id": "multi-session",
@@ -1024,7 +1129,9 @@
       "ruby_endpoint_key": "set_active_session",
       "ruby_api_method": "set_active_session",
       "ruby_api_call": "auth.api.set_active_session",
-      "ruby_plugin": "multi-session"
+      "ruby_plugin": "multi-session",
+      "upstream_hidden": false,
+      "ruby_hidden": false
     },
     {
       "plugin_id": "oauth-popup",
@@ -1043,7 +1150,9 @@
       "ruby_endpoint_key": "oauth_popup_start",
       "ruby_api_method": "oauth_popup_start",
       "ruby_api_call": "auth.api.oauth_popup_start",
-      "ruby_plugin": "oauth-popup"
+      "ruby_plugin": "oauth-popup",
+      "upstream_hidden": true,
+      "ruby_hidden": true
     },
     {
       "plugin_id": "oauth-proxy",
@@ -1062,7 +1171,9 @@
       "ruby_endpoint_key": "oauth_proxy",
       "ruby_api_method": "oauth_proxy",
       "ruby_api_call": "auth.api.oauth_proxy",
-      "ruby_plugin": "oauth-proxy"
+      "ruby_plugin": "oauth-proxy",
+      "upstream_hidden": false,
+      "ruby_hidden": false
     },
     {
       "plugin_id": "oauth-provider",
@@ -1081,7 +1192,9 @@
       "ruby_endpoint_key": "oauth2_authorize",
       "ruby_api_method": "oauth2_authorize",
       "ruby_api_call": "auth.api.oauth2_authorize",
-      "ruby_plugin": "oauth-provider"
+      "ruby_plugin": "oauth-provider",
+      "upstream_hidden": false,
+      "ruby_hidden": false
     },
     {
       "plugin_id": "generic-oauth",
@@ -1100,7 +1213,9 @@
       "ruby_endpoint_key": "oauth2_callback",
       "ruby_api_method": "oauth2_callback",
       "ruby_api_call": "auth.api.oauth2_callback",
-      "ruby_plugin": "generic-oauth"
+      "ruby_plugin": "generic-oauth",
+      "upstream_hidden": true,
+      "ruby_hidden": false
     },
     {
       "plugin_id": "oauth-provider",
@@ -1119,7 +1234,9 @@
       "ruby_endpoint_key": "rotate_oauth_client_secret",
       "ruby_api_method": "rotate_oauth_client_secret",
       "ruby_api_call": "auth.api.rotate_oauth_client_secret",
-      "ruby_plugin": "oauth-provider"
+      "ruby_plugin": "oauth-provider",
+      "upstream_hidden": false,
+      "ruby_hidden": false
     },
     {
       "plugin_id": "oauth-provider",
@@ -1138,7 +1255,9 @@
       "ruby_endpoint_key": "oauth2_consent",
       "ruby_api_method": "oauth2_consent",
       "ruby_api_call": "auth.api.oauth2_consent",
-      "ruby_plugin": "oauth-provider"
+      "ruby_plugin": "oauth-provider",
+      "upstream_hidden": false,
+      "ruby_hidden": false
     },
     {
       "plugin_id": "oauth-provider",
@@ -1157,7 +1276,9 @@
       "ruby_endpoint_key": "oauth2_continue",
       "ruby_api_method": "oauth2_continue",
       "ruby_api_call": "auth.api.oauth2_continue",
-      "ruby_plugin": "oauth-provider"
+      "ruby_plugin": "oauth-provider",
+      "upstream_hidden": false,
+      "ruby_hidden": false
     },
     {
       "plugin_id": "oauth-provider",
@@ -1176,7 +1297,9 @@
       "ruby_endpoint_key": "create_oauth_client",
       "ruby_api_method": "create_oauth_client",
       "ruby_api_call": "auth.api.create_oauth_client",
-      "ruby_plugin": "oauth-provider"
+      "ruby_plugin": "oauth-provider",
+      "upstream_hidden": false,
+      "ruby_hidden": false
     },
     {
       "plugin_id": "oauth-provider",
@@ -1195,7 +1318,9 @@
       "ruby_endpoint_key": "delete_oauth_client",
       "ruby_api_method": "delete_oauth_client",
       "ruby_api_call": "auth.api.delete_oauth_client",
-      "ruby_plugin": "oauth-provider"
+      "ruby_plugin": "oauth-provider",
+      "upstream_hidden": false,
+      "ruby_hidden": false
     },
     {
       "plugin_id": "oauth-provider",
@@ -1214,7 +1339,9 @@
       "ruby_endpoint_key": "delete_oauth_consent",
       "ruby_api_method": "delete_oauth_consent",
       "ruby_api_call": "auth.api.delete_oauth_consent",
-      "ruby_plugin": "oauth-provider"
+      "ruby_plugin": "oauth-provider",
+      "upstream_hidden": false,
+      "ruby_hidden": false
     },
     {
       "plugin_id": "oauth-provider",
@@ -1233,7 +1360,9 @@
       "ruby_endpoint_key": "oauth2_end_session",
       "ruby_api_method": "oauth2_end_session",
       "ruby_api_call": "auth.api.oauth2_end_session",
-      "ruby_plugin": "oauth-provider"
+      "ruby_plugin": "oauth-provider",
+      "upstream_hidden": false,
+      "ruby_hidden": false
     },
     {
       "plugin_id": "oauth-provider",
@@ -1252,7 +1381,9 @@
       "ruby_endpoint_key": "get_oauth_client",
       "ruby_api_method": "get_oauth_client",
       "ruby_api_call": "auth.api.get_oauth_client",
-      "ruby_plugin": "oauth-provider"
+      "ruby_plugin": "oauth-provider",
+      "upstream_hidden": false,
+      "ruby_hidden": false
     },
     {
       "plugin_id": "oauth-provider",
@@ -1271,7 +1402,9 @@
       "ruby_endpoint_key": "get_oauth_clients",
       "ruby_api_method": "get_oauth_clients",
       "ruby_api_call": "auth.api.get_oauth_clients",
-      "ruby_plugin": "oauth-provider"
+      "ruby_plugin": "oauth-provider",
+      "upstream_hidden": false,
+      "ruby_hidden": false
     },
     {
       "plugin_id": "oauth-provider",
@@ -1290,7 +1423,9 @@
       "ruby_endpoint_key": "get_oauth_consent",
       "ruby_api_method": "get_oauth_consent",
       "ruby_api_call": "auth.api.get_oauth_consent",
-      "ruby_plugin": "oauth-provider"
+      "ruby_plugin": "oauth-provider",
+      "upstream_hidden": false,
+      "ruby_hidden": false
     },
     {
       "plugin_id": "oauth-provider",
@@ -1309,7 +1444,9 @@
       "ruby_endpoint_key": "get_oauth_consents",
       "ruby_api_method": "get_oauth_consents",
       "ruby_api_call": "auth.api.get_oauth_consents",
-      "ruby_plugin": "oauth-provider"
+      "ruby_plugin": "oauth-provider",
+      "upstream_hidden": false,
+      "ruby_hidden": false
     },
     {
       "plugin_id": "oauth-provider",
@@ -1328,7 +1465,9 @@
       "ruby_endpoint_key": "oauth2_introspect",
       "ruby_api_method": "oauth2_introspect",
       "ruby_api_call": "auth.api.oauth2_introspect",
-      "ruby_plugin": "oauth-provider"
+      "ruby_plugin": "oauth-provider",
+      "upstream_hidden": false,
+      "ruby_hidden": false
     },
     {
       "plugin_id": "generic-oauth",
@@ -1347,7 +1486,9 @@
       "ruby_endpoint_key": "oauth2_link_account",
       "ruby_api_method": "oauth2_link_account",
       "ruby_api_call": "auth.api.oauth2_link_account",
-      "ruby_plugin": "generic-oauth"
+      "ruby_plugin": "generic-oauth",
+      "upstream_hidden": false,
+      "ruby_hidden": false
     },
     {
       "plugin_id": "oauth-provider",
@@ -1366,7 +1507,9 @@
       "ruby_endpoint_key": "get_oauth_client_public",
       "ruby_api_method": "get_oauth_client_public",
       "ruby_api_call": "auth.api.get_oauth_client_public",
-      "ruby_plugin": "oauth-provider"
+      "ruby_plugin": "oauth-provider",
+      "upstream_hidden": false,
+      "ruby_hidden": false
     },
     {
       "plugin_id": "oauth-provider",
@@ -1385,7 +1528,9 @@
       "ruby_endpoint_key": "get_oauth_client_public_prelogin",
       "ruby_api_method": "get_oauth_client_public_prelogin",
       "ruby_api_call": "auth.api.get_oauth_client_public_prelogin",
-      "ruby_plugin": "oauth-provider"
+      "ruby_plugin": "oauth-provider",
+      "upstream_hidden": false,
+      "ruby_hidden": false
     },
     {
       "plugin_id": "oauth-provider",
@@ -1404,7 +1549,9 @@
       "ruby_endpoint_key": "register_oauth_client",
       "ruby_api_method": "register_oauth_client",
       "ruby_api_call": "auth.api.register_oauth_client",
-      "ruby_plugin": "oauth-provider"
+      "ruby_plugin": "oauth-provider",
+      "upstream_hidden": false,
+      "ruby_hidden": false
     },
     {
       "plugin_id": "oauth-provider",
@@ -1423,7 +1570,9 @@
       "ruby_endpoint_key": "oauth2_revoke",
       "ruby_api_method": "oauth2_revoke",
       "ruby_api_call": "auth.api.oauth2_revoke",
-      "ruby_plugin": "oauth-provider"
+      "ruby_plugin": "oauth-provider",
+      "upstream_hidden": false,
+      "ruby_hidden": false
     },
     {
       "plugin_id": "oauth-provider",
@@ -1442,7 +1591,9 @@
       "ruby_endpoint_key": "oauth2_token",
       "ruby_api_method": "oauth2_token",
       "ruby_api_call": "auth.api.oauth2_token",
-      "ruby_plugin": "oauth-provider"
+      "ruby_plugin": "oauth-provider",
+      "upstream_hidden": false,
+      "ruby_hidden": false
     },
     {
       "plugin_id": "oauth-provider",
@@ -1461,7 +1612,9 @@
       "ruby_endpoint_key": "update_oauth_client",
       "ruby_api_method": "update_oauth_client",
       "ruby_api_call": "auth.api.update_oauth_client",
-      "ruby_plugin": "oauth-provider"
+      "ruby_plugin": "oauth-provider",
+      "upstream_hidden": false,
+      "ruby_hidden": false
     },
     {
       "plugin_id": "oauth-provider",
@@ -1480,7 +1633,9 @@
       "ruby_endpoint_key": "update_oauth_consent",
       "ruby_api_method": "update_oauth_consent",
       "ruby_api_call": "auth.api.update_oauth_consent",
-      "ruby_plugin": "oauth-provider"
+      "ruby_plugin": "oauth-provider",
+      "upstream_hidden": false,
+      "ruby_hidden": false
     },
     {
       "plugin_id": "oauth-provider",
@@ -1499,7 +1654,9 @@
       "ruby_endpoint_key": "oauth2_user_info",
       "ruby_api_method": "oauth2_user_info",
       "ruby_api_call": "auth.api.oauth2_user_info",
-      "ruby_plugin": "oauth-provider"
+      "ruby_plugin": "oauth-provider",
+      "upstream_hidden": false,
+      "ruby_hidden": false
     },
     {
       "plugin_id": "oauth-provider",
@@ -1518,7 +1675,9 @@
       "ruby_endpoint_key": "oauth2_user_info",
       "ruby_api_method": "oauth2_user_info",
       "ruby_api_call": "auth.api.oauth2_user_info",
-      "ruby_plugin": "oauth-provider"
+      "ruby_plugin": "oauth-provider",
+      "upstream_hidden": false,
+      "ruby_hidden": false
     },
     {
       "plugin_id": "one-tap",
@@ -1537,7 +1696,9 @@
       "ruby_endpoint_key": "one_tap_callback",
       "ruby_api_method": "one_tap_callback",
       "ruby_api_call": "auth.api.one_tap_callback",
-      "ruby_plugin": "one-tap"
+      "ruby_plugin": "one-tap",
+      "upstream_hidden": false,
+      "ruby_hidden": false
     },
     {
       "plugin_id": "one-time-token",
@@ -1556,7 +1717,9 @@
       "ruby_endpoint_key": "generate_one_time_token",
       "ruby_api_method": "generate_one_time_token",
       "ruby_api_call": "auth.api.generate_one_time_token",
-      "ruby_plugin": "one-time-token"
+      "ruby_plugin": "one-time-token",
+      "upstream_hidden": false,
+      "ruby_hidden": false
     },
     {
       "plugin_id": "one-time-token",
@@ -1575,7 +1738,9 @@
       "ruby_endpoint_key": "verify_one_time_token",
       "ruby_api_method": "verify_one_time_token",
       "ruby_api_call": "auth.api.verify_one_time_token",
-      "ruby_plugin": "one-time-token"
+      "ruby_plugin": "one-time-token",
+      "upstream_hidden": false,
+      "ruby_hidden": false
     },
     {
       "plugin_id": "open-api",
@@ -1594,7 +1759,9 @@
       "ruby_endpoint_key": "generate_openapi_schema",
       "ruby_api_method": "generate_openapi_schema",
       "ruby_api_call": "auth.api.generate_openapi_schema",
-      "ruby_plugin": "open-api"
+      "ruby_plugin": "open-api",
+      "upstream_hidden": false,
+      "ruby_hidden": false
     },
     {
       "plugin_id": "organization",
@@ -1613,7 +1780,9 @@
       "ruby_endpoint_key": "accept_invitation",
       "ruby_api_method": "accept_invitation",
       "ruby_api_call": "auth.api.accept_invitation",
-      "ruby_plugin": "organization"
+      "ruby_plugin": "organization",
+      "upstream_hidden": false,
+      "ruby_hidden": false
     },
     {
       "plugin_id": "organization",
@@ -1632,7 +1801,9 @@
       "ruby_endpoint_key": "add_team_member",
       "ruby_api_method": "add_team_member",
       "ruby_api_call": "auth.api.add_team_member",
-      "ruby_plugin": "organization"
+      "ruby_plugin": "organization",
+      "upstream_hidden": false,
+      "ruby_hidden": false
     },
     {
       "plugin_id": "organization",
@@ -1651,7 +1822,9 @@
       "ruby_endpoint_key": "cancel_invitation",
       "ruby_api_method": "cancel_invitation",
       "ruby_api_call": "auth.api.cancel_invitation",
-      "ruby_plugin": "organization"
+      "ruby_plugin": "organization",
+      "upstream_hidden": false,
+      "ruby_hidden": false
     },
     {
       "plugin_id": "organization",
@@ -1670,7 +1843,9 @@
       "ruby_endpoint_key": "check_organization_slug",
       "ruby_api_method": "check_organization_slug",
       "ruby_api_call": "auth.api.check_organization_slug",
-      "ruby_plugin": "organization"
+      "ruby_plugin": "organization",
+      "upstream_hidden": false,
+      "ruby_hidden": false
     },
     {
       "plugin_id": "organization",
@@ -1689,7 +1864,9 @@
       "ruby_endpoint_key": "create_organization",
       "ruby_api_method": "create_organization",
       "ruby_api_call": "auth.api.create_organization",
-      "ruby_plugin": "organization"
+      "ruby_plugin": "organization",
+      "upstream_hidden": false,
+      "ruby_hidden": false
     },
     {
       "plugin_id": "organization",
@@ -1708,7 +1885,9 @@
       "ruby_endpoint_key": "create_org_role",
       "ruby_api_method": "create_org_role",
       "ruby_api_call": "auth.api.create_org_role",
-      "ruby_plugin": "organization"
+      "ruby_plugin": "organization",
+      "upstream_hidden": false,
+      "ruby_hidden": false
     },
     {
       "plugin_id": "organization",
@@ -1727,7 +1906,9 @@
       "ruby_endpoint_key": "create_team",
       "ruby_api_method": "create_team",
       "ruby_api_call": "auth.api.create_team",
-      "ruby_plugin": "organization"
+      "ruby_plugin": "organization",
+      "upstream_hidden": false,
+      "ruby_hidden": false
     },
     {
       "plugin_id": "organization",
@@ -1746,7 +1927,9 @@
       "ruby_endpoint_key": "delete_organization",
       "ruby_api_method": "delete_organization",
       "ruby_api_call": "auth.api.delete_organization",
-      "ruby_plugin": "organization"
+      "ruby_plugin": "organization",
+      "upstream_hidden": false,
+      "ruby_hidden": false
     },
     {
       "plugin_id": "organization",
@@ -1765,7 +1948,9 @@
       "ruby_endpoint_key": "delete_org_role",
       "ruby_api_method": "delete_org_role",
       "ruby_api_call": "auth.api.delete_org_role",
-      "ruby_plugin": "organization"
+      "ruby_plugin": "organization",
+      "upstream_hidden": false,
+      "ruby_hidden": false
     },
     {
       "plugin_id": "organization",
@@ -1784,7 +1969,9 @@
       "ruby_endpoint_key": "get_active_member",
       "ruby_api_method": "get_active_member",
       "ruby_api_call": "auth.api.get_active_member",
-      "ruby_plugin": "organization"
+      "ruby_plugin": "organization",
+      "upstream_hidden": false,
+      "ruby_hidden": false
     },
     {
       "plugin_id": "organization",
@@ -1803,7 +1990,9 @@
       "ruby_endpoint_key": "get_active_member_role",
       "ruby_api_method": "get_active_member_role",
       "ruby_api_call": "auth.api.get_active_member_role",
-      "ruby_plugin": "organization"
+      "ruby_plugin": "organization",
+      "upstream_hidden": false,
+      "ruby_hidden": false
     },
     {
       "plugin_id": "organization",
@@ -1822,7 +2011,9 @@
       "ruby_endpoint_key": "get_full_organization",
       "ruby_api_method": "get_full_organization",
       "ruby_api_call": "auth.api.get_full_organization",
-      "ruby_plugin": "organization"
+      "ruby_plugin": "organization",
+      "upstream_hidden": false,
+      "ruby_hidden": false
     },
     {
       "plugin_id": "organization",
@@ -1841,7 +2032,9 @@
       "ruby_endpoint_key": "get_invitation",
       "ruby_api_method": "get_invitation",
       "ruby_api_call": "auth.api.get_invitation",
-      "ruby_plugin": "organization"
+      "ruby_plugin": "organization",
+      "upstream_hidden": false,
+      "ruby_hidden": false
     },
     {
       "plugin_id": "organization",
@@ -1860,7 +2053,9 @@
       "ruby_endpoint_key": "get_org_role",
       "ruby_api_method": "get_org_role",
       "ruby_api_call": "auth.api.get_org_role",
-      "ruby_plugin": "organization"
+      "ruby_plugin": "organization",
+      "upstream_hidden": false,
+      "ruby_hidden": false
     },
     {
       "plugin_id": "organization",
@@ -1879,7 +2074,9 @@
       "ruby_endpoint_key": "has_permission",
       "ruby_api_method": "has_permission",
       "ruby_api_call": "auth.api.has_permission",
-      "ruby_plugin": "organization"
+      "ruby_plugin": "organization",
+      "upstream_hidden": false,
+      "ruby_hidden": false
     },
     {
       "plugin_id": "organization",
@@ -1898,7 +2095,9 @@
       "ruby_endpoint_key": "create_invitation",
       "ruby_api_method": "create_invitation",
       "ruby_api_call": "auth.api.create_invitation",
-      "ruby_plugin": "organization"
+      "ruby_plugin": "organization",
+      "upstream_hidden": false,
+      "ruby_hidden": false
     },
     {
       "plugin_id": "organization",
@@ -1917,7 +2116,9 @@
       "ruby_endpoint_key": "leave_organization",
       "ruby_api_method": "leave_organization",
       "ruby_api_call": "auth.api.leave_organization",
-      "ruby_plugin": "organization"
+      "ruby_plugin": "organization",
+      "upstream_hidden": false,
+      "ruby_hidden": false
     },
     {
       "plugin_id": "organization",
@@ -1936,7 +2137,9 @@
       "ruby_endpoint_key": "list_organizations",
       "ruby_api_method": "list_organizations",
       "ruby_api_call": "auth.api.list_organizations",
-      "ruby_plugin": "organization"
+      "ruby_plugin": "organization",
+      "upstream_hidden": false,
+      "ruby_hidden": false
     },
     {
       "plugin_id": "organization",
@@ -1955,7 +2158,9 @@
       "ruby_endpoint_key": "list_invitations",
       "ruby_api_method": "list_invitations",
       "ruby_api_call": "auth.api.list_invitations",
-      "ruby_plugin": "organization"
+      "ruby_plugin": "organization",
+      "upstream_hidden": false,
+      "ruby_hidden": false
     },
     {
       "plugin_id": "organization",
@@ -1974,7 +2179,9 @@
       "ruby_endpoint_key": "list_members",
       "ruby_api_method": "list_members",
       "ruby_api_call": "auth.api.list_members",
-      "ruby_plugin": "organization"
+      "ruby_plugin": "organization",
+      "upstream_hidden": false,
+      "ruby_hidden": false
     },
     {
       "plugin_id": "organization",
@@ -1993,7 +2200,9 @@
       "ruby_endpoint_key": "list_org_roles",
       "ruby_api_method": "list_org_roles",
       "ruby_api_call": "auth.api.list_org_roles",
-      "ruby_plugin": "organization"
+      "ruby_plugin": "organization",
+      "upstream_hidden": false,
+      "ruby_hidden": false
     },
     {
       "plugin_id": "organization",
@@ -2012,7 +2221,9 @@
       "ruby_endpoint_key": "list_team_members",
       "ruby_api_method": "list_team_members",
       "ruby_api_call": "auth.api.list_team_members",
-      "ruby_plugin": "organization"
+      "ruby_plugin": "organization",
+      "upstream_hidden": false,
+      "ruby_hidden": false
     },
     {
       "plugin_id": "organization",
@@ -2031,7 +2242,9 @@
       "ruby_endpoint_key": "list_organization_teams",
       "ruby_api_method": "list_organization_teams",
       "ruby_api_call": "auth.api.list_organization_teams",
-      "ruby_plugin": "organization"
+      "ruby_plugin": "organization",
+      "upstream_hidden": false,
+      "ruby_hidden": false
     },
     {
       "plugin_id": "organization",
@@ -2050,7 +2263,9 @@
       "ruby_endpoint_key": "list_user_invitations",
       "ruby_api_method": "list_user_invitations",
       "ruby_api_call": "auth.api.list_user_invitations",
-      "ruby_plugin": "organization"
+      "ruby_plugin": "organization",
+      "upstream_hidden": false,
+      "ruby_hidden": false
     },
     {
       "plugin_id": "organization",
@@ -2069,7 +2284,9 @@
       "ruby_endpoint_key": "list_user_teams",
       "ruby_api_method": "list_user_teams",
       "ruby_api_call": "auth.api.list_user_teams",
-      "ruby_plugin": "organization"
+      "ruby_plugin": "organization",
+      "upstream_hidden": false,
+      "ruby_hidden": false
     },
     {
       "plugin_id": "organization",
@@ -2088,7 +2305,9 @@
       "ruby_endpoint_key": "reject_invitation",
       "ruby_api_method": "reject_invitation",
       "ruby_api_call": "auth.api.reject_invitation",
-      "ruby_plugin": "organization"
+      "ruby_plugin": "organization",
+      "upstream_hidden": false,
+      "ruby_hidden": false
     },
     {
       "plugin_id": "organization",
@@ -2107,7 +2326,9 @@
       "ruby_endpoint_key": "remove_member",
       "ruby_api_method": "remove_member",
       "ruby_api_call": "auth.api.remove_member",
-      "ruby_plugin": "organization"
+      "ruby_plugin": "organization",
+      "upstream_hidden": false,
+      "ruby_hidden": false
     },
     {
       "plugin_id": "organization",
@@ -2126,7 +2347,9 @@
       "ruby_endpoint_key": "remove_team",
       "ruby_api_method": "remove_team",
       "ruby_api_call": "auth.api.remove_team",
-      "ruby_plugin": "organization"
+      "ruby_plugin": "organization",
+      "upstream_hidden": false,
+      "ruby_hidden": false
     },
     {
       "plugin_id": "organization",
@@ -2145,7 +2368,9 @@
       "ruby_endpoint_key": "remove_team_member",
       "ruby_api_method": "remove_team_member",
       "ruby_api_call": "auth.api.remove_team_member",
-      "ruby_plugin": "organization"
+      "ruby_plugin": "organization",
+      "upstream_hidden": false,
+      "ruby_hidden": false
     },
     {
       "plugin_id": "organization",
@@ -2164,7 +2389,9 @@
       "ruby_endpoint_key": "set_active_organization",
       "ruby_api_method": "set_active_organization",
       "ruby_api_call": "auth.api.set_active_organization",
-      "ruby_plugin": "organization"
+      "ruby_plugin": "organization",
+      "upstream_hidden": false,
+      "ruby_hidden": false
     },
     {
       "plugin_id": "organization",
@@ -2183,7 +2410,9 @@
       "ruby_endpoint_key": "set_active_team",
       "ruby_api_method": "set_active_team",
       "ruby_api_call": "auth.api.set_active_team",
-      "ruby_plugin": "organization"
+      "ruby_plugin": "organization",
+      "upstream_hidden": false,
+      "ruby_hidden": false
     },
     {
       "plugin_id": "organization",
@@ -2202,7 +2431,9 @@
       "ruby_endpoint_key": "update_organization",
       "ruby_api_method": "update_organization",
       "ruby_api_call": "auth.api.update_organization",
-      "ruby_plugin": "organization"
+      "ruby_plugin": "organization",
+      "upstream_hidden": false,
+      "ruby_hidden": false
     },
     {
       "plugin_id": "organization",
@@ -2221,7 +2452,9 @@
       "ruby_endpoint_key": "update_member_role",
       "ruby_api_method": "update_member_role",
       "ruby_api_call": "auth.api.update_member_role",
-      "ruby_plugin": "organization"
+      "ruby_plugin": "organization",
+      "upstream_hidden": false,
+      "ruby_hidden": false
     },
     {
       "plugin_id": "organization",
@@ -2240,7 +2473,9 @@
       "ruby_endpoint_key": "update_org_role",
       "ruby_api_method": "update_org_role",
       "ruby_api_call": "auth.api.update_org_role",
-      "ruby_plugin": "organization"
+      "ruby_plugin": "organization",
+      "upstream_hidden": false,
+      "ruby_hidden": false
     },
     {
       "plugin_id": "organization",
@@ -2259,7 +2494,9 @@
       "ruby_endpoint_key": "update_team",
       "ruby_api_method": "update_team",
       "ruby_api_call": "auth.api.update_team",
-      "ruby_plugin": "organization"
+      "ruby_plugin": "organization",
+      "upstream_hidden": false,
+      "ruby_hidden": false
     },
     {
       "plugin_id": "passkey",
@@ -2278,7 +2515,9 @@
       "ruby_endpoint_key": "delete_passkey",
       "ruby_api_method": "delete_passkey",
       "ruby_api_call": "auth.api.delete_passkey",
-      "ruby_plugin": "passkey"
+      "ruby_plugin": "passkey",
+      "upstream_hidden": false,
+      "ruby_hidden": false
     },
     {
       "plugin_id": "passkey",
@@ -2297,7 +2536,9 @@
       "ruby_endpoint_key": "generate_passkey_authentication_options",
       "ruby_api_method": "generate_passkey_authentication_options",
       "ruby_api_call": "auth.api.generate_passkey_authentication_options",
-      "ruby_plugin": "passkey"
+      "ruby_plugin": "passkey",
+      "upstream_hidden": false,
+      "ruby_hidden": false
     },
     {
       "plugin_id": "passkey",
@@ -2316,7 +2557,9 @@
       "ruby_endpoint_key": "generate_passkey_registration_options",
       "ruby_api_method": "generate_passkey_registration_options",
       "ruby_api_call": "auth.api.generate_passkey_registration_options",
-      "ruby_plugin": "passkey"
+      "ruby_plugin": "passkey",
+      "upstream_hidden": false,
+      "ruby_hidden": false
     },
     {
       "plugin_id": "passkey",
@@ -2335,7 +2578,9 @@
       "ruby_endpoint_key": "list_passkeys",
       "ruby_api_method": "list_passkeys",
       "ruby_api_call": "auth.api.list_passkeys",
-      "ruby_plugin": "passkey"
+      "ruby_plugin": "passkey",
+      "upstream_hidden": false,
+      "ruby_hidden": false
     },
     {
       "plugin_id": "passkey",
@@ -2354,7 +2599,9 @@
       "ruby_endpoint_key": "update_passkey",
       "ruby_api_method": "update_passkey",
       "ruby_api_call": "auth.api.update_passkey",
-      "ruby_plugin": "passkey"
+      "ruby_plugin": "passkey",
+      "upstream_hidden": false,
+      "ruby_hidden": false
     },
     {
       "plugin_id": "passkey",
@@ -2373,7 +2620,9 @@
       "ruby_endpoint_key": "verify_passkey_authentication",
       "ruby_api_method": "verify_passkey_authentication",
       "ruby_api_call": "auth.api.verify_passkey_authentication",
-      "ruby_plugin": "passkey"
+      "ruby_plugin": "passkey",
+      "upstream_hidden": false,
+      "ruby_hidden": false
     },
     {
       "plugin_id": "passkey",
@@ -2392,7 +2641,9 @@
       "ruby_endpoint_key": "verify_passkey_registration",
       "ruby_api_method": "verify_passkey_registration",
       "ruby_api_call": "auth.api.verify_passkey_registration",
-      "ruby_plugin": "passkey"
+      "ruby_plugin": "passkey",
+      "upstream_hidden": false,
+      "ruby_hidden": false
     },
     {
       "plugin_id": "phone-number",
@@ -2411,7 +2662,9 @@
       "ruby_endpoint_key": "request_password_reset_phone_number",
       "ruby_api_method": "request_password_reset_phone_number",
       "ruby_api_call": "auth.api.request_password_reset_phone_number",
-      "ruby_plugin": "phone-number"
+      "ruby_plugin": "phone-number",
+      "upstream_hidden": false,
+      "ruby_hidden": false
     },
     {
       "plugin_id": "phone-number",
@@ -2430,7 +2683,9 @@
       "ruby_endpoint_key": "reset_password_phone_number",
       "ruby_api_method": "reset_password_phone_number",
       "ruby_api_call": "auth.api.reset_password_phone_number",
-      "ruby_plugin": "phone-number"
+      "ruby_plugin": "phone-number",
+      "upstream_hidden": false,
+      "ruby_hidden": false
     },
     {
       "plugin_id": "phone-number",
@@ -2449,7 +2704,9 @@
       "ruby_endpoint_key": "send_phone_number_otp",
       "ruby_api_method": "send_phone_number_otp",
       "ruby_api_call": "auth.api.send_phone_number_otp",
-      "ruby_plugin": "phone-number"
+      "ruby_plugin": "phone-number",
+      "upstream_hidden": false,
+      "ruby_hidden": false
     },
     {
       "plugin_id": "phone-number",
@@ -2468,7 +2725,9 @@
       "ruby_endpoint_key": "verify_phone_number",
       "ruby_api_method": "verify_phone_number",
       "ruby_api_call": "auth.api.verify_phone_number",
-      "ruby_plugin": "phone-number"
+      "ruby_plugin": "phone-number",
+      "upstream_hidden": false,
+      "ruby_hidden": false
     },
     {
       "plugin_id": "core",
@@ -2487,7 +2746,9 @@
       "ruby_endpoint_key": "refresh_token",
       "ruby_api_method": "refresh_token",
       "ruby_api_call": "auth.api.refresh_token",
-      "ruby_plugin": "core"
+      "ruby_plugin": "core",
+      "upstream_hidden": false,
+      "ruby_hidden": false
     },
     {
       "plugin_id": "core",
@@ -2506,7 +2767,9 @@
       "ruby_endpoint_key": "request_password_reset",
       "ruby_api_method": "request_password_reset",
       "ruby_api_call": "auth.api.request_password_reset",
-      "ruby_plugin": "core"
+      "ruby_plugin": "core",
+      "upstream_hidden": false,
+      "ruby_hidden": false
     },
     {
       "plugin_id": "core",
@@ -2525,7 +2788,9 @@
       "ruby_endpoint_key": "reset_password",
       "ruby_api_method": "reset_password",
       "ruby_api_call": "auth.api.reset_password",
-      "ruby_plugin": "core"
+      "ruby_plugin": "core",
+      "upstream_hidden": false,
+      "ruby_hidden": false
     },
     {
       "plugin_id": "core",
@@ -2544,7 +2809,9 @@
       "ruby_endpoint_key": "request_password_reset_callback",
       "ruby_api_method": "request_password_reset_callback",
       "ruby_api_call": "auth.api.request_password_reset_callback",
-      "ruby_plugin": "core"
+      "ruby_plugin": "core",
+      "upstream_hidden": false,
+      "ruby_hidden": false
     },
     {
       "plugin_id": "core",
@@ -2563,7 +2830,9 @@
       "ruby_endpoint_key": "revoke_other_sessions",
       "ruby_api_method": "revoke_other_sessions",
       "ruby_api_call": "auth.api.revoke_other_sessions",
-      "ruby_plugin": "core"
+      "ruby_plugin": "core",
+      "upstream_hidden": false,
+      "ruby_hidden": false
     },
     {
       "plugin_id": "core",
@@ -2582,7 +2851,9 @@
       "ruby_endpoint_key": "revoke_session",
       "ruby_api_method": "revoke_session",
       "ruby_api_call": "auth.api.revoke_session",
-      "ruby_plugin": "core"
+      "ruby_plugin": "core",
+      "upstream_hidden": false,
+      "ruby_hidden": false
     },
     {
       "plugin_id": "core",
@@ -2601,7 +2872,9 @@
       "ruby_endpoint_key": "revoke_sessions",
       "ruby_api_method": "revoke_sessions",
       "ruby_api_call": "auth.api.revoke_sessions",
-      "ruby_plugin": "core"
+      "ruby_plugin": "core",
+      "upstream_hidden": false,
+      "ruby_hidden": false
     },
     {
       "plugin_id": "scim",
@@ -2620,7 +2893,9 @@
       "ruby_endpoint_key": "delete_scim_provider_connection",
       "ruby_api_method": "delete_scim_provider_connection",
       "ruby_api_call": "auth.api.delete_scim_provider_connection",
-      "ruby_plugin": "scim"
+      "ruby_plugin": "scim",
+      "upstream_hidden": false,
+      "ruby_hidden": false
     },
     {
       "plugin_id": "scim",
@@ -2639,7 +2914,9 @@
       "ruby_endpoint_key": "generate_scim_token",
       "ruby_api_method": "generate_scim_token",
       "ruby_api_call": "auth.api.generate_scim_token",
-      "ruby_plugin": "scim"
+      "ruby_plugin": "scim",
+      "upstream_hidden": false,
+      "ruby_hidden": false
     },
     {
       "plugin_id": "scim",
@@ -2658,7 +2935,9 @@
       "ruby_endpoint_key": "get_scim_provider_connection",
       "ruby_api_method": "get_scim_provider_connection",
       "ruby_api_call": "auth.api.get_scim_provider_connection",
-      "ruby_plugin": "scim"
+      "ruby_plugin": "scim",
+      "upstream_hidden": false,
+      "ruby_hidden": false
     },
     {
       "plugin_id": "scim",
@@ -2677,7 +2956,9 @@
       "ruby_endpoint_key": "list_scim_provider_connections",
       "ruby_api_method": "list_scim_provider_connections",
       "ruby_api_call": "auth.api.list_scim_provider_connections",
-      "ruby_plugin": "scim"
+      "ruby_plugin": "scim",
+      "upstream_hidden": false,
+      "ruby_hidden": false
     },
     {
       "plugin_id": "scim",
@@ -2696,7 +2977,9 @@
       "ruby_endpoint_key": "get_scim_resource_types",
       "ruby_api_method": "get_scim_resource_types",
       "ruby_api_call": "auth.api.get_scim_resource_types",
-      "ruby_plugin": "scim"
+      "ruby_plugin": "scim",
+      "upstream_hidden": true,
+      "ruby_hidden": true
     },
     {
       "plugin_id": "scim",
@@ -2715,7 +2998,9 @@
       "ruby_endpoint_key": "get_scim_resource_type",
       "ruby_api_method": "get_scim_resource_type",
       "ruby_api_call": "auth.api.get_scim_resource_type",
-      "ruby_plugin": "scim"
+      "ruby_plugin": "scim",
+      "upstream_hidden": true,
+      "ruby_hidden": true
     },
     {
       "plugin_id": "scim",
@@ -2734,7 +3019,9 @@
       "ruby_endpoint_key": "get_scim_schemas",
       "ruby_api_method": "get_scim_schemas",
       "ruby_api_call": "auth.api.get_scim_schemas",
-      "ruby_plugin": "scim"
+      "ruby_plugin": "scim",
+      "upstream_hidden": true,
+      "ruby_hidden": true
     },
     {
       "plugin_id": "scim",
@@ -2753,7 +3040,9 @@
       "ruby_endpoint_key": "get_scim_schema",
       "ruby_api_method": "get_scim_schema",
       "ruby_api_call": "auth.api.get_scim_schema",
-      "ruby_plugin": "scim"
+      "ruby_plugin": "scim",
+      "upstream_hidden": true,
+      "ruby_hidden": true
     },
     {
       "plugin_id": "scim",
@@ -2772,7 +3061,9 @@
       "ruby_endpoint_key": "get_scim_service_provider_config",
       "ruby_api_method": "get_scim_service_provider_config",
       "ruby_api_call": "auth.api.get_scim_service_provider_config",
-      "ruby_plugin": "scim"
+      "ruby_plugin": "scim",
+      "upstream_hidden": true,
+      "ruby_hidden": true
     },
     {
       "plugin_id": "scim",
@@ -2791,7 +3082,9 @@
       "ruby_endpoint_key": "list_scim_users",
       "ruby_api_method": "list_scim_users",
       "ruby_api_call": "auth.api.list_scim_users",
-      "ruby_plugin": "scim"
+      "ruby_plugin": "scim",
+      "upstream_hidden": true,
+      "ruby_hidden": true
     },
     {
       "plugin_id": "scim",
@@ -2810,7 +3103,9 @@
       "ruby_endpoint_key": "create_scim_user",
       "ruby_api_method": "create_scim_user",
       "ruby_api_call": "auth.api.create_scim_user",
-      "ruby_plugin": "scim"
+      "ruby_plugin": "scim",
+      "upstream_hidden": true,
+      "ruby_hidden": true
     },
     {
       "plugin_id": "scim",
@@ -2829,7 +3124,9 @@
       "ruby_endpoint_key": "delete_scim_user",
       "ruby_api_method": "delete_scim_user",
       "ruby_api_call": "auth.api.delete_scim_user",
-      "ruby_plugin": "scim"
+      "ruby_plugin": "scim",
+      "upstream_hidden": true,
+      "ruby_hidden": true
     },
     {
       "plugin_id": "scim",
@@ -2848,7 +3145,9 @@
       "ruby_endpoint_key": "get_scim_user",
       "ruby_api_method": "get_scim_user",
       "ruby_api_call": "auth.api.get_scim_user",
-      "ruby_plugin": "scim"
+      "ruby_plugin": "scim",
+      "upstream_hidden": true,
+      "ruby_hidden": true
     },
     {
       "plugin_id": "scim",
@@ -2867,7 +3166,9 @@
       "ruby_endpoint_key": "patch_scim_user",
       "ruby_api_method": "patch_scim_user",
       "ruby_api_call": "auth.api.patch_scim_user",
-      "ruby_plugin": "scim"
+      "ruby_plugin": "scim",
+      "upstream_hidden": true,
+      "ruby_hidden": true
     },
     {
       "plugin_id": "scim",
@@ -2886,7 +3187,9 @@
       "ruby_endpoint_key": "update_scim_user",
       "ruby_api_method": "update_scim_user",
       "ruby_api_call": "auth.api.update_scim_user",
-      "ruby_plugin": "scim"
+      "ruby_plugin": "scim",
+      "upstream_hidden": true,
+      "ruby_hidden": true
     },
     {
       "plugin_id": "core",
@@ -2905,7 +3208,9 @@
       "ruby_endpoint_key": "send_verification_email",
       "ruby_api_method": "send_verification_email",
       "ruby_api_call": "auth.api.send_verification_email",
-      "ruby_plugin": "core"
+      "ruby_plugin": "core",
+      "upstream_hidden": false,
+      "ruby_hidden": false
     },
     {
       "plugin_id": "anonymous",
@@ -2924,7 +3229,9 @@
       "ruby_endpoint_key": "sign_in_anonymous",
       "ruby_api_method": "sign_in_anonymous",
       "ruby_api_call": "auth.api.sign_in_anonymous",
-      "ruby_plugin": "anonymous"
+      "ruby_plugin": "anonymous",
+      "upstream_hidden": false,
+      "ruby_hidden": false
     },
     {
       "plugin_id": "core",
@@ -2943,7 +3250,9 @@
       "ruby_endpoint_key": "sign_in_email",
       "ruby_api_method": "sign_in_email",
       "ruby_api_call": "auth.api.sign_in_email",
-      "ruby_plugin": "core"
+      "ruby_plugin": "core",
+      "upstream_hidden": false,
+      "ruby_hidden": false
     },
     {
       "plugin_id": "email-otp",
@@ -2962,7 +3271,9 @@
       "ruby_endpoint_key": "sign_in_email_otp",
       "ruby_api_method": "sign_in_email_otp",
       "ruby_api_call": "auth.api.sign_in_email_otp",
-      "ruby_plugin": "email-otp"
+      "ruby_plugin": "email-otp",
+      "upstream_hidden": false,
+      "ruby_hidden": false
     },
     {
       "plugin_id": "magic-link",
@@ -2981,7 +3292,9 @@
       "ruby_endpoint_key": "sign_in_magic_link",
       "ruby_api_method": "sign_in_magic_link",
       "ruby_api_call": "auth.api.sign_in_magic_link",
-      "ruby_plugin": "magic-link"
+      "ruby_plugin": "magic-link",
+      "upstream_hidden": false,
+      "ruby_hidden": false
     },
     {
       "plugin_id": "generic-oauth",
@@ -3000,7 +3313,9 @@
       "ruby_endpoint_key": "sign_in_with_oauth2",
       "ruby_api_method": "sign_in_with_oauth2",
       "ruby_api_call": "auth.api.sign_in_with_oauth2",
-      "ruby_plugin": "generic-oauth"
+      "ruby_plugin": "generic-oauth",
+      "upstream_hidden": false,
+      "ruby_hidden": false
     },
     {
       "plugin_id": "phone-number",
@@ -3019,7 +3334,9 @@
       "ruby_endpoint_key": "sign_in_phone_number",
       "ruby_api_method": "sign_in_phone_number",
       "ruby_api_call": "auth.api.sign_in_phone_number",
-      "ruby_plugin": "phone-number"
+      "ruby_plugin": "phone-number",
+      "upstream_hidden": false,
+      "ruby_hidden": false
     },
     {
       "plugin_id": "core",
@@ -3038,7 +3355,9 @@
       "ruby_endpoint_key": "sign_in_social",
       "ruby_api_method": "sign_in_social",
       "ruby_api_call": "auth.api.sign_in_social",
-      "ruby_plugin": "core"
+      "ruby_plugin": "core",
+      "upstream_hidden": false,
+      "ruby_hidden": false
     },
     {
       "plugin_id": "sso",
@@ -3057,7 +3376,9 @@
       "ruby_endpoint_key": "sign_in_sso",
       "ruby_api_method": "sign_in_sso",
       "ruby_api_call": "auth.api.sign_in_sso",
-      "ruby_plugin": "sso"
+      "ruby_plugin": "sso",
+      "upstream_hidden": false,
+      "ruby_hidden": false
     },
     {
       "plugin_id": "username",
@@ -3076,7 +3397,9 @@
       "ruby_endpoint_key": "sign_in_username",
       "ruby_api_method": "sign_in_username",
       "ruby_api_call": "auth.api.sign_in_username",
-      "ruby_plugin": "username"
+      "ruby_plugin": "username",
+      "upstream_hidden": false,
+      "ruby_hidden": false
     },
     {
       "plugin_id": "core",
@@ -3095,7 +3418,9 @@
       "ruby_endpoint_key": "sign_out",
       "ruby_api_method": "sign_out",
       "ruby_api_call": "auth.api.sign_out",
-      "ruby_plugin": "core"
+      "ruby_plugin": "core",
+      "upstream_hidden": false,
+      "ruby_hidden": false
     },
     {
       "plugin_id": "core",
@@ -3114,7 +3439,9 @@
       "ruby_endpoint_key": "sign_up_email",
       "ruby_api_method": "sign_up_email",
       "ruby_api_call": "auth.api.sign_up_email",
-      "ruby_plugin": "core"
+      "ruby_plugin": "core",
+      "upstream_hidden": false,
+      "ruby_hidden": false
     },
     {
       "plugin_id": "siwe",
@@ -3133,7 +3460,9 @@
       "ruby_endpoint_key": "get_nonce",
       "ruby_api_method": "get_nonce",
       "ruby_api_call": "auth.api.get_nonce",
-      "ruby_plugin": "siwe"
+      "ruby_plugin": "siwe",
+      "upstream_hidden": false,
+      "ruby_hidden": false
     },
     {
       "plugin_id": "siwe",
@@ -3152,7 +3481,9 @@
       "ruby_endpoint_key": "get_siwe_nonce",
       "ruby_api_method": "get_siwe_nonce",
       "ruby_api_call": "auth.api.get_siwe_nonce",
-      "ruby_plugin": "siwe"
+      "ruby_plugin": "siwe",
+      "upstream_hidden": false,
+      "ruby_hidden": false
     },
     {
       "plugin_id": "siwe",
@@ -3171,7 +3502,9 @@
       "ruby_endpoint_key": "verify_siwe_message",
       "ruby_api_method": "verify_siwe_message",
       "ruby_api_call": "auth.api.verify_siwe_message",
-      "ruby_plugin": "siwe"
+      "ruby_plugin": "siwe",
+      "upstream_hidden": false,
+      "ruby_hidden": false
     },
     {
       "plugin_id": "sso",
@@ -3190,7 +3523,9 @@
       "ruby_endpoint_key": "callback_sso_shared",
       "ruby_api_method": "callback_sso_shared",
       "ruby_api_call": "auth.api.callback_sso_shared",
-      "ruby_plugin": "sso"
+      "ruby_plugin": "sso",
+      "upstream_hidden": false,
+      "ruby_hidden": false
     },
     {
       "plugin_id": "sso",
@@ -3209,7 +3544,9 @@
       "ruby_endpoint_key": "callback_sso",
       "ruby_api_method": "callback_sso",
       "ruby_api_call": "auth.api.callback_sso",
-      "ruby_plugin": "sso"
+      "ruby_plugin": "sso",
+      "upstream_hidden": false,
+      "ruby_hidden": false
     },
     {
       "plugin_id": "sso",
@@ -3228,7 +3565,9 @@
       "ruby_endpoint_key": "delete_sso_provider",
       "ruby_api_method": "delete_sso_provider",
       "ruby_api_call": "auth.api.delete_sso_provider",
-      "ruby_plugin": "sso"
+      "ruby_plugin": "sso",
+      "upstream_hidden": false,
+      "ruby_hidden": false
     },
     {
       "plugin_id": "sso",
@@ -3247,7 +3586,9 @@
       "ruby_endpoint_key": "get_sso_provider",
       "ruby_api_method": "get_sso_provider",
       "ruby_api_call": "auth.api.get_sso_provider",
-      "ruby_plugin": "sso"
+      "ruby_plugin": "sso",
+      "upstream_hidden": false,
+      "ruby_hidden": false
     },
     {
       "plugin_id": "sso",
@@ -3266,7 +3607,9 @@
       "ruby_endpoint_key": "list_sso_providers",
       "ruby_api_method": "list_sso_providers",
       "ruby_api_call": "auth.api.list_sso_providers",
-      "ruby_plugin": "sso"
+      "ruby_plugin": "sso",
+      "upstream_hidden": false,
+      "ruby_hidden": false
     },
     {
       "plugin_id": "sso",
@@ -3285,7 +3628,9 @@
       "ruby_endpoint_key": "register_sso_provider",
       "ruby_api_method": "register_sso_provider",
       "ruby_api_call": "auth.api.register_sso_provider",
-      "ruby_plugin": "sso"
+      "ruby_plugin": "sso",
+      "upstream_hidden": false,
+      "ruby_hidden": false
     },
     {
       "plugin_id": "sso",
@@ -3304,7 +3649,9 @@
       "ruby_endpoint_key": "request_domain_verification",
       "ruby_api_method": "request_domain_verification",
       "ruby_api_call": "auth.api.request_domain_verification",
-      "ruby_plugin": "better_auth/sso/plugin"
+      "ruby_plugin": "better_auth/sso/plugin",
+      "upstream_hidden": false,
+      "ruby_hidden": false
     },
     {
       "plugin_id": "sso",
@@ -3323,7 +3670,9 @@
       "ruby_endpoint_key": "callback_sso_saml",
       "ruby_api_method": "callback_sso_saml",
       "ruby_api_call": "auth.api.callback_sso_saml",
-      "ruby_plugin": "sso"
+      "ruby_plugin": "sso",
+      "upstream_hidden": true,
+      "ruby_hidden": false
     },
     {
       "plugin_id": "sso",
@@ -3342,7 +3691,9 @@
       "ruby_endpoint_key": "callback_sso_saml",
       "ruby_api_method": "callback_sso_saml",
       "ruby_api_call": "auth.api.callback_sso_saml",
-      "ruby_plugin": "sso"
+      "ruby_plugin": "sso",
+      "upstream_hidden": true,
+      "ruby_hidden": false
     },
     {
       "plugin_id": "sso",
@@ -3361,7 +3712,9 @@
       "ruby_endpoint_key": "initiate_slo",
       "ruby_api_method": "initiate_slo",
       "ruby_api_call": "auth.api.initiate_slo",
-      "ruby_plugin": "sso"
+      "ruby_plugin": "sso",
+      "upstream_hidden": true,
+      "ruby_hidden": false
     },
     {
       "plugin_id": "sso",
@@ -3380,7 +3733,9 @@
       "ruby_endpoint_key": "acs_endpoint",
       "ruby_api_method": "acs",
       "ruby_api_call": "auth.api.acs",
-      "ruby_plugin": "sso"
+      "ruby_plugin": "sso",
+      "upstream_hidden": true,
+      "ruby_hidden": false
     },
     {
       "plugin_id": "sso",
@@ -3399,7 +3754,9 @@
       "ruby_endpoint_key": "sp_metadata",
       "ruby_api_method": "sp_metadata",
       "ruby_api_call": "auth.api.sp_metadata",
-      "ruby_plugin": "sso"
+      "ruby_plugin": "sso",
+      "upstream_hidden": false,
+      "ruby_hidden": false
     },
     {
       "plugin_id": "sso",
@@ -3418,7 +3775,9 @@
       "ruby_endpoint_key": "slo_endpoint",
       "ruby_api_method": "slo",
       "ruby_api_call": "auth.api.slo",
-      "ruby_plugin": "sso"
+      "ruby_plugin": "sso",
+      "upstream_hidden": true,
+      "ruby_hidden": false
     },
     {
       "plugin_id": "sso",
@@ -3437,7 +3796,9 @@
       "ruby_endpoint_key": "slo_endpoint",
       "ruby_api_method": "slo",
       "ruby_api_call": "auth.api.slo",
-      "ruby_plugin": "sso"
+      "ruby_plugin": "sso",
+      "upstream_hidden": true,
+      "ruby_hidden": false
     },
     {
       "plugin_id": "sso",
@@ -3456,7 +3817,9 @@
       "ruby_endpoint_key": "update_sso_provider",
       "ruby_api_method": "update_sso_provider",
       "ruby_api_call": "auth.api.update_sso_provider",
-      "ruby_plugin": "sso"
+      "ruby_plugin": "sso",
+      "upstream_hidden": false,
+      "ruby_hidden": false
     },
     {
       "plugin_id": "sso",
@@ -3475,7 +3838,9 @@
       "ruby_endpoint_key": "verify_domain",
       "ruby_api_method": "verify_domain",
       "ruby_api_call": "auth.api.verify_domain",
-      "ruby_plugin": "better_auth/sso/plugin"
+      "ruby_plugin": "better_auth/sso/plugin",
+      "upstream_hidden": false,
+      "ruby_hidden": false
     },
     {
       "plugin_id": "stripe",
@@ -3494,7 +3859,9 @@
       "ruby_endpoint_key": "stripe_webhook",
       "ruby_api_method": "stripe_webhook",
       "ruby_api_call": "auth.api.stripe_webhook",
-      "ruby_plugin": "stripe"
+      "ruby_plugin": "stripe",
+      "upstream_hidden": true,
+      "ruby_hidden": true
     },
     {
       "plugin_id": "stripe",
@@ -3513,7 +3880,9 @@
       "ruby_endpoint_key": "create_billing_portal",
       "ruby_api_method": "create_billing_portal",
       "ruby_api_call": "auth.api.create_billing_portal",
-      "ruby_plugin": "stripe"
+      "ruby_plugin": "stripe",
+      "upstream_hidden": false,
+      "ruby_hidden": false
     },
     {
       "plugin_id": "stripe",
@@ -3532,7 +3901,9 @@
       "ruby_endpoint_key": "cancel_subscription",
       "ruby_api_method": "cancel_subscription",
       "ruby_api_call": "auth.api.cancel_subscription",
-      "ruby_plugin": "stripe"
+      "ruby_plugin": "stripe",
+      "upstream_hidden": false,
+      "ruby_hidden": false
     },
     {
       "plugin_id": "stripe",
@@ -3551,7 +3922,9 @@
       "ruby_endpoint_key": "list_active_subscriptions",
       "ruby_api_method": "list_active_subscriptions",
       "ruby_api_call": "auth.api.list_active_subscriptions",
-      "ruby_plugin": "stripe"
+      "ruby_plugin": "stripe",
+      "upstream_hidden": false,
+      "ruby_hidden": false
     },
     {
       "plugin_id": "stripe",
@@ -3570,7 +3943,9 @@
       "ruby_endpoint_key": "restore_subscription",
       "ruby_api_method": "restore_subscription",
       "ruby_api_call": "auth.api.restore_subscription",
-      "ruby_plugin": "stripe"
+      "ruby_plugin": "stripe",
+      "upstream_hidden": false,
+      "ruby_hidden": false
     },
     {
       "plugin_id": "stripe",
@@ -3589,7 +3964,9 @@
       "ruby_endpoint_key": "subscription_success",
       "ruby_api_method": "subscription_success",
       "ruby_api_call": "auth.api.subscription_success",
-      "ruby_plugin": "stripe"
+      "ruby_plugin": "stripe",
+      "upstream_hidden": false,
+      "ruby_hidden": false
     },
     {
       "plugin_id": "stripe",
@@ -3608,7 +3985,9 @@
       "ruby_endpoint_key": "upgrade_subscription",
       "ruby_api_method": "upgrade_subscription",
       "ruby_api_call": "auth.api.upgrade_subscription",
-      "ruby_plugin": "stripe"
+      "ruby_plugin": "stripe",
+      "upstream_hidden": false,
+      "ruby_hidden": false
     },
     {
       "plugin_id": "jwt",
@@ -3627,7 +4006,9 @@
       "ruby_endpoint_key": "get_token",
       "ruby_api_method": "get_token",
       "ruby_api_call": "auth.api.get_token",
-      "ruby_plugin": "jwt"
+      "ruby_plugin": "jwt",
+      "upstream_hidden": false,
+      "ruby_hidden": false
     },
     {
       "plugin_id": "two-factor",
@@ -3646,7 +4027,9 @@
       "ruby_endpoint_key": "disable_two_factor",
       "ruby_api_method": "disable_two_factor",
       "ruby_api_call": "auth.api.disable_two_factor",
-      "ruby_plugin": "two-factor"
+      "ruby_plugin": "two-factor",
+      "upstream_hidden": false,
+      "ruby_hidden": false
     },
     {
       "plugin_id": "two-factor",
@@ -3665,7 +4048,9 @@
       "ruby_endpoint_key": "enable_two_factor",
       "ruby_api_method": "enable_two_factor",
       "ruby_api_call": "auth.api.enable_two_factor",
-      "ruby_plugin": "two-factor"
+      "ruby_plugin": "two-factor",
+      "upstream_hidden": false,
+      "ruby_hidden": false
     },
     {
       "plugin_id": "two-factor",
@@ -3684,7 +4069,9 @@
       "ruby_endpoint_key": "generate_backup_codes",
       "ruby_api_method": "generate_backup_codes",
       "ruby_api_call": "auth.api.generate_backup_codes",
-      "ruby_plugin": "two-factor"
+      "ruby_plugin": "two-factor",
+      "upstream_hidden": false,
+      "ruby_hidden": false
     },
     {
       "plugin_id": "two-factor",
@@ -3703,7 +4090,9 @@
       "ruby_endpoint_key": "get_totp_uri",
       "ruby_api_method": "get_totp_uri",
       "ruby_api_call": "auth.api.get_totp_uri",
-      "ruby_plugin": "two-factor"
+      "ruby_plugin": "two-factor",
+      "upstream_hidden": false,
+      "ruby_hidden": false
     },
     {
       "plugin_id": "two-factor",
@@ -3722,7 +4111,9 @@
       "ruby_endpoint_key": "send_two_factor_otp",
       "ruby_api_method": "send_two_factor_otp",
       "ruby_api_call": "auth.api.send_two_factor_otp",
-      "ruby_plugin": "two-factor"
+      "ruby_plugin": "two-factor",
+      "upstream_hidden": false,
+      "ruby_hidden": false
     },
     {
       "plugin_id": "two-factor",
@@ -3741,7 +4132,9 @@
       "ruby_endpoint_key": "verify_backup_code",
       "ruby_api_method": "verify_backup_code",
       "ruby_api_call": "auth.api.verify_backup_code",
-      "ruby_plugin": "two-factor"
+      "ruby_plugin": "two-factor",
+      "upstream_hidden": false,
+      "ruby_hidden": false
     },
     {
       "plugin_id": "two-factor",
@@ -3760,7 +4153,9 @@
       "ruby_endpoint_key": "verify_two_factor_otp",
       "ruby_api_method": "verify_two_factor_otp",
       "ruby_api_call": "auth.api.verify_two_factor_otp",
-      "ruby_plugin": "two-factor"
+      "ruby_plugin": "two-factor",
+      "upstream_hidden": false,
+      "ruby_hidden": false
     },
     {
       "plugin_id": "two-factor",
@@ -3779,7 +4174,9 @@
       "ruby_endpoint_key": "verify_totp",
       "ruby_api_method": "verify_totp",
       "ruby_api_call": "auth.api.verify_totp",
-      "ruby_plugin": "two-factor"
+      "ruby_plugin": "two-factor",
+      "upstream_hidden": false,
+      "ruby_hidden": false
     },
     {
       "plugin_id": "core",
@@ -3798,7 +4195,9 @@
       "ruby_endpoint_key": "unlink_account",
       "ruby_api_method": "unlink_account",
       "ruby_api_call": "auth.api.unlink_account",
-      "ruby_plugin": "core"
+      "ruby_plugin": "core",
+      "upstream_hidden": false,
+      "ruby_hidden": false
     },
     {
       "plugin_id": "core",
@@ -3817,7 +4216,9 @@
       "ruby_endpoint_key": "update_session",
       "ruby_api_method": "update_session",
       "ruby_api_call": "auth.api.update_session",
-      "ruby_plugin": "core"
+      "ruby_plugin": "core",
+      "upstream_hidden": false,
+      "ruby_hidden": false
     },
     {
       "plugin_id": "core",
@@ -3836,7 +4237,9 @@
       "ruby_endpoint_key": "update_user",
       "ruby_api_method": "update_user",
       "ruby_api_call": "auth.api.update_user",
-      "ruby_plugin": "core"
+      "ruby_plugin": "core",
+      "upstream_hidden": false,
+      "ruby_hidden": false
     },
     {
       "plugin_id": "core",
@@ -3855,7 +4258,9 @@
       "ruby_endpoint_key": "verify_email",
       "ruby_api_method": "verify_email",
       "ruby_api_call": "auth.api.verify_email",
-      "ruby_plugin": "core"
+      "ruby_plugin": "core",
+      "upstream_hidden": false,
+      "ruby_hidden": false
     },
     {
       "plugin_id": "core",
@@ -3874,7 +4279,9 @@
       "ruby_endpoint_key": "verify_password",
       "ruby_api_method": "verify_password",
       "ruby_api_call": "auth.api.verify_password",
-      "ruby_plugin": "core"
+      "ruby_plugin": "core",
+      "upstream_hidden": false,
+      "ruby_hidden": false
     }
   ],
   "registry_key_mismatches": [],
@@ -3897,6 +4304,7 @@
       "header_params": [],
       "disable_body": false,
       "server_only": true,
+      "hidden": false,
       "source": "static+runtime",
       "method": "POST",
       "ruby_api_method": "admin_create_oauth_client",
@@ -3923,6 +4331,7 @@
       "header_params": [],
       "disable_body": false,
       "server_only": true,
+      "hidden": false,
       "source": "static+runtime",
       "method": "PATCH",
       "ruby_api_method": "admin_update_oauth_client",
@@ -3947,6 +4356,7 @@
       "header_params": [],
       "disable_body": false,
       "server_only": false,
+      "hidden": false,
       "operation_id": "postApiKeyDeleteAllExpiredApiKeys",
       "source": "runtime",
       "method": "POST",
@@ -3983,6 +4393,7 @@
       "header_params": [],
       "disable_body": false,
       "server_only": false,
+      "hidden": false,
       "operation_id": "postApiKeyVerify",
       "source": "runtime",
       "method": "POST",
@@ -4016,6 +4427,7 @@
       "header_params": [],
       "disable_body": false,
       "server_only": false,
+      "hidden": false,
       "source": "static+runtime",
       "method": "POST",
       "ruby_api_method": "dub_link",
@@ -4039,6 +4451,7 @@
       "header_params": [],
       "disable_body": false,
       "server_only": false,
+      "hidden": true,
       "source": "static+runtime",
       "method": "GET",
       "ruby_api_method": "error",
@@ -4062,6 +4475,7 @@
       "header_params": [],
       "disable_body": false,
       "server_only": false,
+      "hidden": false,
       "source": "static",
       "method": "DELETE",
       "ruby_api_method": "oauth_find_user_consent",
@@ -4083,6 +4497,7 @@
       "header_params": [],
       "disable_body": false,
       "server_only": false,
+      "hidden": false,
       "source": "static",
       "method": "GET",
       "ruby_api_method": "oauth_find_user_consent",
@@ -4104,6 +4519,7 @@
       "header_params": [],
       "disable_body": false,
       "server_only": false,
+      "hidden": false,
       "source": "static",
       "method": "PATCH",
       "ruby_api_method": "oauth_find_user_consent",
@@ -4125,6 +4541,7 @@
       "header_params": [],
       "disable_body": false,
       "server_only": false,
+      "hidden": false,
       "source": "static",
       "method": "GET",
       "ruby_api_method": "oauth_find_user_consent",
@@ -4188,6 +4605,7 @@
       "header_params": [],
       "disable_body": false,
       "server_only": false,
+      "hidden": false,
       "source": "static+runtime",
       "method": "POST",
       "ruby_api_method": "oauth2_end_session",
@@ -4211,6 +4629,7 @@
       "header_params": [],
       "disable_body": false,
       "server_only": false,
+      "hidden": true,
       "source": "static+runtime",
       "method": "GET",
       "ruby_api_method": "ok",
@@ -4250,6 +4669,7 @@
       "header_params": [],
       "disable_body": false,
       "server_only": false,
+      "hidden": false,
       "source": "static+runtime",
       "method": "POST",
       "ruby_api_method": "add_member",
@@ -4271,6 +4691,7 @@
       "header_params": [],
       "disable_body": false,
       "server_only": false,
+      "hidden": true,
       "operation_id": null,
       "source": "runtime",
       "method": "GET",
@@ -4299,6 +4720,7 @@
       "header_params": [],
       "disable_body": false,
       "server_only": false,
+      "hidden": false,
       "source": "static+runtime",
       "method": "POST",
       "ruby_api_method": "set_password",
@@ -4331,6 +4753,7 @@
       "header_params": [],
       "disable_body": false,
       "server_only": false,
+      "hidden": false,
       "operation_id": "cancelSubscriptionCallback",
       "source": "runtime",
       "method": "GET",
@@ -4359,6 +4782,7 @@
       "header_params": [],
       "disable_body": false,
       "server_only": false,
+      "hidden": false,
       "source": "static+runtime",
       "method": "POST",
       "ruby_api_method": "generate_totp",
@@ -4369,6 +4793,218 @@
     }
   ],
   "deprecated_pairs": [],
+  "visibility_mismatches": [
+    {
+      "plugin_id": "core",
+      "registry_key": "callbackOAuth",
+      "ruby_registry_key": "callback_oauth",
+      "path": "/callback/:id",
+      "method": "GET",
+      "upstream_api": "auth.api.callbackOAuth",
+      "ruby_api": "auth.api.callback_oauth",
+      "upstream_client": null,
+      "deprecated": false,
+      "server_only": false,
+      "exposure": "http_hidden_metadata",
+      "client_visibility": "hidden_metadata",
+      "source_file": "reference/upstream-src/1.6.23/repository/packages/better-auth/src/api/routes/callback.ts",
+      "ruby_endpoint_key": "callback_oauth",
+      "ruby_api_method": "callback_oauth",
+      "ruby_api_call": "auth.api.callback_oauth",
+      "ruby_plugin": "core",
+      "upstream_hidden": true,
+      "ruby_hidden": false
+    },
+    {
+      "plugin_id": "core",
+      "registry_key": "callbackOAuth",
+      "ruby_registry_key": "callback_oauth",
+      "path": "/callback/:id",
+      "method": "POST",
+      "upstream_api": "auth.api.callbackOAuth",
+      "ruby_api": "auth.api.callback_oauth",
+      "upstream_client": null,
+      "deprecated": false,
+      "server_only": false,
+      "exposure": "http_hidden_metadata",
+      "client_visibility": "hidden_metadata",
+      "source_file": "reference/upstream-src/1.6.23/repository/packages/better-auth/src/api/routes/callback.ts",
+      "ruby_endpoint_key": "callback_oauth",
+      "ruby_api_method": "callback_oauth",
+      "ruby_api_call": "auth.api.callback_oauth",
+      "ruby_plugin": "core",
+      "upstream_hidden": true,
+      "ruby_hidden": false
+    },
+    {
+      "plugin_id": "expo",
+      "registry_key": "expoAuthorizationProxy",
+      "ruby_registry_key": "expo_authorization_proxy",
+      "path": "/expo-authorization-proxy",
+      "method": "GET",
+      "upstream_api": "auth.api.expoAuthorizationProxy",
+      "ruby_api": "auth.api.expo_authorization_proxy",
+      "upstream_client": null,
+      "deprecated": false,
+      "server_only": false,
+      "exposure": "http_hidden_metadata",
+      "client_visibility": "hidden_metadata",
+      "source_file": "reference/upstream-src/1.6.23/repository/packages/expo/src/routes.ts",
+      "ruby_endpoint_key": "expo_authorization_proxy",
+      "ruby_api_method": "expo_authorization_proxy",
+      "ruby_api_call": "auth.api.expo_authorization_proxy",
+      "ruby_plugin": "expo",
+      "upstream_hidden": true,
+      "ruby_hidden": false
+    },
+    {
+      "plugin_id": "generic-oauth",
+      "registry_key": "oAuth2Callback",
+      "ruby_registry_key": "oauth2_callback",
+      "path": "/oauth2/callback/:providerId",
+      "method": "GET",
+      "upstream_api": "auth.api.oAuth2Callback",
+      "ruby_api": "auth.api.oauth2_callback",
+      "upstream_client": null,
+      "deprecated": false,
+      "server_only": false,
+      "exposure": "http_hidden_metadata",
+      "client_visibility": "hidden_metadata",
+      "source_file": "reference/upstream-src/1.6.23/repository/packages/better-auth/src/plugins/generic-oauth/routes.ts",
+      "ruby_endpoint_key": "oauth2_callback",
+      "ruby_api_method": "oauth2_callback",
+      "ruby_api_call": "auth.api.oauth2_callback",
+      "ruby_plugin": "generic-oauth",
+      "upstream_hidden": true,
+      "ruby_hidden": false
+    },
+    {
+      "plugin_id": "sso",
+      "registry_key": "callbackSSOSAML",
+      "ruby_registry_key": "callback_sso_saml",
+      "path": "/sso/saml2/callback/:providerId",
+      "method": "GET",
+      "upstream_api": "auth.api.callbackSSOSAML",
+      "ruby_api": "auth.api.callback_sso_saml",
+      "upstream_client": null,
+      "deprecated": false,
+      "server_only": false,
+      "exposure": "http_hidden_metadata",
+      "client_visibility": "hidden_metadata",
+      "source_file": "reference/upstream-src/1.6.23/repository/packages/sso/src/routes/sso.ts",
+      "ruby_endpoint_key": "callback_sso_saml",
+      "ruby_api_method": "callback_sso_saml",
+      "ruby_api_call": "auth.api.callback_sso_saml",
+      "ruby_plugin": "sso",
+      "upstream_hidden": true,
+      "ruby_hidden": false
+    },
+    {
+      "plugin_id": "sso",
+      "registry_key": "callbackSSOSAML",
+      "ruby_registry_key": "callback_sso_saml",
+      "path": "/sso/saml2/callback/:providerId",
+      "method": "POST",
+      "upstream_api": "auth.api.callbackSSOSAML",
+      "ruby_api": "auth.api.callback_sso_saml",
+      "upstream_client": null,
+      "deprecated": false,
+      "server_only": false,
+      "exposure": "http_hidden_metadata",
+      "client_visibility": "hidden_metadata",
+      "source_file": "reference/upstream-src/1.6.23/repository/packages/sso/src/routes/sso.ts",
+      "ruby_endpoint_key": "callback_sso_saml",
+      "ruby_api_method": "callback_sso_saml",
+      "ruby_api_call": "auth.api.callback_sso_saml",
+      "ruby_plugin": "sso",
+      "upstream_hidden": true,
+      "ruby_hidden": false
+    },
+    {
+      "plugin_id": "sso",
+      "registry_key": "initiateSLO",
+      "ruby_registry_key": "initiate_slo",
+      "path": "/sso/saml2/logout/:providerId",
+      "method": "POST",
+      "upstream_api": "auth.api.initiateSLO",
+      "ruby_api": "auth.api.initiate_slo",
+      "upstream_client": null,
+      "deprecated": false,
+      "server_only": false,
+      "exposure": "http_hidden_metadata",
+      "client_visibility": "hidden_metadata",
+      "source_file": "reference/upstream-src/1.6.23/repository/packages/sso/src/routes/sso.ts",
+      "ruby_endpoint_key": "initiate_slo",
+      "ruby_api_method": "initiate_slo",
+      "ruby_api_call": "auth.api.initiate_slo",
+      "ruby_plugin": "sso",
+      "upstream_hidden": true,
+      "ruby_hidden": false
+    },
+    {
+      "plugin_id": "sso",
+      "registry_key": "acsEndpoint",
+      "ruby_registry_key": "acs_endpoint",
+      "path": "/sso/saml2/sp/acs/:providerId",
+      "method": "POST",
+      "upstream_api": "auth.api.acsEndpoint",
+      "ruby_api": "auth.api.acs_endpoint",
+      "upstream_client": null,
+      "deprecated": false,
+      "server_only": false,
+      "exposure": "http_hidden_metadata",
+      "client_visibility": "hidden_metadata",
+      "source_file": "reference/upstream-src/1.6.23/repository/packages/sso/src/routes/sso.ts",
+      "ruby_endpoint_key": "acs_endpoint",
+      "ruby_api_method": "acs",
+      "ruby_api_call": "auth.api.acs",
+      "ruby_plugin": "sso",
+      "upstream_hidden": true,
+      "ruby_hidden": false
+    },
+    {
+      "plugin_id": "sso",
+      "registry_key": "sloEndpoint",
+      "ruby_registry_key": "slo_endpoint",
+      "path": "/sso/saml2/sp/slo/:providerId",
+      "method": "GET",
+      "upstream_api": "auth.api.sloEndpoint",
+      "ruby_api": "auth.api.slo_endpoint",
+      "upstream_client": null,
+      "deprecated": false,
+      "server_only": false,
+      "exposure": "http_hidden_metadata",
+      "client_visibility": "hidden_metadata",
+      "source_file": "reference/upstream-src/1.6.23/repository/packages/sso/src/routes/sso.ts",
+      "ruby_endpoint_key": "slo_endpoint",
+      "ruby_api_method": "slo",
+      "ruby_api_call": "auth.api.slo",
+      "ruby_plugin": "sso",
+      "upstream_hidden": true,
+      "ruby_hidden": false
+    },
+    {
+      "plugin_id": "sso",
+      "registry_key": "sloEndpoint",
+      "ruby_registry_key": "slo_endpoint",
+      "path": "/sso/saml2/sp/slo/:providerId",
+      "method": "POST",
+      "upstream_api": "auth.api.sloEndpoint",
+      "ruby_api": "auth.api.slo_endpoint",
+      "upstream_client": null,
+      "deprecated": false,
+      "server_only": false,
+      "exposure": "http_hidden_metadata",
+      "client_visibility": "hidden_metadata",
+      "source_file": "reference/upstream-src/1.6.23/repository/packages/sso/src/routes/sso.ts",
+      "ruby_endpoint_key": "slo_endpoint",
+      "ruby_api_method": "slo",
+      "ruby_api_call": "auth.api.slo",
+      "ruby_plugin": "sso",
+      "upstream_hidden": true,
+      "ruby_hidden": false
+    }
+  ],
   "excluded_unsupported": [
     {
       "plugin_id": "mcp",
@@ -4660,7 +5296,9 @@
       "ruby_endpoint_key": "change_email_email_otp",
       "ruby_api_method": "change_email_email_otp",
       "ruby_api_call": "auth.api.change_email_email_otp",
-      "ruby_plugin": "email-otp"
+      "ruby_plugin": "email-otp",
+      "upstream_hidden": false,
+      "ruby_hidden": false
     },
     {
       "plugin_id": "email-otp",
@@ -4679,7 +5317,9 @@
       "ruby_endpoint_key": "check_verification_otp",
       "ruby_api_method": "check_verification_otp",
       "ruby_api_call": "auth.api.check_verification_otp",
-      "ruby_plugin": "email-otp"
+      "ruby_plugin": "email-otp",
+      "upstream_hidden": false,
+      "ruby_hidden": false
     },
     {
       "plugin_id": "email-otp",
@@ -4698,7 +5338,9 @@
       "ruby_endpoint_key": "request_email_change_email_otp",
       "ruby_api_method": "request_email_change_email_otp",
       "ruby_api_call": "auth.api.request_email_change_email_otp",
-      "ruby_plugin": "email-otp"
+      "ruby_plugin": "email-otp",
+      "upstream_hidden": false,
+      "ruby_hidden": false
     },
     {
       "plugin_id": "email-otp",
@@ -4717,7 +5359,9 @@
       "ruby_endpoint_key": "request_password_reset_email_otp",
       "ruby_api_method": "request_password_reset_email_otp",
       "ruby_api_call": "auth.api.request_password_reset_email_otp",
-      "ruby_plugin": "email-otp"
+      "ruby_plugin": "email-otp",
+      "upstream_hidden": false,
+      "ruby_hidden": false
     },
     {
       "plugin_id": "email-otp",
@@ -4736,7 +5380,9 @@
       "ruby_endpoint_key": "reset_password_email_otp",
       "ruby_api_method": "reset_password_email_otp",
       "ruby_api_call": "auth.api.reset_password_email_otp",
-      "ruby_plugin": "email-otp"
+      "ruby_plugin": "email-otp",
+      "upstream_hidden": false,
+      "ruby_hidden": false
     },
     {
       "plugin_id": "email-otp",
@@ -4755,7 +5401,9 @@
       "ruby_endpoint_key": "send_verification_otp",
       "ruby_api_method": "send_verification_otp",
       "ruby_api_call": "auth.api.send_verification_otp",
-      "ruby_plugin": "email-otp"
+      "ruby_plugin": "email-otp",
+      "upstream_hidden": false,
+      "ruby_hidden": false
     },
     {
       "plugin_id": "email-otp",
@@ -4774,7 +5422,9 @@
       "ruby_endpoint_key": "verify_email_otp",
       "ruby_api_method": "verify_email_otp",
       "ruby_api_call": "auth.api.verify_email_otp",
-      "ruby_plugin": "email-otp"
+      "ruby_plugin": "email-otp",
+      "upstream_hidden": false,
+      "ruby_hidden": false
     },
     {
       "plugin_id": "email-otp",
@@ -4793,7 +5443,9 @@
       "ruby_endpoint_key": "sign_in_email_otp",
       "ruby_api_method": "sign_in_email_otp",
       "ruby_api_call": "auth.api.sign_in_email_otp",
-      "ruby_plugin": "email-otp"
+      "ruby_plugin": "email-otp",
+      "upstream_hidden": false,
+      "ruby_hidden": false
     }
   ]
 }

@@ -593,7 +593,19 @@ class BetterAuthPluginsGenericOAuthTest < Minitest::Test
       newUserCallbackURL: "/welcome",
       requestSignUp: true,
       scopes: ["calendar"],
-      additionalData: {tenant: "acme"},
+      additionalData: {
+        "callbackURL" => "/evil",
+        "codeVerifier" => "attacker-verifier",
+        "errorURL" => "/evil-error",
+        "newUserURL" => "/evil-new",
+        "expiresAt" => 1,
+        "oauthState" => "attacker-state",
+        "link" => {"userId" => "victim"},
+        "requestSignUp" => false,
+        "userId" => "kept-user",
+        "tenantID" => "acme",
+        "nestedValue" => {"camelCaseKey" => "kept", "snake_key" => {"UPPERKey" => true}}
+      },
       codeVerifier: verifier
     )
     params = Rack::Utils.parse_query(URI.parse(url).query)
@@ -605,7 +617,15 @@ class BetterAuthPluginsGenericOAuthTest < Minitest::Test
     assert_equal "/error", state_data.fetch("errorURL")
     assert_equal "/welcome", state_data.fetch("newUserURL")
     assert_equal true, state_data.fetch("requestSignUp")
-    assert_equal "acme", state_data.fetch("tenant")
+    assert_equal "kept-user", state_data.fetch("userId")
+    assert_equal "acme", state_data.fetch("tenantID")
+    assert_equal({"camelCaseKey" => "kept", "snake_key" => {"UPPERKey" => true}}, state_data.fetch("nestedValue"))
+    assert_equal params.fetch("state"), state_data.fetch("oauthState")
+    refute_equal "attacker-verifier", state_data.fetch("codeVerifier")
+    refute_equal "/evil-error", state_data.fetch("errorURL")
+    refute_equal "/evil-new", state_data.fetch("newUserURL")
+    refute_equal 1, state_data.fetch("expiresAt")
+    assert_nil state_data["link"]
     assert_includes ctx.response_headers.fetch("set-cookie"), "better-auth.state="
     assert_equal "S256", params.fetch("code_challenge_method")
   end
@@ -627,10 +647,43 @@ class BetterAuthPluginsGenericOAuthTest < Minitest::Test
     encrypted = BetterAuth::Cookies.parse_cookies(cookie_header(ctx.response_headers.fetch("set-cookie"))).fetch(cookie_name)
     state_data = JSON.parse(BetterAuth::Crypto.symmetric_decrypt(key: auth.context.secret_config, data: encrypted))
 
-    assert_equal params.fetch("state"), state_data.fetch("state")
+    assert_equal params.fetch("state"), state_data.fetch("oauthState")
     assert_equal verifier, state_data.fetch("codeVerifier")
     assert_equal "/dashboard", state_data.fetch("callbackURL")
     assert_equal "S256", params.fetch("code_challenge_method")
+  end
+
+  def test_generic_provider_precedes_builtin_provider_with_the_same_id
+    auth = BetterAuth.auth(
+      base_url: "http://localhost:3000",
+      secret: SECRET,
+      database: :memory,
+      social_providers: {
+        custom: {
+          id: "custom",
+          create_authorization_url: ->(_data) { "https://builtin.example/authorize" }
+        }
+      },
+      plugins: [
+        BetterAuth::Plugins.generic_oauth(
+          config: [{
+            provider_id: "custom",
+            authorization_url: "https://generic.example/authorize",
+            token_url: "https://generic.example/token",
+            client_id: "generic-client"
+          }]
+        )
+      ]
+    )
+    provider = auth.context.social_providers.fetch(:custom)
+
+    url = provider.fetch(:oauth_popup_authorization_url).call(
+      endpoint_context(auth),
+      callbackURL: "/dashboard",
+      codeVerifier: "v" * 128
+    )
+
+    assert_equal "generic.example", URI.parse(url).host
   end
 
   def test_cookie_state_strategy_survives_secret_rotation
@@ -680,9 +733,17 @@ class BetterAuthPluginsGenericOAuthTest < Minitest::Test
 
     assert_equal 302, callback_status
     assert_equal "/error?error=state_mismatch", callback_headers.fetch("location")
-    state_cookie = callback_headers.fetch("set-cookie").lines.find { |line| line.start_with?("better-auth.oauth_state=") }
-    assert state_cookie
-    assert_includes state_cookie, "Max-Age=0"
+    refute callback_headers.fetch("set-cookie", "").lines.any? { |line| line.start_with?("better-auth.oauth_state=") && line.include?("Max-Age=0") }
+
+    retry_status, retry_headers, = auth.api.oauth2_callback(
+      params: {providerId: "custom"},
+      query: {code: "oauth-code", state: state},
+      headers: {"cookie" => cookie_header(headers.fetch("set-cookie"))},
+      as_response: true
+    )
+
+    assert_equal 302, retry_status
+    assert_equal "/dashboard", retry_headers.fetch("location")
   end
 
   def test_cookie_state_strategy_rejects_missing_state_cookie

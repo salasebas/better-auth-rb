@@ -16,8 +16,8 @@ release notes live in each package's `CHANGELOG.md`.
 - Added maintained upstream test and endpoint inventories so the v1.6.23 server
   reference can be checked without treating generated artifacts as proof on
   their own.
-- Recorded the OAuth Popup server half as a future opt-in experimental plugin;
-  it is not included in the current runtime surface.
+- Documented the OAuth Popup server half as an opt-in experimental runtime
+  plugin.
 
 ## 2026-05-21
 

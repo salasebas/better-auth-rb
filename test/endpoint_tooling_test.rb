@@ -276,6 +276,21 @@ class EndpointToolingTest < Minitest::Test
     assert_equal 0, report.fetch(:missing_ruby_count)
   end
 
+  def test_reports_hidden_metadata_visibility_mismatches
+    upstream = upstream_row("/oauth-popup/start", "GET", "oauthPopupStart", plugin_id: "oauth-popup").merge(hidden_metadata: true)
+    ruby = ruby_row("/oauth-popup/start", "GET", "oauth_popup_start").merge(hidden: false)
+
+    report = EndpointApiComparison.build_report([upstream], [ruby])
+
+    assert_equal 1, report.fetch(:visibility_mismatch_count)
+    mismatch = report.fetch(:visibility_mismatches).fetch(0)
+    assert_equal true, mismatch.fetch(:upstream_hidden)
+    assert_equal false, mismatch.fetch(:ruby_hidden)
+
+    aligned = EndpointApiComparison.build_report([upstream], [ruby.merge(hidden: true)])
+    assert_equal 0, aligned.fetch(:visibility_mismatch_count)
+  end
+
   private
 
   def mapping(registry_key, symbol:, comment: "")

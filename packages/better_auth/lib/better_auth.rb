@@ -42,6 +42,7 @@ BetterAuth::Plugins.load_boot_plugins!
 require_relative "better_auth/social_providers"
 require_relative "better_auth/session_store"
 require_relative "better_auth/cookies"
+require_relative "better_auth/oauth_state"
 require_relative "better_auth/session"
 require_relative "better_auth/endpoint"
 require_relative "better_auth/routes/validation"

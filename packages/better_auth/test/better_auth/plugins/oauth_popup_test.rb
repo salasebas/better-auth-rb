@@ -10,7 +10,7 @@ require_relative "../../test_helper"
 class BetterAuthPluginsOAuthPopupTest < Minitest::Test
   SECRET = "oauth-popup-secret-with-enough-entropy-123"
   BASE_URL = "http://localhost:3000"
-  POPUP_ORIGIN = "http://localhost:3000"
+  POPUP_ORIGIN = "https://app.example.com"
   BetterAuth::Plugins.oauth_popup
 
   def test_completion_script_hash_matches_actual_script_bytes
@@ -37,31 +37,37 @@ class BetterAuthPluginsOAuthPopupTest < Minitest::Test
     assert_includes source, "\\u003c/script>\\u003cscript>alert(1)\\u003c/script>"
   end
 
-  def test_built_in_start_sets_signed_ten_minute_marker_and_pkce_state
-    captured = nil
-    auth = build_builtin_auth do |data|
-      captured = data
-      "https://provider.example/authorize?#{URI.encode_www_form(state: data.fetch(:state))}"
+  def test_built_in_start_uses_confidential_opaque_state_for_database_and_cookie_strategies
+    [nil, "cookie"].each do |strategy|
+      captured = nil
+      auth = build_builtin_auth(state_strategy: strategy) do |data|
+        captured = data
+        "https://provider.example/authorize?#{URI.encode_www_form(state: data.fetch(:state))}"
+      end
+
+      status, headers, = popup_start(auth, provider: "github", scopes: "profile,email")
+      marker = cookie_line(headers, popup_cookie_name(auth))
+      state = captured.fetch(:state)
+      state_data = stored_oauth_state(auth, headers, state, strategy)
+
+      assert_equal 302, status
+      assert marker
+      assert_includes marker, "Max-Age=600"
+      assert_equal(
+        {"popupOrigin" => POPUP_ORIGIN, "popupNonce" => "nonce-1"},
+        signed_cookie_payload(marker, popup_cookie_name(auth))
+      )
+      assert_equal 32, state.length
+      refute_includes state, captured.fetch(:codeVerifier)
+      assert_nil BetterAuth::Crypto.verify_jwt(state, SECRET)
+      assert_equal 128, captured.fetch(:codeVerifier).length
+      assert_equal ["profile", "email"], captured.fetch(:scopes)
+      assert_equal "#{BASE_URL}/api/auth/callback/github", captured.fetch(:redirectURI)
+      assert_equal "#{BASE_URL}/api/auth", state_data.fetch("callbackURL")
+      assert_equal captured.fetch(:codeVerifier), state_data.fetch("codeVerifier")
+      assert_equal state, state_data.fetch("oauthState")
+      assert_in_delta Time.now.to_i + 600, state_data.fetch("expiresAt"), 2
     end
-
-    status, headers, = popup_start(auth, provider: "github", scopes: "profile,email")
-    marker = cookie_line(headers, popup_cookie_name(auth))
-    state_cookie = cookie_line(headers, auth.context.create_auth_cookie("state").name)
-
-    assert_equal 302, status
-    assert marker
-    assert_includes marker, "Max-Age=600"
-    assert state_cookie
-    assert_equal(
-      {"popupOrigin" => POPUP_ORIGIN, "popupNonce" => "nonce-1"},
-      signed_cookie_payload(marker, popup_cookie_name(auth))
-    )
-    assert_equal 128, captured.fetch(:codeVerifier).length
-    assert_equal ["profile", "email"], captured.fetch(:scopes)
-    assert_equal "#{BASE_URL}/api/auth/callback/github", captured.fetch(:redirectURI)
-    state_data = BetterAuth::Crypto.verify_jwt(captured.fetch(:state), SECRET)
-    assert_equal "#{BASE_URL}/api/auth", state_data.fetch("callbackURL")
-    assert_equal captured.fetch(:codeVerifier), state_data.fetch("codeVerifier")
   end
 
   def test_successful_callback_preserves_cookies_expires_marker_and_targets_exact_origin
@@ -86,7 +92,10 @@ class BetterAuthPluginsOAuthPopupTest < Minitest::Test
     assert_equal POPUP_ORIGIN, data.fetch("targetOrigin")
     assert_equal "nonce-1", data.fetch("nonce")
     assert_equal "/dashboard", data.fetch("redirectTo")
-    refute_empty data.fetch("token")
+    session_cookie = cookies.reverse.find { |line| line.start_with?("#{auth.context.auth_cookies[:session_token].name}=") }
+    expected_token = URI.decode_uri_component(BetterAuth::Cookies.parse_set_cookie(session_cookie).fetch(:value))
+    assert_equal expected_token, data.fetch("token")
+    refute data.key?("error")
   end
 
   def test_completion_token_authenticates_through_bearer
@@ -131,6 +140,31 @@ class BetterAuthPluginsOAuthPopupTest < Minitest::Test
     end
   end
 
+  def test_builtin_new_user_popup_completes_with_new_user_redirect
+    auth = build_builtin_auth do |data|
+      "https://provider.example/authorize?#{URI.encode_www_form(state: data.fetch(:state))}"
+    end
+    _start_status, start_headers, = popup_start(
+      auth,
+      provider: "github",
+      callbackURL: "/dashboard",
+      newUserCallbackURL: "/welcome"
+    )
+    state = authorization_params(start_headers).fetch("state")
+
+    status, headers, body = auth.call(
+      rack_env(
+        "GET",
+        "/api/auth/callback/github?#{URI.encode_www_form(code: "oauth-code", state: state)}",
+        cookie: cookie_header(start_headers.fetch("set-cookie"))
+      )
+    )
+
+    assert_equal 200, status
+    refute headers.key?("location")
+    assert_equal "/welcome", completion_data(body).fetch("redirectTo")
+  end
+
   def test_non_popup_callback_remains_normal_redirect_byte_for_byte
     auth = build_generic_auth
     status, headers, body = auth.api.sign_in_with_oauth2(
@@ -168,7 +202,10 @@ class BetterAuthPluginsOAuthPopupTest < Minitest::Test
 
     assert_equal 200, status
     refute headers.key?("location")
-    assert_equal({"code" => "access_denied", "description" => description}, completion_data(body).fetch("error"))
+    data = completion_data(body)
+    assert_equal({"code" => "access_denied", "description" => description}, data.fetch("error"))
+    refute data.key?("token")
+    refute data.key?("redirectTo")
     refute_includes body.join, "</script><script>alert(2)</script>"
     refute_includes body.join, "\u2028"
     refute_includes body.join, "\u2029"
@@ -186,6 +223,19 @@ class BetterAuthPluginsOAuthPopupTest < Minitest::Test
     refute cookie_line(headers, popup_cookie_name(auth))
   end
 
+  def test_generic_database_state_creation_failure_does_not_emit_insecure_authorization_url
+    auth = build_generic_auth
+
+    status, headers, body = auth.context.internal_adapter.stub(:create_verification_value, nil) do
+      popup_start(auth)
+    end
+
+    assert_equal 200, status
+    refute headers.key?("location")
+    assert_equal "popup_sign_in_failed", completion_data(body).dig("error", "code")
+    refute_includes body.join, "https://provider.example.com/authorize"
+  end
+
   def test_unknown_provider_returns_safe_completion_without_marker
     auth = build_generic_auth
     status, headers, body = popup_start(auth, provider: "missing")
@@ -195,7 +245,7 @@ class BetterAuthPluginsOAuthPopupTest < Minitest::Test
     refute BetterAuth::Cookies.split_set_cookie_header(headers["set-cookie"]).any? { |line| line.start_with?("#{popup_cookie_name(auth)}=") }
   end
 
-  def test_additional_data_cannot_replace_internal_builtin_state
+  def test_additional_data_preserves_exact_public_shape_and_cannot_replace_only_canonical_internal_state
     captured = nil
     auth = build_builtin_auth do |data|
       captured = data
@@ -203,7 +253,7 @@ class BetterAuthPluginsOAuthPopupTest < Minitest::Test
     end
     injected = {
       callbackURL: "https://evil.example/callback",
-      callback_url: "https://evil.example/callback-2",
+      callback_url: "kept-alias",
       errorURL: "https://evil.example/error",
       newUserURL: "https://evil.example/new",
       requestSignUp: false,
@@ -212,7 +262,11 @@ class BetterAuthPluginsOAuthPopupTest < Minitest::Test
       expiresAt: 1,
       expires_at: 1,
       link: {userId: "victim"},
-      tenant: "acme"
+      oauthState: "attacker-state",
+      userId: "kept-user",
+      accountId: "kept-account",
+      tenantID: "acme",
+      nestedValue: {"camelCaseKey" => "kept", "snake_key" => {"UPPERKey" => true}}
     }
 
     status, = popup_start(
@@ -224,17 +278,222 @@ class BetterAuthPluginsOAuthPopupTest < Minitest::Test
       requestSignUp: "true",
       additionalData: JSON.generate(injected)
     )
-    state = BetterAuth::Crypto.verify_jwt(captured.fetch(:state), SECRET)
+    state = stored_oauth_state(auth, nil, captured.fetch(:state), nil)
 
     assert_equal 302, status
     assert_equal "/dashboard", state.fetch("callbackURL")
-    assert_equal "/error", state.fetch("errorCallbackURL")
-    assert_equal "/welcome", state.fetch("newUserCallbackURL")
+    assert_equal "/error", state.fetch("errorURL")
+    assert_equal "/welcome", state.fetch("newUserURL")
     assert_equal true, state.fetch("requestSignUp")
     assert_equal captured.fetch(:codeVerifier), state.fetch("codeVerifier")
-    assert_equal "acme", state.fetch("tenant")
+    assert_equal "kept-user", state.fetch("userId")
+    assert_equal "kept-account", state.fetch("accountId")
+    assert_equal "kept-alias", state.fetch("callback_url")
+    assert_equal "acme", state.fetch("tenantID")
+    assert_equal({"camelCaseKey" => "kept", "snake_key" => {"UPPERKey" => true}}, state.fetch("nestedValue"))
     refute state.key?("link")
     refute_equal 1, state["expiresAt"]
+    refute_equal "attacker-state", state["oauthState"]
+  end
+
+  def test_builtin_callback_consumes_state_and_rejects_replay_for_database_and_cookie_strategies
+    [nil, "cookie"].each do |strategy|
+      auth = build_builtin_auth(state_strategy: strategy) do |data|
+        "https://provider.example/authorize?#{URI.encode_www_form(state: data.fetch(:state))}"
+      end
+      _start_status, start_headers, = popup_start(auth, provider: "github", callbackURL: "/dashboard")
+      state = authorization_params(start_headers).fetch("state")
+      request_cookie = cookie_header(start_headers.fetch("set-cookie"))
+      state_cookie_name = auth.context.create_auth_cookie((strategy == "cookie") ? "oauth_state" : "state").name
+      failed_cookie = if strategy == "cookie"
+        request_cookie
+      else
+        cookie_header_without(request_cookie, state_cookie_name)
+      end
+      failed_state = (strategy == "cookie") ? "#{state}-wrong" : state
+
+      failed_status, failed_headers, failed_body = auth.call(
+        rack_env("GET", "/api/auth/callback/github?#{URI.encode_www_form(code: "oauth-code", state: failed_state)}", cookie: failed_cookie)
+      )
+
+      assert_equal 200, failed_status
+      assert_equal "state_mismatch", completion_data(failed_body).dig("error", "code")
+      refute cookie_expired?(failed_headers["set-cookie"], state_cookie_name)
+
+      status, callback_headers, body = auth.call(
+        rack_env("GET", "/api/auth/callback/github?#{URI.encode_www_form(code: "oauth-code", state: state)}", cookie: request_cookie)
+      )
+
+      assert_equal 200, status
+      assert_equal "/dashboard", completion_data(body).fetch("redirectTo")
+      assert_state_cookie_expired(auth, callback_headers, strategy)
+
+      replay_cookie = cookie_header(callback_headers.fetch("set-cookie"))
+      replay_status, replay_headers, = auth.call(
+        rack_env("GET", "/api/auth/callback/github?#{URI.encode_www_form(code: "oauth-code", state: state)}", cookie: replay_cookie)
+      )
+
+      assert_equal 302, replay_status
+      assert_includes replay_headers.fetch("location"), "error=state_mismatch"
+      refute replay_headers.fetch("set-cookie", "").include?(auth.context.auth_cookies[:session_token].name)
+    end
+  end
+
+  def test_cookie_state_decrypt_failure_does_not_expire_state_or_destroy_original_flow
+    auth = build_builtin_auth(state_strategy: "cookie") do |data|
+      "https://provider.example/authorize?#{URI.encode_www_form(state: data.fetch(:state))}"
+    end
+    _start_status, start_headers, = popup_start(auth, provider: "github", callbackURL: "/dashboard")
+    state = authorization_params(start_headers).fetch("state")
+    request_cookie = cookie_header(start_headers.fetch("set-cookie"))
+    state_cookie_name = auth.context.create_auth_cookie("oauth_state").name
+    corrupted_cookie = request_cookie.sub(/#{Regexp.escape(state_cookie_name)}=[^;]*/, "#{state_cookie_name}=not-encrypted")
+
+    failed_status, failed_headers, failed_body = auth.call(
+      rack_env("GET", "/api/auth/callback/github?#{URI.encode_www_form(code: "oauth-code", state: state)}", cookie: corrupted_cookie)
+    )
+
+    assert_equal 200, failed_status
+    assert_equal "state_invalid", completion_data(failed_body).dig("error", "code")
+    refute cookie_expired?(failed_headers["set-cookie"], state_cookie_name)
+
+    status, _headers, body = auth.call(
+      rack_env("GET", "/api/auth/callback/github?#{URI.encode_www_form(code: "oauth-code", state: state)}", cookie: request_cookie)
+    )
+
+    assert_equal 200, status
+    assert_equal "/dashboard", completion_data(body).fetch("redirectTo")
+  end
+
+  def test_builtin_callback_rejects_expired_opaque_state_with_recovered_error_url
+    [nil, "cookie"].each do |strategy|
+      exchanged = false
+      auth = build_builtin_auth(
+        state_strategy: strategy,
+        validate_authorization_code: ->(_data) { exchanged = true }
+      ) { |_data| raise "unused" }
+      ctx = callback_hook_context(auth, cookie: "", location: "/unused")
+      state = BetterAuth::OAuthState.generate(
+        ctx,
+        "callbackURL" => "/dashboard",
+        "errorURL" => "/expired-error",
+        "codeVerifier" => "v" * 128,
+        "expiresAt" => Time.now.to_i - 1
+      )
+
+      status, headers, = auth.api.callback_oauth(
+        params: {providerId: "github"},
+        query: {state: state, code: "oauth-code"},
+        headers: {"cookie" => cookie_header(ctx.response_headers.fetch("set-cookie"))},
+        as_response: true
+      )
+
+      assert_equal 302, status
+      assert_equal "/expired-error?error=state_mismatch", headers.fetch("location")
+      refute exchanged
+    end
+  end
+
+  def test_builtin_provider_error_consumes_state_before_redirect_and_blocks_code_replay
+    auth = build_builtin_auth(state_strategy: nil) do |data|
+      "https://provider.example/authorize?#{URI.encode_www_form(state: data.fetch(:state))}"
+    end
+    _start_status, start_headers, = popup_start(auth, provider: "github", errorCallbackURL: "/popup-error")
+    state = authorization_params(start_headers).fetch("state")
+    request_cookie = cookie_header(start_headers.fetch("set-cookie"))
+
+    status, headers, body = auth.call(
+      rack_env("GET", "/api/auth/callback/github?#{URI.encode_www_form(state: state, error: "access_denied")}", cookie: request_cookie)
+    )
+
+    assert_equal 200, status
+    assert_equal "access_denied", completion_data(body).dig("error", "code")
+    refute headers.key?("location")
+
+    replay_status, replay_headers, replay_body = auth.call(
+      rack_env("GET", "/api/auth/callback/github?#{URI.encode_www_form(state: state, code: "oauth-code")}", cookie: request_cookie)
+    )
+
+    assert_equal 200, replay_status
+    refute replay_headers.key?("location")
+    assert_equal "state_mismatch", completion_data(replay_body).dig("error", "code")
+    refute replay_headers.fetch("set-cookie", "").include?(auth.context.auth_cookies[:session_token].name)
+  end
+
+  def test_builtin_token_exchange_exception_becomes_popup_invalid_code_completion
+    auth = build_builtin_auth(validate_authorization_code: ->(_data) { raise "provider exploded" }) do |data|
+      "https://provider.example/authorize?#{URI.encode_www_form(state: data.fetch(:state))}"
+    end
+    _start_status, start_headers, = popup_start(auth, provider: "github", errorCallbackURL: "/popup-error")
+    state = authorization_params(start_headers).fetch("state")
+
+    status, headers, body = auth.call(
+      rack_env(
+        "GET",
+        "/api/auth/callback/github?#{URI.encode_www_form(state: state, code: "oauth-code")}",
+        cookie: cookie_header(start_headers.fetch("set-cookie"))
+      )
+    )
+
+    data = completion_data(body)
+    assert_equal 200, status
+    refute headers.key?("location")
+    assert_equal "invalid_code", data.dig("error", "code")
+    refute data.key?("token")
+    assert marker_expired?(auth, headers.fetch("set-cookie"))
+  end
+
+  def test_completion_accepts_session_cookie_without_max_age
+    auth = build_generic_auth
+    _start_status, start_headers, = popup_start(auth)
+    ctx = callback_hook_context(
+      auth,
+      cookie: cookie_header(start_headers.fetch("set-cookie")),
+      location: "/dashboard"
+    )
+    token = "session-token.signature"
+    ctx.response_headers["set-cookie"] = "#{auth.context.auth_cookies[:session_token].name}=#{token}; Path=/; HttpOnly"
+
+    result = BetterAuth::Plugins.oauth_popup_after_callback(ctx)
+    data = completion_data(result.response)
+
+    assert_equal token, data.fetch("token")
+    assert_equal "/dashboard", data.fetch("redirectTo")
+    refute data.key?("error")
+  end
+
+  def test_start_query_contract_rejects_missing_or_non_string_values
+    auth = build_generic_auth
+    [
+      {},
+      {provider: "custom"},
+      {provider: 123, popupOrigin: POPUP_ORIGIN},
+      {provider: "custom", popupOrigin: POPUP_ORIGIN, popupNonce: false},
+      {provider: "custom", popupOrigin: POPUP_ORIGIN, callbackURL: []},
+      {provider: "custom", popupOrigin: POPUP_ORIGIN, errorCallbackURL: {}},
+      {provider: "custom", popupOrigin: POPUP_ORIGIN, newUserCallbackURL: true},
+      {provider: "custom", popupOrigin: POPUP_ORIGIN, scopes: ["email"]},
+      {provider: "custom", popupOrigin: POPUP_ORIGIN, requestSignUp: true},
+      {provider: "custom", popupOrigin: POPUP_ORIGIN, additionalData: {tenant: "acme"}}
+    ].each do |query|
+      status, _headers, body = auth.api.oauth_popup_start(query: query, as_response: true)
+
+      assert_equal 400, status, query.inspect
+      assert_equal BetterAuth::BASE_ERROR_CODES["VALIDATION_ERROR"], JSON.parse(body.join).fetch("message")
+    end
+  end
+
+  def test_hidden_start_endpoint_catalogs_its_query_contract
+    endpoint = build_generic_auth.api.endpoints.fetch(:oauth_popup_start)
+    parameters = endpoint.metadata.dig(:openapi, :parameters)
+
+    assert_equal true, endpoint.metadata.fetch(:hide)
+    assert_equal(
+      %w[additionalData callbackURL errorCallbackURL newUserCallbackURL popupNonce popupOrigin provider requestSignUp scopes],
+      parameters.map { |parameter| parameter.fetch(:name) }.sort
+    )
+    assert_equal %w[popupOrigin provider], parameters.select { |parameter| parameter[:required] }.map { |parameter| parameter[:name] }.sort
+    assert parameters.all? { |parameter| parameter.dig(:schema, :type) == "string" }
   end
 
   def test_untrusted_redirect_inputs_return_specific_safe_completion_errors
@@ -439,7 +698,7 @@ class BetterAuthPluginsOAuthPopupTest < Minitest::Test
     )
   end
 
-  def build_builtin_auth(last_login_method: false, plugin_order: :popup_first, &authorization_url)
+  def build_builtin_auth(last_login_method: false, plugin_order: :popup_first, state_strategy: nil, validate_authorization_code: nil, &authorization_url)
     plugins = [BetterAuth::Plugins.oauth_popup, BetterAuth::Plugins.bearer]
     if last_login_method
       last_login = BetterAuth::Plugins.last_login_method
@@ -455,12 +714,13 @@ class BetterAuthPluginsOAuthPopupTest < Minitest::Test
       secret: SECRET,
       database: :memory,
       trusted_origins: [POPUP_ORIGIN],
+      account: state_strategy ? {store_state_strategy: state_strategy} : {},
       session: {cookie_cache: {enabled: true}},
       social_providers: {
         github: {
           id: "github",
           create_authorization_url: authorization_url,
-          validate_authorization_code: ->(_data) { {accessToken: "access-token"} },
+          validate_authorization_code: validate_authorization_code || ->(_data) { {accessToken: "access-token"} },
           get_user_info: ->(_tokens) {
             {user: {id: "github-sub", email: "github@example.com", name: "GitHub User", emailVerified: true}}
           }
@@ -510,6 +770,10 @@ class BetterAuthPluginsOAuthPopupTest < Minitest::Test
     BetterAuth::Cookies.split_set_cookie_header(set_cookie).map { |line| line.split(";", 2).first }.join("; ")
   end
 
+  def cookie_header_without(cookie, name)
+    cookie.split("; ").reject { |entry| entry.start_with?("#{name}=") }.join("; ")
+  end
+
   def cookie_line(headers, name)
     BetterAuth::Cookies.split_set_cookie_header(headers["set-cookie"]).find { |line| line.start_with?("#{name}=") }
   end
@@ -548,6 +812,24 @@ class BetterAuthPluginsOAuthPopupTest < Minitest::Test
     end
   end
 
+  def stored_oauth_state(auth, headers, state, strategy)
+    if strategy == "cookie"
+      name = auth.context.create_auth_cookie("oauth_state").name
+      encrypted = BetterAuth::Cookies.parse_cookies(cookie_header(headers.fetch("set-cookie"))).fetch(name)
+      JSON.parse(BetterAuth::Crypto.symmetric_decrypt(key: auth.context.secret_config, data: encrypted))
+    else
+      JSON.parse(auth.context.internal_adapter.find_verification_value(state).fetch("value"))
+    end
+  end
+
+  def assert_state_cookie_expired(auth, headers, strategy)
+    name = auth.context.create_auth_cookie((strategy == "cookie") ? "oauth_state" : "state").name
+    line = BetterAuth::Cookies.split_set_cookie_header(headers.fetch("set-cookie")).reverse.find { |cookie| cookie.start_with?("#{name}=") }
+
+    assert line
+    assert_includes line, "Max-Age=0"
+  end
+
   def callback_hook_context(auth, cookie:, location:)
     BetterAuth::Endpoint::Context.new(
       path: "/callback/custom",
@@ -563,6 +845,12 @@ class BetterAuthPluginsOAuthPopupTest < Minitest::Test
   def marker_expired?(auth, set_cookie)
     BetterAuth::Cookies.split_set_cookie_header(set_cookie).any? do |line|
       line.start_with?("#{popup_cookie_name(auth)}=") && line.match?(/Max-Age=0/i)
+    end
+  end
+
+  def cookie_expired?(set_cookie, name)
+    BetterAuth::Cookies.split_set_cookie_header(set_cookie).any? do |line|
+      line.start_with?("#{name}=") && line.match?(/Max-Age=0/i)
     end
   end
 end

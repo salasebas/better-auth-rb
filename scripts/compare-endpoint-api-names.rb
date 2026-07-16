@@ -78,6 +78,7 @@ module EndpointApiComparison
     registry_key_mismatches = []
     missing_ruby = []
     deprecated_pairs = []
+    visibility_mismatches = []
 
     comparable_upstream.group_by { |upstream| route_group_key(upstream) }.each_value do |group|
       upstream = group.first
@@ -89,12 +90,17 @@ module EndpointApiComparison
       end
 
       matching = group.find { |entry| registry_entry_matches_ruby?(entry, ruby) }
-      pair = (matching || upstream).merge(
+      selected_upstream = matching || upstream
+      pair = selected_upstream.merge(
         ruby_endpoint_key: ruby[:endpoint_key],
         ruby_api_method: ruby[:ruby_api_method],
         ruby_api_call: ruby[:ruby_api_call],
-        ruby_plugin: ruby[:plugin_id] || ruby[:plugin_hint]
+        ruby_plugin: ruby[:plugin_id] || ruby[:plugin_hint],
+        upstream_hidden: upstream_hidden?(selected_upstream),
+        ruby_hidden: ruby[:hidden] == true
       )
+
+      visibility_mismatches << pair if visibility_mismatch?(selected_upstream, ruby)
 
       if group.any? { |entry| entry[:deprecated] } && !matching
         deprecated_pairs << pair
@@ -131,6 +137,7 @@ module EndpointApiComparison
       missing_upstream_count: missing_upstream.length,
       ruby_only_classified_count: ruby_only_classified.length,
       deprecated_pair_count: deprecated_pairs.length,
+      visibility_mismatch_count: visibility_mismatches.length,
       excluded_unsupported_count: excluded_unsupported.length,
       excluded_unsupported_plugins: UNSUPPORTED_PLUGINS,
       known_gap_count: known_gaps.length,
@@ -141,6 +148,7 @@ module EndpointApiComparison
       missing_upstream: missing_upstream,
       ruby_only_classified: ruby_only_classified,
       deprecated_pairs: deprecated_pairs,
+      visibility_mismatches: visibility_mismatches,
       excluded_unsupported: excluded_unsupported,
       known_gaps: known_gaps.map { |row| row.merge(known_gap_definition(row)) },
       email_otp_focus: email_otp_focus
@@ -184,6 +192,16 @@ module EndpointApiComparison
     EndpointNaming.registry_keys_equivalent?(upstream[:registry_key], ruby[:endpoint_key])
   end
 
+  def visibility_mismatch?(upstream, ruby)
+    upstream_hidden?(upstream) != (ruby[:hidden] == true)
+  end
+
+  def upstream_hidden?(upstream)
+    upstream[:hidden_metadata] == true ||
+      upstream[:exposure].to_s == "http_hidden_metadata" ||
+      upstream[:client_visibility].to_s == "hidden_metadata"
+  end
+
   def ruby_only_definition(row)
     RUBY_ONLY_ROUTES.find do |definition|
       definition[:method] == row[:method].to_s.upcase && definition[:path] == row[:path]
@@ -209,6 +227,7 @@ module EndpointApiComparison
     lines << "- **Classified Ruby extensions**: #{report[:ruby_only_classified_count]}"
     lines << "- **Unexplained Ruby-only / not found upstream**: #{report[:missing_upstream_count]}"
     lines << "- **Deprecated upstream pairs still in Ruby**: #{report[:deprecated_pair_count]}"
+    lines << "- **Visibility mismatches**: #{report[:visibility_mismatch_count]}"
     lines << ""
     lines << "Naming policy: `reference/ruby-api-naming-policy.md`"
     lines << ""
@@ -250,6 +269,7 @@ module EndpointApiComparison
     end
 
     sections = [
+      ["Visibility mismatches (metadata hide differs)", :visibility_mismatches, visibility_mismatch_row],
       ["Registry key mismatches (path matches, canonical key differs)", :registry_key_mismatches, mismatch_row],
       ["Deprecated upstream routes still present in Ruby", :deprecated_pairs, deprecated_row],
       ["Missing in Ruby inventory (non-deprecated upstream)", :missing_ruby, upstream_only_row],
@@ -308,6 +328,18 @@ module EndpointApiComparison
     }
   end
 
+  def visibility_mismatch_row
+    {
+      header: "| Path | Upstream visibility | Ruby visibility | Ruby endpoint key |",
+      divider: "| --- | --- | --- | --- |",
+      row: ->(row) {
+        upstream = row[:upstream_hidden] ? "hidden metadata" : "documented"
+        ruby = row[:ruby_hidden] ? "hidden metadata" : "documented"
+        "| `#{row[:method]} #{row[:path]}` | #{upstream} | #{ruby} | `#{row[:ruby_endpoint_key] || "-"}` |"
+      }
+    }
+  end
+
   def deprecated_row
     {
       header: "| Path | Upstream registry key | Ruby endpoint key | Notes |",
@@ -357,7 +389,7 @@ module EndpointApiComparison
     puts "Wrote #{OUTPUT_MD}"
     puts "Wrote #{OUTPUT_JSON}"
     puts "Upstream: #{report[:upstream_route_count]} | HTTP: #{report[:upstream_http_route_count]} | Server-only: #{report[:upstream_server_only_count]} | Ruby: #{report[:ruby_route_count]} | Aligned: #{report[:aligned_count]}"
-    puts "Registry key mismatches: #{report[:registry_key_mismatch_count]} | Missing Ruby: #{report[:missing_ruby_count]} | Known gaps: #{report[:known_gap_count]} | Excluded unsupported: #{report[:excluded_unsupported_count]} | Ruby-only: #{report[:missing_upstream_count]} | Deprecated pairs: #{report[:deprecated_pair_count]}"
+    puts "Registry key mismatches: #{report[:registry_key_mismatch_count]} | Missing Ruby: #{report[:missing_ruby_count]} | Known gaps: #{report[:known_gap_count]} | Excluded unsupported: #{report[:excluded_unsupported_count]} | Ruby-only: #{report[:missing_upstream_count]} | Deprecated pairs: #{report[:deprecated_pair_count]} | Visibility mismatches: #{report[:visibility_mismatch_count]}"
   end
 end
 

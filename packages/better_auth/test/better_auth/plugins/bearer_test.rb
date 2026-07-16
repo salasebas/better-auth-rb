@@ -193,7 +193,35 @@ class BetterAuthPluginsBearerTest < Minitest::Test
 
     BetterAuth::Plugins.expose_auth_token(ctx)
 
-    assert_equal "signed.token", ctx.response_headers.fetch("set-auth-token")
+    assert_equal "later.token", ctx.response_headers.fetch("set-auth-token")
+  end
+
+  def test_bearer_last_session_cookie_wins_across_header_shapes_and_expiration
+    auth = build_auth(plugins: [BetterAuth::Plugins.bearer])
+    cookie_name = auth.context.auth_cookies[:session_token].name
+    valid = "#{cookie_name}=valid.token; Path=/; HttpOnly"
+    replacement = "#{cookie_name}=replacement.token; Path=/; HttpOnly"
+    expired = "#{cookie_name}=; Path=/; Max-Age=0; HttpOnly"
+
+    [
+      [valid, replacement],
+      "#{valid}\n#{replacement}",
+      "preference=dark; Path=/, #{valid}, #{replacement}"
+    ].each do |set_cookie|
+      ctx = bearer_context(auth, set_cookie)
+
+      BetterAuth::Plugins.expose_auth_token(ctx)
+
+      assert_equal "replacement.token", ctx.response_headers.fetch("set-auth-token")
+    end
+
+    [[valid, expired], "#{valid}\n#{expired}", "#{valid}, #{expired}"].each do |set_cookie|
+      ctx = bearer_context(auth, set_cookie)
+
+      BetterAuth::Plugins.expose_auth_token(ctx)
+
+      refute ctx.response_headers.key?("set-auth-token")
+    end
   end
 
   private
@@ -208,5 +236,17 @@ class BetterAuthPluginsBearerTest < Minitest::Test
     auth.context.internal_adapter.create_session(result[:user].fetch("id"), false, {token: token}, true)
     signature = BetterAuth::Crypto.hmac_signature(token, SECRET, encoding: :base64url)
     "#{token}.#{signature}"
+  end
+
+  def bearer_context(auth, set_cookie)
+    BetterAuth::Endpoint::Context.new(
+      path: "/sign-up/email",
+      method: "POST",
+      query: {},
+      body: {},
+      params: {},
+      headers: {},
+      context: auth.context
+    ).tap { |ctx| ctx.response_headers["set-cookie"] = set_cookie }
   end
 end
