@@ -1746,7 +1746,7 @@
       "gem": "better_auth",
       "local_exists": true,
       "upstream_exists": true,
-      "current_local_lines": 204,
+      "current_local_lines": 220,
       "upstream_lines": 303,
       "status": "thin"
     },
@@ -1819,7 +1819,7 @@
       "reason": "Ruby-specific database schema reference",
       "local_exists": true,
       "upstream_exists": false,
-      "current_local_lines": 2547,
+      "current_local_lines": 2587,
       "upstream_lines": 0,
       "status": "keep_local"
     },
@@ -2113,7 +2113,7 @@
       "supported": true,
       "local_exists": true,
       "upstream_exists": true,
-      "current_local_lines": 338,
+      "current_local_lines": 340,
       "upstream_lines": 134,
       "status": "needs_manual_review"
     },

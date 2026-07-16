@@ -10,7 +10,7 @@ Do not edit the generated endpoint reference by hand; update the Ruby source of 
 
 Generated configuration: supported Ruby plugin set, email/password auth, database-backed rate limiting, and optional schema-bearing supported plugin features. Actual app schemas and endpoints may differ when plugins are disabled or names and fields are customized.
 
-Generated count: 181 operations across 176 paths.
+Generated count: 182 operations across 176 paths.
 
 ## Official
 
@@ -35,7 +35,7 @@ Endpoint metadata is generated from the auth API OpenAPI schema method using a d
 | --- | --- | --- | --- | --- | --- | --- |
 | `GET` | `/api/auth/account-info` | `accountInfo` | Get user info from a linked provider account | bearerAuth | none | 200 - Success - object: data, user; required: data, user |
 | `GET` | `/api/auth/callback/{id}` | `callbackOAuth` | Handle an OAuth provider callback | bearerAuth | none | 200 - Success - object |
-| `POST` | `/api/auth/callback/{id}` | `callbackOAuth` | Handle an OAuth provider callback | bearerAuth | application/json: object | 200 - Success - object |
+| `POST` | `/api/auth/callback/{id}` | `callbackOAuthPost` | Handle an OAuth provider callback | bearerAuth | application/json: object | 200 - Success - object |
 | `POST` | `/api/auth/change-email` | `changeEmail` |  | bearerAuth | application/json: object: callbackURL, newEmail; required: newEmail | 200 - Email change request processed successfully - object: message, status, user; required: status |
 | `POST` | `/api/auth/change-password` | `changePassword` | Change the password of the user | bearerAuth | application/json: object: currentPassword, newPassword, revokeOtherSessions; required: currentPassword, newPassword | 200 - Password successfully changed - object: token, user; required: user |
 | `POST` | `/api/auth/delete-user` | `deleteUser` | Delete the current user | bearerAuth | application/json: object: callbackURL, password, token | 200 - User deleted or verification email sent - object: message, success; required: message, success |
@@ -43,7 +43,7 @@ Endpoint metadata is generated from the auth API OpenAPI schema method using a d
 | `GET` | `/api/auth/error` | `getError` | Displays an error page | bearerAuth | none | 200 - Success - object: html; required: html |
 | `POST` | `/api/auth/get-access-token` | `getAccessToken` | Get an access token for a linked provider account | bearerAuth | application/json: object: accountId, providerId, userId; required: providerId | 200 - Provider access token - object: accessToken, accessTokenExpiresAt, idToken, scopes; required: scopes |
 | `GET` | `/api/auth/get-session` | `getSession` | Get the current session | bearerAuth | none | 200 - Current session or null - object or null: session, user; required: session, user |
-| `POST` | `/api/auth/get-session` | `getSession` | Get the current session | bearerAuth | application/json: object | 200 - Current session or null - object or null: session, user; required: session, user |
+| `POST` | `/api/auth/get-session` | `getSessionPost` | Get the current session | bearerAuth | application/json: object | 200 - Current session or null - object or null: session, user; required: session, user |
 | `POST` | `/api/auth/link-social` | `linkSocialAccount` | Link a social account to the current user | bearerAuth | application/json: object: callbackURL, disableRedirect, errorCallbackURL, idToken, provider, scopes; required: provider | 200 - Social account link started or completed - object: redirect, status, url; required: redirect, url |
 | `GET` | `/api/auth/list-accounts` | `listUserAccounts` | List linked accounts for the current user | bearerAuth | none | 200 - Linked accounts - array of object |
 | `GET` | `/api/auth/list-sessions` | `listSessions` | List active sessions for the current user | bearerAuth | none | 200 - Active sessions - array of object |
@@ -91,7 +91,7 @@ Endpoint metadata is generated from the auth API OpenAPI schema method using a d
 | --- | --- | --- | --- | --- | --- | --- |
 | `GET` | `/api/auth/device` | `getDeviceVerification` | Get device verification status | bearerAuth | none | 200 - Success - object: status, user_code; required: status, user_code |
 | `POST` | `/api/auth/device/approve` | `approveDevice` | Approve a device authorization request | bearerAuth | application/json: object: userCode; required: userCode | 200 - Success - object: success; required: success |
-| `POST` | `/api/auth/device/code` | `requestDeviceCode` | Request a device and user code | bearerAuth | application/json: object: client_id, scope | 200 - Success - object: device_code, expires_in, interval, user_code, verification_uri, verification_uri_complete; required: device_code, expires_in, interval, user_code, verification_uri, verification_uri_complete |
+| `POST` | `/api/auth/device/code` | `requestDeviceCode` | Request a device and user code | bearerAuth | application/json: object: client_id, scope, user_id | 200 - Success - object: device_code, expires_in, interval, user_code, verification_uri, verification_uri_complete; required: device_code, expires_in, interval, user_code, verification_uri, verification_uri_complete |
 | `POST` | `/api/auth/device/deny` | `denyDevice` | Deny a device authorization request | bearerAuth | application/json: object: userCode; required: userCode | 200 - Success - object: success; required: success |
 | `POST` | `/api/auth/device/token` | `exchangeDeviceToken` | Exchange device code for access token | bearerAuth | application/json: object: client_id, device_code, grant_type; required: device_code, grant_type | 200 - Success - object: access_token, expires_in, scope, token_type; required: access_token, expires_in, token_type |
 
@@ -100,7 +100,7 @@ Endpoint metadata is generated from the auth API OpenAPI schema method using a d
 | Method | Path | Operation | Summary | Auth | Request body | Response |
 | --- | --- | --- | --- | --- | --- | --- |
 | `POST` | `/api/auth/dub/link` | `dubLink` | Link a Dub OAuth account | bearerAuth | application/json: object: callbackURL, callback_url | 200 - Authorization URL generated successfully for linking a Dub account - object: redirect, url; required: redirect, url |
-| `GET` | `/api/auth/oauth2/callback/{providerId}` | `oauth2Callback` | OAuth2 callback | bearerAuth | none | 200 - OAuth2 callback - object: url; required: url |
+| `GET` | `/api/auth/oauth2/callback/{providerId}` | `oauth2CallbackGet` | OAuth2 callback | bearerAuth | none | 200 - OAuth2 callback - object: url; required: url |
 
 ### Email-Otp
 
@@ -156,7 +156,7 @@ Endpoint metadata is generated from the auth API OpenAPI schema method using a d
 | `POST` | `/api/auth/oauth2/delete-client` | `postOauth2DeleteClient` | Delete an OAuth2 client | bearerAuth | application/json: object: client_id; required: client_id | 200 - OAuth2 client deleted - object: deleted; required: deleted |
 | `POST` | `/api/auth/oauth2/delete-consent` | `postOauth2DeleteConsent` | Delete OAuth2 consent | bearerAuth | application/json: object: client_id, id | 200 - OAuth2 consent deleted - object: deleted; required: deleted |
 | `GET` | `/api/auth/oauth2/end-session` | `getOauth2EndSession` | End an OpenID Connect session | bearerAuth | none | 200 - OpenID Connect session ended - object: status; required: status |
-| `POST` | `/api/auth/oauth2/end-session` | `getOauth2EndSession` | End an OpenID Connect session | bearerAuth | application/json: object: client_id, id_token_hint, post_logout_redirect_uri, state | 200 - OpenID Connect session ended - object: status; required: status |
+| `POST` | `/api/auth/oauth2/end-session` | `getOauth2EndSessionPost` | End an OpenID Connect session | bearerAuth | application/json: object: client_id, id_token_hint, post_logout_redirect_uri, state | 200 - OpenID Connect session ended - object: status; required: status |
 | `GET` | `/api/auth/oauth2/get-client` | `getOauth2GetClient` | Execute the getOauth2GetClient endpoint. | bearerAuth | none | 200 - Success - object |
 | `GET` | `/api/auth/oauth2/get-clients` | `getOauth2GetClients` | Execute the getOauth2GetClients endpoint. | bearerAuth | none | 200 - Success - object |
 | `GET` | `/api/auth/oauth2/get-consent` | `getOauth2GetConsent` | Execute the getOauth2GetConsent endpoint. | bearerAuth | none | 200 - Success - object |
@@ -170,6 +170,7 @@ Endpoint metadata is generated from the auth API OpenAPI schema method using a d
 | `POST` | `/api/auth/oauth2/update-client` | `postOauth2UpdateClient` | Update an OAuth2 client | bearerAuth | application/json: object: client_id, update; required: client_id, update | 200 - OAuth2 client updated - object: client_id, client_id_issued_at, client_name, client_secret_expires_at, client_uri, contacts, and 16 more |
 | `POST` | `/api/auth/oauth2/update-consent` | `postOauth2UpdateConsent` | Update OAuth2 consent scopes | bearerAuth | application/json: object: client_id, id, scope, scopes, update | 200 - OAuth2 consent updated - object: clientId, createdAt, id, scopes, updatedAt, userId |
 | `GET` | `/api/auth/oauth2/userinfo` | `getOauth2Userinfo` | Execute the getOauth2Userinfo endpoint. | bearerAuth | none | 200 - Success - object |
+| `POST` | `/api/auth/oauth2/userinfo` | `getOauth2UserinfoPost` | Execute the getOauth2Userinfo endpoint. | bearerAuth | application/json: object | 200 - Success - object |
 
 ### Oauth-Proxy
 
@@ -283,12 +284,12 @@ Endpoint metadata is generated from the auth API OpenAPI schema method using a d
 | `POST` | `/api/auth/sso/register` | `postSsoRegister` | Register an SSO provider | bearerAuth | application/json: object: domain, issuer, oidc_config, organization_id, override_user_info, provider_id, and 1 more; required: domain, issuer, provider_id | 200 - SSO provider registered - object: domain, domainVerificationToken, domainVerified, id, issuer, oidcConfig, and 5 more |
 | `POST` | `/api/auth/sso/request-domain-verification` | `postSsoRequestDomainVerification` | Execute the postSsoRequestDomainVerification endpoint. | bearerAuth | application/json: object | 200 - Success - object |
 | `GET` | `/api/auth/sso/saml2/callback/{providerId}` | `getSsoSaml2CallbackProviderid` | Handle a SAML identity provider callback | bearerAuth | none | 200 - SAML callback handled - object |
-| `POST` | `/api/auth/sso/saml2/callback/{providerId}` | `getSsoSaml2CallbackProviderid` | Handle a SAML identity provider callback | bearerAuth | application/json: object: RelayState, SAMLRequest, SAMLResponse, relay_state, saml_request, saml_response | 200 - SAML callback handled - object |
+| `POST` | `/api/auth/sso/saml2/callback/{providerId}` | `getSsoSaml2CallbackProvideridPost` | Handle a SAML identity provider callback | bearerAuth | application/json: object: RelayState, SAMLRequest, SAMLResponse, relay_state, saml_request, saml_response | 200 - SAML callback handled - object |
 | `POST` | `/api/auth/sso/saml2/logout/{providerId}` | `postSsoSaml2LogoutProviderid` | Initiate SAML single logout | bearerAuth | application/json: object: callback_url | 200 - SAML logout initiated - object |
 | `POST` | `/api/auth/sso/saml2/sp/acs/{providerId}` | `postSsoSaml2SpAcsProviderid` | Handle a SAML assertion consumer service response | bearerAuth | application/json: object: RelayState, SAMLRequest, SAMLResponse, relay_state, saml_request, saml_response | 200 - SAML response handled - object |
 | `GET` | `/api/auth/sso/saml2/sp/metadata` | `getSsoSaml2SpMetadata` | Execute the getSsoSaml2SpMetadata endpoint. | bearerAuth | none | 200 - Success - object |
 | `GET` | `/api/auth/sso/saml2/sp/slo/{providerId}` | `getSsoSaml2SpSloProviderid` | Handle SAML single logout | bearerAuth | none | 200 - SAML single logout handled - object |
-| `POST` | `/api/auth/sso/saml2/sp/slo/{providerId}` | `getSsoSaml2SpSloProviderid` | Handle SAML single logout | bearerAuth | application/json: object: RelayState, SAMLRequest, SAMLResponse, relay_state, saml_request, saml_response | 200 - SAML single logout handled - object |
+| `POST` | `/api/auth/sso/saml2/sp/slo/{providerId}` | `getSsoSaml2SpSloProvideridPost` | Handle SAML single logout | bearerAuth | application/json: object: RelayState, SAMLRequest, SAMLResponse, relay_state, saml_request, saml_response | 200 - SAML single logout handled - object |
 | `POST` | `/api/auth/sso/update-provider` | `postSsoUpdateProvider` | Update an SSO provider | bearerAuth | application/json: object: domain, issuer, oidc_config, organization_id, override_user_info, provider_id, and 1 more | 200 - SSO provider updated - object: domain, domainVerificationToken, domainVerified, id, issuer, oidcConfig, and 5 more |
 | `POST` | `/api/auth/sso/verify-domain` | `postSsoVerifyDomain` | Execute the postSsoVerifyDomain endpoint. | bearerAuth | application/json: object | 200 - Success - object |
 
@@ -323,7 +324,7 @@ Endpoint metadata is generated from the auth API OpenAPI schema method using a d
 | Method | Path | Operation | Summary | Auth | Request body | Response |
 | --- | --- | --- | --- | --- | --- | --- |
 | `POST` | `/api/auth/is-username-available` | `isUsernameAvailable` | Check whether a username is available | bearerAuth | application/json: object: username; required: username | 200 - Username availability - object: available; required: available |
-| `POST` | `/api/auth/sign-in/username` | `signInUsername` | Sign in with username and password | bearerAuth | application/json: object: callbackURL, password, rememberMe, username; required: password, username | 200 - Signed in - object: token, user; required: token, user |
+| `POST` | `/api/auth/sign-in/username` | `signInUsername` | Sign in with username and password | bearerAuth | application/json: object: callbackURL, password, rememberMe, username; required: password, username | 200 - Signed in - object: redirect, token, url, user; required: redirect, token, user |
 
 ## Inspiration
 
