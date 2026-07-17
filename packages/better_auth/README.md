@@ -358,52 +358,20 @@ git push origin feat/new-feature
 - Each PR runs: lint + tests on Ruby 3.2 and 3.3
 - Everything must pass before merging
 
-**Manual Release:**
+**Synchronized releases:**
 
-Releases are published manually with `gem build` and `gem push`. See `RELEASING.md`
-at the repository root for the full process.
-
-```bash
-# STEP 1: Update the target package version file
-# Example: VERSION = "0.1.1"
-# Or update .release.yml and run: rake release:sync_versions
-
-# STEP 2: Commit and push to main
-git add lib/better_auth/version.rb
-git commit -m "chore: bump version to 0.1.1"
-git push origin main
-
-# STEP 3: Build and publish
-cd packages/better_auth
-gem build better_auth.gemspec
-gem push better_auth-0.1.1.gem
-
-# STEP 4: Tag the release
-git tag better_auth-v0.1.1
-git push origin better_auth-v0.1.1
-```
-
-Use `better_auth-vX.Y.Z` for the core gem, `better_auth-rails-vX.Y.Z` for Rails, `better_auth-sinatra-vX.Y.Z` for Sinatra, and `better_auth-hanami-vX.Y.Z` for Hanami.
+Release Please maintains one combined version/changelog PR for the 19 linked
+Better Auth gems. After that PR merges, Release Please creates `<gem>/vX.Y.Z`
+tags and GitHub Releases. An environment-approved job validates every tag and
+builds every artifact before configuring RubyGems Trusted Publishing. It then
+publishes in dependency order, skipping an existing immutable gem only when its
+SHA-256 checksum matches. See the repository-root `RELEASING.md` for setup,
+recovery, and operations.
 
 **Local packaging dry-run:**
 
 ```bash
 make release-check
-```
-
-### Manual Release (per package)
-
-```bash
-# 1. Update version.rb (or sync from .release.yml)
-# 2. Build the gem
-gem build better_auth.gemspec
-
-# 3. Publish (you need to be logged into RubyGems)
-gem push better_auth-*.gem
-
-# 4. Create and push the tag
-git tag -a better_auth-v0.1.1 -m "Release better_auth v0.1.1"
-git push origin better_auth-v0.1.1
 ```
 
 ### Project Structure

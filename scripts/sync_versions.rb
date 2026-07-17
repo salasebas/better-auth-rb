@@ -22,18 +22,6 @@ manifest.fetch("version_files").each do |path|
   changed << path if update_file(path) { |contents| contents.gsub(/VERSION\s*=\s*"[^"]+"/, "VERSION = \"#{version}\"") }
 end
 
-manifest.fetch("literal_gemspec_versions").each do |path|
-  changed << path if update_file(path) { |contents| contents.gsub(/spec\.version\s*=\s*"[^"]+"/, "spec.version = \"#{version}\"") }
-end
-
-manifest.fetch("pinned_dependencies").each do |path, dependencies|
-  changed << path if update_file(path) do |contents|
-    dependencies.reduce(contents) do |memo, dependency|
-      memo.gsub(/(spec\.add_dependency\s+"#{Regexp.escape(dependency)}",\s*)"[^"]+"/, "\\1\"#{version}\"")
-    end
-  end
-end
-
 if changed.empty?
   puts "Versions already synced to #{version}."
 else

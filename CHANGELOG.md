@@ -1,7 +1,8 @@
 # Changelog
 
-This repository contains independently versioned Ruby packages. Package-specific
-release notes live in each package's `CHANGELOG.md`.
+This repository releases 19 Better Auth gems at one synchronized version.
+Package-specific release notes live in each published package's `CHANGELOG.md`;
+this file is the manually reviewed release-set summary.
 
 ## Unreleased
 

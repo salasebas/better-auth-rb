@@ -10,10 +10,7 @@ require "yaml"
 RELEASE_MANIFEST = YAML.safe_load(File.read(File.join(__dir__, ".release.yml")))
 # standard:enable Style/YAMLFileRead
 RELEASE_PACKAGE_NAMES = RELEASE_MANIFEST.fetch("version_files").map { |path| path.split("/")[1] }.uniq.freeze
-RELEASE_GEMSPEC_PATHS = (
-  RELEASE_PACKAGE_NAMES.flat_map { |package| Dir[File.join("packages", package, "*.gemspec")] } +
-  RELEASE_MANIFEST.fetch("literal_gemspec_versions")
-).uniq.sort.freeze
+RELEASE_GEMSPEC_PATHS = RELEASE_PACKAGE_NAMES.flat_map { |package| Dir[File.join("packages", package, "*.gemspec")] }.uniq.sort.freeze
 
 STANDARD_PATHS = [
   "Rakefile",

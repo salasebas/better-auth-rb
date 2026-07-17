@@ -59,10 +59,12 @@ jobs:
           --health-timeout 5s
           --health-retries 5
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
 
       - name: Set up Ruby
-        uses: ruby/setup-ruby@v1
+        uses: ruby/setup-ruby@003a5c4d8d6321bd302e38f6f0ec593f77f06600 # v1.319.0
         with:
           ruby-version: .ruby-version
           bundler-cache: true
@@ -76,7 +78,7 @@ jobs:
         run: bundle exec rake test:integration
 
       - name: Set up Ruby for api-key
-        uses: ruby/setup-ruby@v1
+        uses: ruby/setup-ruby@003a5c4d8d6321bd302e38f6f0ec593f77f06600 # v1.319.0
         with:
           ruby-version: .ruby-version
           bundler-cache: true
@@ -103,7 +105,7 @@ jobs:
           - better_auth-oauth-provider
     services:
       postgres:
-        image: postgres:latest
+        image: postgres:17
         env:
           POSTGRES_USER: user
           POSTGRES_PASSWORD: password
@@ -116,7 +118,7 @@ jobs:
           --health-timeout 5s
           --health-retries 10
       mysql:
-        image: mysql:latest
+        image: mysql:8.4
         env:
           MYSQL_ROOT_PASSWORD: root_password
           MYSQL_DATABASE: better_auth
@@ -144,7 +146,9 @@ jobs:
           --health-retries 20
           --health-start-period 40s
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
 
       - name: Install database client headers
         run: |
@@ -155,7 +159,7 @@ jobs:
           sudo apt-get install -y --no-install-recommends default-libmysqlclient-dev freetds-dev
 
       - name: Set up Ruby
-        uses: ruby/setup-ruby@v1
+        uses: ruby/setup-ruby@003a5c4d8d6321bd302e38f6f0ec593f77f06600 # v1.319.0
         with:
           ruby-version: .ruby-version
           bundler-cache: true
@@ -170,7 +174,7 @@ jobs:
     runs-on: ubuntu-latest
     services:
       postgres:
-        image: postgres:latest
+        image: postgres:17
         env:
           POSTGRES_USER: user
           POSTGRES_PASSWORD: password
@@ -183,7 +187,7 @@ jobs:
           --health-timeout 5s
           --health-retries 10
       mysql:
-        image: mysql:latest
+        image: mysql:8.4
         env:
           MYSQL_ROOT_PASSWORD: root_password
           MYSQL_DATABASE: better_auth
@@ -198,7 +202,9 @@ jobs:
           --health-retries 30
           --health-start-period 30s
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
 
       - name: Install database client headers
         run: |
@@ -209,7 +215,7 @@ jobs:
           sudo apt-get install -y --no-install-recommends default-libmysqlclient-dev
 
       - name: Set up Ruby
-        uses: ruby/setup-ruby@v1
+        uses: ruby/setup-ruby@003a5c4d8d6321bd302e38f6f0ec593f77f06600 # v1.319.0
         with:
           ruby-version: .ruby-version
           bundler-cache: true
@@ -224,7 +230,7 @@ jobs:
     runs-on: ubuntu-latest
     services:
       postgres:
-        image: postgres:latest
+        image: postgres:17
         env:
           POSTGRES_USER: user
           POSTGRES_PASSWORD: password
@@ -237,7 +243,7 @@ jobs:
           --health-timeout 5s
           --health-retries 10
       mysql:
-        image: mysql:latest
+        image: mysql:8.4
         env:
           MYSQL_ROOT_PASSWORD: root_password
           MYSQL_DATABASE: better_auth
@@ -265,7 +271,9 @@ jobs:
           --health-retries 20
           --health-start-period 40s
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
 
       - name: Install database client headers
         run: |
@@ -276,7 +284,7 @@ jobs:
           sudo apt-get install -y --no-install-recommends default-libmysqlclient-dev freetds-dev
 
       - name: Set up Ruby
-        uses: ruby/setup-ruby@v1
+        uses: ruby/setup-ruby@003a5c4d8d6321bd302e38f6f0ec593f77f06600 # v1.319.0
         with:
           ruby-version: .ruby-version
           bundler-cache: true
@@ -297,7 +305,7 @@ jobs:
           - better_auth-mongo-adapter
     services:
       mongodb:
-        image: mongo:latest
+        image: mongo:8.0
         ports:
           - 27017:27017
         options: >-
@@ -307,10 +315,12 @@ jobs:
           --health-retries 20
           --health-start-period 10s
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
 
       - name: Set up Ruby
-        uses: ruby/setup-ruby@v1
+        uses: ruby/setup-ruby@003a5c4d8d6321bd302e38f6f0ec593f77f06600 # v1.319.0
         with:
           ruby-version: .ruby-version
           bundler-cache: true
@@ -325,7 +335,7 @@ jobs:
     runs-on: ubuntu-latest
     services:
       mysql:
-        image: mysql:latest
+        image: mysql:8.4
         env:
           MYSQL_ROOT_PASSWORD: root_password
           MYSQL_DATABASE: better_auth
@@ -340,7 +350,9 @@ jobs:
           --health-retries 30
           --health-start-period 30s
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
 
       - name: Install database client headers
         run: |
@@ -351,7 +363,7 @@ jobs:
           sudo apt-get install -y --no-install-recommends default-libmysqlclient-dev
 
       - name: Set up Ruby
-        uses: ruby/setup-ruby@v1
+        uses: ruby/setup-ruby@003a5c4d8d6321bd302e38f6f0ec593f77f06600 # v1.319.0
         with:
           ruby-version: .ruby-version
           bundler-cache: true

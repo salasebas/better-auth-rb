@@ -1,4 +1,4 @@
-version: "0.10.0"
+version: "0.10.0" # x-release-please-version
 
 version_files:
   - packages/better_auth/lib/better_auth/version.rb
@@ -20,10 +20,3 @@ version_files:
   - packages/better_auth-sso/lib/better_auth/sso/version.rb
   - packages/better_auth-stripe/lib/better_auth/stripe/version.rb
   - packages/better_auth-telemetry/lib/better_auth/telemetry/version.rb
-
-literal_gemspec_versions:
-  - packages/rubyauth/rubyauth.gemspec
-
-pinned_dependencies:
-  packages/rubyauth/rubyauth.gemspec:
-    - better_auth

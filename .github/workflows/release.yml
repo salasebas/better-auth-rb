@@ -1,0 +1,62 @@
+name: Release
+
+on:
+  push:
+    branches:
+      - main
+
+permissions: {}
+
+jobs:
+  release-pr:
+    runs-on: ubuntu-latest
+    concurrency:
+      group: release-please-pr
+      cancel-in-progress: false
+    permissions: {}
+    outputs:
+      releases_created: ${{ steps.release.outputs.releases_created }}
+    steps:
+      - name: Create or update the linked release
+        id: release
+        uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7 # v5.0.0
+        with:
+          token: ${{ secrets.RELEASE_PLEASE_TOKEN }}
+          config-file: release-please-config.json
+          manifest-file: .release-please-manifest.json
+
+  publish:
+    needs: release-pr
+    if: needs.release-pr.outputs.releases_created == 'true'
+    runs-on: ubuntu-latest
+    environment: release
+    concurrency:
+      group: rubygems-production
+      cancel-in-progress: false
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      BUNDLE_GEMFILE: ${{ github.workspace }}/Gemfile
+    steps:
+      - name: Checkout exact release commit
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+          ref: ${{ github.sha }}
+
+      - name: Set up Ruby and the workspace bundle
+        uses: ruby/setup-ruby@003a5c4d8d6321bd302e38f6f0ec593f77f06600 # v1.319.0
+        with:
+          ruby-version: .ruby-version
+          bundler-cache: true # zizmor: ignore[cache-poisoning] Protected-main release uses the root lockfile cache.
+
+      - name: Prepare and validate every release artifact
+        run: ruby scripts/release/publish_gems.rb prepare tmp/release-gems
+
+      - name: Configure RubyGems Trusted Publishing
+        uses: rubygems/configure-rubygems-credentials@dc5a8d8553e6ee01fc26761a49e99e733d17954a # v2.1.0
+
+      - name: Publish and checksum-verify every release artifact
+        run: ruby scripts/release/publish_gems.rb publish tmp/release-gems

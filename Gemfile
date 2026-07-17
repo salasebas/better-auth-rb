@@ -28,7 +28,6 @@ gem "better_auth-sinatra", path: "packages/better_auth-sinatra"
 gem "better_auth-hanami", path: "packages/better_auth-hanami"
 gem "better_auth-grape", path: "packages/better_auth-grape"
 gem "better_auth-cli", path: "packages/better_auth-cli"
-gem "rubyauth", path: "packages/rubyauth"
 
 # Workspace development dependencies.
 group :development, :test do

@@ -8,12 +8,13 @@ This project is governed by our [Code of Conduct](CODE_OF_CONDUCT.md). By partic
 
 ## Project Structure
 
-This is a monorepo with two Ruby gems:
+This is a monorepo with a core gem plus framework integrations, adapters, and
+plugins:
 
 ```
 packages/
   better_auth/            # Core auth library (Rack-based, framework-agnostic)
-  better_auth-rails/      # Rails adapter (middleware, helpers, generators)
+  better_auth-*/           # Framework integrations, adapters, and plugins
 reference/                # Upstream attribution + local clone instructions (see AGENTS.md)
 ```
 
@@ -78,7 +79,7 @@ reference/                # Upstream attribution + local clone instructions (see
    make test-rails        # Only better_auth-rails (RSpec)
    ```
 
-6. Commit with a descriptive message:
+6. Commit with a descriptive Conventional Commit message:
 
    ```
    feat(core): add OAuth2 provider support
@@ -86,7 +87,10 @@ reference/                # Upstream attribution + local clone instructions (see
    docs: improve installation guide
    ```
 
-7. Push and open a PR against `main`
+7. Push and open a PR against `main`. PRs are squash-merged, so the PR title
+   becomes the commit message on `main`. Use Conventional Commits syntax in the
+   PR title; Release Please uses it to decide whether the release is a patch,
+   minor, or major version.
 
 ## Code Style
 
@@ -160,9 +164,10 @@ If you're porting a feature from the TypeScript upstream:
 5. Ensure CI passes (lint + tests)
 6. Be responsive to review feedback
 
-## Commit Conventions
+## PR Title and Commit Conventions
 
-We use [Conventional Commits](https://www.conventionalcommits.org/):
+We use [Conventional Commits](https://www.conventionalcommits.org/). Because
+PRs are squash-merged, the PR title must follow this format:
 
 | Prefix | Use |
 |--------|-----|

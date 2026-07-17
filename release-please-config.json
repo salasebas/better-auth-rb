@@ -1,0 +1,43 @@
+{
+  "$schema": "https://raw.githubusercontent.com/googleapis/release-please/main/schemas/config.json",
+  "release-type": "ruby",
+  "bootstrap-sha": "dae3c925c597ea7c3585c2eb74efa058cbc50082",
+  "bump-minor-pre-major": true,
+  "separate-pull-requests": false,
+  "sequential-calls": true,
+  "include-component-in-tag": true,
+  "tag-separator": "/",
+  "packages": {
+    "packages/better_auth": {"component": "better_auth", "package-name": "better_auth", "version-file": "lib/better_auth/version.rb", "extra-files": [{"type": "yaml", "path": "/.release.yml", "jsonpath": "$.version"}]},
+    "packages/better_auth-api-key": {"component": "better_auth-api-key", "package-name": "better_auth-api-key", "version-file": "lib/better_auth/api_key/version.rb"},
+    "packages/better_auth-cli": {"component": "better_auth-cli", "package-name": "better_auth-cli", "version-file": "lib/better_auth/cli/version.rb"},
+    "packages/better_auth-grape": {"component": "better_auth-grape", "package-name": "better_auth-grape", "version-file": "lib/better_auth/grape/version.rb"},
+    "packages/better_auth-hanami": {"component": "better_auth-hanami", "package-name": "better_auth-hanami", "version-file": "lib/better_auth/hanami/version.rb"},
+    "packages/better_auth-mongo-adapter": {"component": "better_auth-mongo-adapter", "package-name": "better_auth-mongo-adapter", "version-file": "lib/better_auth/mongo_adapter/version.rb"},
+    "packages/better_auth-mongodb": {"component": "better_auth-mongodb", "package-name": "better_auth-mongodb", "version-file": "lib/better_auth/mongodb/version.rb"},
+    "packages/better_auth-oauth-provider": {"component": "better_auth-oauth-provider", "package-name": "better_auth-oauth-provider", "version-file": "lib/better_auth/oauth_provider/version.rb"},
+    "packages/better_auth-oidc": {"component": "better_auth-oidc", "package-name": "better_auth-oidc", "version-file": "lib/better_auth/oidc/version.rb"},
+    "packages/better_auth-passkey": {"component": "better_auth-passkey", "package-name": "better_auth-passkey", "version-file": "lib/better_auth/passkey/version.rb"},
+    "packages/better_auth-rails": {"component": "better_auth-rails", "package-name": "better_auth-rails", "version-file": "lib/better_auth/rails/version.rb"},
+    "packages/better_auth-redis-storage": {"component": "better_auth-redis-storage", "package-name": "better_auth-redis-storage", "version-file": "lib/better_auth/redis_storage/version.rb"},
+    "packages/better_auth-roda": {"component": "better_auth-roda", "package-name": "better_auth-roda", "version-file": "lib/better_auth/roda/version.rb"},
+    "packages/better_auth-saml": {"component": "better_auth-saml", "package-name": "better_auth-saml", "version-file": "lib/better_auth/saml/version.rb"},
+    "packages/better_auth-scim": {"component": "better_auth-scim", "package-name": "better_auth-scim", "version-file": "lib/better_auth/scim/version.rb"},
+    "packages/better_auth-sinatra": {"component": "better_auth-sinatra", "package-name": "better_auth-sinatra", "version-file": "lib/better_auth/sinatra/version.rb"},
+    "packages/better_auth-sso": {"component": "better_auth-sso", "package-name": "better_auth-sso", "version-file": "lib/better_auth/sso/version.rb"},
+    "packages/better_auth-stripe": {"component": "better_auth-stripe", "package-name": "better_auth-stripe", "version-file": "lib/better_auth/stripe/version.rb"},
+    "packages/better_auth-telemetry": {"component": "better_auth-telemetry", "package-name": "better_auth-telemetry", "version-file": "lib/better_auth/telemetry/version.rb"}
+  },
+  "plugins": [
+    {
+      "type": "linked-versions",
+      "groupName": "better-auth-release",
+      "components": [
+        "better_auth", "better_auth-api-key", "better_auth-cli", "better_auth-grape", "better_auth-hanami",
+        "better_auth-mongo-adapter", "better_auth-mongodb", "better_auth-oauth-provider", "better_auth-oidc",
+        "better_auth-passkey", "better_auth-rails", "better_auth-redis-storage", "better_auth-roda", "better_auth-saml",
+        "better_auth-scim", "better_auth-sinatra", "better_auth-sso", "better_auth-stripe", "better_auth-telemetry"
+      ]
+    }
+  ]
+}
