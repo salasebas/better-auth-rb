@@ -2,6 +2,10 @@
 
 require "minitest/autorun"
 require "json"
+require "open3"
+require "rbconfig"
+require "tmpdir"
+require "yaml"
 
 class ReleaseWorkflowsTest < Minitest::Test
   ROOT = File.expand_path("..", __dir__)
@@ -38,22 +42,51 @@ class ReleaseWorkflowsTest < Minitest::Test
     assert_includes publish, "ref: ${{ github.sha }}"
   end
 
-  def test_release_please_uses_custom_token_and_gates_publish
+  def test_release_please_uses_builtin_token_and_gates_publish
     workflow = release_workflow
     release_pr = job_body(workflow, "release-pr")
     publish = job_body(workflow, "publish")
 
-    assert_includes release_pr, "token: ${{ secrets.RELEASE_PLEASE_TOKEN }}"
-    refute_includes release_pr, "token: ${{ secrets.GITHUB_TOKEN }}"
-    assert_includes release_pr, "permissions: {}"
-    refute_includes release_pr, "contents: write"
-    refute_includes release_pr, "pull-requests: write"
+    assert_includes release_pr, "token: ${{ github.token }}"
+    refute_includes workflow, ["RELEASE", "PLEASE", "TOKEN"].join("_")
+    assert_includes release_pr, "contents: write"
+    assert_includes release_pr, "pull-requests: write"
     assert_includes release_pr, "group: release-please-pr"
     assert_includes release_pr, "cancel-in-progress: false"
     assert_includes release_pr, "releases_created: ${{ steps.release.outputs.releases_created }}"
     assert_includes publish, "needs: release-pr"
     assert_includes publish, "if: needs.release-pr.outputs.releases_created == 'true'"
     refute JSON.parse(File.read(File.join(ROOT, "release-please-config.json"))).key?("skip-github-release")
+  end
+
+  def test_pending_manifest_release_runs_full_integration_before_release_please
+    workflow = release_workflow
+    detection = job_body(workflow, "detect-pending-release")
+    integration = job_body(workflow, "release-integration")
+    release_pr = job_body(workflow, "release-pr")
+
+    assert_includes detection, ".release-please-manifest.json"
+    assert_includes detection, "release-please-config.json"
+    assert_includes detection, 'IO.popen(["git", "tag", "--list"]'
+    assert_includes detection, 'config.fetch("include-component-in-tag", false)'
+    assert_includes detection, 'config["tag-separator"]'
+    assert_includes detection, "configured_tag = include_component"
+    assert_includes detection, "legacy_tag = \"\#{component}-v\#{version}\""
+    assert_includes detection, "pending = !missing.empty?"
+    refute_includes detection, "github.event.before"
+    refute_includes detection, "git diff"
+    assert_includes integration, "uses: ./.github/workflows/integration.yml"
+    assert_includes integration, "full: true"
+    assert_includes release_pr, "- detect-pending-release"
+    assert_includes release_pr, "- release-integration"
+    assert_includes release_pr, "if: >-"
+    assert_includes release_pr, "needs.release-integration.result == 'success'"
+  end
+
+  def test_pending_release_detector_accepts_configured_and_legacy_tags
+    assert_equal "pending=true", run_pending_release_detector
+    assert_equal "pending=false", run_pending_release_detector(tag: "example/v1.2.3")
+    assert_equal "pending=false", run_pending_release_detector(tag: "example-v1.2.3")
   end
 
   def test_every_active_action_is_full_sha_pinned
@@ -84,19 +117,14 @@ class ReleaseWorkflowsTest < Minitest::Test
     assert_operator checkout_count, :>, 0
   end
 
-  def test_ci_filters_cover_retained_release_automation_only
+  def test_ci_has_stable_unfiltered_required_triggers
     workflow = File.read(File.join(ROOT, ".github/workflows/ci.yml"))
-    retained_paths = %w[
-      .release.yml
-      .release-please-manifest.json
-      release-please-config.json
-      scripts/**
-      .github/workflows/release.yml
-    ]
 
-    retained_paths.each { |path| assert_equal 2, workflow.scan("'#{path}'").size, "#{path} must trigger PR and push CI" }
-    removed_workflow = ".github/workflows/" + "api-compatibility.yml"
-    refute_includes workflow, removed_workflow
+    assert_match(/^  workflow_dispatch:$/, workflow)
+    assert_match(/^  pull_request:$/, workflow)
+    assert_match(/^  push:$/, workflow)
+    assert_match(/^  merge_group:$/, workflow)
+    refute_match(/^\s+paths:/, workflow.lines.take_while { |line| line != "concurrency:\n" }.join)
   end
 
   def test_audit_workflow_combines_pull_request_push_and_schedule
@@ -108,17 +136,36 @@ class ReleaseWorkflowsTest < Minitest::Test
     refute_path_exists File.join(ROOT, ".github/workflows/pr-audit.yml")
   end
 
+  def test_audit_installs_database_headers_before_ruby
+    workflow = File.read(File.join(ROOT, ".github/workflows/audit.yml"))
+    headers = workflow.index("default-libmysqlclient-dev freetds-dev")
+    ruby = workflow.index("ruby/setup-ruby@")
+
+    assert headers < ruby
+    assert_includes workflow, "/etc/apt/apt-mirrors.txt"
+    assert_includes workflow, "Acquire::Retries=3"
+  end
+
   def test_release_documentation_describes_safe_nineteen_gem_process
     changelog = File.read(File.join(ROOT, "CHANGELOG.md"))
     releasing = File.read(File.join(ROOT, "RELEASING.md"))
 
     assert_includes changelog, "## Unreleased"
     assert_includes releasing, "19 linked gems"
-    assert_includes releasing, "RELEASE_PLEASE_TOKEN"
+    refute_includes releasing, ["RELEASE", "PLEASE", "TOKEN"].join("_")
     assert_includes releasing, "SHA-256"
     assert_includes releasing, "built-in `GITHUB_TOKEN`"
+    assert_includes releasing, "Settings > Actions > General > Workflow permissions"
+    assert_includes releasing, "Approve workflows to run"
+    refute_includes releasing, "manually\nrun the `CI`"
+    assert_includes releasing, "reusable full-integration gate"
+    assert_includes releasing, "every later push rerun the full"
+    assert_includes releasing, "<component>/vX.Y.Z"
+    assert_includes releasing, "<component>-vX.Y.Z"
+    assert_includes releasing, "Trusted Publishing"
     assert_includes releasing, "<gem-name>/vX.Y.Z"
     assert_includes releasing, "GitHub Releases"
+    assert_equal 19, releasing.scan(/^- \[`better_auth[^`]*`\]\(packages\/better_auth[^)]*\/\)$/).size
 
     trusted_publisher = releasing.scan(
       /^- (Repository owner|Repository name|Workflow filename|Environment): `([^`]+)`$/
@@ -139,6 +186,64 @@ class ReleaseWorkflowsTest < Minitest::Test
 
   def release_workflow
     @release_workflow ||= File.read(File.join(ROOT, ".github/workflows/release.yml"))
+  end
+
+  def pending_release_detector
+    workflow = YAML.safe_load_file(File.join(ROOT, ".github/workflows/release.yml"), aliases: true)
+    run = workflow.fetch("jobs").fetch("detect-pending-release").fetch("steps")
+      .find { |step| step["id"] == "detect" }.fetch("run")
+    match = run.match(/ruby <<'RUBY'\n(?<script>.*)\nRUBY\n?\z/m)
+
+    refute_nil match, "pending release detector must remain an inline Ruby heredoc"
+    match[:script]
+  end
+
+  def run_pending_release_detector(tag: nil)
+    Dir.mktmpdir("pending-release-detector") do |dir|
+      File.write(
+        File.join(dir, ".release-please-manifest.json"),
+        JSON.generate("packages/example" => "1.2.3")
+      )
+      File.write(
+        File.join(dir, "release-please-config.json"),
+        JSON.generate(
+          "include-component-in-tag" => true,
+          "tag-separator" => "/",
+          "packages" => {
+            "packages/example" => {
+              "component" => "example",
+              "package-name" => "example"
+            }
+          }
+        )
+      )
+      output_path = File.join(dir, "github-output")
+      initialize_tagged_repository(dir, tag)
+
+      stdout, stderr, status = Open3.capture3(
+        {"GITHUB_OUTPUT" => output_path},
+        RbConfig.ruby,
+        stdin_data: pending_release_detector,
+        chdir: dir
+      )
+      assert status.success?, "#{stdout}\n#{stderr}"
+
+      File.read(output_path).strip
+    end
+  end
+
+  def initialize_tagged_repository(dir, tag)
+    commands = [
+      %w[git init --quiet],
+      %w[git config user.email release-test@example.com],
+      %w[git config user.name ReleaseTest],
+      %w[git commit --quiet --allow-empty -m initial]
+    ]
+    commands << ["git", "tag", tag] if tag
+
+    commands.each do |command|
+      assert system(*command, chdir: dir), "failed: #{command.join(" ")}"
+    end
   end
 
   def job_body(workflow, name)

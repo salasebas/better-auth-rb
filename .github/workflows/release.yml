@@ -8,12 +8,79 @@ on:
 permissions: {}
 
 jobs:
+  detect-pending-release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      pending: ${{ steps.detect.outputs.pending }}
+    steps:
+      - name: Checkout exact pushed commit with history
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+          ref: ${{ github.sha }}
+
+      - name: Detect an unpublished manifest release
+        id: detect
+        run: |
+          set -euo pipefail
+          ruby <<'RUBY'
+          require "json"
+          require "set"
+
+          manifest = JSON.parse(File.read(".release-please-manifest.json"))
+          config = JSON.parse(File.read("release-please-config.json"))
+          packages = config.fetch("packages")
+          tags = IO.popen(["git", "tag", "--list"], &:read).lines(chomp: true).to_set
+
+          missing = manifest.filter_map do |path, version|
+            package = packages.fetch(path)
+            component = package["component"] || package["package-name"] || File.basename(path)
+            include_component = package.fetch(
+              "include-component-in-tag",
+              config.fetch("include-component-in-tag", false)
+            )
+            separator = package["tag-separator"] || config["tag-separator"] || "-"
+            configured_tag = include_component ? "#{component}#{separator}v#{version}" : "v#{version}"
+            legacy_tag = "#{component}-v#{version}"
+            expected_tags = [configured_tag, legacy_tag].uniq
+            next if expected_tags.any? { |tag| tags.include?(tag) }
+
+            "#{path} #{version} (expected #{expected_tags.join(" or ")})"
+          end
+
+          pending = !missing.empty?
+          puts(pending ? "Pending release components:\n- #{missing.join("\n- ")}" : "Manifest release already tagged.")
+          File.open(ENV.fetch("GITHUB_OUTPUT"), "a") { |output| output.puts("pending=#{pending}") }
+          RUBY
+
+  release-integration:
+    needs: detect-pending-release
+    if: needs.detect-pending-release.outputs.pending == 'true'
+    permissions:
+      contents: read
+      pull-requests: read
+    uses: ./.github/workflows/integration.yml
+    with:
+      full: true
+
   release-pr:
+    needs:
+      - detect-pending-release
+      - release-integration
+    if: >-
+      always() &&
+      needs.detect-pending-release.result == 'success' &&
+      (needs.detect-pending-release.outputs.pending == 'false' || needs.release-integration.result == 'success')
     runs-on: ubuntu-latest
     concurrency:
       group: release-please-pr
       cancel-in-progress: false
-    permissions: {}
+    permissions:
+      contents: write
+      pull-requests: write
     outputs:
       releases_created: ${{ steps.release.outputs.releases_created }}
     steps:
@@ -21,7 +88,7 @@ jobs:
         id: release
         uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7 # v5.0.0
         with:
-          token: ${{ secrets.RELEASE_PLEASE_TOKEN }}
+          token: ${{ github.token }}
           config-file: release-please-config.json
           manifest-file: .release-please-manifest.json
 

@@ -3,10 +3,32 @@
 require "bundler/gem_tasks"
 require "rake/testtask"
 
+ALL_TEST_FILES = FileList["test/**/*_test.rb"].to_a.freeze
+INTEGRATION_TEST_FILES = %w[
+  test/better_auth/adapters/mssql_test.rb
+  test/better_auth/adapters/mysql_test.rb
+  test/better_auth/adapters/postgres_test.rb
+].freeze
+UNIT_TEST_FILES = (ALL_TEST_FILES - INTEGRATION_TEST_FILES).freeze
+
+unless (UNIT_TEST_FILES & INTEGRATION_TEST_FILES).empty? &&
+    (UNIT_TEST_FILES + INTEGRATION_TEST_FILES).sort == ALL_TEST_FILES.sort
+  raise "better_auth test partition must be exhaustive and disjoint"
+end
+
 Rake::TestTask.new(:test) do |t|
   t.libs << "test"
   t.libs << "lib"
-  t.test_files = FileList["test/**/*_test.rb"]
+  t.test_files = FileList[*UNIT_TEST_FILES]
+end
+
+namespace :test do
+  desc "Run service-backed SQL adapter tests"
+  Rake::TestTask.new(:integration) do |t|
+    t.libs << "test"
+    t.libs << "lib"
+    t.test_files = FileList[*INTEGRATION_TEST_FILES]
+  end
 end
 
 desc "Run StandardRB linter"

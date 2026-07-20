@@ -201,12 +201,6 @@ Short version:
 - [`better_auth-stripe`](packages/better_auth-stripe/): Stripe billing plugin
   package.
 
-An alias package is also available for users who prefer alternate naming. It
-installs and loads the matching Better Auth Ruby package, and its README points
-back to the canonical documentation at https://better-auth-rb.vercel.app/.
-
-- [`rubyauth`](packages/rubyauth/): Alias for `better_auth`.
-
 ## Development
 
 ```bash

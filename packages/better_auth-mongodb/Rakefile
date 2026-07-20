@@ -3,10 +3,30 @@
 require "rake/testtask"
 require "standard/rake"
 
+ALL_TEST_FILES = FileList["test/**/*_test.rb"].to_a.freeze
+INTEGRATION_TEST_FILES = %w[
+  test/better_auth/adapters/mongodb_test.rb
+].freeze
+UNIT_TEST_FILES = (ALL_TEST_FILES - INTEGRATION_TEST_FILES).freeze
+
+unless (UNIT_TEST_FILES & INTEGRATION_TEST_FILES).empty? &&
+    (UNIT_TEST_FILES + INTEGRATION_TEST_FILES).sort == ALL_TEST_FILES.sort
+  raise "better_auth-mongodb test partition must be exhaustive and disjoint"
+end
+
 Rake::TestTask.new(:test) do |task|
   task.libs << "test"
   task.libs << "lib"
-  task.pattern = "test/**/*_test.rb"
+  task.test_files = FileList[*UNIT_TEST_FILES]
+end
+
+namespace :test do
+  desc "Run MongoDB adapter integration tests"
+  Rake::TestTask.new(:integration) do |task|
+    task.libs << "test"
+    task.libs << "lib"
+    task.test_files = FileList[*INTEGRATION_TEST_FILES]
+  end
 end
 
 task default: [:test, :standard]
