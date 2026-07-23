@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require "base64"
+require "json"
 require "rack/utils"
 require "uri"
 require "zlib"
@@ -134,6 +135,27 @@ class BetterAuthSSOSAMLAdapterTest < Minitest::Test
     assert_equal "relay-123", params.fetch("RelayState")
     assert_equal "true", params.fetch("ForceAuthn")
     assert_includes request_xml, "AssertionConsumerServiceURL='https://auth.example.com/api/auth/sso/saml2/sp/acs/auth-request'"
+  end
+
+  def test_auth_request_url_parses_database_serialized_config
+    captured = nil
+    hook = BetterAuth::SSO::SAML.auth_request_url(
+      settings: lambda do |provider:, context:, saml_config:|
+        captured = saml_config
+        BetterAuth::SSO::SAML.build_settings(provider, context, saml_config)
+      end
+    )
+    stored_provider = provider("serialized-auth-request")
+    stored_provider["samlConfig"] = JSON.generate(stored_provider.fetch("samlConfig"))
+
+    hook.call(
+      provider: stored_provider,
+      relay_state: "relay-serialized",
+      context: context("https://auth.example.com/api/auth")
+    )
+
+    assert_equal "https://idp.example.com/sso", captured.fetch(:entry_point)
+    assert_equal IDP_CERT, captured.fetch(:cert)
   end
 
   def test_response_parser_builds_settings_and_maps_attributes_without_idp_network

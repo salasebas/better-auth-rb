@@ -40,8 +40,8 @@ module BetterAuth
             providerId: provider_id,
             issuer: body[:issuer].to_s,
             domain: body[:domain].to_s.downcase,
-            oidcConfig: oidc_config.empty? ? nil : oidc_config,
-            samlConfig: saml_config.empty? ? nil : saml_config,
+            oidcConfig: sso_persisted_provider_config(oidc_config),
+            samlConfig: sso_persisted_provider_config(saml_config),
             userId: session.fetch(:user).fetch("id"),
             organizationId: body[:organization_id],
             domainVerified: false
@@ -107,6 +107,7 @@ module BetterAuth
           update[:oidcConfig] = current.merge(normalize_hash(body[:oidc_config])).merge(issuer: resolved_issuer).compact
           sso_validate_oidc_endpoint_origins!(ctx, update[:oidcConfig])
           identity_boundary_changed ||= sso_oidc_identity_boundary_changed?(current, update[:oidcConfig])
+          update[:oidcConfig] = sso_persisted_provider_config(update[:oidcConfig])
         end
         if body.key?(:saml_config)
           current = sso_provider_config_hash(provider["samlConfig"])
@@ -115,8 +116,8 @@ module BetterAuth
           resolved_issuer = update[:issuer] || current[:issuer] || provider["issuer"]
           merged_saml_config = current.merge(normalize_hash(body[:saml_config])).merge(issuer: resolved_issuer).compact
           sso_validate_saml_config!(merged_saml_config, config)
-          update[:samlConfig] = merged_saml_config
           identity_boundary_changed ||= sso_saml_identity_boundary_changed?(current, merged_saml_config)
+          update[:samlConfig] = sso_persisted_provider_config(merged_saml_config)
         end
         if identity_boundary_changed && sso_provider_linked_account?(ctx, provider.fetch("providerId"))
           raise APIError.new("CONFLICT", message: "Cannot change SSO provider identity fields while linked accounts exist")

@@ -238,7 +238,7 @@ module BetterAuth
           session.commit_transaction
           result
         rescue
-          session.abort_transaction
+          session.abort_transaction if transaction_active?(session)
           raise
         ensure
           session.end_session
@@ -246,6 +246,13 @@ module BetterAuth
       end
 
       private
+
+      def transaction_active?(session)
+        return session.in_transaction? if session.respond_to?(:in_transaction?)
+        return session.transaction_started? if session.respond_to?(:transaction_started?)
+
+        true
+      end
 
       def index_options_for(attributes)
         return {} unless attributes[:unique]

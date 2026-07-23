@@ -9,15 +9,20 @@ creates or moves a tag.
 
 ## One-time GitHub setup
 
-Create a fine-grained personal access token scoped only to this repository with
-these repository permissions:
+Release Please uses the workflow's built-in `GITHUB_TOKEN`. No personal access
+token or repository secret is required.
 
-- Contents: read and write
-- Pull requests: read and write
+In **Settings > Actions > General > Workflow permissions**, select **Read and
+write permissions** and enable **Allow GitHub Actions to create and approve
+pull requests**. The `release-pr` job narrows its own permissions to
+`contents: write` and `pull-requests: write`; all other jobs declare only what
+they need.
 
-Store it as the Actions secret `RELEASE_PLEASE_TOKEN`. Release Please must use
-this token because pull requests created with the built-in `GITHUB_TOKEN` do
-not trigger the repository's pull request CI workflows.
+Pull request workflow runs created by `GITHUB_TOKEN` start in an
+approval-required state. A repository user with write access must click
+**Approve workflows to run** in the release pull request banner once; `CI` and
+`Integration` then run normally for the pull request. Review and merge the
+release pull request only after those checks succeed.
 
 Create a protected GitHub environment named `release`. Apply the desired
 reviewer and branch protections to it. The publish job receives its RubyGems
@@ -25,25 +30,25 @@ OIDC identity only after the environment allows the job to start.
 
 Register one RubyGems Trusted Publisher for each of these 19 gems:
 
-- `better_auth`
-- `better_auth-api-key`
-- `better_auth-cli`
-- `better_auth-grape`
-- `better_auth-hanami`
-- `better_auth-mongo-adapter`
-- `better_auth-mongodb`
-- `better_auth-oauth-provider`
-- `better_auth-oidc`
-- `better_auth-passkey`
-- `better_auth-rails`
-- `better_auth-redis-storage`
-- `better_auth-roda`
-- `better_auth-saml`
-- `better_auth-scim`
-- `better_auth-sinatra`
-- `better_auth-sso`
-- `better_auth-stripe`
-- `better_auth-telemetry`
+- [`better_auth`](packages/better_auth/)
+- [`better_auth-api-key`](packages/better_auth-api-key/)
+- [`better_auth-cli`](packages/better_auth-cli/)
+- [`better_auth-grape`](packages/better_auth-grape/)
+- [`better_auth-hanami`](packages/better_auth-hanami/)
+- [`better_auth-mongo-adapter`](packages/better_auth-mongo-adapter/)
+- [`better_auth-mongodb`](packages/better_auth-mongodb/)
+- [`better_auth-oauth-provider`](packages/better_auth-oauth-provider/)
+- [`better_auth-oidc`](packages/better_auth-oidc/)
+- [`better_auth-passkey`](packages/better_auth-passkey/)
+- [`better_auth-rails`](packages/better_auth-rails/)
+- [`better_auth-redis-storage`](packages/better_auth-redis-storage/)
+- [`better_auth-roda`](packages/better_auth-roda/)
+- [`better_auth-saml`](packages/better_auth-saml/)
+- [`better_auth-scim`](packages/better_auth-scim/)
+- [`better_auth-sinatra`](packages/better_auth-sinatra/)
+- [`better_auth-sso`](packages/better_auth-sso/)
+- [`better_auth-stripe`](packages/better_auth-stripe/)
+- [`better_auth-telemetry`](packages/better_auth-telemetry/)
 
 Use the same Trusted Publisher identity for every registration:
 
@@ -61,25 +66,38 @@ No long-lived RubyGems API key is stored by the repository.
 2. The serialized `release-pr` job uses `release-please-config.json` and
    `.release-please-manifest.json` to create or update one linked-version pull
    request for all 19 Better Auth gems.
-3. Review the synchronized versions and generated package changelogs, wait for
-   CI, and merge the release pull request.
-4. Release Please creates the 19 component tags and GitHub Releases. Only when
+3. Click **Approve workflows to run** once on the bot-created release pull
+   request, review the synchronized versions and generated package changelogs,
+   and merge only after `CI` and `Integration` pass.
+4. The merge updates `.release-please-manifest.json` to versions whose component
+   tags do not exist yet. On every push, the release workflow compares the
+   current manifest and Release Please config with fetched tags. Any untagged
+   component keeps the reusable full-integration gate active. Release Please
+   cannot create tags or GitHub Releases unless that gate succeeds.
+5. Release Please creates the 19 component tags and GitHub Releases. Only when
    it reports `releases_created == 'true'` can the protected `publish` job run.
-5. The publish job checks out the exact triggering commit with complete tag
+6. The publish job checks out the exact triggering commit with complete tag
    history and installs the root bundle once.
-6. Before OIDC credentials are configured,
+7. Before OIDC credentials are configured,
    `scripts/release/publish_gems.rb prepare tmp/release-gems` validates all
    three release manifests, every gemspec name and version, the internal
    dependency order, and every release tag. It then builds all 19 artifacts
    outside the package directories and records their SHA-256 checksums in an
    ephemeral inventory.
-7. The workflow configures RubyGems Trusted Publishing once and runs
+8. After the protected `release` environment grants approval, the workflow
+   obtains short-lived OIDC credentials through RubyGems Trusted Publishing and
+   runs
    `scripts/release/publish_gems.rb publish tmp/release-gems`.
 
 The release pull request changes versions and changelogs but does not publish
-anything while it is open. Merging it triggers the same `release.yml` workflow
-again: the `release-pr` job recognizes the merged release, creates the tags and
-GitHub Releases, and then unlocks the `publish` job.
+anything while it is open. Normal pushes to `main` skip the full release
+integration gate only when every current manifest component is already tagged,
+and continue creating or updating that pull request. Merging the release pull
+request leaves the new manifest versions untagged, which selects full
+integration before Release Please is allowed to create the tags and GitHub
+Releases. The workflow accepts both configured `<component>/vX.Y.Z` tags and
+legacy `<component>-vX.Y.Z` tags when determining whether a manifest version
+was already released.
 
 ## Idempotency and recovery
 
@@ -105,6 +123,17 @@ revert them merely because RubyGems was temporarily unavailable. Fix the
 credential, environment, or infrastructure problem and rerun the failed
 `publish` job from the same workflow run. If some gems were already uploaded,
 checksum verification skips them and continues with the missing gems.
+
+If the pre-release integration gate fails, no release tags or GitHub Releases
+are created and publishing cannot start. Fix the failure on `main`; because the
+manifest versions remain untagged, that push and every later push rerun the full
+gate before Release Please. The gate stops recurring only after every manifest
+component has its release tag. If Release Please itself fails after integration
+succeeds, rerun the failed workflow. If the protected environment is waiting
+for approval, approve the existing publish job rather than starting a second
+release. A failed publish can be rerun safely from the same workflow run because
+checksum verification skips artifacts that already exist with identical
+contents.
 
 ## Local checks
 

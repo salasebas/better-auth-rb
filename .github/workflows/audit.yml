@@ -32,6 +32,21 @@ jobs:
         with:
           persist-credentials: false
 
+      - name: Install database client headers
+        run: |
+          set -euo pipefail
+          if [ -f /etc/apt/apt-mirrors.txt ]; then
+            echo "https://archive.ubuntu.com/ubuntu/" | sudo tee /etc/apt/apt-mirrors.txt
+          fi
+          for attempt in 1 2 3; do
+            sudo apt-get update -o Acquire::Retries=3 -o Acquire::http::Timeout=10 -o Acquire::https::Timeout=10 && break
+            if [ "$attempt" = "3" ]; then
+              exit 1
+            fi
+            sleep 10
+          done
+          sudo apt-get install -y --no-install-recommends default-libmysqlclient-dev freetds-dev
+
       - name: Set up Ruby
         uses: ruby/setup-ruby@003a5c4d8d6321bd302e38f6f0ec593f77f06600 # v1.319.0
         with:

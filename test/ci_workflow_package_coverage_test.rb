@@ -17,14 +17,14 @@ class CIWorkflowPackageCoverageTest < Minitest::Test
     @jobs = @workflow.fetch("jobs")
   end
 
-  def test_linted_packages_with_tests_have_main_ci_package_test_jobs
-    missing_packages = linted_packages_with_tests.reject do |package|
+  def test_release_packages_with_tests_have_main_ci_package_test_jobs
+    missing_packages = release_packages_with_tests.reject do |package|
       package_test_jobs_by_package.key?(package)
     end
 
     assert_empty(
       missing_packages,
-      "Expected main CI package test jobs for linted packages with test/spec " \
+      "Expected main CI package test jobs for release packages with test/spec " \
         "directories. Missing: #{missing_packages.join(", ")}. Regression " \
         "packages: #{REGRESSION_PACKAGES.join(", ")}."
     )
@@ -52,24 +52,42 @@ class CIWorkflowPackageCoverageTest < Minitest::Test
     end
   end
 
-  private
-
-  def linted_packages
-    @jobs.fetch("lint-package")
-      .fetch("strategy")
-      .fetch("matrix")
-      .fetch("package")
+  def test_root_lint_is_not_duplicated_by_a_package_matrix
+    assert @jobs.key?("lint-workspace")
+    refute @jobs.key?("lint-package")
+    assert_equal ["lint-workspace"], @jobs.keys.grep(/^lint-/)
   end
 
-  def linted_packages_with_tests
-    linted_packages.select do |package|
+  def test_every_ruby_test_step_loads_a_strict_helper
+    ruby_test_steps = @jobs.values.flat_map { |job| Array(job["steps"]) }.select do |step|
+      step.is_a?(Hash) && step["run"].to_s.match?(/\b(rake test|rake test:workspace|rspec)\b/)
+    end
+
+    refute_empty ruby_test_steps
+    ruby_test_steps.each do |step|
+      env = step.fetch("env", {})
+      strict = env["RUBYOPT"].to_s.include?("strict_minitest") ||
+        env["SPEC_OPTS"].to_s.include?("strict_rspec")
+      assert strict, "#{step["name"] || step["run"]} must load a strict test helper"
+    end
+  end
+
+  private
+
+  def release_packages
+    manifest = YAML.safe_load_file(".release.yml")
+    manifest.fetch("version_files").map { |path| path.split("/")[1] }.uniq
+  end
+
+  def release_packages_with_tests
+    release_packages.select do |package|
       package_path = PACKAGES_PATH.join(package)
       package_path.join("test").directory? || package_path.join("spec").directory?
     end
   end
 
   def package_test_jobs_by_package
-    @package_test_jobs_by_package ||= linted_packages_with_tests.to_h do |package|
+    @package_test_jobs_by_package ||= release_packages_with_tests.to_h do |package|
       [
         package,
         package_test_job_ids_for(package)

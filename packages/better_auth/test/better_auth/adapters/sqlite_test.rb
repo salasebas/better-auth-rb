@@ -163,6 +163,33 @@ class BetterAuthSQLiteAdapterTest < Minitest::Test
     skip "sqlite3 gem is not installed"
   end
 
+  def test_sqlite_adapter_round_trips_iso8601_string_date_inputs
+    require "sqlite3"
+
+    Tempfile.create(["better-auth-string-date", ".sqlite3"]) do |file|
+      config = BetterAuth::Configuration.new(secret: SECRET, database: :memory)
+      connection = SQLite3::Database.new(file.path)
+      connection.results_as_hash = true
+      create_schema(connection, config)
+      adapter = BetterAuth::Adapters::SQLite.new(config, connection: connection)
+      user = adapter.create(model: "user", data: {name: "String Date", email: "string-date@example.com"})
+      expires_at = "2030-01-02T03:04:05.123456Z"
+
+      session = adapter.create(
+        model: "session",
+        data: {token: "string-date-token", userId: user.fetch("id"), expiresAt: expires_at},
+        force_allow_id: true
+      )
+
+      assert_equal Time.iso8601(expires_at), session.fetch("expiresAt")
+      assert_equal expires_at, direct_sqlite_value(connection, %(SELECT expires_at FROM "sessions" WHERE token = ?), "string-date-token")
+    ensure
+      connection&.close
+    end
+  rescue LoadError
+    skip "sqlite3 gem is not installed"
+  end
+
   def test_sqlite_adapter_coerces_string_where_values_to_schema_types
     require "sqlite3"
 

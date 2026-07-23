@@ -7,45 +7,9 @@ on:
       - opened
       - synchronize
       - reopened
-    paths:
-      - 'packages/**'
-      - 'Gemfile'
-      - 'Gemfile.lock'
-      - 'Rakefile'
-      - '.release.yml'
-      - '.release-please-manifest.json'
-      - 'release-please-config.json'
-      - '.standard.yml'
-      - 'docker-compose.yml'
-      - '.ruby-version'
-      - 'scripts/**'
-      - 'test/**'
-      - 'reference/upstream-better-auth/**'
-      - 'docs/**'
-      - 'docs-site/**'
-      - '.github/workflows/ci.yml'
-      - '.github/workflows/release.yml'
   push:
     branches:
       - main
-    paths:
-      - 'packages/**'
-      - 'Gemfile'
-      - 'Gemfile.lock'
-      - 'Rakefile'
-      - '.release.yml'
-      - '.release-please-manifest.json'
-      - 'release-please-config.json'
-      - '.standard.yml'
-      - 'docker-compose.yml'
-      - '.ruby-version'
-      - 'scripts/**'
-      - 'test/**'
-      - 'reference/upstream-better-auth/**'
-      - 'docs/**'
-      - 'docs-site/**'
-      - '.github/workflows/ci.yml'
-      - '.github/workflows/release.yml'
   merge_group:
 
 concurrency:
@@ -57,13 +21,6 @@ permissions:
 
 env:
   BETTER_AUTH_URL: http://localhost:3000
-  BETTER_AUTH_POSTGRES_URL: postgres://user:password@localhost:5432/better_auth
-  BETTER_AUTH_MONGODB_URL: mongodb://127.0.0.1:27017/better-auth-ruby-test
-  BETTER_AUTH_MYSQL_HOST: 127.0.0.1
-  BETTER_AUTH_MYSQL_PORT: 3306
-  BETTER_AUTH_MYSQL_USER: user
-  BETTER_AUTH_MYSQL_PASSWORD: password
-  BETTER_AUTH_MYSQL_DATABASE: better_auth
 
 jobs:
   lint-workspace:
@@ -81,49 +38,6 @@ jobs:
           bundler-cache: true
 
       - name: Run linter
-        run: bundle exec standardrb
-
-  lint-package:
-    name: Lint ${{ matrix.package }}
-    runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        package:
-          - better_auth
-          - better_auth-passkey
-          - better_auth-cli
-          - better_auth-api-key
-          - better_auth-rails
-          - better_auth-sinatra
-          - better_auth-roda
-          - better_auth-hanami
-          - better_auth-grape
-          - better_auth-oauth-provider
-          - better_auth-redis-storage
-          - better_auth-mongodb
-          - better_auth-mongo-adapter
-          - better_auth-scim
-          - better_auth-oidc
-          - better_auth-saml
-          - better_auth-sso
-          - better_auth-stripe
-          - better_auth-telemetry
-
-    steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
-        with:
-          persist-credentials: false
-
-      - name: Set up Ruby
-        uses: ruby/setup-ruby@003a5c4d8d6321bd302e38f6f0ec593f77f06600 # v1.319.0
-        with:
-          ruby-version: .ruby-version
-          bundler-cache: true
-          working-directory: packages/${{ matrix.package }}
-
-      - name: Run linter
-        working-directory: packages/${{ matrix.package }}
         run: bundle exec standardrb
 
   test-workspace:
@@ -153,40 +67,13 @@ jobs:
           bundler-cache: true
 
       - name: Run workspace packaging tests
+        env:
+          RUBYOPT: -r${{ github.workspace }}/test/support/strict_minitest
         run: bundle exec rake test:workspace
 
   test-core:
     name: Test better_auth (Core)
     runs-on: ubuntu-latest
-    services:
-      postgres:
-        image: postgres:17
-        env:
-          POSTGRES_USER: user
-          POSTGRES_PASSWORD: password
-          POSTGRES_DB: better_auth
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd "pg_isready -U user -d better_auth"
-          --health-interval 1s
-          --health-timeout 5s
-          --health-retries 10
-      mysql:
-        image: mysql:8.4
-        env:
-          MYSQL_ROOT_PASSWORD: root_password
-          MYSQL_DATABASE: better_auth
-          MYSQL_USER: user
-          MYSQL_PASSWORD: password
-        ports:
-          - 3306:3306
-        options: >-
-          --health-cmd "mysqladmin ping -h 127.0.0.1 -uuser -ppassword"
-          --health-interval 1s
-          --health-timeout 5s
-          --health-retries 30
-          --health-start-period 30s
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
@@ -194,14 +81,6 @@ jobs:
 
       - name: Fetch upstream Better Auth sources
         run: ./scripts/fetch-upstream-better-auth.sh
-
-      - name: Install database client headers
-        run: |
-          if [ -f /etc/apt/apt-mirrors.txt ]; then
-            echo "https://archive.ubuntu.com/ubuntu/" | sudo tee /etc/apt/apt-mirrors.txt
-          fi
-          sudo apt-get update -o Acquire::Retries=3 -o Acquire::http::Timeout=10 -o Acquire::https::Timeout=10
-          sudo apt-get install -y --no-install-recommends default-libmysqlclient-dev freetds-dev
 
       - name: Set up Ruby
         uses: ruby/setup-ruby@003a5c4d8d6321bd302e38f6f0ec593f77f06600 # v1.319.0
@@ -213,6 +92,8 @@ jobs:
 
       - name: Run tests
         working-directory: packages/better_auth
+        env:
+          RUBYOPT: -r${{ github.workspace }}/test/support/strict_minitest
         run: bundle exec rake test
 
   test-passkey:
@@ -236,6 +117,8 @@ jobs:
 
       - name: Run tests
         working-directory: packages/better_auth-passkey
+        env:
+          RUBYOPT: -r${{ github.workspace }}/test/support/strict_minitest
         run: bundle exec rake test
 
   test-cli:
@@ -260,6 +143,8 @@ jobs:
 
       - name: Run tests
         working-directory: packages/better_auth-cli
+        env:
+          RUBYOPT: -r${{ github.workspace }}/test/support/strict_minitest
         run: timeout 180s bundle exec rake test
 
   test-api-key:
@@ -283,6 +168,8 @@ jobs:
 
       - name: Run tests
         working-directory: packages/better_auth-api-key
+        env:
+          RUBYOPT: -r${{ github.workspace }}/test/support/strict_minitest
         run: bundle exec rake test
 
   test-rails:
@@ -303,6 +190,8 @@ jobs:
 
       - name: Run fast tests
         working-directory: packages/better_auth-rails
+        env:
+          SPEC_OPTS: --require ${{ github.workspace }}/test/support/strict_rspec
         run: bundle exec rake test
 
   test-sinatra:
@@ -323,6 +212,8 @@ jobs:
 
       - name: Run tests
         working-directory: packages/better_auth-sinatra
+        env:
+          SPEC_OPTS: --require ${{ github.workspace }}/test/support/strict_rspec
         run: bundle exec rspec
 
   test-roda:
@@ -344,6 +235,8 @@ jobs:
 
       - name: Run tests
         working-directory: packages/better_auth-roda
+        env:
+          SPEC_OPTS: --require ${{ github.workspace }}/test/support/strict_rspec
         run: timeout 180s bundle exec rspec
 
   test-hanami:
@@ -364,6 +257,8 @@ jobs:
 
       - name: Run fast tests
         working-directory: packages/better_auth-hanami
+        env:
+          SPEC_OPTS: --require ${{ github.workspace }}/test/support/strict_rspec
         run: bundle exec rake test
 
   test-grape:
@@ -385,6 +280,8 @@ jobs:
 
       - name: Run tests
         working-directory: packages/better_auth-grape
+        env:
+          SPEC_OPTS: --require ${{ github.workspace }}/test/support/strict_rspec
         run: timeout 180s bundle exec rspec
 
   test-oauth-provider:
@@ -408,6 +305,8 @@ jobs:
 
       - name: Run tests
         working-directory: packages/better_auth-oauth-provider
+        env:
+          RUBYOPT: -r${{ github.workspace }}/test/support/strict_minitest
         run: bundle exec rake test
 
   test-redis-storage:
@@ -431,6 +330,8 @@ jobs:
 
       - name: Run fast tests
         working-directory: packages/better_auth-redis-storage
+        env:
+          RUBYOPT: -r${{ github.workspace }}/test/support/strict_minitest
         run: bundle exec rake test
 
   test-mongodb:
@@ -451,6 +352,8 @@ jobs:
 
       - name: Run tests
         working-directory: packages/better_auth-mongodb
+        env:
+          RUBYOPT: -r${{ github.workspace }}/test/support/strict_minitest
         run: bundle exec rake test
 
   test-mongo-adapter:
@@ -471,6 +374,8 @@ jobs:
 
       - name: Run tests
         working-directory: packages/better_auth-mongo-adapter
+        env:
+          RUBYOPT: -r${{ github.workspace }}/test/support/strict_minitest
         run: bundle exec rake test
 
   test-scim:
@@ -494,6 +399,8 @@ jobs:
 
       - name: Run tests
         working-directory: packages/better_auth-scim
+        env:
+          RUBYOPT: -r${{ github.workspace }}/test/support/strict_minitest
         run: bundle exec rake test
 
   test-oidc:
@@ -514,6 +421,8 @@ jobs:
 
       - name: Run tests
         working-directory: packages/better_auth-oidc
+        env:
+          RUBYOPT: -r${{ github.workspace }}/test/support/strict_minitest
         run: bundle exec rake test
 
   test-saml:
@@ -534,6 +443,8 @@ jobs:
 
       - name: Run tests
         working-directory: packages/better_auth-saml
+        env:
+          RUBYOPT: -r${{ github.workspace }}/test/support/strict_minitest
         run: bundle exec rake test
 
   test-sso:
@@ -557,6 +468,8 @@ jobs:
 
       - name: Run tests
         working-directory: packages/better_auth-sso
+        env:
+          RUBYOPT: -r${{ github.workspace }}/test/support/strict_minitest
         run: bundle exec rake test
 
   test-stripe:
@@ -580,6 +493,8 @@ jobs:
 
       - name: Run tests
         working-directory: packages/better_auth-stripe
+        env:
+          RUBYOPT: -r${{ github.workspace }}/test/support/strict_minitest
         run: bundle exec rake test
 
   test-telemetry:
@@ -600,6 +515,8 @@ jobs:
 
       - name: Run tests
         working-directory: packages/better_auth-telemetry
+        env:
+          RUBYOPT: -r${{ github.workspace }}/test/support/strict_minitest
         run: bundle exec rake test
 
   docs-site:
@@ -634,7 +551,6 @@ jobs:
     runs-on: ubuntu-latest
     needs:
       - lint-workspace
-      - lint-package
       - test-workspace
       - test-core
       - test-passkey

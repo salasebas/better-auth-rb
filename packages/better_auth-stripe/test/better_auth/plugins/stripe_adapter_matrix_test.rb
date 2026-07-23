@@ -232,10 +232,10 @@ class BetterAuthPluginsStripeAdapterMatrixTest < Minitest::Test
   end
 
   def load_mongodb_test_support!
-    package_root = File.expand_path("../../../../..", __dir__)
-    mongodb_lib = File.join(package_root, "better_auth-mongodb", "lib")
+    packages_root = File.expand_path("../../../..", __dir__)
+    mongodb_lib = File.join(packages_root, "better_auth-mongodb", "lib")
     $LOAD_PATH.unshift(mongodb_lib) unless $LOAD_PATH.include?(mongodb_lib)
     require "better_auth/mongodb"
-    require File.join(package_root, "better_auth-mongodb", "test", "support", "fake_mongo")
+    require File.join(packages_root, "better_auth-mongodb", "test", "support", "fake_mongo")
   end
 end

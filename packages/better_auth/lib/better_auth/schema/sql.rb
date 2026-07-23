@@ -8,13 +8,17 @@ module BetterAuth
       def create_statements(options, dialect:)
         dialect = dialect.to_sym
         tables = Schema.migration_tables(options)
-        statements = tables.map { |logical_name, table| create_table_statement(logical_name, table, dialect, tables) }
+        delete_actions = mssql_delete_actions(tables, dialect)
+        statements = tables.map do |logical_name, table|
+          create_table_statement(logical_name, table, dialect, tables, delete_actions: delete_actions)
+        end
         statements.concat(tables.flat_map { |_logical_name, table| index_statements(table, dialect) })
       end
 
       def pending_statements(plan)
+        delete_actions = mssql_delete_actions(plan.tables, plan.dialect)
         statements = plan.to_create.map do |change|
-          create_table_statement(change.logical_name, change.table, plan.dialect, plan.tables)
+          create_table_statement(change.logical_name, change.table, plan.dialect, plan.tables, delete_actions: delete_actions)
         end
         statements.concat(plan.to_add.flat_map do |change|
           change.fields.map do |logical_field, attributes|
@@ -37,13 +41,13 @@ module BetterAuth
         end)
       end
 
-      def create_table_statement(logical_name, table, dialect, tables = nil)
+      def create_table_statement(logical_name, table, dialect, tables = nil, delete_actions: nil)
         table_name = table.fetch(:model_name)
         columns = table.fetch(:fields).map do |logical_field, attributes|
           column_definition(table_name, logical_field, attributes, dialect)
         end
         constraints = table.fetch(:fields).flat_map do |logical_field, attributes|
-          field_constraints(table_name, logical_field, attributes, dialect, tables)
+          field_constraints(table_name, logical_field, attributes, dialect, tables, delete_actions: delete_actions)
         end
         body = (columns + constraints).join(",\n  ")
 
@@ -73,7 +77,7 @@ module BetterAuth
         parts.join(" ")
       end
 
-      def field_constraints(table_name, logical_field, attributes, dialect, tables = nil)
+      def field_constraints(table_name, logical_field, attributes, dialect, tables = nil, delete_actions: nil)
         constraints = []
         column = attributes[:field_name] || physical_name(logical_field)
 
@@ -83,7 +87,7 @@ module BetterAuth
 
         reference = attributes[:references]
         if reference
-          constraints << foreign_key_constraint(table_name, column, reference, dialect, tables)
+          constraints << foreign_key_constraint(table_name, column, reference, dialect, tables, delete_actions: delete_actions)
         end
 
         constraints
@@ -236,11 +240,12 @@ module BetterAuth
         end
       end
 
-      def foreign_key_constraint(table_name, column, reference, dialect, tables = nil)
+      def foreign_key_constraint(table_name, column, reference, dialect, tables = nil, delete_actions: nil)
         target_table = foreign_key_target_table(reference, tables)
         target_model = target_table&.fetch(:model_name) || reference.fetch(:model)
         target_field = foreign_key_target_field(reference, target_table)
-        on_delete = reference[:on_delete] ? " ON DELETE #{reference[:on_delete].to_s.upcase}" : ""
+        delete_action = delete_actions&.fetch([table_name.to_s, column.to_s], reference[:on_delete]) || reference[:on_delete]
+        on_delete = delete_action ? " ON DELETE #{delete_action.to_s.upcase}" : ""
 
         case dialect
         when :postgres, :sqlite
@@ -250,6 +255,56 @@ module BetterAuth
         when :mssql
           %(CONSTRAINT #{quote("fk_#{table_name}_#{column}", dialect)} FOREIGN KEY (#{quote(column, dialect)}) REFERENCES #{quote(target_model, dialect)} (#{quote(target_field, dialect)})#{on_delete})
         end
+      end
+
+      def mssql_delete_actions(tables, dialect)
+        return unless dialect.to_sym == :mssql
+
+        graph = {}
+        tables.each_with_object({}) do |(_logical_name, table), actions|
+          child = table.fetch(:model_name).to_s
+          table.fetch(:fields).each do |logical_field, attributes|
+            reference = attributes[:references]
+            next unless reference
+
+            column = (attributes[:field_name] || physical_name(logical_field)).to_s
+            action = reference[:on_delete]&.to_s
+            key = [child, column]
+            unless mssql_cascading_action?(action)
+              actions[key] = action
+              next
+            end
+
+            target_table = foreign_key_target_table(reference, tables)
+            parent = (target_table&.fetch(:model_name) || reference.fetch(:model)).to_s
+            if mssql_cascade_conflict?(graph, parent, child)
+              actions[key] = "no action"
+            else
+              graph[parent] ||= []
+              graph[parent] << child unless graph[parent].include?(child)
+              actions[key] = action
+            end
+          end
+        end
+      end
+
+      def mssql_cascading_action?(action)
+        %w[cascade set\ null set\ default].include?(action.to_s.downcase.tr("_", " "))
+      end
+
+      def mssql_cascade_conflict?(graph, parent, child)
+        nodes = (graph.keys + graph.values.flatten + [parent, child]).uniq
+        nodes.any? do |source|
+          mssql_reachable?(graph, source, parent) && mssql_reachable?(graph, source, child)
+        end
+      end
+
+      def mssql_reachable?(graph, source, target, visited = {})
+        return true if source == target
+        return false if visited[source]
+
+        visited[source] = true
+        Array(graph[source]).any? { |child| mssql_reachable?(graph, child, target, visited) }
       end
 
       def foreign_key_target_table(reference, tables)

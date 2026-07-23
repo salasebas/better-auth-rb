@@ -90,9 +90,9 @@ module BetterAuth
 
     def sso_saml_idp_metadata(provider_or_config)
       saml_config = if provider_or_config.respond_to?(:key?) && (provider_or_config.key?("samlConfig") || provider_or_config.key?(:samlConfig))
-        normalize_hash(provider_or_config["samlConfig"] || provider_or_config[:samlConfig] || {})
+        sso_provider_config_hash(provider_or_config["samlConfig"] || provider_or_config[:samlConfig])
       else
-        normalize_hash(provider_or_config || {})
+        sso_provider_config_hash(provider_or_config)
       end
       idp_metadata = normalize_hash(saml_config[:idp_metadata] || {})
       xml = idp_metadata[:metadata] || saml_config[:metadata] || saml_config[:idp_metadata_xml]

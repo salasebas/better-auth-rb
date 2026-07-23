@@ -5,7 +5,6 @@ core:
   - changed-files:
       - any-glob-to-any-file:
           - "packages/better_auth/**"
-          - "packages/rubyauth/**"
 
 adapters:
   - changed-files:
