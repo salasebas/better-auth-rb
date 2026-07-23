@@ -7,6 +7,43 @@ class BetterAuthSSOProvidersTest < Minitest::Test
   SECRET = "providers-secret-with-enough-entropy-123"
   TEST_CERT = "MIIDXTCCAkWgAwIBAgIJAJC1HiIAZAiUMA0Gcm9markup"
 
+  def test_register_provider_serializes_persistable_configs_for_database_adapters
+    auth = build_auth
+    cookie = sign_up_cookie(auth)
+
+    auth.api.register_sso_provider(
+      headers: {"cookie" => cookie},
+      body: {
+        providerId: "serialized-registration",
+        issuer: "https://idp.example.com",
+        domain: "example.com",
+        oidcConfig: {
+          clientId: "client-id",
+          clientSecret: "client-secret",
+          skipDiscovery: true,
+          authorizationEndpoint: "https://idp.example.com/authorize",
+          tokenEndpoint: "https://idp.example.com/token"
+        }
+      }
+    )
+
+    stored = auth.context.adapter.find_one(model: "ssoProvider", where: [{field: "providerId", value: "serialized-registration"}])
+    config = JSON.parse(stored.fetch("oidcConfig"))
+
+    assert_instance_of String, stored.fetch("oidcConfig")
+    assert_equal "client-id", config.fetch("client_id")
+    assert_equal true, config.fetch("skip_discovery")
+  end
+
+  def test_persisted_provider_config_keeps_ruby_callable_hooks_in_memory
+    callback = ->(**_data) { {accessToken: "token"} }
+
+    persisted = BetterAuth::Plugins.sso_persisted_provider_config(getToken: callback)
+
+    assert_instance_of Hash, persisted
+    assert_same callback, persisted.fetch(:get_token)
+  end
+
   def test_get_provider_sanitizes_serialized_oidc_config_from_database
     auth = build_auth
     cookie = sign_up_cookie(auth)

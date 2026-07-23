@@ -38,7 +38,7 @@ env:
   BETTER_AUTH_MYSQL_URL: mysql2://user:password@127.0.0.1:3306/better_auth
   BETTER_AUTH_MSSQL_URL: tinytds://sa:Password123!@127.0.0.1:1433/better_auth?timeout=30
   BETTER_AUTH_MSSQL_MASTER_URL: tinytds://sa:Password123!@127.0.0.1:1433/master?timeout=30
-  BETTER_AUTH_MONGODB_URL: mongodb://127.0.0.1:27017/better-auth-ruby-test
+  BETTER_AUTH_MONGODB_URL: mongodb://127.0.0.1:27017/better-auth-ruby-test?replicaSet=rs0
 
 jobs:
   changes:
@@ -289,10 +289,6 @@ jobs:
           --health-timeout 5s
           --health-retries 20
           --health-start-period 40s
-      mongo:
-        image: mongo:8.0
-        ports:
-          - 27017:27017
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
@@ -312,16 +308,28 @@ jobs:
           ruby-version: .ruby-version
           bundler-cache: true
 
-      - name: Wait for MongoDB
+      - name: Start MongoDB replica set
+        if: contains(fromJSON('["better_auth-passkey", "better_auth-scim", "better_auth-sso"]'), matrix.package)
         run: |
           set -euo pipefail
-          container="$(docker ps --filter ancestor=mongo:8.0 --format '{{.ID}}' | head -n 1)"
-          for attempt in $(seq 1 30); do
-            if docker exec "$container" mongosh --quiet --eval 'db.adminCommand({ping: 1})' >/dev/null 2>&1; then
+          docker run --detach --name mongodb-replica --publish 27017:27017 mongo:8.0 --replSet rs0 --bind_ip_all
+          for attempt in $(seq 1 60); do
+            if docker exec mongodb-replica mongosh --quiet --eval 'db.adminCommand({ping: 1})' >/dev/null 2>&1; then
+              break
+            fi
+            if [ "$attempt" = "60" ]; then
+              docker logs mongodb-replica
+              exit 1
+            fi
+            sleep 2
+          done
+          docker exec mongodb-replica mongosh --quiet --eval 'rs.initiate({_id: "rs0", members: [{_id: 0, host: "localhost:27017"}]})'
+          for attempt in $(seq 1 60); do
+            if docker exec mongodb-replica mongosh --quiet --eval 'quit(db.hello().isWritablePrimary ? 0 : 1)'; then
               exit 0
             fi
-            if [ "$attempt" = "30" ]; then
-              docker logs "$container"
+            if [ "$attempt" = "60" ]; then
+              docker logs mongodb-replica
               exit 1
             fi
             sleep 2

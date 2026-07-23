@@ -107,6 +107,42 @@ class BetterAuthSchemaSQLTest < Minitest::Test
     assert_includes sql, "CREATE INDEX [index_sessions_on_user_id] ON [sessions] ([user_id])"
   end
 
+  def test_mssql_ddl_demotes_only_conflicting_cascade_paths_to_no_action
+    plugin = BetterAuth::Plugin.new(
+      id: "mssql-cascade-graph",
+      schema: {
+        cascadeRoot: {
+          model_name: "cascade_roots",
+          fields: {
+            name: {type: "string", required: true}
+          }
+        },
+        cascadeBranch: {
+          model_name: "cascade_branches",
+          fields: {
+            rootId: {type: "string", required: true, references: {model: "cascadeRoot", field: "id", on_delete: "cascade"}}
+          }
+        },
+        cascadeLeaf: {
+          model_name: "cascade_leaves",
+          fields: {
+            rootId: {type: "string", required: true, references: {model: "cascadeRoot", field: "id", on_delete: "cascade"}},
+            branchId: {type: "string", required: false, references: {model: "cascadeBranch", field: "id", on_delete: "set null"}}
+          }
+        }
+      }
+    )
+    config = BetterAuth::Configuration.new(secret: SECRET, database: :memory, plugins: [plugin])
+
+    mssql = BetterAuth::Schema::SQL.create_statements(config, dialect: :mssql).join("\n")
+    postgres = BetterAuth::Schema::SQL.create_statements(config, dialect: :postgres).join("\n")
+
+    assert_includes mssql, "CONSTRAINT [fk_cascade_branches_root_id] FOREIGN KEY ([root_id]) REFERENCES [cascade_roots] ([id]) ON DELETE CASCADE"
+    assert_includes mssql, "CONSTRAINT [fk_cascade_leaves_root_id] FOREIGN KEY ([root_id]) REFERENCES [cascade_roots] ([id]) ON DELETE CASCADE"
+    assert_includes mssql, "CONSTRAINT [fk_cascade_leaves_branch_id] FOREIGN KEY ([branch_id]) REFERENCES [cascade_branches] ([id]) ON DELETE NO ACTION"
+    assert_includes postgres, 'FOREIGN KEY ("branch_id") REFERENCES "cascade_branches" ("id") ON DELETE SET NULL'
+  end
+
   def test_mssql_nullable_unique_fields_use_filtered_indexes
     config = BetterAuth::Configuration.new(
       secret: SECRET,

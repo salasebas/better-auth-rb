@@ -924,6 +924,25 @@ class BetterAuthMongoDBAdapterTest < Minitest::Test
     assert_equal session, database.collection("user").insert_options.first.fetch(:session)
   end
 
+  def test_mongodb_adapter_does_not_mask_an_error_that_ends_the_transaction
+    database = FakeMongoDatabase.new
+    session = FakeMongoSession.new
+    client = Object.new
+    client.define_singleton_method(:start_session) { session }
+    adapter = BetterAuth::Adapters::MongoDB.new(@config, database: database, client: client)
+    original_error = RuntimeError.new("original transaction failure")
+
+    error = assert_raises(RuntimeError) do
+      adapter.transaction do
+        session.abort_transaction
+        raise original_error
+      end
+    end
+
+    assert_same original_error, error
+    assert_equal true, session.ended
+  end
+
   def test_mongodb_adapter_fake_transaction_rolls_back_staged_mutations_and_records_session_options
     database = FakeMongoDatabase.new
     client = FakeMongoClient.new

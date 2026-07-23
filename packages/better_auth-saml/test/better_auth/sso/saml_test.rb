@@ -271,7 +271,7 @@ class BetterAuthSSOSAMLMirrorTest < Minitest::Test
     assert_equal "saml", provider.fetch("type")
     assert_equal "https://idp.example.com/sso", provider.fetch("samlConfig").fetch("entryPoint")
     refute JSON.generate(provider).include?(IDP_CERT.strip)
-    assert_equal IDP_CERT, stored.fetch("samlConfig").fetch(:cert)
+    assert_equal IDP_CERT, BetterAuth::Plugins.sso_provider_config_hash(stored.fetch("samlConfig")).fetch(:cert)
   end
 
   def test_register_saml_provider_preserves_safe_nested_config_without_secret_leaks

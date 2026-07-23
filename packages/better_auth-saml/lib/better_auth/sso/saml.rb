@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require "base64"
+require "json"
 require "logger"
 require "onelogin/ruby-saml"
 require "uri"
@@ -40,7 +41,7 @@ module BetterAuth
 
       def auth_request_url(settings: nil, request_options: {}, **_options)
         lambda do |provider:, relay_state:, context:|
-          config = BetterAuth::Plugins.normalize_hash(provider["samlConfig"] || provider[:samlConfig] || {})
+          config = provider_config(provider)
           saml_settings = settings.respond_to?(:call) ? settings.call(provider: provider, context: context, saml_config: config) : build_settings(provider, context, config, settings)
           OneLogin::RubySaml::Authrequest.new.create(saml_settings, {RelayState: relay_state}.merge(request_options))
         end
@@ -48,7 +49,7 @@ module BetterAuth
 
       def response_parser(settings: nil, response_options: {}, attribute_map: DEFAULT_ATTRIBUTE_MAP, **_options)
         lambda do |raw_response:, provider:, context:|
-          config = BetterAuth::Plugins.normalize_hash(provider["samlConfig"] || provider[:samlConfig] || {})
+          config = provider_config(provider)
           saml_settings = settings.respond_to?(:call) ? settings.call(provider: provider, context: context, saml_config: config) : build_settings(provider, context, config, settings)
           validate_response_xml!(raw_response, config)
           response = OneLogin::RubySaml::Response.new(raw_response, {settings: saml_settings}.merge(response_options))
@@ -76,6 +77,15 @@ module BetterAuth
             email_verified: email_verified == true || email_verified == "true"
           )
         end
+      end
+
+      def provider_config(provider)
+        value = provider["samlConfig"] || provider[:samlConfig] || {}
+        return BetterAuth::Plugins.normalize_hash(value) if value.is_a?(Hash)
+
+        BetterAuth::Plugins.normalize_hash(JSON.parse(value.to_s))
+      rescue JSON::ParserError, TypeError
+        {}
       end
 
       def build_settings(provider, context, config, overrides = nil)

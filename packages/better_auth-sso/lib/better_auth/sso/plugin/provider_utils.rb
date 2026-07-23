@@ -140,6 +140,27 @@ module BetterAuth
       {}
     end
 
+    # Upstream stores provider configs as JSON strings. Ruby-only callable hooks
+    # cannot be serialized, so keep those configs in memory for compatibility.
+    def sso_persisted_provider_config(value)
+      config = normalize_hash(value || {})
+      return nil if config.empty?
+      return config if sso_config_contains_callable?(config)
+
+      JSON.generate(config)
+    end
+
+    def sso_config_contains_callable?(value)
+      case value
+      when Hash
+        value.any? { |key, entry| key.respond_to?(:call) || sso_config_contains_callable?(entry) }
+      when Array
+        value.any? { |entry| sso_config_contains_callable?(entry) }
+      else
+        value.respond_to?(:call)
+      end
+    end
+
     def sso_context_domain_verification_enabled?(context)
       context.options.plugins.any? do |plugin|
         plugin.id == "sso" && plugin.options.dig(:domain_verification, :enabled)

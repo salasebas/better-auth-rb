@@ -112,12 +112,20 @@ RSpec.describe "BetterAuth::Hanami::SequelAdapter database integrations", :integ
       Sequel.connect(ENV.fetch("BETTER_AUTH_MYSQL_URL", "mysql2://user:password@127.0.0.1:3306/better_auth"))
     when :mssql
       require "tiny_tds"
+      ensure_mssql_database
       Sequel.connect(ENV.fetch("BETTER_AUTH_MSSQL_URL", "tinytds://sa:Password123!@127.0.0.1:1433/better_auth?timeout=30"))
     end
   rescue LoadError
     skip "#{database} driver gem is not installed"
   rescue Sequel::DatabaseConnectionError
     skip "#{database} test service is not available"
+  end
+
+  def ensure_mssql_database
+    master = Sequel.connect(ENV.fetch("BETTER_AUTH_MSSQL_MASTER_URL", "tinytds://sa:Password123!@127.0.0.1:1433/master?timeout=30"))
+    master.run("IF DB_ID(N'better_auth') IS NULL CREATE DATABASE [better_auth]")
+  ensure
+    master&.disconnect
   end
 
   def reset_database(db, database)
