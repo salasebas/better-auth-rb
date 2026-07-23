@@ -6,6 +6,13 @@
 - Documented and tested the Ruby OIDC integration boundary for the hardened SSO
   lifecycle work.
 
+## [0.11.1](https://github.com/salasebas/better-auth-rb/compare/better_auth-oidc/v0.11.0...better_auth-oidc/v0.11.1) (2026-07-23)
+
+
+### Miscellaneous Chores
+
+* **better_auth-oidc:** Synchronize better-auth-release versions
+
 ## [0.11.0](https://github.com/salasebas/better-auth-rb/compare/better_auth-oidc-v0.10.0...better_auth-oidc/v0.11.0) (2026-07-23)
 
 
