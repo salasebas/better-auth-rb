@@ -1,6 +1,12 @@
 name: Release
 
 on:
+  workflow_dispatch:
+    inputs:
+      release_commit:
+        description: Immutable tagged release commit to recover
+        required: true
+        type: string
   push:
     branches:
       - main
@@ -9,6 +15,7 @@ permissions: {}
 
 jobs:
   detect-pending-release:
+    if: github.event_name == 'push'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -56,6 +63,13 @@ jobs:
           File.open(ENV.fetch("GITHUB_OUTPUT"), "a") { |output| output.puts("pending=#{pending}") }
           RUBY
 
+  release-ci:
+    needs: detect-pending-release
+    if: needs.detect-pending-release.outputs.pending == 'true'
+    permissions:
+      contents: read
+    uses: ./.github/workflows/ci.yml
+
   release-integration:
     needs: detect-pending-release
     if: needs.detect-pending-release.outputs.pending == 'true'
@@ -69,11 +83,14 @@ jobs:
   release-pr:
     needs:
       - detect-pending-release
+      - release-ci
       - release-integration
     if: >-
       always() &&
+      github.event_name == 'push' &&
       needs.detect-pending-release.result == 'success' &&
-      (needs.detect-pending-release.outputs.pending == 'false' || needs.release-integration.result == 'success')
+      (needs.detect-pending-release.outputs.pending == 'false' ||
+        (needs.release-ci.result == 'success' && needs.release-integration.result == 'success'))
     runs-on: ubuntu-latest
     concurrency:
       group: release-please-pr
@@ -94,7 +111,39 @@ jobs:
 
   publish:
     needs: release-pr
-    if: needs.release-pr.outputs.releases_created == 'true'
+    if: github.event_name == 'push' && needs.release-pr.outputs.releases_created == 'true'
+    runs-on: ubuntu-latest
+    environment: release
+    concurrency:
+      group: rubygems-production
+      cancel-in-progress: false
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Checkout exact release commit
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+          ref: ${{ github.sha }}
+
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@003a5c4d8d6321bd302e38f6f0ec593f77f06600 # v1.319.0
+        with:
+          ruby-version: .ruby-version
+
+      - name: Prepare and validate every release artifact
+        run: ruby scripts/release/publish_gems.rb prepare tmp/release-gems
+
+      - name: Configure RubyGems Trusted Publishing
+        uses: rubygems/configure-rubygems-credentials@dc5a8d8553e6ee01fc26761a49e99e733d17954a # v2.1.0
+
+      - name: Publish and checksum-verify every release artifact
+        run: ruby scripts/release/publish_gems.rb publish tmp/release-gems
+
+  recover-publish:
+    if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     environment: release
     concurrency:
@@ -104,26 +153,42 @@ jobs:
       contents: read
       id-token: write
     env:
-      BUNDLE_GEMFILE: ${{ github.workspace }}/Gemfile
+      RELEASE_COMMIT: ${{ inputs.release_commit }}
     steps:
-      - name: Checkout exact release commit
+      - name: Validate the recovery request
+        env:
+          DISPATCH_REF: ${{ github.ref }}
+        run: |
+          set -euo pipefail
+          test "$DISPATCH_REF" = "refs/heads/main"
+          ruby -e 'abort "release_commit must be a lowercase 40-character commit SHA" unless ENV.fetch("RELEASE_COMMIT").match?(/\A[0-9a-f]{40}\z/)'
+
+      - name: Checkout the exact tagged release commit
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           fetch-depth: 0
           persist-credentials: false
-          ref: ${{ github.sha }}
+          ref: ${{ inputs.release_commit }}
 
-      - name: Set up Ruby and the workspace bundle
+      - name: Verify the release commit is immutable and on main
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$RELEASE_COMMIT"
+          git merge-base --is-ancestor "$RELEASE_COMMIT" refs/remotes/origin/main
+
+      - name: Set up Ruby
         uses: ruby/setup-ruby@003a5c4d8d6321bd302e38f6f0ec593f77f06600 # v1.319.0
         with:
           ruby-version: .ruby-version
-          bundler-cache: true # zizmor: ignore[cache-poisoning] Protected-main release uses the root lockfile cache.
 
-      - name: Prepare and validate every release artifact
-        run: ruby scripts/release/publish_gems.rb prepare tmp/release-gems
+      - name: Prepare and validate every recovery artifact
+        run: |
+          # GITHUB_SHA identifies the dispatch workflow, not the checked-out release.
+          ruby -r./scripts/release/publish_gems \
+            -e 'ReleasePublisher::Preparer.new(root: Dir.pwd, release_commit: ENV.fetch("RELEASE_COMMIT")).call("tmp/release-gems")'
 
       - name: Configure RubyGems Trusted Publishing
         uses: rubygems/configure-rubygems-credentials@dc5a8d8553e6ee01fc26761a49e99e733d17954a # v2.1.0
 
-      - name: Publish and checksum-verify every release artifact
+      - name: Publish and checksum-verify every recovery artifact
         run: ruby scripts/release/publish_gems.rb publish tmp/release-gems

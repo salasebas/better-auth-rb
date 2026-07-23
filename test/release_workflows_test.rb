@@ -12,22 +12,29 @@ class ReleaseWorkflowsTest < Minitest::Test
   CHECKOUT_ACTION = "actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0"
   CREDENTIAL_ACTION = "rubygems/configure-rubygems-credentials@dc5a8d8553e6ee01fc26761a49e99e733d17954a"
 
-  def test_release_workflow_prepares_before_one_oidc_configuration_and_publish
+  def test_release_workflow_prepares_before_oidc_configuration_and_publish
     workflow = release_workflow
     publish = job_body(workflow, "publish")
-    prepare_index = publish.index("ruby scripts/release/publish_gems.rb prepare tmp/release-gems")
-    credentials_index = publish.index(CREDENTIAL_ACTION)
-    publish_index = publish.index("ruby scripts/release/publish_gems.rb publish tmp/release-gems")
+    recover_publish = job_body(workflow, "recover-publish")
 
-    assert_equal 1, workflow.scan(CREDENTIAL_ACTION).size
+    assert_equal 2, workflow.scan(CREDENTIAL_ACTION).size
     refute_includes workflow, ["rubygems", "release-gem"].join("/")
-    assert prepare_index < credentials_index
-    assert credentials_index < publish_index
+    assert_publish_order(
+      publish,
+      prepare: "ruby scripts/release/publish_gems.rb prepare tmp/release-gems",
+      publish: "ruby scripts/release/publish_gems.rb publish tmp/release-gems"
+    )
+    assert_publish_order(
+      recover_publish,
+      prepare: "ReleasePublisher::Preparer.new",
+      publish: "ruby scripts/release/publish_gems.rb publish tmp/release-gems"
+    )
     assert_equal 1, publish.scan("ruby/setup-ruby@").size
+    assert_equal 1, recover_publish.scan("ruby/setup-ruby@").size
     refute_includes workflow, "RUBYGEMS_API_KEY"
   end
 
-  def test_publish_has_protected_least_privilege_and_exact_checkout
+  def test_automatic_publish_has_protected_least_privilege_and_exact_checkout_without_bundle
     publish = job_body(release_workflow, "publish")
 
     assert_includes publish, "environment: release"
@@ -40,6 +47,9 @@ class ReleaseWorkflowsTest < Minitest::Test
     assert_includes publish, "fetch-depth: 0"
     assert_includes publish, "persist-credentials: false"
     assert_includes publish, "ref: ${{ github.sha }}"
+    assert_includes publish, "if: github.event_name == 'push'"
+    refute_includes publish, "BUNDLE_GEMFILE"
+    refute_includes publish, "bundler-cache"
   end
 
   def test_release_please_uses_builtin_token_and_gates_publish
@@ -55,16 +65,19 @@ class ReleaseWorkflowsTest < Minitest::Test
     assert_includes release_pr, "cancel-in-progress: false"
     assert_includes release_pr, "releases_created: ${{ steps.release.outputs.releases_created }}"
     assert_includes publish, "needs: release-pr"
-    assert_includes publish, "if: needs.release-pr.outputs.releases_created == 'true'"
+    assert_includes publish, "if: github.event_name == 'push' && needs.release-pr.outputs.releases_created == 'true'"
     refute JSON.parse(File.read(File.join(ROOT, "release-please-config.json"))).key?("skip-github-release")
   end
 
-  def test_pending_manifest_release_runs_full_integration_before_release_please
+  def test_pending_manifest_release_runs_reusable_ci_and_full_integration_before_release_please
     workflow = release_workflow
+    ci_workflow = File.read(File.join(ROOT, ".github/workflows/ci.yml"))
     detection = job_body(workflow, "detect-pending-release")
+    release_ci = job_body(workflow, "release-ci")
     integration = job_body(workflow, "release-integration")
     release_pr = job_body(workflow, "release-pr")
 
+    assert_match(/^  workflow_call:$/, ci_workflow)
     assert_includes detection, ".release-please-manifest.json"
     assert_includes detection, "release-please-config.json"
     assert_includes detection, 'IO.popen(["git", "tag", "--list"]'
@@ -75,12 +88,52 @@ class ReleaseWorkflowsTest < Minitest::Test
     assert_includes detection, "pending = !missing.empty?"
     refute_includes detection, "github.event.before"
     refute_includes detection, "git diff"
+    assert_includes detection, "if: github.event_name == 'push'"
+    assert_includes release_ci, "uses: ./.github/workflows/ci.yml"
+    assert_includes release_ci, "needs.detect-pending-release.outputs.pending == 'true'"
     assert_includes integration, "uses: ./.github/workflows/integration.yml"
     assert_includes integration, "full: true"
     assert_includes release_pr, "- detect-pending-release"
+    assert_includes release_pr, "- release-ci"
     assert_includes release_pr, "- release-integration"
     assert_includes release_pr, "if: >-"
+    assert_includes release_pr, "github.event_name == 'push'"
+    assert_includes release_pr, "needs.release-ci.result == 'success'"
     assert_includes release_pr, "needs.release-integration.result == 'success'"
+    assert_includes release_pr, "needs.detect-pending-release.outputs.pending == 'false'"
+  end
+
+  def test_manual_recovery_is_protected_and_uses_only_the_validated_tagged_commit
+    workflow = release_workflow
+    recovery = job_body(workflow, "recover-publish")
+    validation_index = recovery.index("Validate the recovery request")
+    checkout_index = recovery.index(CHECKOUT_ACTION)
+
+    assert_match(/^  workflow_dispatch:\n    inputs:\n      release_commit:/, workflow)
+    assert_includes workflow, "required: true"
+    assert_includes workflow, "type: string"
+    assert_includes recovery, "if: github.event_name == 'workflow_dispatch'"
+    assert_includes recovery, "environment: release"
+    assert_includes recovery, "group: rubygems-production"
+    assert_includes recovery, "cancel-in-progress: false"
+    assert_includes recovery, "contents: read"
+    assert_includes recovery, "id-token: write"
+    refute_includes recovery, "contents: write"
+    assert validation_index < checkout_index
+    assert_includes recovery, "DISPATCH_REF: ${{ github.ref }}"
+    assert_includes recovery, 'test "$DISPATCH_REF" = "refs/heads/main"'
+    assert_includes recovery, '\A[0-9a-f]{40}\z'
+    assert_includes recovery, "RELEASE_COMMIT: ${{ inputs.release_commit }}"
+    assert_includes recovery, "ref: ${{ inputs.release_commit }}"
+    assert_includes recovery, "fetch-depth: 0"
+    assert_includes recovery, "persist-credentials: false"
+    assert_includes recovery, 'test "$(git rev-parse HEAD)" = "$RELEASE_COMMIT"'
+    assert_includes recovery, 'git merge-base --is-ancestor "$RELEASE_COMMIT" refs/remotes/origin/main'
+    assert_includes recovery, 'release_commit: ENV.fetch("RELEASE_COMMIT")'
+    assert_includes recovery, '.call("tmp/release-gems")'
+    refute_includes recovery, "github.sha"
+    refute_includes recovery, "BUNDLE_GEMFILE"
+    refute_includes recovery, "bundler-cache"
   end
 
   def test_pending_release_detector_accepts_configured_and_legacy_tags
@@ -158,8 +211,12 @@ class ReleaseWorkflowsTest < Minitest::Test
     assert_includes releasing, "Settings > Actions > General > Workflow permissions"
     assert_includes releasing, "Approve workflows to run"
     refute_includes releasing, "manually\nrun the `CI`"
-    assert_includes releasing, "reusable full-integration gate"
+    assert_includes releasing, "reusable CI and full-integration gates"
     assert_includes releasing, "every later push rerun the full"
+    assert_includes releasing, "workflow_dispatch"
+    assert_includes releasing, "release_commit"
+    assert_includes releasing, "ancestor of `origin/main`"
+    assert_includes releasing, "Never move a release tag"
     assert_includes releasing, "<component>/vX.Y.Z"
     assert_includes releasing, "<component>-vX.Y.Z"
     assert_includes releasing, "Trusted Publishing"
@@ -251,5 +308,17 @@ class ReleaseWorkflowsTest < Minitest::Test
     assert start, "missing #{name} job"
     finish = workflow.index(/^  [a-z][a-z0-9-]+:\n/, start + 3) || workflow.length
     workflow[start...finish]
+  end
+
+  def assert_publish_order(job, prepare:, publish:)
+    prepare_index = job.index(prepare)
+    credentials_index = job.index(CREDENTIAL_ACTION)
+    publish_index = job.index(publish)
+
+    refute_nil prepare_index
+    refute_nil credentials_index
+    refute_nil publish_index
+    assert prepare_index < credentials_index
+    assert credentials_index < publish_index
   end
 end
