@@ -69,3 +69,17 @@ Update the relevant package README and `docs-site/` when users need to know.
 
 Do not commit unless the user asks for it or the task is explicitly about CI,
 release, or repository automation.
+
+## Agent skills
+
+### Issue tracker
+
+Issues and PRDs are tracked in GitHub Issues for `salasebas/better-auth-rb`. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+Triage uses the canonical `needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, and `wontfix` labels. See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+This repository uses a single-context layout with `CONTEXT.md` and `docs/adr/` at the repository root. See `docs/agents/domain.md`.
