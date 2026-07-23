@@ -5,6 +5,13 @@
 - Honored plugin migration controls in MongoDB schema/index generation and
   added regression coverage for the supported generator path.
 
+## [0.11.1](https://github.com/salasebas/better-auth-rb/compare/better_auth-mongodb/v0.11.0...better_auth-mongodb/v0.11.1) (2026-07-23)
+
+
+### Miscellaneous Chores
+
+* **better_auth-mongodb:** Synchronize better-auth-release versions
+
 ## [0.11.0](https://github.com/salasebas/better-auth-rb/compare/better_auth-mongodb-v0.10.0...better_auth-mongodb/v0.11.0) (2026-07-23)
 
 

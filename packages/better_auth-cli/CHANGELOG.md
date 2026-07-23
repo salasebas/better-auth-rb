@@ -5,6 +5,13 @@
 - Honored plugin migration controls in generated schema and Mongo index
   commands.
 
+## [0.11.1](https://github.com/salasebas/better-auth-rb/compare/better_auth-cli/v0.11.0...better_auth-cli/v0.11.1) (2026-07-23)
+
+
+### Bug Fixes
+
+* harden release publishing and recovery ([#56](https://github.com/salasebas/better-auth-rb/issues/56)) ([fa502ae](https://github.com/salasebas/better-auth-rb/commit/fa502ae709171560fe5ccb61f2862b2dde259e9a))
+
 ## [0.11.0](https://github.com/salasebas/better-auth-rb/compare/better_auth-cli-v0.10.0...better_auth-cli/v0.11.0) (2026-07-23)
 
 

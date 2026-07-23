@@ -4,6 +4,13 @@
 
 - Honored plugin migration controls in the Sinatra migration integration.
 
+## [0.11.1](https://github.com/salasebas/better-auth-rb/compare/better_auth-sinatra/v0.11.0...better_auth-sinatra/v0.11.1) (2026-07-23)
+
+
+### Miscellaneous Chores
+
+* **better_auth-sinatra:** Synchronize better-auth-release versions
+
 ## [0.11.0](https://github.com/salasebas/better-auth-rb/compare/better_auth-sinatra-v0.10.0...better_auth-sinatra/v0.11.0) (2026-07-23)
 
 
