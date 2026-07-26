@@ -4,7 +4,7 @@ module BetterAuth
   module SocialProviders
     module_function
 
-    def salesforce(client_id:, client_secret:, scopes: ["openid", "email", "profile"], **options)
+    def salesforce(client_id:, client_secret: nil, scopes: ["openid", "email", "profile"], **options)
       host = if options[:loginUrl] || options[:login_url]
         "https://#{options[:loginUrl] || options[:login_url]}"
       elsif options[:environment].to_s == "sandbox"

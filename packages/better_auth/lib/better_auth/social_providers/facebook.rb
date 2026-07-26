@@ -4,7 +4,7 @@ module BetterAuth
   module SocialProviders
     module_function
 
-    def facebook(client_id:, client_secret:, scopes: ["email", "public_profile"], **options)
+    def facebook(client_id:, client_secret: nil, scopes: ["email", "public_profile"], **options)
       normalized = Base.normalize_options(options)
       fields = Array(options[:fields] || %w[id name email picture email_verified]).join(",")
       provider = Base.oauth_provider(

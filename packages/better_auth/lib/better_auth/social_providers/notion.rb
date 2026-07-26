@@ -4,7 +4,7 @@ module BetterAuth
   module SocialProviders
     module_function
 
-    def notion(client_id:, client_secret:, scopes: [], **options)
+    def notion(client_id:, client_secret: nil, scopes: [], **options)
       Base.oauth_provider(
         id: "notion",
         name: "Notion",

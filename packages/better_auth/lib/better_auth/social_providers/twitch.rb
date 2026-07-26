@@ -4,7 +4,7 @@ module BetterAuth
   module SocialProviders
     module_function
 
-    def twitch(client_id:, client_secret:, scopes: ["user:read:email", "openid"], **options)
+    def twitch(client_id:, client_secret: nil, scopes: ["user:read:email", "openid"], **options)
       normalized = Base.normalize_options(options)
       provider = Base.oauth_provider(
         id: "twitch",

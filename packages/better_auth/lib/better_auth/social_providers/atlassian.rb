@@ -4,7 +4,7 @@ module BetterAuth
   module SocialProviders
     module_function
 
-    def atlassian(client_id:, client_secret:, scopes: ["read:jira-user", "offline_access"], **options)
+    def atlassian(client_id:, client_secret: nil, scopes: ["read:jira-user", "offline_access"], **options)
       Base.oauth_provider(
         id: "atlassian",
         name: "Atlassian",

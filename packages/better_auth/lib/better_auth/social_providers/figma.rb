@@ -4,7 +4,7 @@ module BetterAuth
   module SocialProviders
     module_function
 
-    def figma(client_id:, client_secret:, scopes: ["current_user:read"], **options)
+    def figma(client_id:, client_secret: nil, scopes: ["current_user:read"], **options)
       Base.oauth_provider(
         id: "figma",
         name: "Figma",

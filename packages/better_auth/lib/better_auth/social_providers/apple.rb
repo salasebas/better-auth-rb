@@ -4,7 +4,7 @@ module BetterAuth
   module SocialProviders
     module_function
 
-    def apple(client_id:, client_secret:, scopes: ["email", "name"], **options)
+    def apple(client_id:, client_secret: nil, scopes: ["email", "name"], **options)
       normalized = Base.normalize_options(options)
       primary_client_id = Base.primary_client_id(client_id)
       {

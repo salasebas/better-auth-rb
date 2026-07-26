@@ -12,7 +12,7 @@ module BetterAuth
       token_hosted_domain == configured_hosted_domain
     end
 
-    def google(client_id:, client_secret:, scopes: ["openid", "email", "profile"], **options)
+    def google(client_id:, client_secret: nil, scopes: ["openid", "email", "profile"], **options)
       normalized = Base.normalize_options(options)
       primary_client_id = Base.primary_client_id(client_id)
       {

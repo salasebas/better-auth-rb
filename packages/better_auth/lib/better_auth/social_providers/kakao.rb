@@ -4,7 +4,7 @@ module BetterAuth
   module SocialProviders
     module_function
 
-    def kakao(client_id:, client_secret:, scopes: ["account_email", "profile_image", "profile_nickname"], **options)
+    def kakao(client_id:, client_secret: nil, scopes: ["account_email", "profile_image", "profile_nickname"], **options)
       Base.oauth_provider(
         id: "kakao",
         name: "Kakao",
