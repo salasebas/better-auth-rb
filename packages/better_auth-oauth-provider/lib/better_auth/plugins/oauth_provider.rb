@@ -87,7 +87,7 @@ module BetterAuth
         init: oauth_provider_init(config),
         hooks: oauth_provider_hooks(config),
         endpoints: endpoints,
-        schema: oauth_provider_schema,
+        schema: oauth_provider_schema(config[:schema]),
         rate_limit: oauth_provider_rate_limits(config),
         options: config
       )

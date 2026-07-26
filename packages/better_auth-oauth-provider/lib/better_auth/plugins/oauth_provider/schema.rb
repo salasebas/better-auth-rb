@@ -4,8 +4,8 @@ module BetterAuth
   module Plugins
     module_function
 
-    def oauth_provider_schema
-      {
+    def oauth_provider_schema(custom_schema = nil)
+      schema = {
         oauthClient: {
           model_name: "oauth_clients",
           fields: {
@@ -84,6 +84,36 @@ module BetterAuth
           }
         }
       }
+
+      oauth_provider_apply_schema_mappings(schema, custom_schema)
+    end
+
+    def oauth_provider_apply_schema_mappings(schema, custom_schema)
+      return schema unless custom_schema.is_a?(Hash)
+
+      normalize_hash(custom_schema).each do |raw_model, table_mapping|
+        table = schema[Schema.storage_key(raw_model).to_sym]
+        next unless table && table_mapping.is_a?(Hash)
+
+        model_name = table_mapping[:model_name]
+        table[:model_name] = model_name if oauth_provider_schema_name?(model_name)
+
+        fields = table_mapping[:fields]
+        next unless fields.is_a?(Hash)
+
+        fields.each do |raw_field, field_name|
+          next unless oauth_provider_schema_name?(field_name)
+
+          attributes = table[:fields][Schema.storage_key(raw_field).to_sym]
+          attributes[:field_name] = field_name if attributes
+        end
+      end
+
+      schema
+    end
+
+    def oauth_provider_schema_name?(value)
+      value.is_a?(String) && !value.empty?
     end
   end
 end
