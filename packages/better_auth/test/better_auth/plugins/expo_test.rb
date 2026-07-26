@@ -28,6 +28,51 @@ class BetterAuthPluginsExpoTest < Minitest::Test
     assert_includes headers.fetch("set-cookie"), "better-auth.oauth_state=cookie-state"
   end
 
+  def test_authorization_proxy_rejects_invalid_targets_before_setting_state_cookie
+    auth = build_auth(base_url: "https://app.example")
+    invalid_targets = {
+      "same origin with oauth state" => ["https://app.example/api/auth/callback/google?state=x", "attacker-state"],
+      "same normalized origin" => ["https://user:password@APP.EXAMPLE:443/api/auth/callback/google?state=x", nil],
+      "external http" => ["http://accounts.google.com/o/oauth2/v2/auth?state=x", nil],
+      "non-url" => ["not-a-url", nil],
+      "malformed" => ["https://accounts.google.com/%?state=x", nil],
+      "relative" => ["/oauth2/authorize?state=x", nil],
+      "protocol relative" => ["//accounts.google.com/o/oauth2/v2/auth?state=x", nil],
+      "fragment" => ["https://accounts.google.com/o/oauth2/v2/auth?state=x#fragment", nil],
+      "bare fragment" => ["https://accounts.google.com/o/oauth2/v2/auth?state=x#", nil]
+    }
+
+    invalid_targets.each do |label, (authorization_url, oauth_state)|
+      params = {"authorizationURL" => authorization_url}
+      params["oauthState"] = oauth_state if oauth_state
+      response = Rack::MockRequest.new(auth.handler).get("/api/auth/expo-authorization-proxy", params: params)
+
+      assert_equal 400, response.status, label
+      assert_equal "Invalid authorizationURL", JSON.parse(response.body).fetch("message"), label
+      assert_nil response["location"], label
+      assert_nil response["set-cookie"], label
+    end
+  end
+
+  def test_authorization_proxy_redirects_external_https_targets_unchanged
+    auth = build_auth(base_url: "https://app.example")
+    authorization_urls = [
+      "https://accounts.google.com/o/oauth2/v2/auth?client_id=x&state=abc",
+      "https://app.example:444/oauth2/authorize?state=non-default-port"
+    ]
+
+    authorization_urls.each do |authorization_url|
+      response = Rack::MockRequest.new(auth.handler).get(
+        "/api/auth/expo-authorization-proxy",
+        params: {"authorizationURL" => authorization_url}
+      )
+
+      assert_equal 302, response.status
+      assert_equal authorization_url, response["location"]
+      assert_includes response["set-cookie"], "better-auth.state="
+    end
+  end
+
   def test_expo_origin_header_is_used_when_origin_is_missing
     auth = build_auth
     app = auth.handler
@@ -198,9 +243,10 @@ class BetterAuthPluginsExpoTest < Minitest::Test
   private
 
   def build_auth(plugin_options = {})
+    base_url = plugin_options.delete(:base_url) || "http://localhost:3000"
     trusted_origins = plugin_options.delete(:trusted_origins)
     auth_options = {
-      base_url: "http://localhost:3000",
+      base_url: base_url,
       secret: SECRET,
       database: :memory,
       email_and_password: {enabled: true},

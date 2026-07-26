@@ -50,19 +50,31 @@ module BetterAuth
         oauth_state = ctx.query[:oauthState] || ctx.query["oauthState"] || ctx.query[:oauth_state] || ctx.query["oauth_state"]
         raise APIError.new("BAD_REQUEST", message: "Unexpected error") if authorization_url.to_s.empty?
 
+        raise APIError.new("BAD_REQUEST", message: "Invalid authorizationURL") if authorization_url.include?("#")
+
+        begin
+          authorization_uri = URI.parse(authorization_url)
+        rescue URI::InvalidURIError
+          raise APIError.new("BAD_REQUEST", message: "Invalid authorizationURL")
+        end
+
+        authorization_origin = Configuration.origin_for(authorization_uri)&.downcase
+        base_origin = Configuration.origin_for(URI.parse(ctx.context.base_url.to_s))&.downcase
+        if authorization_uri.scheme != "https" || authorization_uri.host.to_s.empty? || authorization_origin == base_origin
+          raise APIError.new("BAD_REQUEST", message: "Invalid authorizationURL")
+        end
+
         if oauth_state
           cookie = ctx.context.create_auth_cookie("oauth_state", max_age: 600)
           ctx.set_cookie(cookie.name, oauth_state, cookie.attributes)
         else
-          state = URI.parse(authorization_url).then { |uri| Rack::Utils.parse_query(uri.query)["state"] }
+          state = Rack::Utils.parse_query(authorization_uri.query)["state"]
           raise APIError.new("BAD_REQUEST", message: "Unexpected error") if state.to_s.empty?
 
           cookie = ctx.context.create_auth_cookie("state", max_age: 300)
           ctx.set_signed_cookie(cookie.name, state, ctx.context.secret, cookie.attributes)
         end
         [302, ctx.response_headers.merge("location" => authorization_url), [""]]
-      rescue URI::InvalidURIError
-        raise APIError.new("BAD_REQUEST", message: "Unexpected error")
       end
     end
 
