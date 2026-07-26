@@ -349,6 +349,7 @@ module ReleasePublisher
 
   class Publisher
     DOWNLOAD_BASE = "https://rubygems.org/downloads/"
+    MISSING_ARTIFACT_STATUSES = [403, 404].freeze
     VERIFY_ATTEMPTS = 6
     VERIFY_DELAY_SECONDS = 5
 
@@ -389,7 +390,7 @@ module ReleasePublisher
       artifact = entry.fetch("artifact")
       response = @downloader.download("#{DOWNLOAD_BASE}#{artifact}")
 
-      if response.status == 404
+      if MISSING_ARTIFACT_STATUSES.include?(response.status)
         @uploader.push(artifact_path)
         verify_uploaded(entry)
       elsif response.status.between?(200, 299)
@@ -410,7 +411,7 @@ module ReleasePublisher
           verified = true
           break
         end
-        unless response.status == 404
+        unless MISSING_ARTIFACT_STATUSES.include?(response.status)
           raise Error, "RubyGems verification returned HTTP #{response.status} for #{entry.fetch("artifact")}"
         end
 
