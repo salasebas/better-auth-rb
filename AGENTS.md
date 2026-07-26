@@ -32,6 +32,7 @@ packages provide integration—do not duplicate core logic there.
 
 ## Development
 
+- Use English for all repository content and collaboration.
 - StandardRB, `# frozen_string_literal: true`, idiomatic Ruby naming.
 - Core uses Minitest (`packages/better_auth`); adapters/plugins use RSpec.
 - Prefer real, observable tests over mocks. Check upstream tests for parity work.
@@ -74,7 +75,10 @@ release, or repository automation.
 
 ### Issue tracker
 
-Issues and PRDs are tracked in GitHub Issues for `salasebas/better-auth-rb`. See `docs/agents/issue-tracker.md`.
+Public requests and external collaboration use GitHub Issues. Private planning
+initiated by the maintainer uses the private `OpenAuth` Linear team and
+`better-auth-rb` project. See `docs/agents/issue-tracker.md` for routing and
+privacy rules.
 
 ### Triage labels
 
