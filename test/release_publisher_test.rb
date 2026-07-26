@@ -67,6 +67,33 @@ class ReleasePublisherTest < Minitest::Test
     end
   end
 
+  def test_rubygems_forbidden_missing_artifact_is_pushed_and_retried_until_available
+    with_inventory do |directory, entries, bodies|
+      first_artifact = entries.first.fetch("artifact")
+      first_downloads = 0
+      downloader = fake_downloader do |url, _call|
+        artifact = File.basename(url)
+        if artifact == first_artifact
+          first_downloads += 1
+          next response(403) if first_downloads <= 2
+        end
+        response(200, bodies.fetch(artifact))
+      end
+      uploader = FakeUploader.new([])
+      sleeps = []
+
+      ReleasePublisher::Publisher.new(
+        downloader: downloader,
+        uploader: uploader,
+        sleeper: ->(seconds) { sleeps << seconds }
+      ).call(directory)
+
+      assert_equal [File.join(directory, first_artifact)], uploader.paths
+      assert_equal 3, first_downloads
+      assert_equal [ReleasePublisher::Publisher::VERIFY_DELAY_SECONDS], sleeps
+    end
+  end
+
   def test_matching_remote_artifacts_are_skipped_without_push
     with_inventory do |directory, _entries, bodies|
       downloader = fake_downloader { |url, _call| response(200, bodies.fetch(File.basename(url))) }

@@ -115,10 +115,11 @@ artifact. For each gem it downloads the corresponding immutable RubyGems
 artifact:
 
 - A matching checksum means that gem was already published, so it is skipped.
-- A missing artifact is pushed and then downloaded again until its checksum is
-  verified.
+- A missing artifact (`403` or `404` from RubyGems' public downloads endpoint)
+  is pushed and then downloaded again until its checksum is verified.
 - A different checksum, HTTP error, TLS or network error, push failure, or
-  verification timeout stops the run immediately.
+  verification timeout stops the run immediately. Other HTTP statuses are not
+  treated as absence.
 
 This makes a workflow rerun safe after a partial upload: already verified gems
 are skipped and publishing resumes in dependency order. Never move a release
