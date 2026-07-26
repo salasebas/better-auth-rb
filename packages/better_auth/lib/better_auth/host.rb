@@ -122,6 +122,7 @@ module BetterAuth
       return :link_local if first_byte == 0xfe && (second_byte & 0xc0) == 0x80
       return :private if (first_byte & 0xfe) == 0xfc
       return :documentation if expanded.start_with?("2001:0db8:")
+      return :benchmarking if expanded.start_with?("2001:0002:0000:")
 
       if expanded.start_with?("2002:")
         embedded = embedded_ipv4(expanded, 1)
@@ -133,12 +134,16 @@ module BetterAuth
         return :reserved if embedded
       end
 
+      return :reserved if expanded.start_with?("0064:ff9b:0001:")
+
       if expanded.start_with?("2001:0000:")
         embedded = embedded_ipv4(expanded, 6, xor: true)
         return :reserved if embedded
       end
 
       return :reserved if expanded.start_with?("0100:0000:0000:0000:")
+      return :documentation if expanded.start_with?("3fff:0")
+      return :reserved if expanded.start_with?("5f00:")
 
       :public
     end
