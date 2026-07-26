@@ -142,15 +142,21 @@ There are two recovery paths:
 gh workflow run release.yml --ref main -f release_commit=RELEASE_COMMIT_SHA
 ```
 
-The manual recovery job rejects a non-lowercase full SHA, checks out that exact
-commit, verifies it is an ancestor of `origin/main`, and then asks the release
-preparer to validate that all 19 component tags point to that SHA. The job uses
-the protected `release` environment, whose approval happens before the job
-starts. Within the approved job, the RubyGems credential action requests the
-same `release.yml` Trusted Publishing OIDC identity used by normal releases
-only after validation and preparation succeed. The preparer builds the
-artifacts and records SHA-256 checksums; publishing re-hashes them and compares
-any existing RubyGems artifacts before uploading what is missing.
+The manual recovery job rejects a non-lowercase full SHA. It checks out the
+reviewed recovery tooling from the dispatched `main` commit and checks out the
+exact tagged release source into a separate directory. It verifies that the
+release commit is an ancestor of the dispatched `main` commit, then runs the
+current preparer and publisher against only the tagged source and its generated
+artifacts. The preparer also validates that all 19 component tags point to the
+release SHA. This separation allows a broken historical publisher to be fixed
+without changing the source used to build the released gems.
+
+The job uses the protected `release` environment, whose approval happens before
+the job starts. Within the approved job, the RubyGems credential action requests
+the same `release.yml` Trusted Publishing OIDC identity used by normal releases
+only after validation and preparation succeed. The preparer records SHA-256
+checksums; publishing re-hashes the artifacts and compares anything already on
+RubyGems before uploading what is missing.
 Never move a release tag to make recovery pass.
 
 If publication fails after the release pull request has merged, the committed

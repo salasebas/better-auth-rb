@@ -163,18 +163,27 @@ jobs:
           test "$DISPATCH_REF" = "refs/heads/main"
           ruby -e 'abort "release_commit must be a lowercase 40-character commit SHA" unless ENV.fetch("RELEASE_COMMIT").match?(/\A[0-9a-f]{40}\z/)'
 
-      - name: Checkout the exact tagged release commit
+      - name: Checkout the reviewed recovery tooling from main
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           fetch-depth: 0
           persist-credentials: false
+          ref: ${{ github.sha }}
+
+      - name: Checkout the exact tagged release source
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+          path: release-source
           ref: ${{ inputs.release_commit }}
 
-      - name: Verify the release commit is immutable and on main
+      - name: Verify the tooling and release source commits
         run: |
           set -euo pipefail
-          test "$(git rev-parse HEAD)" = "$RELEASE_COMMIT"
-          git merge-base --is-ancestor "$RELEASE_COMMIT" refs/remotes/origin/main
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$(git -C release-source rev-parse HEAD)" = "$RELEASE_COMMIT"
+          git merge-base --is-ancestor "$RELEASE_COMMIT" "$GITHUB_SHA"
 
       - name: Set up Ruby
         uses: ruby/setup-ruby@003a5c4d8d6321bd302e38f6f0ec593f77f06600 # v1.319.0
@@ -183,9 +192,9 @@ jobs:
 
       - name: Prepare and validate every recovery artifact
         run: |
-          # GITHUB_SHA identifies the dispatch workflow, not the checked-out release.
+          # Use reviewed tooling from main against only the immutable tagged source.
           ruby -r./scripts/release/publish_gems \
-            -e 'ReleasePublisher::Preparer.new(root: Dir.pwd, release_commit: ENV.fetch("RELEASE_COMMIT")).call("tmp/release-gems")'
+            -e 'ReleasePublisher::Preparer.new(root: File.expand_path("release-source", Dir.pwd), release_commit: ENV.fetch("RELEASE_COMMIT")).call(File.expand_path("tmp/release-gems", Dir.pwd))'
 
       - name: Configure RubyGems Trusted Publishing
         uses: rubygems/configure-rubygems-credentials@dc5a8d8553e6ee01fc26761a49e99e733d17954a # v2.1.0
