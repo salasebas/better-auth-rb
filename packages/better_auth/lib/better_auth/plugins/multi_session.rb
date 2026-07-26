@@ -88,11 +88,12 @@ module BetterAuth
       ) do |ctx|
         token = fetch_value(ctx.body, "sessionToken").to_s
         cookie_name = multi_session_cookie_name(ctx, token)
-        unless !token.empty? && ctx.get_signed_cookie(cookie_name, ctx.context.secret)
+        verified_token = ctx.get_signed_cookie(cookie_name, ctx.context.secret) unless token.empty?
+        unless verified_token
           raise APIError.new("UNAUTHORIZED", message: MULTI_SESSION_ERROR_CODES["INVALID_SESSION_TOKEN"])
         end
 
-        session = ctx.context.internal_adapter.find_session(token)
+        session = ctx.context.internal_adapter.find_session(verified_token)
         unless session && session[:session]["expiresAt"] > Time.now
           expire_cookie(ctx, cookie_name)
           raise APIError.new("UNAUTHORIZED", message: MULTI_SESSION_ERROR_CODES["INVALID_SESSION_TOKEN"])
@@ -128,16 +129,17 @@ module BetterAuth
         current = Routes.current_session(ctx)
         token = fetch_value(ctx.body, "sessionToken").to_s
         cookie_name = multi_session_cookie_name(ctx, token)
-        unless !token.empty? && ctx.get_signed_cookie(cookie_name, ctx.context.secret)
+        verified_token = ctx.get_signed_cookie(cookie_name, ctx.context.secret) unless token.empty?
+        unless verified_token
           raise APIError.new("UNAUTHORIZED", message: MULTI_SESSION_ERROR_CODES["INVALID_SESSION_TOKEN"])
         end
 
-        ctx.context.internal_adapter.delete_session(token)
+        ctx.context.internal_adapter.delete_session(verified_token)
         expire_cookie(ctx, cookie_name)
 
-        if current && current[:session]["token"] == token
+        if current && current[:session]["token"] == verified_token
           next_session = ctx.context.internal_adapter
-            .find_sessions(verified_multi_session_tokens(ctx).reject { |entry| entry == token })
+            .find_sessions(verified_multi_session_tokens(ctx).reject { |entry| entry == verified_token })
             .find { |entry| !entry[:session]["expiresAt"] || entry[:session]["expiresAt"] > Time.now }
           if next_session
             Cookies.set_session_cookie(ctx, next_session)
