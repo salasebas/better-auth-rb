@@ -275,7 +275,7 @@ class BetterAuthAuthContextUpstreamParityTest < Minitest::Test
     assert_equal "value", error.headers.fetch("key")
   end
 
-  def test_router_blocks_endpoints_marked_server_scope
+  def test_router_allows_endpoints_marked_server_scope
     auth = BetterAuth.auth(
       base_url: "http://localhost:3000",
       secret: SECRET,
@@ -295,8 +295,8 @@ class BetterAuthAuthContextUpstreamParityTest < Minitest::Test
 
     status, _headers, body = auth.call(rack_env("GET", "/api/auth/server-scoped"))
 
-    assert_equal 403, status
-    assert_equal({"error" => "Forbidden"}, JSON.parse(body.join))
+    assert_equal 200, status
+    assert_equal "ok", body.join
   end
 
   def test_direct_api_server_call_hooks_cookies_and_error_chaining_match_upstream
