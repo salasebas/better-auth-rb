@@ -107,7 +107,9 @@ class ReleaseWorkflowsTest < Minitest::Test
     workflow = release_workflow
     recovery = job_body(workflow, "recover-publish")
     validation_index = recovery.index("Validate the recovery request")
-    checkout_index = recovery.index(CHECKOUT_ACTION)
+    tooling_checkout_index = recovery.index("Checkout the reviewed recovery tooling from main")
+    source_checkout_index = recovery.index("Checkout the exact tagged release source")
+    prepare_index = recovery.index("Prepare and validate every recovery artifact")
 
     assert_match(/^  workflow_dispatch:\n    inputs:\n      release_commit:/, workflow)
     assert_includes workflow, "required: true"
@@ -119,19 +121,26 @@ class ReleaseWorkflowsTest < Minitest::Test
     assert_includes recovery, "contents: read"
     assert_includes recovery, "id-token: write"
     refute_includes recovery, "contents: write"
-    assert validation_index < checkout_index
+    assert validation_index < tooling_checkout_index
+    assert tooling_checkout_index < source_checkout_index
+    assert source_checkout_index < prepare_index
+    assert_equal 2, recovery.scan(CHECKOUT_ACTION).size
     assert_includes recovery, "DISPATCH_REF: ${{ github.ref }}"
     assert_includes recovery, 'test "$DISPATCH_REF" = "refs/heads/main"'
     assert_includes recovery, '\A[0-9a-f]{40}\z'
     assert_includes recovery, "RELEASE_COMMIT: ${{ inputs.release_commit }}"
+    assert_includes recovery, "ref: ${{ github.sha }}"
     assert_includes recovery, "ref: ${{ inputs.release_commit }}"
+    assert_includes recovery, "path: release-source"
     assert_includes recovery, "fetch-depth: 0"
     assert_includes recovery, "persist-credentials: false"
-    assert_includes recovery, 'test "$(git rev-parse HEAD)" = "$RELEASE_COMMIT"'
-    assert_includes recovery, 'git merge-base --is-ancestor "$RELEASE_COMMIT" refs/remotes/origin/main'
+    assert_includes recovery, 'test "$(git rev-parse HEAD)" = "$GITHUB_SHA"'
+    assert_includes recovery, 'test "$(git -C release-source rev-parse HEAD)" = "$RELEASE_COMMIT"'
+    assert_includes recovery, 'git merge-base --is-ancestor "$RELEASE_COMMIT" "$GITHUB_SHA"'
+    assert_includes recovery, 'root: File.expand_path("release-source", Dir.pwd)'
     assert_includes recovery, 'release_commit: ENV.fetch("RELEASE_COMMIT")'
-    assert_includes recovery, '.call("tmp/release-gems")'
-    refute_includes recovery, "github.sha"
+    assert_includes recovery, '.call(File.expand_path("tmp/release-gems", Dir.pwd))'
+    assert_includes recovery, "ruby scripts/release/publish_gems.rb publish tmp/release-gems"
     refute_includes recovery, "BUNDLE_GEMFILE"
     refute_includes recovery, "bundler-cache"
   end
@@ -215,7 +224,7 @@ class ReleaseWorkflowsTest < Minitest::Test
     assert_includes releasing, "every later push rerun the full"
     assert_includes releasing, "workflow_dispatch"
     assert_includes releasing, "release_commit"
-    assert_includes releasing, "ancestor of `origin/main`"
+    assert_includes releasing, "ancestor of the dispatched `main` commit"
     assert_includes releasing, "Never move a release tag"
     assert_includes releasing, "<component>/vX.Y.Z"
     assert_includes releasing, "<component>-vX.Y.Z"
