@@ -295,7 +295,7 @@ class BetterAuthRateLimiterTest < Minitest::Test
     limiter.call(rack_request("GET", "/limited", headers: {"HTTP_X_FORWARDED_FOR" => second_ip}), auth.context, "/limited")
 
     assert_equal 1, storage.keys.length
-    assert_match(/\A2001:db8:abcd:1234::\|\/limited\z/, storage.keys.first)
+    assert_match(/\A2001:0db8:abcd:1234:0000:0000:0000:0000\|\/limited\z/, storage.keys.first)
   end
 
   def test_rate_limiter_applies_default_sign_in_special_rule

@@ -841,7 +841,7 @@ class BetterAuthRouterTest < Minitest::Test
     assert_equal 200, auth.call(rack_env("GET", "/api/auth/limited", headers: {"HTTP_X_FORWARDED_FOR" => first_ip})).first
     assert_equal 429, auth.call(rack_env("GET", "/api/auth/limited", headers: {"HTTP_X_FORWARDED_FOR" => second_ip})).first
     assert_equal 1, storage.keys.length
-    assert_match(/\A2001:db8:abcd:1234::\|\/limited\z/, storage.keys.first)
+    assert_match(/\A2001:0db8:abcd:1234:0000:0000:0000:0000\|\/limited\z/, storage.keys.first)
   end
 
   def test_rate_limit_can_disable_ip_tracking
