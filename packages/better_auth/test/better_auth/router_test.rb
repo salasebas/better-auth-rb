@@ -521,22 +521,61 @@ class BetterAuthRouterTest < Minitest::Test
     auth = BetterAuth.auth(
       base_url: "http://localhost:3000",
       secret: SECRET,
-      advanced: {disable_origin_check: ["/public"]},
+      advanced: {disable_origin_check: ["/public/"]},
       plugins: [
         {
           id: "test",
           endpoints: {
+            public_root: BetterAuth::Endpoint.new(path: "/public", method: "POST") { {ok: true} },
             public_post: BetterAuth::Endpoint.new(path: "/public/data", method: "POST") { {ok: true} },
-            protected_post: BetterAuth::Endpoint.new(path: "/protected/data", method: "POST") { {ok: true} }
+            public_nested_post: BetterAuth::Endpoint.new(path: "/public/data/nested", method: "POST") { {ok: true} },
+            near_prefix_post: BetterAuth::Endpoint.new(path: "/publicity", method: "POST") { {ok: true} },
+            hyphenated_post: BetterAuth::Endpoint.new(path: "/public-data", method: "POST") { {ok: true} }
           }
         }
       ]
     )
 
+    assert_equal 200, auth.call(rack_env("POST", "/api/auth/public", headers: {"HTTP_ORIGIN" => "https://evil.com", "HTTP_COOKIE" => "session=1"})).first
     assert_equal 200, auth.call(rack_env("POST", "/api/auth/public/data", headers: {"HTTP_ORIGIN" => "https://evil.com", "HTTP_COOKIE" => "session=1"})).first
-    assert_equal 403, auth.call(rack_env("POST", "/api/auth/protected/data", headers: {"HTTP_ORIGIN" => "https://evil.com", "HTTP_COOKIE" => "session=1"})).first
+    assert_equal 200, auth.call(rack_env("POST", "/api/auth/public/data/nested", headers: {"HTTP_ORIGIN" => "https://evil.com", "HTTP_COOKIE" => "session=1"})).first
+    assert_equal 403, auth.call(rack_env("POST", "/api/auth/publicity", headers: {"HTTP_ORIGIN" => "https://evil.com", "HTTP_COOKIE" => "session=1"})).first
+    assert_equal 403, auth.call(rack_env("POST", "/api/auth/public-data", headers: {"HTTP_ORIGIN" => "https://evil.com", "HTTP_COOKIE" => "session=1"})).first
+    assert_equal 200, auth.call(rack_env("POST", "/api/auth/public", body: {"callbackURL" => "https://evil.com"})).first
     assert_equal 200, auth.call(rack_env("POST", "/api/auth/public/data", body: {"callbackURL" => "https://evil.com"})).first
-    assert_equal 403, auth.call(rack_env("POST", "/api/auth/protected/data", body: {"callbackURL" => "https://evil.com"})).first
+    assert_equal 403, auth.call(rack_env("POST", "/api/auth/publicity", body: {"callbackURL" => "https://evil.com"})).first
+    assert_equal 403, auth.call(rack_env("POST", "/api/auth/public-data", body: {"redirectTo" => "https://evil.com"})).first
+  end
+
+  def test_plugin_middleware_wildcards_respect_path_segment_boundaries
+    auth = BetterAuth.auth(
+      base_url: "http://localhost:3000",
+      secret: SECRET,
+      plugins: [
+        {
+          id: "test",
+          middlewares: [
+            {
+              path: "/foo/**",
+              middleware: ->(ctx) { [418, {"content-type" => "text/plain"}, ["matched #{ctx.path}"]] }
+            }
+          ],
+          endpoints: {
+            foo: BetterAuth::Endpoint.new(path: "/foo", method: "GET") { {ok: true} },
+            foo_child: BetterAuth::Endpoint.new(path: "/foo/child", method: "GET") { {ok: true} },
+            foo_nested: BetterAuth::Endpoint.new(path: "/foo/child/nested", method: "GET") { {ok: true} },
+            foobar: BetterAuth::Endpoint.new(path: "/foobar", method: "GET") { {ok: true} },
+            foo_bar: BetterAuth::Endpoint.new(path: "/foo-bar", method: "GET") { {ok: true} }
+          }
+        }
+      ]
+    )
+
+    assert_equal 418, auth.call(rack_env("GET", "/api/auth/foo")).first
+    assert_equal 418, auth.call(rack_env("GET", "/api/auth/foo/child")).first
+    assert_equal 418, auth.call(rack_env("GET", "/api/auth/foo/child/nested")).first
+    assert_equal 200, auth.call(rack_env("GET", "/api/auth/foobar")).first
+    assert_equal 200, auth.call(rack_env("GET", "/api/auth/foo-bar")).first
   end
 
   def test_rate_limit_runs_after_middleware_and_before_plugin_on_request

@@ -110,7 +110,7 @@ module BetterAuth
         skip = endpoint_context.context.options.advanced[:disable_origin_check]
         return false unless skip.is_a?(Array)
 
-        skip.any? { |path| endpoint_context.path.start_with?(path.to_s) }
+        skip.any? { |path| PathMatcher.literal_subtree_matches?(path, endpoint_context.path) }
       end
 
       def login_or_signup_path?(path)

@@ -36,7 +36,14 @@ class BetterAuthSSORackAndEdgeCasesTest < Minitest::Test
   end
 
   def test_rack_mounted_saml_acs_allows_external_idp_origin_but_other_posts_still_require_trusted_origin
-    auth = build_sso_auth(plugin_options: {saml: {parse_response: ->(**_data) { {id: "rack-saml", email: "rack-saml@example.com", name: "Rack SAML"} }}})
+    sso_plugin = BetterAuth::Plugins.sso(saml: {parse_response: ->(**_data) { {id: "rack-saml", email: "rack-saml@example.com", name: "Rack SAML"} }})
+    adjacent_plugin = {
+      id: "adjacent-saml-path",
+      endpoints: {
+        acs_evil: BetterAuth::Endpoint.new(path: "/sso/saml2/sp/acsevil", method: "POST") { {ok: true} }
+      }
+    }
+    auth = build_sso_auth(plugins: [sso_plugin, adjacent_plugin])
     cookie = sign_up_cookie(auth)
     register_saml_provider(auth, cookie: cookie, provider_id: "rack-saml")
 
@@ -44,21 +51,17 @@ class BetterAuthSSORackAndEdgeCasesTest < Minitest::Test
       auth,
       "POST",
       "/api/auth/sso/saml2/sp/acs/rack-saml",
+      cookie: cookie,
       origin: "https://external-idp.example.com",
       form: {SAMLResponse: saml_response_xml(assertion_id: "rack-saml")}
     )
     blocked_status, _blocked_headers, blocked_body = rack_json_request(
       auth,
       "POST",
-      "/api/auth/sso/register",
+      "/api/auth/sso/saml2/sp/acsevil",
       cookie: cookie,
       origin: "https://attacker.example.com",
-      body: {
-        providerId: "attacker-provider",
-        issuer: "https://idp.example.com",
-        domain: "attacker.example.com",
-        oidcConfig: serializable_oidc_config
-      }
+      body: {}
     )
 
     assert_equal 302, acs_status

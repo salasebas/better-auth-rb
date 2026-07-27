@@ -132,9 +132,12 @@ auth = BetterAuth.auth(
   protection only when `disable_csrf_check` is omitted. Set
   `disable_csrf_check: false` explicitly to keep CSRF validation enabled. An
   array value such as `disable_origin_check: ["/public"]` skips ordinary origin
-  and redirect-URL validation for matching path prefixes. Fetch Metadata still
-  blocks a first-login cross-site navigation on those paths unless
-  `disable_csrf_check: true` disables that protection globally.
+  and redirect-URL validation for the exact path and its slash-boundary
+  descendants. Entries are literal paths, not wildcard patterns, and never
+  cover a path that only shares a string prefix. Keep the array as narrow as
+  possible because every matched subtree bypasses these validations. Fetch
+  Metadata still blocks a first-login cross-site navigation on those paths
+  unless `disable_csrf_check: true` disables that protection globally.
 </Callout>
 
 #### Summary
