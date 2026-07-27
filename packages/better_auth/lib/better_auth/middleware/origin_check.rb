@@ -77,7 +77,12 @@ module BetterAuth
           "newUserCallbackURL" => "newUserCallbackURL"
         }.each do |key, label|
           value = fetch_data(endpoint_context.body, key) || fetch_data(endpoint_context.query, key)
-          next if value.nil? || value == ""
+          next if value.nil? || value == "" || value == false
+          next if value.is_a?(Numeric) && value.zero?
+
+          unless value.is_a?(String)
+            raise APIError.new("BAD_REQUEST", message: "Invalid #{label}: expected a string")
+          end
 
           unless endpoint_context.context.trusted_origin?(value, allow_relative_paths: label != "origin")
             log(endpoint_context.context, :error, "Invalid #{label}: #{value}")
