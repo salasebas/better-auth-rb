@@ -155,7 +155,7 @@ class BetterAuthSQLAdapterTest < Minitest::Test
     assert_equal "ada@example.com", found["email"]
     assert_equal ["github", "credential"], found["account"].map { |account| account["providerId"] }
     assert_includes connection.sql.first, 'LEFT JOIN "accounts" AS "account" ON "account"."user_id" = "users"."id"'
-    refute_includes connection.sql.first, "LIMIT"
+    assert_includes connection.sql.first, "LIMIT 100"
   end
 
   def test_sql_adapter_infers_user_session_collection_join
@@ -202,7 +202,7 @@ class BetterAuthSQLAdapterTest < Minitest::Test
 
     assert_equal ["token-1", "token-2"], found.fetch("session").map { |session| session.fetch("token") }
     assert_includes connection.sql.first, 'LEFT JOIN "sessions" AS "session" ON "session"."user_id" = "users"."id"'
-    refute_includes connection.sql.first, "LIMIT"
+    assert_includes connection.sql.first, "LIMIT 100"
   end
 
   def test_sql_adapter_infers_schema_reference_one_to_one_join

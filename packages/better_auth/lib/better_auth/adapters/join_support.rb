@@ -61,12 +61,12 @@ module BetterAuth
 
       def join_limit(config)
         value = config[:limit]
-        return 100 if value.nil?
+        return default_find_many_limit if value.nil?
 
         parsed = Integer(value)
-        parsed.positive? ? parsed : 100
+        parsed.positive? ? parsed : default_find_many_limit
       rescue ArgumentError, TypeError
-        100
+        default_find_many_limit
       end
     end
   end

@@ -74,6 +74,7 @@ module BetterAuth
 
       def find_many(model:, where: [], sort_by: nil, limit: nil, offset: nil, select: nil, join: nil)
         model = model.to_s
+        limit = find_many_limit(limit)
         params = []
         sql = +"SELECT "
         sql << "TOP (#{Integer(limit)}) " if dialect == :mssql && limit && !offset

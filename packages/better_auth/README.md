@@ -152,6 +152,28 @@ auth = BetterAuth.auth(
 )
 ```
 
+Core Memory and SQL adapters cap `find_many` calls at 100 records when
+`limit:` is omitted or `nil`. Configure that default for base queries and
+one-to-many joins with `advanced.database.default_find_many_limit`:
+
+```ruby
+auth = BetterAuth.auth(
+  secret: ENV.fetch("BETTER_AUTH_SECRET"),
+  database: :postgres,
+  advanced: {
+    database: {
+      default_find_many_limit: 250
+    }
+  }
+)
+```
+
+An explicit `limit:` overrides the configured default. Adapter `count` calls
+remain uncapped. Use non-negative limits for portable behavior; `0` returns no
+base rows. Negative values are not normalized across Ruby adapters: Memory
+rejects them while SQL dialects may interpret them differently, so they do not
+mirror JavaScript `slice` semantics.
+
 Custom adapters must implement
 `create_if_absent(model:, data:, conflict_field: "id", force_allow_id: true)`
 as a targeted first-writer-wins insert returning a boolean,

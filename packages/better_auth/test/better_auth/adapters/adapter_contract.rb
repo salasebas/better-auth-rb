@@ -376,6 +376,90 @@ module BetterAuthAdapterContract
     end
   end
 
+  def test_adapter_contract_find_many_caps_an_omitted_limit_at_100
+    config = contract_config(user: {additional_fields: {sequence: {type: "number", required: true}}})
+
+    with_contract_adapter(config) do |adapter|
+      101.times do |sequence|
+        adapter.create(
+          model: "user",
+          data: {id: "limited-user-#{sequence}", name: "Limited User", email: "limited-#{sequence}@example.com", sequence: sequence},
+          force_allow_id: true
+        )
+      end
+
+      users = adapter.find_many(model: "user", sort_by: {field: "sequence", direction: "asc"})
+
+      assert_equal (0...100).to_a, users.map { |user| user.fetch("sequence") }
+      assert_equal 101, adapter.count(model: "user")
+    end
+  end
+
+  def test_adapter_contract_find_many_uses_the_configured_default_after_filter_sort_and_offset
+    config = contract_config(
+      advanced: {database: {default_find_many_limit: 7}},
+      user: {additional_fields: {sequence: {type: "number", required: true}}}
+    )
+
+    with_contract_adapter(config) do |adapter|
+      3.times do |sequence|
+        adapter.create(
+          model: "user",
+          data: {id: "excluded-user-#{sequence}", name: "Excluded", email: "excluded-#{sequence}@example.com", sequence: 1_000 + sequence},
+          force_allow_id: true
+        )
+      end
+      105.times do |sequence|
+        adapter.create(
+          model: "user",
+          data: {id: "matched-user-#{sequence}", name: "Matched", email: "matched-#{sequence}@example.com", sequence: sequence},
+          force_allow_id: true
+        )
+      end
+
+      users = adapter.find_many(
+        model: "user",
+        where: [{field: "name", value: "Matched"}],
+        sort_by: {field: "sequence", direction: "desc"},
+        limit: nil,
+        offset: 2,
+        select: ["id", "sequence"]
+      )
+
+      assert_equal [102, 101, 100, 99, 98, 97, 96], users.map { |user| user.fetch("sequence") }
+      assert_equal [["id", "sequence"]], users.map { |user| user.keys.sort }.uniq
+      assert_equal 105, adapter.count(model: "user", where: [{field: "name", value: "Matched"}])
+
+      explicit = adapter.find_many(model: "user", sort_by: {field: "sequence", direction: "desc"}, limit: 2)
+      assert_equal [1_002, 1_001], explicit.map { |user| user.fetch("sequence") }
+      assert_empty adapter.find_many(model: "user", limit: 0)
+    end
+  end
+
+  def test_adapter_contract_collection_joins_use_the_configured_default_limit
+    config = contract_config(advanced: {database: {default_find_many_limit: 3}})
+
+    with_contract_adapter(config) do |adapter|
+      user = adapter.create(model: "user", data: {id: "joined-user", name: "Joined User", email: "joined@example.com"}, force_allow_id: true)
+      5.times do |sequence|
+        adapter.create(
+          model: "session",
+          data: {id: "joined-session-#{sequence}", userId: user.fetch("id"), token: "joined-token-#{sequence}", expiresAt: Time.now + 3600},
+          force_allow_id: true
+        )
+      end
+
+      found = adapter.find_many(
+        model: "user",
+        where: [{field: "id", value: user.fetch("id")}],
+        limit: 10,
+        join: {session: true}
+      ).first
+
+      assert_equal ["joined-token-0", "joined-token-1", "joined-token-2"], found.fetch("session").map { |session| session.fetch("token") }
+    end
+  end
+
   def test_adapter_contract_json_array_fields_round_trip
     plugin = BetterAuth::Plugin.new(
       id: "typed-contract",

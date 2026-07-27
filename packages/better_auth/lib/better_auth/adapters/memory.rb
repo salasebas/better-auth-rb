@@ -57,6 +57,7 @@ module BetterAuth
       def find_many(model:, where: [], sort_by: nil, limit: nil, offset: nil, select: nil, join: nil)
         @lock.synchronize do
           model = model.to_s
+          limit = find_many_limit(limit)
           records = table_for(model).select { |record| matches_where?(record, where || []) }.map(&:dup)
           records = records.map { |record| apply_join(model, record, join) } if join
           records = sort_records(model, records, sort_by) if sort_by
@@ -108,7 +109,9 @@ module BetterAuth
       end
 
       def count(model:, where: nil)
-        find_many(model: model, where: where || []).length
+        @lock.synchronize do
+          table_for(model).count { |record| matches_where?(record, where || []) }
+        end
       end
 
       def consume_one(model:, where:)
