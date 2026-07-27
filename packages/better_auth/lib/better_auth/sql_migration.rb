@@ -485,10 +485,15 @@ module BetterAuth
 
     def matching_type?(actual_type, expected_type, dialect)
       normalized = actual_type.to_s.downcase.split("(").first.strip
-      type = expected_type.to_s
+      type = if expected_type.is_a?(Array)
+        BetterAuth::Schema::SQL.validate_literal_enum_type!(expected_type)
+        "string"
+      else
+        expected_type.to_s
+      end
       expected = case type
       when "string"
-        %w[text varchar character varying char uuid nvarchar uniqueidentifier]
+        ["text", "varchar", "character varying", "char", "uuid", "nvarchar", "uniqueidentifier"]
       when "number"
         %w[integer int int4 bigint smallint numeric real decimal float double]
       when "boolean"

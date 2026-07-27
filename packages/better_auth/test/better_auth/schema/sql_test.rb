@@ -574,6 +574,80 @@ class BetterAuthSchemaSQLTest < Minitest::Test
     assert_includes error.message, "Unsupported field type: object"
   end
 
+  def test_literal_enum_field_types_are_unconstrained_text_for_each_dialect
+    plugin = BetterAuth::Plugin.new(
+      id: "literal-enum",
+      schema: {
+        auditLog: {
+          model_name: "audit_logs",
+          fields: {
+            status: {type: ["draft", "published"], required: false}
+          }
+        }
+      }
+    )
+    config = BetterAuth::Configuration.new(secret: SECRET, database: :memory, plugins: [plugin])
+
+    {
+      postgres: '"status" text',
+      mysql: "`status` text",
+      sqlite: '"status" text',
+      mssql: "[status] text NULL"
+    }.each do |dialect, column|
+      sql = BetterAuth::Schema::SQL.create_statements(config, dialect: dialect).join("\n")
+
+      assert_includes sql, column, dialect.to_s
+      refute_match(/\b(?:check|enum)\b/i, sql, dialect.to_s)
+      refute_includes sql, "draft", dialect.to_s
+      refute_includes sql, "published", dialect.to_s
+    end
+  end
+
+  def test_empty_and_duplicate_literal_enum_definitions_are_supported
+    plugin = BetterAuth::Plugin.new(
+      id: "literal-enum-shapes",
+      schema: {
+        auditLog: {
+          model_name: "audit_logs",
+          fields: {
+            category: {type: [], required: false},
+            status: {type: ["", "active", "active"], required: false}
+          }
+        }
+      }
+    )
+    config = BetterAuth::Configuration.new(secret: SECRET, database: :memory, plugins: [plugin])
+
+    sql = BetterAuth::Schema::SQL.create_statements(config, dialect: :postgres).join("\n")
+
+    assert_includes sql, '"category" text'
+    assert_includes sql, '"status" text'
+    refute_includes sql, "active"
+  end
+
+  def test_literal_enum_field_type_rejects_non_string_members
+    plugin = BetterAuth::Plugin.new(
+      id: "invalid-literal-enum",
+      schema: {
+        auditLog: {
+          model_name: "audit_logs",
+          fields: {
+            status: {type: ["active", 1], required: false}
+          }
+        }
+      }
+    )
+    config = BetterAuth::Configuration.new(secret: SECRET, database: :memory, plugins: [plugin])
+
+    error = assert_raises(BetterAuth::Error) do
+      BetterAuth::Schema::SQL.create_statements(config, dialect: :postgres)
+    end
+
+    assert_includes error.message, "Invalid literal-enum field type"
+    assert_includes error.message, "index 1"
+    assert_includes error.message, "expected String, got Integer"
+  end
+
   def test_string_defaults_are_sql_escaped
     config = BetterAuth::Configuration.new(
       secret: SECRET,
@@ -616,8 +690,6 @@ class BetterAuthSchemaSQLTest < Minitest::Test
     assert_includes sqlite, '"active" integer DEFAULT 1'
     assert_includes sqlite, '"count" integer DEFAULT 42'
   end
-
-  # Enum array SQL types are not supported in Ruby schema generation yet; use string/json instead.
 
   def test_generate_id_option_does_not_change_sql_id_column_type
     serial_sql = BetterAuth::Schema::SQL.create_statements(
