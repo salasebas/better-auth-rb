@@ -32,21 +32,71 @@ class BetterAuthRateLimiterTest < Minitest::Test
     assert_equal 5, threads.map(&:value).count { |result| result[:allowed] }
   end
 
-  def test_memory_boundary_reset_sweep_and_cap_are_deterministic
-    now = 100.0
+  def test_memory_consume_resets_at_and_after_exact_expiry
+    base = 1_800_000_000.0
+    now = base
     clock = -> { now }
-    store = BetterAuth::RateLimiter::MemoryStore.new(clock: clock, max_entries: 2)
+    store = BetterAuth::RateLimiter::MemoryStore.new(clock: clock)
+    after_store = BetterAuth::RateLimiter::MemoryStore.new(clock: clock)
 
-    assert store.consume("boundary", window: 10, max: 1)[:allowed]
-    now = 110.0
-    refute store.consume("boundary", window: 10, max: 1)[:allowed]
-    now = 110.001
-    assert store.consume("boundary", window: 10, max: 1)[:allowed]
-    store.set("second", {count: 1}, ttl: 10)
-    store.set("third", {count: 1}, ttl: 10)
+    assert store.consume("just-before", window: 10, max: 1)[:allowed]
+    assert store.consume("exact", window: 10, max: 1)[:allowed]
+    assert after_store.consume("just-after", window: 10, max: 1)[:allowed]
+
+    now = base + 9.999
+    decision = store.consume("just-before", window: 10, max: 1)
+    refute decision[:allowed]
+    assert_equal 1, decision[:retry_after]
+
+    now = base + 10
+    assert store.consume("exact", window: 10, max: 1)[:allowed]
+    assert_equal(
+      {key: "exact", count: 1, last_request: now},
+      store.get("exact")
+    )
+
+    now = base + 10.001
+    assert after_store.consume("just-after", window: 10, max: 1)[:allowed]
+    assert_equal(
+      {key: "just-after", count: 1, last_request: now},
+      after_store.get("just-after")
+    )
+  end
+
+  def test_memory_get_deletes_an_entry_at_exact_expiry
+    base = 1_800_000_000.0
+    now = base
+    store = BetterAuth::RateLimiter::MemoryStore.new(clock: -> { now })
+
+    store.set("key", {count: 1}, ttl: 10)
+    assert_equal({count: 1}, store.get("key"))
+
+    now = base + 10
+    assert_nil store.get("key")
+    assert_equal 0, store.size
+  end
+
+  def test_memory_sweep_deletes_exact_expiry_and_preserves_entry_cap
+    base = 1_800_000_000.0
+    now = base
+    store = BetterAuth::RateLimiter::MemoryStore.new(clock: -> { now }, max_entries: 2)
+
+    store.set("expired", {count: 1}, ttl: 10)
+    assert store.consume("blocked", window: 20, max: 1)[:allowed]
+
+    now = base + 10
+    decision = store.consume("blocked", window: 20, max: 1)
+    refute decision[:allowed]
+    assert_equal 10, decision[:retry_after]
+    assert_equal 1, store.size
+
+    store.set("second", {count: 1}, ttl: 20)
+    store.set("third", {count: 1}, ttl: 20)
 
     assert_equal 2, store.size
-    assert_nil store.get("boundary")
+    assert_nil store.get("blocked")
+    assert_equal({count: 1}, store.get("second"))
+    assert_equal({count: 1}, store.get("third"))
   end
 
   def test_memory_default_cap_is_never_exceeded
@@ -55,6 +105,82 @@ class BetterAuthRateLimiterTest < Minitest::Test
 
     assert_equal 100_000, store.size
     assert_nil store.get("key-0")
+  end
+
+  def test_database_boundary_denies_at_expiry_and_resets_one_millisecond_after
+    base = 1_800_000_000.0
+    now = base
+    clock = -> { now }
+    rate_limit = {enabled: true, window: 10, max: 1, storage: "database"}
+    exact_auth = build_auth(rate_limit: rate_limit)
+    after_auth = build_auth(rate_limit: rate_limit)
+    exact_limiter = BetterAuth::RateLimiter.new(clock: clock)
+    after_limiter = BetterAuth::RateLimiter.new(clock: clock)
+    exact_path = "/database-exact"
+    after_path = "/database-after"
+
+    assert_nil exact_limiter.call(rack_request("GET", exact_path), exact_auth.context, exact_path)
+    assert_nil after_limiter.call(rack_request("GET", after_path), after_auth.context, after_path)
+
+    now = base + 10
+    status, headers, = exact_limiter.call(rack_request("GET", exact_path), exact_auth.context, exact_path)
+    assert_equal 429, status
+    assert_equal "0", headers.fetch("x-retry-after")
+
+    exact_row = exact_auth.context.internal_adapter.adapter.find_one(
+      model: "rateLimit",
+      where: [{field: "key", value: "127.0.0.1|#{exact_path}"}]
+    )
+    assert_equal 1, exact_row.fetch("count")
+    assert_equal 1_800_000_000_000, exact_row.fetch("lastRequest")
+
+    now = base + 10.001
+    after_adapter = after_auth.context.internal_adapter.adapter
+    cleanup_cutoff = (now * 1000).to_i - 60_000
+    assert after_adapter.create_if_absent(
+      model: "rateLimit",
+      data: {key: "cleanup-equality", count: 1, lastRequest: cleanup_cutoff},
+      conflict_field: "key"
+    )
+    assert after_adapter.create_if_absent(
+      model: "rateLimit",
+      data: {key: "cleanup-expired", count: 1, lastRequest: cleanup_cutoff - 1},
+      conflict_field: "key"
+    )
+
+    assert_nil after_limiter.call(rack_request("GET", after_path), after_auth.context, after_path)
+
+    after_row = after_adapter.find_one(
+      model: "rateLimit",
+      where: [{field: "key", value: "127.0.0.1|#{after_path}"}]
+    )
+    assert_equal 1, after_row.fetch("count")
+    assert_equal 1_800_000_010_001, after_row.fetch("lastRequest")
+    refute_nil after_adapter.find_one(model: "rateLimit", where: [{field: "key", value: "cleanup-equality"}])
+    assert_nil after_adapter.find_one(model: "rateLimit", where: [{field: "key", value: "cleanup-expired"}])
+  end
+
+  def test_database_boundary_denies_even_when_count_is_below_max
+    base = 1_800_000_000.0
+    now = base
+    clock = -> { now }
+    auth = build_auth(rate_limit: {enabled: true, window: 10, max: 2, storage: "database"})
+    limiter = BetterAuth::RateLimiter.new(clock: clock)
+    path = "/database-under-max"
+
+    assert_nil limiter.call(rack_request("GET", path), auth.context, path)
+
+    now = base + 10
+    status, headers, = limiter.call(rack_request("GET", path), auth.context, path)
+    assert_equal 429, status
+    assert_equal "0", headers.fetch("x-retry-after")
+
+    row = auth.context.internal_adapter.adapter.find_one(
+      model: "rateLimit",
+      where: [{field: "key", value: "127.0.0.1|#{path}"}]
+    )
+    assert_equal 1, row.fetch("count")
+    assert_equal 1_800_000_000_000, row.fetch("lastRequest")
   end
 
   def test_rate_limiter_returns_nil_when_disabled
