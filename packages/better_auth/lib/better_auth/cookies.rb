@@ -194,7 +194,7 @@ module BetterAuth
       Crypto.symmetric_decode_jwt(value, ctx.context.secret_config, "better-auth-account")
     end
 
-    def get_cookie_cache(request_or_cookie_header, secret:, strategy: "compact", version: nil, cookie_prefix: "better-auth", cookie_name: "session_data", is_secure: nil, cookie_full_name: nil)
+    def get_cookie_cache(request_or_cookie_header, secret:, strategy: "compact", version: nil, cookie_prefix: "better-auth", cookie_name: "session_data", is_secure: nil, cookie_full_name: nil, include_expiry: false)
       cookie_header = header_value(request_or_cookie_header)
       return nil if cookie_header.to_s.empty?
 
@@ -210,7 +210,7 @@ module BetterAuth
       raw = parsed[name] || chunked_value(parsed, name)
       return nil unless raw
 
-      payload = decode_cookie_cache(raw, secret, strategy: strategy)
+      payload = decode_cookie_cache(raw, secret, strategy: strategy, include_expiry: include_expiry)
       return nil unless payload && payload["session"] && payload["user"]
       return nil if embedded_session_expired?(payload["session"])
 
@@ -259,7 +259,7 @@ module BetterAuth
       end
     end
 
-    def decode_cookie_cache(value, secret, strategy:)
+    def decode_cookie_cache(value, secret, strategy:, include_expiry: false)
       case strategy.to_s
       when "jwt"
         Crypto.verify_jwt(value, secret)
@@ -271,7 +271,9 @@ module BetterAuth
 
         signed = payload.fetch("session").merge("expiresAt" => payload.fetch("expiresAt"))
         valid = Crypto.verify_hmac_signature(JSON.generate(signed), payload["signature"], secret, encoding: :base64url)
-        valid ? payload["session"] : nil
+        if valid
+          include_expiry ? signed : payload["session"]
+        end
       end
     rescue JSON::ParserError, KeyError, ArgumentError, JWT::DecodeError
       nil

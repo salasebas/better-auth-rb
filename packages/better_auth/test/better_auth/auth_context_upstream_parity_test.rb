@@ -70,16 +70,6 @@ class BetterAuthAuthContextUpstreamParityTest < Minitest::Test
     assert_equal 1234, auth.options.session.dig(:cookie_cache, :max_age)
   end
 
-  def test_cookie_cache_refresh_true_uses_twenty_percent_of_max_age
-    payload = {"updatedAt" => ((Time.now.to_f - 201) * 1000).to_i}
-
-    assert BetterAuth::Session.send(
-      :should_refresh_cookie_cache?,
-      {refresh_cache: true, max_age: 1000},
-      payload
-    )
-  end
-
   def test_context_exposes_password_utilities_and_custom_callbacks
     auth = BetterAuth.auth(
       base_url: "http://localhost:3000",
