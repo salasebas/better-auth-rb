@@ -133,7 +133,7 @@ module BetterAuth
         user = siwe_find_user(ctx, wallet_address, chain_id)
         user ||= siwe_create_user(ctx, config, wallet_address, chain_id, email, anonymous)
         siwe_ensure_wallet_and_account(ctx, user, wallet_address, chain_id)
-        session = ctx.context.internal_adapter.create_session(user["id"])
+        session = ctx.context.internal_adapter.create_session(user["id"], false, nil, false, ctx)
         session_data = {session: session, user: user}
         Cookies.set_session_cookie(ctx, session_data)
 
