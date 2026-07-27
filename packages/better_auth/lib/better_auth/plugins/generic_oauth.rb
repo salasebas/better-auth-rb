@@ -551,6 +551,7 @@ module BetterAuth
       else
         account = ctx.context.internal_adapter.create_account(account_info)
       end
+      Routes.update_social_user_info_on_link(ctx, link["user_id"], user_info) if existing_account || account
       Cookies.set_account_cookie(ctx, account) if account
     end
 
