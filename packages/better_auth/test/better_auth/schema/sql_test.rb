@@ -468,7 +468,7 @@ class BetterAuthSchemaSQLTest < Minitest::Test
 
   # Ruby CLI generates SQL only; upstream Prisma/Drizzle schema output is not ported here.
 
-  def test_omitted_required_on_plugin_fields_stays_nullable_in_ruby
+  def test_omitted_required_on_plugin_fields_defaults_to_not_null
     plugin = BetterAuth::Plugin.new(
       id: "required-default",
       schema: {
@@ -481,10 +481,11 @@ class BetterAuthSchemaSQLTest < Minitest::Test
       }
     )
     config = BetterAuth::Configuration.new(secret: SECRET, database: :memory, plugins: [plugin])
+    field = BetterAuth::Schema.auth_tables(config).fetch("auditLog").fetch(:fields).fetch("action")
     sql = BetterAuth::Schema::SQL.create_statements(config, dialect: :postgres).join("\n")
 
-    assert_includes sql, '"action" text'
-    refute_includes sql, '"action" text NOT NULL'
+    assert_equal true, field[:required]
+    assert_includes sql, '"action" text NOT NULL'
   end
 
   def test_explicit_required_true_adds_not_null
@@ -500,8 +501,10 @@ class BetterAuthSchemaSQLTest < Minitest::Test
       }
     )
     config = BetterAuth::Configuration.new(secret: SECRET, database: :memory, plugins: [plugin])
+    field = BetterAuth::Schema.auth_tables(config).fetch("auditLog").fetch(:fields).fetch("action")
     sql = BetterAuth::Schema::SQL.create_statements(config, dialect: :postgres).join("\n")
 
+    assert_equal true, field[:required]
     assert_includes sql, '"action" text NOT NULL'
   end
 
@@ -518,10 +521,47 @@ class BetterAuthSchemaSQLTest < Minitest::Test
       }
     )
     config = BetterAuth::Configuration.new(secret: SECRET, database: :memory, plugins: [plugin])
+    field = BetterAuth::Schema.auth_tables(config).fetch("auditLog").fetch(:fields).fetch("action")
     sql = BetterAuth::Schema::SQL.create_statements(config, dialect: :postgres).join("\n")
 
+    assert_equal false, field[:required]
     assert_includes sql, '"action" text'
     refute_includes sql, '"action" text NOT NULL'
+  end
+
+  def test_required_defaults_apply_to_pending_add_column_statements
+    plugin = BetterAuth::Plugin.new(
+      id: "pending-required-default",
+      schema: {
+        auditLog: {
+          model_name: "audit_logs",
+          fields: {
+            omittedRequired: {type: "string"},
+            explicitFalse: {type: "string", required: false},
+            explicitTrue: {type: "string", required: true}
+          }
+        }
+      }
+    )
+    config = BetterAuth::Configuration.new(secret: SECRET, database: :memory, plugins: [plugin])
+    tables = BetterAuth::Schema.migration_tables(config)
+    table = tables.fetch("audit_logs")
+    fields = table.fetch(:fields).slice("omitted_required", "explicit_false", "explicit_true")
+    plan = BetterAuth::MigrationPlan::Plan.new(
+      [],
+      [BetterAuth::MigrationPlan::FieldChange.new("auditLog", "audit_logs", fields, table, 1)],
+      [],
+      [],
+      :postgres,
+      tables
+    )
+
+    sql = BetterAuth::Schema::SQL.pending_statements(plan).join("\n")
+
+    assert_includes sql, 'ALTER TABLE "audit_logs" ADD COLUMN "omitted_required" text NOT NULL;'
+    assert_includes sql, 'ALTER TABLE "audit_logs" ADD COLUMN "explicit_false" text;'
+    refute_includes sql, 'ALTER TABLE "audit_logs" ADD COLUMN "explicit_false" text NOT NULL;'
+    assert_includes sql, 'ALTER TABLE "audit_logs" ADD COLUMN "explicit_true" text NOT NULL;'
   end
 
   def test_json_and_array_field_types_map_per_dialect

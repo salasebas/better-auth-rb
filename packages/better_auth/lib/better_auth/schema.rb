@@ -315,6 +315,7 @@ module BetterAuth
 
     private_class_method def self.normalize_field(value, key)
       data = symbolize_hash(value || {})
+      data[:required] = true unless data.key?(:required)
       data[:field_name] ||= physical_name(key)
       data[:references] = normalize_reference(data[:references]) if data[:references]
       data
