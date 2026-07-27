@@ -5,6 +5,30 @@ require_relative "../../test_helper"
 class OAuthProviderMetadataTest < Minitest::Test
   include OAuthProviderFlowHelpers
 
+  def test_omitted_scopes_default_to_upstream_oidc_scopes
+    auth = build_auth_without_scope_configuration
+    expected_scopes = %w[openid profile email offline_access]
+
+    assert_equal expected_scopes, auth.api.get_oauth_server_config[:scopes_supported]
+    assert_equal expected_scopes, auth.api.get_openid_config[:scopes_supported]
+  end
+
+  def test_explicit_scopes_replace_default_scopes
+    auth = build_auth(scopes: ["create:test"])
+
+    assert_equal ["create:test"], auth.api.get_oauth_server_config[:scopes_supported]
+    error = assert_raises(BetterAuth::APIError) { auth.api.get_openid_config }
+    assert_equal 404, error.status_code
+  end
+
+  def test_explicit_empty_scopes_replace_default_scopes
+    auth = build_auth(scopes: [])
+
+    assert_equal [], auth.api.get_oauth_server_config[:scopes_supported]
+    error = assert_raises(BetterAuth::APIError) { auth.api.get_openid_config }
+    assert_equal 404, error.status_code
+  end
+
   def test_authorization_server_metadata_matches_upstream_endpoints_and_cache_headers
     auth = build_auth(scopes: ["openid", "profile", "email"])
 

@@ -40,7 +40,7 @@ module BetterAuth
       config = {
         login_page: "/login",
         consent_page: "/oauth2/consent",
-        scopes: [],
+        scopes: %w[openid profile email offline_access],
         grant_types: [OAuthProtocol::AUTH_CODE_GRANT, OAuthProtocol::CLIENT_CREDENTIALS_GRANT, OAuthProtocol::REFRESH_GRANT],
         allow_dynamic_client_registration: false,
         allow_unauthenticated_client_registration: false,
