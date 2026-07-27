@@ -332,7 +332,7 @@ module BetterAuth
         body = normalize_hash(ctx.body)
         organization = organization_by_id(ctx, body[:organization_id] || session[:session]["activeOrganizationId"]) || organization_by_slug(ctx, body[:organization_slug])
         raise APIError.new("BAD_REQUEST", message: ORGANIZATION_ERROR_CODES.fetch("ORGANIZATION_NOT_FOUND")) unless organization
-        require_org_permission!(ctx, config, session, organization["id"], {invitation: ["create"]}, ORGANIZATION_ERROR_CODES.fetch("YOU_ARE_NOT_ALLOWED_TO_INVITE_USERS_TO_THIS_ORGANIZATION"))
+        member = require_org_permission!(ctx, config, session, organization["id"], {invitation: ["create"]}, ORGANIZATION_ERROR_CODES.fetch("YOU_ARE_NOT_ALLOWED_TO_INVITE_USERS_TO_THIS_ORGANIZATION"))
         email = body[:email].to_s.downcase
         raise APIError.new("BAD_REQUEST", message: BASE_ERROR_CODES.fetch("INVALID_EMAIL")) unless Routes::EMAIL_PATTERN.match?(email)
         role = parse_roles(body[:role] || "member")
@@ -341,43 +341,72 @@ module BetterAuth
             raise APIError.new("BAD_REQUEST", message: ORGANIZATION_ERROR_CODES.fetch("ROLE_NOT_FOUND"))
           end
         end
+        creator_role = config[:creator_role]
+        unless normalized_role_names(member["role"]).include?(creator_role)
+          if normalized_role_names(role).include?(creator_role)
+            raise APIError.new("FORBIDDEN", message: ORGANIZATION_ERROR_CODES.fetch("YOU_ARE_NOT_ALLOWED_TO_INVITE_USER_WITH_THIS_ROLE"))
+          end
+        end
         existing_member = find_member_by_email(ctx, organization["id"], email)
         raise APIError.new("CONFLICT", message: ORGANIZATION_ERROR_CODES.fetch("USER_IS_ALREADY_A_MEMBER_OF_THIS_ORGANIZATION")) if existing_member
         team_ids = organization_team_ids(body[:team_id] || body[:team_ids])
-        validate_invitation_team_ids!(ctx, config, organization["id"], body[:team_id] || body[:team_ids], team_ids)
-        invitation_data = {
-          organizationId: organization["id"],
-          email: email,
-          role: role,
-          status: "pending",
-          expiresAt: Time.now + config[:invitation_expires_in].to_i,
-          inviterId: session[:user]["id"],
-          teamId: team_ids.any? ? team_ids.join(",") : nil,
-          createdAt: Time.now
-        }.merge(additional_input(body, :organization_id, :organization_slug, :email, :role, :team_id, :team_ids))
-        merge_hook_data!(invitation_data, run_org_hook(config, :before_create_invitation, {invitation: invitation_data, inviter: session[:user], organization: organization_wire(ctx, organization)}, ctx))
-        invitation = organization_transaction(ctx) do |adapter|
+        invitation_outcome = organization_transaction(ctx) do |adapter|
           lock_organization_capacity!(adapter, organization)
           pending = adapter.find_many(model: "invitation", where: [{field: "organizationId", value: organization["id"]}, {field: "email", value: email}, {field: "status", value: "pending"}])
+
+          if pending.any? && org_truthy?(body[:resend])
+            existing = pending.first
+            expires_at = Time.now + config[:invitation_expires_in].to_i
+            updated = adapter.update(model: "invitation", where: [{field: "id", value: existing["id"]}], update: {expiresAt: expires_at})
+            next {invitation: updated || existing.merge("expiresAt" => expires_at), reused: true}
+          end
+
           if pending.any?
             if config[:cancel_pending_invitations_on_re_invite]
-              pending.each { |entry| adapter.update(model: "invitation", where: [{field: "id", value: entry["id"]}], update: {status: "canceled"}) }
+              adapter.update(model: "invitation", where: [{field: "id", value: pending.first["id"]}], update: {status: "canceled"})
             else
-              raise APIError.new("CONFLICT", message: ORGANIZATION_ERROR_CODES.fetch("USER_IS_ALREADY_INVITED_TO_THIS_ORGANIZATION"))
+              raise APIError.new("BAD_REQUEST", message: ORGANIZATION_ERROR_CODES.fetch("USER_IS_ALREADY_INVITED_TO_THIS_ORGANIZATION"))
             end
           end
           pending_count = adapter.count(model: "invitation", where: [{field: "organizationId", value: organization["id"]}, {field: "status", value: "pending"}])
           limit = config[:invitation_limit]
-          if limit && pending_count >= limit.to_i
+          if limit.respond_to?(:call)
+            limit = limit.call(
+              {
+                user: session[:user],
+                organization: organization_wire(ctx, organization),
+                member: member_wire(ctx, member)
+              },
+              ctx.context
+            )
+          end
+          if limit && pending_count >= limit
             raise APIError.new("FORBIDDEN", message: ORGANIZATION_ERROR_CODES.fetch("INVITATION_LIMIT_REACHED"))
           end
+          validate_invitation_team_ids!(ctx, config, organization["id"], body[:team_id] || body[:team_ids], team_ids)
           validate_stored_invitation_teams!(adapter, organization["id"], team_ids)
           ensure_team_member_capacity!(ctx, config, team_ids, adapter: adapter)
-          adapter.create(model: "invitation", data: invitation_data, force_allow_id: true)
+
+          invitation_data = {
+            organizationId: organization["id"],
+            email: email,
+            role: role,
+            status: "pending",
+            expiresAt: Time.now + config[:invitation_expires_in].to_i,
+            inviterId: session[:user]["id"],
+            teamId: team_ids.any? ? team_ids.join(",") : nil,
+            createdAt: Time.now
+          }.merge(additional_input(body, :organization_id, :organization_slug, :email, :role, :resend, :team_id, :team_ids))
+          merge_hook_data!(invitation_data, run_org_hook(config, :before_create_invitation, {invitation: invitation_data, inviter: session[:user], organization: organization_wire(ctx, organization)}, ctx))
+          {invitation: adapter.create(model: "invitation", data: invitation_data, force_allow_id: true), reused: false}
         end
+        invitation = invitation_outcome.fetch(:invitation)
         sender = config[:send_invitation_email]
-        sender.call({id: invitation["id"], role: role, email: email, organization: organization_wire(ctx, organization), invitation: invitation_wire(ctx, invitation), inviter: require_member!(ctx, session[:user]["id"], organization["id"])}, ctx.request) if sender.respond_to?(:call)
-        run_org_hook(config, :after_create_invitation, {invitation: invitation_wire(ctx, invitation), inviter: session[:user], organization: organization_wire(ctx, organization)}, ctx)
+        inviter = member_wire(ctx, member).merge("user" => session[:user])
+        sender.call({id: invitation["id"], role: invitation["role"], email: invitation["email"].to_s.downcase, organization: organization_wire(ctx, organization), invitation: invitation_wire(ctx, invitation), inviter: inviter}, ctx.request) if sender.respond_to?(:call)
+        unless invitation_outcome.fetch(:reused)
+          run_org_hook(config, :after_create_invitation, {invitation: invitation_wire(ctx, invitation), inviter: session[:user], organization: organization_wire(ctx, organization)}, ctx)
+        end
         ctx.json(invitation_wire(ctx, invitation))
       end
     end
