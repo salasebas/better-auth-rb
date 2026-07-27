@@ -83,6 +83,11 @@ module BetterAuth
 
     def admin_config(options)
       config = normalize_hash(options)
+      if options.is_a?(Hash)
+        roles_entry = options.find { |key, _value| normalize_key(key) == :roles }
+        # Upstream treats role names as runtime identifiers, so option-key normalization must not rewrite them.
+        config[:roles] = roles_entry.last if roles_entry
+      end
       config[:roles_configured] = config.key?(:roles)
       config[:default_role] ||= "user"
       config[:admin_roles] = Array(config[:admin_roles] || ["admin"]).flat_map { |role| role.to_s.split(",") }
@@ -784,15 +789,15 @@ module BetterAuth
       roles = (config[:roles] || admin_default_roles(config)).transform_keys(&:to_s)
       selected_roles = role_string.to_s.empty? ? [config[:default_role].to_s] : role_string.to_s.split(",")
       selected_roles.any? do |role|
-        admin_role_for(roles, role)&.authorize(permissions || {})&.fetch(:success, false)
+        roles[role.to_s]&.authorize(permissions || {})&.fetch(:success, false)
       end
     end
 
     def admin_user?(user, config)
       return true if Array(config[:admin_user_ids]).map(&:to_s).include?(user["id"].to_s)
 
-      admin_roles = config[:admin_roles].map { |role| role.to_s.downcase }
-      user["role"].to_s.split(",").any? { |role| admin_roles.include?(role.to_s.downcase) }
+      admin_roles = config[:admin_roles].map { |role| role.to_s.strip }
+      user["role"].to_s.split(",").any? { |role| admin_roles.include?(role) }
     end
 
     def admin_parse_roles(roles)
