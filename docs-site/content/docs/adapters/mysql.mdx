@@ -50,8 +50,57 @@ auth = BetterAuth.auth(
   `BetterAuth::Adapters::MySQL` implementation and adapter tests in this repository.
 </Callout>
 
+## Connection URL options
+
+The direct adapter preserves supported Ruby `mysql2` connection options from
+the URL query string. Use the `mysql2` gem's snake\_case option names; these
+differ from some Node mysql2 names.
+
+```text title="DATABASE_URL"
+mysql2://user:password@db.example/app?ssl_mode=verify_identity&sslca=%2Fetc%2Fssl%2Fmysql-ca.pem&connect_timeout=5&read_timeout=10&encoding=utf8mb4
+```
+
+Supported URL query keys are:
+
+| Type | Keys |
+| --- | --- |
+| String | `socket`, `encoding`, `flags`, `sslkey`, `sslcert`, `sslca`, `sslcapath`, `sslcipher`, `default_file`, `default_group`, `default_auth`, `init_command` |
+| Positive integer (seconds) | `connect_timeout`, `read_timeout`, `write_timeout` |
+| Boolean (`true` or `false`) | `reconnect`, `local_infile`, `secure_auth`, `get_server_public_key`, `sslverify` |
+| TLS mode | `ssl_mode`: `disabled`, `preferred`, `required`, `verify_ca`, or `verify_identity` |
+
+URL components and query values are percent-decoded. If a key is repeated,
+the last value wins. Unsupported query keys are ignored with a warning that
+includes the key, but never its value. Host, port, username, password, and
+database come from the URL authority/path and cannot be replaced by query
+parameters.
+
+For deliberate overrides, pass a documented Ruby `mysql2` option in
+`connection_options`. Explicit options win over the URL; the adapter always
+keeps `symbolize_keys: false` because its SQL record mapping requires string
+keys.
+
+```ruby title="config/auth.rb"
+BetterAuth::Adapters::MySQL.new(
+  options,
+  url: ENV.fetch("DATABASE_URL"),
+  connection_options: {
+    read_timeout: 15,
+    ssl_mode: :verify_identity,
+    sslca: ENV.fetch("MYSQL_SSL_CA")
+  }
+)
+```
+
+<Callout type="warn">
+  `ssl_mode=required` requires encryption but does not verify the certificate
+  authority or hostname. Prefer `verify_identity` for production; use
+  `verify_ca` only when hostname verification is intentionally unavailable.
+  `sslverify` is the legacy driver switch for older MySQL client libraries.
+</Callout>
+
 You may also pass an existing `Mysql2::Client` when your app owns connection
-management.
+management. An explicit client bypasses URL parsing and `connection_options`.
 
 ```ruby title="config/auth.rb"
 require "mysql2"
