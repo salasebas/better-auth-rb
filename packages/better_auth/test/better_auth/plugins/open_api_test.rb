@@ -413,6 +413,42 @@ class BetterAuthPluginsOpenAPITest < Minitest::Test
     end
   end
 
+  def test_admin_get_user_open_api_matches_upstream_generated_contract
+    auth = build_auth(
+      plugins: [
+        BetterAuth::Plugins.admin,
+        BetterAuth::Plugins.open_api
+      ]
+    )
+
+    schema = auth.api.generate_openapi_schema
+    path = schema.dig(:paths, "/admin/get-user")
+    operation = path.fetch(:get)
+
+    assert_equal [:get], path.keys
+    assert_equal "getUser", operation.fetch(:operationId)
+    assert_equal "Get an existing user", operation.fetch(:description)
+    assert_equal(
+      [
+        {
+          name: "id",
+          in: "query",
+          schema: {type: "string", description: "The id of the User"}
+        }
+      ],
+      operation.fetch(:parameters)
+    )
+    assert_equal(
+      {
+        type: "object",
+        properties: {
+          user: {"$ref": "#/components/schemas/User"}
+        }
+      },
+      json_schema(schema, "/admin/get-user", :get, "200")
+    )
+  end
+
   def test_organization_route_open_api_metadata_lives_on_endpoints
     plugin = BetterAuth::Plugins.organization(
       teams: {enabled: true},

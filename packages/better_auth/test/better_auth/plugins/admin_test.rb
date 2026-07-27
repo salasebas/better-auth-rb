@@ -560,6 +560,96 @@ class BetterAuthPluginsAdminTest < Minitest::Test
     assert_equal 400, self_ban.status_code
   end
 
+  def test_admin_get_user_http_uses_only_the_canonical_id_and_returns_a_raw_user
+    auth = build_auth
+    admin_cookie = sign_up_cookie(auth, email: "get-user-admin@example.com", name: "Admin")
+    target_cookie = sign_up_cookie(auth, email: "get-user-target@example.com", name: "Target")
+    admin = auth.api.get_session(headers: {"cookie" => admin_cookie}).fetch(:user)
+    target = auth.api.get_session(headers: {"cookie" => target_cookie}).fetch(:user)
+    auth.context.internal_adapter.update_user(admin.fetch("id"), role: "admin")
+
+    status, body = get_user_rack_response(
+      auth,
+      cookie: admin_cookie,
+      query: URI.encode_www_form(
+        id: target.fetch("id"),
+        userId: admin.fetch("id"),
+        email: admin.fetch("email"),
+        ignored: "value"
+      )
+    )
+
+    assert_equal 200, status
+    assert_equal target.fetch("id"), body.fetch("id")
+    assert_equal target.fetch("email"), body.fetch("email")
+    refute body.key?("user")
+  end
+
+  def test_admin_get_user_http_rejects_missing_and_non_string_ids_before_authorization
+    auth = build_auth
+    admin_cookie = sign_up_cookie(auth, email: "get-user-validation-admin@example.com")
+    user_cookie = sign_up_cookie(auth, email: "get-user-validation-user@example.com")
+    admin = auth.api.get_session(headers: {"cookie" => admin_cookie}).fetch(:user)
+    user = auth.api.get_session(headers: {"cookie" => user_cookie}).fetch(:user)
+    auth.context.internal_adapter.update_user(admin.fetch("id"), role: "admin")
+
+    invalid_requests = {
+      "missing id" => {cookie: admin_cookie, query: ""},
+      "email selector" => {cookie: admin_cookie, query: URI.encode_www_form(email: user.fetch("email"))},
+      "userId selector" => {cookie: admin_cookie, query: URI.encode_www_form(userId: user.fetch("id"))},
+      "array id" => {cookie: admin_cookie, query: "id[]=#{URI.encode_www_form_component(user.fetch("id"))}"},
+      "unauthenticated missing id" => {cookie: nil, query: ""},
+      "non-admin missing id" => {cookie: user_cookie, query: ""}
+    }
+
+    invalid_requests.each do |label, request|
+      status, body = get_user_rack_response(auth, **request)
+
+      assert_equal 400, status, label
+      assert_equal "VALIDATION_ERROR", body.fetch("code"), label
+    end
+
+    [nil, 123].each do |id|
+      error = assert_raises(BetterAuth::APIError) do
+        auth.api.get_user(headers: {"cookie" => admin_cookie}, query: {id: id})
+      end
+
+      assert_equal 400, error.status_code
+      assert_equal "VALIDATION_ERROR", error.code
+    end
+  end
+
+  def test_admin_get_user_http_accepts_string_ids_then_applies_authorization_and_lookup
+    auth = build_auth
+    admin_cookie = sign_up_cookie(auth, email: "get-user-lookup-admin@example.com")
+    user_cookie = sign_up_cookie(auth, email: "get-user-lookup-user@example.com")
+    admin = auth.api.get_session(headers: {"cookie" => admin_cookie}).fetch(:user)
+    user = auth.api.get_session(headers: {"cookie" => user_cookie}).fetch(:user)
+    auth.context.internal_adapter.update_user(admin.fetch("id"), role: "admin")
+
+    ["", "123", "null", "malformed/id"].each do |id|
+      status, body = get_user_rack_response(auth, cookie: admin_cookie, query: URI.encode_www_form(id: id))
+
+      assert_equal 404, status, id.inspect
+      assert_equal "USER_NOT_FOUND", body.fetch("code"), id.inspect
+    end
+
+    unauthenticated_status, unauthenticated_body = get_user_rack_response(
+      auth,
+      query: URI.encode_www_form(id: user.fetch("id"))
+    )
+    assert_equal 401, unauthenticated_status
+    assert_equal "UNAUTHORIZED", unauthenticated_body.fetch("code")
+
+    forbidden_status, forbidden_body = get_user_rack_response(
+      auth,
+      cookie: user_cookie,
+      query: URI.encode_www_form(id: admin.fetch("id"))
+    )
+    assert_equal 403, forbidden_status
+    assert_equal "YOU_ARE_NOT_ALLOWED_TO_GET_USER", forbidden_body.fetch("code")
+  end
+
   def test_admin_ban_hooks_cover_custom_message_expiry_and_social_callback
     auth = build_auth(
       admin_options: {banned_user_message: "Custom banned user message"},
@@ -744,5 +834,17 @@ class BetterAuthPluginsAdminTest < Minitest::Test
 
   def cookie_header(set_cookie)
     set_cookie.to_s.lines.map { |line| line.split(";").first }.join("; ")
+  end
+
+  def get_user_rack_response(auth, query:, cookie: nil)
+    status, _headers, body = auth.call(
+      BetterAuthTestHelpers.json_rack_env(
+        "GET",
+        "/api/auth/admin/get-user",
+        query: query,
+        cookie: cookie
+      )
+    )
+    [status, BetterAuthTestHelpers.json_response_body(body)]
   end
 end

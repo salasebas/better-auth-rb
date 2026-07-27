@@ -171,30 +171,47 @@ module BetterAuth
       Endpoint.new(
         path: "/admin/get-user",
         method: "GET",
+        query_schema: admin_get_user_query_schema,
         metadata: {
           openapi: {
             operationId: "getUser",
             description: "Get an existing user",
             parameters: [
-              {name: "id", in: "query", required: false, schema: {type: "string"}},
-              {name: "userId", in: "query", required: false, schema: {type: "string"}},
-              {name: "email", in: "query", required: false, schema: {type: "string"}}
+              {name: "id", in: "query", schema: {type: "string", description: "The id of the User"}}
             ],
             responses: {
-              "200" => OpenAPI.json_response("User", {type: "object", "$ref": "#/components/schemas/User"})
+              "200" => OpenAPI.json_response(
+                "User",
+                {type: "object", properties: {user: {"$ref": "#/components/schemas/User"}}}
+              )
             }
           }
         }
       ) do |ctx|
         admin_require_permission!(ctx, config, {user: ["get"]}, ADMIN_ERROR_CODES.fetch("YOU_ARE_NOT_ALLOWED_TO_GET_USER"))
-        query = normalize_hash(ctx.query)
-        user = if query[:id] || query[:user_id]
-          ctx.context.internal_adapter.find_user_by_id(query[:id] || query[:user_id])
-        elsif query[:email]
-          ctx.context.internal_adapter.find_user_by_email(query[:email])&.fetch(:user)
-        end
+        user = ctx.context.internal_adapter.find_user_by_id(ctx.query[:id])
         raise APIError.new("NOT_FOUND", code: "USER_NOT_FOUND", message: BASE_ERROR_CODES.fetch("USER_NOT_FOUND")) unless user
         ctx.json(Schema.parse_output(ctx.context.options, "user", user))
+      end
+    end
+
+    def admin_get_user_query_schema
+      lambda do |query|
+        data = query.is_a?(Hash) ? query : {}
+        id = if data.key?("id")
+          data["id"]
+        elsif data.key?(:id)
+          data[:id]
+        end
+        unless id.is_a?(String)
+          raise APIError.new(
+            "BAD_REQUEST",
+            code: "VALIDATION_ERROR",
+            message: BASE_ERROR_CODES.fetch("VALIDATION_ERROR")
+          )
+        end
+
+        {id: id}
       end
     end
 
