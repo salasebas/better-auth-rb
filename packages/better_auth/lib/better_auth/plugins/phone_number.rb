@@ -228,6 +228,11 @@ module BetterAuth
             phoneNumber: phone_number,
             phoneNumberVerified: true
           )
+          raise APIError.new("INTERNAL_SERVER_ERROR", message: BASE_ERROR_CODES["FAILED_TO_UPDATE_USER"]) unless updated
+
+          callback = config[:callback_on_verification]
+          callback.call({phone_number: phone_number, user: updated}, ctx) if callback.respond_to?(:call)
+
           next ctx.json({status: true, token: session[:session]["token"], user: Schema.parse_output(ctx.context.options, "user", updated)})
         end
 
