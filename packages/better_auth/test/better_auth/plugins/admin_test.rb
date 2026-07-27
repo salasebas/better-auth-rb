@@ -141,6 +141,43 @@ class BetterAuthPluginsAdminTest < Minitest::Test
     refute_includes without_alpha.fetch(:users).map { |user| user.fetch("id") }, alpha.fetch("id")
   end
 
+  def test_admin_list_users_returns_empty_result_when_listing_fails
+    auth = build_auth
+    admin_cookie = sign_up_cookie(auth, email: "list-failure-admin@example.com")
+    admin = auth.api.get_session(headers: {"cookie" => admin_cookie}).fetch(:user)
+    adapter = auth.context.internal_adapter
+    adapter.update_user(admin.fetch("id"), role: "admin")
+    count_called = false
+
+    result = adapter.stub(:list_users, ->(**_kwargs) { raise "list users failed" }) do
+      adapter.stub(:count_total_users, ->(**_kwargs) { count_called = true }) do
+        auth.api.list_users(headers: {"cookie" => admin_cookie}, query: {limit: 1, offset: 1})
+      end
+    end
+
+    assert_equal({users: [], total: 0}, result)
+    refute count_called
+  end
+
+  def test_admin_list_users_discards_fetched_users_when_counting_fails
+    auth = build_auth
+    admin_cookie = sign_up_cookie(auth, email: "count-failure-admin@example.com")
+    admin = auth.api.get_session(headers: {"cookie" => admin_cookie}).fetch(:user)
+    adapter = auth.context.internal_adapter
+    adapter.update_user(admin.fetch("id"), role: "admin")
+    listed_users = nil
+    list_users = adapter.method(:list_users)
+
+    result = adapter.stub(:list_users, ->(**kwargs) { listed_users = list_users.call(**kwargs) }) do
+      adapter.stub(:count_total_users, ->(**_kwargs) { raise "count users failed" }) do
+        auth.api.list_users(headers: {"cookie" => admin_cookie}, query: {limit: 1, offset: 0})
+      end
+    end
+
+    refute_empty listed_users
+    assert_equal({users: [], total: 0}, result)
+  end
+
   def test_admin_update_user_requires_set_role_permission_for_role_changes
     ac = BetterAuth::Plugins.create_access_control(user: ["update", "set-role"])
     auth = build_auth(

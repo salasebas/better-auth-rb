@@ -348,14 +348,18 @@ module BetterAuth
         sort_by = admin_user_sort(query)
         limit = query.key?(:limit) ? query[:limit].to_i : nil
         offset = query.key?(:offset) ? query[:offset].to_i : nil
-        users = ctx.context.internal_adapter.list_users(limit: limit, offset: offset, sort_by: sort_by, where: where)
-        total = ctx.context.internal_adapter.count_total_users(where: where)
-        ctx.json({
-          users: users.map { |user| Schema.parse_output(ctx.context.options, "user", user) },
-          total: total,
-          limit: limit,
-          offset: offset
-        })
+        begin
+          users = ctx.context.internal_adapter.list_users(limit: limit, offset: offset, sort_by: sort_by, where: where)
+          total = ctx.context.internal_adapter.count_total_users(where: where)
+          ctx.json({
+            users: users.map { |user| Schema.parse_output(ctx.context.options, "user", user) },
+            total: total,
+            limit: limit,
+            offset: offset
+          })
+        rescue
+          ctx.json({users: [], total: 0})
+        end
       end
     end
 
