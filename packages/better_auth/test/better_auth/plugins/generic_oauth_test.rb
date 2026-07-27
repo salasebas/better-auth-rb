@@ -580,6 +580,22 @@ class BetterAuthPluginsGenericOAuthTest < Minitest::Test
     assert_includes state_cookie, "Max-Age=0"
   end
 
+  def test_secondary_storage_defaults_oauth_state_to_verification_storage
+    storage = RecordingSecondaryStorage.new
+    auth = build_auth(database: nil, secondary_storage: storage)
+
+    status, headers, body = auth.api.sign_in_with_oauth2(
+      body: {providerId: "custom", callbackURL: "/dashboard"},
+      as_response: true
+    )
+    state = Rack::Utils.parse_query(URI.parse(JSON.parse(body.join).fetch("url")).query).fetch("state")
+
+    assert_equal 200, status
+    assert_includes headers.fetch("set-cookie"), "better-auth.state="
+    refute_includes headers.fetch("set-cookie"), "better-auth.oauth_state="
+    assert_includes storage.keys, "verification:#{state}"
+  end
+
   def test_internal_popup_authorization_start_uses_database_state_and_supplied_verifier
     auth = build_auth(provider_overrides: {pkce: true})
     ctx = endpoint_context(auth)
@@ -1629,6 +1645,28 @@ class BetterAuthPluginsGenericOAuthTest < Minitest::Test
   StubHTTPResponse = Struct.new(:body) do
     def is_a?(klass)
       klass == Net::HTTPSuccess || super
+    end
+  end
+
+  class RecordingSecondaryStorage
+    attr_reader :keys
+
+    def initialize
+      @data = {}
+      @keys = []
+    end
+
+    def get(key)
+      @data[key]
+    end
+
+    def set(key, value, _ttl = nil)
+      @keys << key
+      @data[key] = value
+    end
+
+    def delete(key)
+      @data.delete(key)
     end
   end
 
