@@ -36,7 +36,7 @@ module BetterAuth
 
       result = {session: session, user: user}
       result = refresh_session(ctx, result) if should_refresh?(ctx, session, disable_refresh)
-      Cookies.set_cookie_cache(ctx, result, false)
+      Cookies.set_cookie_cache(ctx, result, Cookies.dont_remember?(ctx))
       ctx.context.set_current_session(result) if ctx.context.respond_to?(:set_current_session)
       result
     end
