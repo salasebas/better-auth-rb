@@ -311,8 +311,8 @@ module BetterAuth
         "plugins/anonymous/anon.test.ts" => {
           owner: "better_auth/plugins/anonymous_test.rb",
           status: :covered,
-          evidence: {"better_auth/plugins/anonymous_test.rb" => "test_sign_in_email_otp_links_and_deletes_previous_anonymous_user"},
-          notes: "Anonymous creation, deletion, session linking, social, magic-link, and email-OTP linking are covered in anonymous_test; SIWE has its own equivalent plugin callback coverage"
+          evidence: {"better_auth/plugins/anonymous_test.rb" => "test_verify_email_auto_sign_in_links_and_cleans_previous_anonymous_user"},
+          notes: "Anonymous creation, deletion, session linking, social, magic-link, email-OTP, and verification auto-sign-in linking and cleanup are covered in anonymous_test; SIWE has its own equivalent plugin callback coverage"
         },
         "plugins/bearer/bearer.test.ts" => {
           owner: "better_auth/plugins/bearer_test.rb",
