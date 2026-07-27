@@ -12,7 +12,13 @@ module BetterAuth
         metadata: oauth_openapi_for(:token).merge(allowed_media_types: ["application/x-www-form-urlencoded", "application/json"])
       ) do |ctx|
         body = OAuthProtocol.request_body!(ctx.body)
-        client = OAuthProtocol.authenticate_client!(ctx, "oauthClient", store_client_secret: config[:store_client_secret], prefix: config[:prefix])
+        client = OAuthProtocol.authenticate_client!(
+          ctx,
+          "oauthClient",
+          store_client_secret: config[:store_client_secret],
+          prefix: config[:prefix],
+          migrate_legacy_hashed: config[:migrate_legacy_hashed_client_secrets]
+        )
         client_id = OAuthProtocol.stringify_keys(client)["clientId"]
         grant_type = body["grant_type"].to_s
         unless oauth_provider_allows_grant?(config, grant_type)

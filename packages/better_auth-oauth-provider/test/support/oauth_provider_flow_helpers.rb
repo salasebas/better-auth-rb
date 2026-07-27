@@ -14,6 +14,7 @@ module OAuthProviderFlowHelpers
     disable_jwt = opts[:disable_jwt_plugin] == true
     base_url = opts.delete(:base_url) || "http://localhost:3000"
     secret = opts.delete(:secret) || SECRET
+    secrets = opts.delete(:secrets)
     database = opts.delete(:database) || :memory
     secondary_storage = opts.delete(:secondary_storage)
     session = opts.delete(:session)
@@ -39,7 +40,7 @@ module OAuthProviderFlowHelpers
     end
     plugins << BetterAuth::Plugins.oauth_provider(oauth_options)
 
-    BetterAuth.auth(
+    auth_options = {
       base_url: base_url,
       secret: secret,
       database: database,
@@ -48,7 +49,9 @@ module OAuthProviderFlowHelpers
       hooks: hooks,
       email_and_password: {enabled: true},
       plugins: plugins
-    )
+    }
+    auth_options[:secrets] = secrets if secrets
+    BetterAuth.auth(auth_options)
   end
 
   def sign_up_cookie(auth, email: "oauth-provider@example.com", name: "OAuth Owner")

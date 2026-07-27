@@ -1619,7 +1619,7 @@
       "require_path": "better_auth/oauth_provider",
       "local_exists": true,
       "upstream_exists": true,
-      "current_local_lines": 1179,
+      "current_local_lines": 1188,
       "upstream_lines": 2152,
       "status": "thin"
     },

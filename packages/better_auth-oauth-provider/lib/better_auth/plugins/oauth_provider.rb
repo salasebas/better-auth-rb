@@ -37,6 +37,7 @@ module BetterAuth
 
     def oauth_provider(options = {})
       raw_options = normalize_hash(options)
+      disable_jwt_plugin = raw_options[:disable_jwt_plugin] == true
       config = {
         login_page: "/login",
         consent_page: "/oauth2/consent",
@@ -49,7 +50,8 @@ module BetterAuth
         signup: {},
         select_account: {},
         post_login: {},
-        store_client_secret: "hashed",
+        disable_jwt_plugin: false,
+        store_client_secret: disable_jwt_plugin ? "encrypted" : "hashed",
         store_tokens: "hashed",
         prefix: {},
         code_expires_in: 600,
@@ -61,8 +63,10 @@ module BetterAuth
         scope_expirations: {},
         store: OAuthProtocol.stores
       }.merge(raw_options)
+      config[:migrate_legacy_hashed_client_secrets] = disable_jwt_plugin && !raw_options.key?(:store_client_secret)
 
       oauth_provider_validate_config!(config, raw_options)
+      OAuthProtocol.scrub_client_secret_snapshots!(config[:store])
 
       trusted = raw_options[:cached_trusted_clients] || raw_options[:cachedTrustedClients]
       config[:cached_trusted_clients] = if trusted.is_a?(Set)
@@ -115,12 +119,35 @@ module BetterAuth
       end
 
       store_client_secret = config[:store_client_secret]
-      if config[:disable_jwt_plugin] && raw_options.key?(:store_client_secret) && oauth_hashed_secret_storage?(store_client_secret)
+      oauth_validate_client_secret_storage!(store_client_secret)
+      if config[:disable_jwt_plugin] && oauth_hashed_secret_storage?(store_client_secret)
         raise APIError.new("BAD_REQUEST", message: "unable to store hashed secrets because id tokens will be signed with client secret")
       end
       if !config[:disable_jwt_plugin] && oauth_encrypted_secret_storage?(store_client_secret)
         raise APIError.new("BAD_REQUEST", message: "encrypted secret storage is not recommended, please use hashed secret storage with the JWT plugin")
       end
+    end
+
+    def oauth_validate_client_secret_storage!(value)
+      if value.is_a?(String) || value.is_a?(Symbol)
+        return if %w[hashed encrypted plain].include?(value.to_s)
+
+        raise APIError.new("BAD_REQUEST", message: "store_client_secret must be hashed, encrypted, plain, or a custom storage configuration")
+      end
+
+      unless value.is_a?(Hash)
+        raise APIError.new("BAD_REQUEST", message: "store_client_secret must be hashed, encrypted, plain, or a custom storage configuration")
+      end
+
+      mode = normalize_hash(value)
+      hashing = mode.key?(:hash) || mode.key?(:verify)
+      encryption = mode.key?(:encrypt) || mode.key?(:decrypt)
+      valid_hashing = (mode.keys - [:hash, :verify]).empty? && mode[:hash].respond_to?(:call) && (!mode.key?(:verify) || mode[:verify].respond_to?(:call))
+      valid_encryption = (mode.keys - [:encrypt, :decrypt]).empty? && mode[:encrypt].respond_to?(:call) && mode[:decrypt].respond_to?(:call)
+      return if hashing && !encryption && valid_hashing
+      return if encryption && !hashing && valid_encryption
+
+      raise APIError.new("BAD_REQUEST", message: "store_client_secret must provide hash (and optional verify), or both encrypt and decrypt callbacks")
     end
 
     def oauth_hashed_secret_storage?(value)
@@ -244,7 +271,7 @@ module BetterAuth
         oauth2_introspect: oauth_introspect_endpoint(config),
         oauth2_revoke: oauth_revoke_endpoint(config),
         oauth2_user_info: oauth_userinfo_endpoint(config),
-        oauth2_end_session: oauth_end_session_endpoint
+        oauth2_end_session: oauth_end_session_endpoint(config)
       }
     end
 
