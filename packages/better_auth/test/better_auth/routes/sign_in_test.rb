@@ -246,6 +246,30 @@ class BetterAuthRoutesSignInTest < Minitest::Test
     assert_equal 200, status
   end
 
+  def test_request_aware_direct_sign_in_validates_cookie_origin
+    auth = build_auth
+    auth.api.sign_up_email(body: {email: "direct-cookie-sign-in@example.com", password: "password123", name: "CSRF"})
+    request = Rack::Request.new(
+      rack_env(
+        "POST",
+        "/api/auth/sign-in/email",
+        body: JSON.generate(email: "direct-cookie-sign-in@example.com", password: "password123"),
+        extra_headers: {
+          "HTTP_COOKIE" => "some_cookie=value",
+          "HTTP_ORIGIN" => "https://evil.example"
+        }
+      )
+    )
+
+    status, _headers, body = auth.api.sign_in_email(
+      request: request,
+      body: {email: "direct-cookie-sign-in@example.com", password: "password123"}
+    )
+
+    assert_equal 403, status
+    assert_equal "Invalid origin", JSON.parse(body.join).fetch("message")
+  end
+
   def test_sign_in_email_blocks_cross_site_form_navigation
     auth = build_auth
 
@@ -290,6 +314,27 @@ class BetterAuthRoutesSignInTest < Minitest::Test
 
     assert_equal 403, status
     assert_equal BetterAuth::BASE_ERROR_CODES["CROSS_SITE_NAVIGATION_LOGIN_BLOCKED"], data.fetch("message")
+  end
+
+  def test_sign_in_email_disable_csrf_check_bypasses_fetch_metadata
+    auth = build_auth(advanced: {disable_csrf_check: true, disable_origin_check: false})
+    auth.api.sign_up_email(body: {email: "csrf-disabled-sign-in@example.com", password: "password123", name: "CSRF"})
+
+    status, _headers, _body = auth.call(
+      rack_env(
+        "POST",
+        "/api/auth/sign-in/email",
+        body: JSON.generate(email: "csrf-disabled-sign-in@example.com", password: "password123"),
+        extra_headers: {
+          "HTTP_SEC_FETCH_SITE" => "cross-site",
+          "HTTP_SEC_FETCH_MODE" => "navigate",
+          "HTTP_SEC_FETCH_DEST" => "document",
+          "HTTP_ORIGIN" => "https://evil.example"
+        }
+      )
+    )
+
+    assert_equal 200, status
   end
 
   def test_sign_in_email_sends_verification_when_send_on_sign_in_is_enabled

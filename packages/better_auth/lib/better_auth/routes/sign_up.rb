@@ -11,6 +11,7 @@ module BetterAuth
       Endpoint.new(
         path: "/sign-up/email",
         method: "POST",
+        use: [Middleware::OriginCheck.form_csrf],
         body_schema: request_body_schema(
           required_strings: %w[name email],
           required_nonempty_strings: %w[password]
