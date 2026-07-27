@@ -190,7 +190,7 @@ module BetterAuth
           delete_user_by_token!(ctx, session, body["token"])
         elsif sender
           token = SecureRandom.hex(16)
-          expires_in = ctx.context.options.user.dig(:delete_user, :delete_token_expires_in) || 3600
+          expires_in = ctx.context.options.user.dig(:delete_user, :delete_token_expires_in) || 60 * 60 * 24
           callback_url = body["callbackURL"] || body["callbackUrl"] || body["callback_url"] || "/"
           url = "#{token_link_base_url}/delete-user/callback?token=#{URI.encode_www_form_component(token)}&callbackURL=#{URI.encode_www_form_component(callback_url)}"
           ctx.context.internal_adapter.create_verification_value(

@@ -700,7 +700,7 @@
       "ruby_source": "packages/better_auth/test/better_auth/routes/user_routes_test.rb",
       "local_exists": true,
       "upstream_exists": true,
-      "current_local_lines": 360,
+      "current_local_lines": 362,
       "upstream_lines": 594,
       "status": "thin"
     },
