@@ -78,6 +78,38 @@ class BetterAuthSSORubySAMLTest < Minitest::Test
     assert_equal "/dashboard?error=replay_detected&error_description=SAML+assertion+has+already+been+used", headers.fetch("location")
   end
 
+  def test_slo_with_signed_assertion_without_session_index_uses_name_id_without_fabricating_a_session_index
+    auth = build_auth(saml_options: {enable_single_logout: true})
+    register_provider(auth, saml_config: {singleLogoutService: "https://idp.example.com/slo"})
+
+    status, headers, _body = complete_saml(
+      auth,
+      signed_response(
+        email: "no-session-index@example.com",
+        assertion_id: "_assertion-without-session-index",
+        session_index: nil
+      )
+    )
+    saml_cookie = headers.fetch("set-cookie").lines.map { |line| line.split(";").first }.join("; ")
+
+    assert_equal 302, status
+    session_record = auth.context.internal_adapter.find_verification_value("saml-session:saml:no-session-index@example.com")
+    assert_nil JSON.parse(session_record.fetch("value"))["sessionIndex"]
+
+    status, headers, _body = auth.api.initiate_slo(
+      headers: {"cookie" => saml_cookie},
+      params: {providerId: "saml"},
+      body: {callbackURL: "/after-logout"},
+      as_response: true
+    )
+    logout_request = Base64.decode64(Rack::Utils.parse_query(URI.parse(headers.fetch("location")).query).fetch("SAMLRequest"))
+
+    assert_equal 302, status
+    assert_includes logout_request, "<saml:NameID>no-session-index@example.com</saml:NameID>"
+    refute_includes logout_request, "SessionIndex"
+    refute_includes logout_request, "_assertion-without-session-index"
+  end
+
   def test_algorithm_policy_rejects_deprecated_sha1_signatures
     auth = build_auth
     register_provider(auth)
@@ -127,17 +159,17 @@ class BetterAuthSSORubySAMLTest < Minitest::Test
 
   private
 
-  def build_auth
+  def build_auth(saml_options: {})
     BetterAuth.auth(
       base_url: "http://localhost:3000",
       secret: SECRET,
       database: :memory,
       email_and_password: {enabled: true},
-      plugins: [BetterAuth::Plugins.sso(BetterAuth::SSO::SAML.sso_options)]
+      plugins: [BetterAuth::Plugins.sso(saml: BetterAuth::SSO::SAML.sso_options.fetch(:saml).merge(saml_options))]
     )
   end
 
-  def register_provider(auth)
+  def register_provider(auth, saml_config: {})
     cookie = sign_up_cookie(auth)
     auth.api.register_sso_provider(
       headers: {"cookie" => cookie},
@@ -151,7 +183,7 @@ class BetterAuthSSORubySAMLTest < Minitest::Test
           audience: SP_ENTITY_ID,
           callbackUrl: ACS_URL,
           wantAssertionsSigned: true
-        }
+        }.merge(saml_config)
       }
     )
   end
@@ -204,6 +236,7 @@ class BetterAuthSSORubySAMLTest < Minitest::Test
     email: "signed@example.com",
     name: "Signed User",
     assertion_id: "_#{SecureRandom.hex(16)}",
+    session_index: assertion_id,
     issuer: IDP_ISSUER,
     audience: SP_ENTITY_ID,
     recipient: ACS_URL,
@@ -212,6 +245,7 @@ class BetterAuthSSORubySAMLTest < Minitest::Test
   )
     now = Time.now.utc.iso8601
     session_expires = (Time.now.utc + 3600).iso8601
+    session_index_attribute = session_index ? " SessionIndex=\"#{xml(session_index)}\"" : ""
     <<~XML
       <saml:Assertion xmlns:saml="urn:oasis:names:tc:SAML:2.0:assertion" xmlns:samlp="urn:oasis:names:tc:SAML:2.0:protocol" xmlns:ds="http://www.w3.org/2000/09/xmldsig#" xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" ID="#{xml(assertion_id)}" Version="2.0" IssueInstant="#{now}">
         <saml:Issuer>#{xml(issuer)}</saml:Issuer>
@@ -226,7 +260,7 @@ class BetterAuthSSORubySAMLTest < Minitest::Test
             <saml:Audience>#{xml(audience)}</saml:Audience>
           </saml:AudienceRestriction>
         </saml:Conditions>
-        <saml:AuthnStatement AuthnInstant="#{now}" SessionIndex="#{xml(assertion_id)}" SessionNotOnOrAfter="#{session_expires}">
+        <saml:AuthnStatement AuthnInstant="#{now}"#{session_index_attribute} SessionNotOnOrAfter="#{session_expires}">
           <saml:AuthnContext>
             <saml:AuthnContextClassRef>urn:oasis:names:tc:SAML:2.0:ac:classes:PasswordProtectedTransport</saml:AuthnContextClassRef>
           </saml:AuthnContext>

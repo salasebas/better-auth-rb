@@ -190,17 +190,17 @@ module BetterAuth
     end
 
     def sso_store_saml_session(ctx, provider, assertion, session)
-      name_id = assertion[:name_id] || assertion[:nameid] || assertion[:email]
-      session_index = assertion[:session_index] || assertion[:sessionindex] || assertion[:id]
-      return if name_id.to_s.empty? || session_index.to_s.empty?
+      name_id = assertion[:name_id] || assertion[:nameid]
+      session_index = assertion[:session_index] || assertion[:sessionindex]
+      return if name_id.to_s.empty?
 
       record = {
         providerId: provider.fetch("providerId"),
         sessionToken: session.fetch("token"),
         userId: session.fetch("userId"),
-        nameId: name_id.to_s,
-        sessionIndex: session_index.to_s
+        nameId: name_id.to_s
       }
+      record[:sessionIndex] = session_index.to_s unless session_index.to_s.empty?
       expires_at = session["expiresAt"] || Time.now + (SSO_DEFAULT_ASSERTION_TTL_MS / 1000.0)
       value = JSON.generate(record)
       session_identifier = "#{SSO_SAML_SESSION_KEY_PREFIX}#{provider.fetch("providerId")}:#{name_id}"
