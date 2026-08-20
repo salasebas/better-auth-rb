@@ -5,15 +5,24 @@ module BetterAuth
     module Session
       module_function
 
-      def header_config(ctx, config)
-        config.fetch(:configurations, [config]).find do |entry|
-          entry[:enable_session_for_api_keys] && BetterAuth::APIKey::Keys.from_headers(ctx, entry)
+      def find_key_and_config(ctx, config)
+        config.fetch(:configurations, [config]).each do |entry|
+          next unless entry[:enable_session_for_api_keys]
+
+          key = BetterAuth::APIKey::Keys.from_headers(ctx, entry)
+          return {key: key, config: entry} if BetterAuth::APIKey::Keys.truthy?(key)
         end
+        nil
+      end
+
+      def header_config(ctx, config)
+        find_key_and_config(ctx, config)&.fetch(:config)
       end
 
       def hook(ctx, config)
-        config = header_config(ctx, config) || config
-        key = BetterAuth::APIKey::Keys.from_headers(ctx, config)
+        result = find_key_and_config(ctx, config)
+        config = result.fetch(:config)
+        key = result.fetch(:key)
         unless key.is_a?(String)
           raise BetterAuth::APIError.new("BAD_REQUEST", message: BetterAuth::Plugins::API_KEY_ERROR_CODES["INVALID_API_KEY_GETTER_RETURN_TYPE"])
         end
@@ -46,17 +55,17 @@ module BetterAuth
           user: user,
           session: {
             "id" => record["id"],
-            "tokenFingerprint" => BetterAuth::Plugins.default_api_key_hasher(key),
+            "token" => key,
             "userId" => reference_id,
-            "userAgent" => ctx.headers["user-agent"],
-            "ipAddress" => BetterAuth::RequestIP.client_ip(ctx.request || ctx.headers, ctx.context.options),
+            "userAgent" => ctx.request ? BetterAuth::RequestIP.header_value(ctx.request, "user-agent") : nil,
+            "ipAddress" => ctx.request ? BetterAuth::RequestIP.client_ip(ctx.request, ctx.context.options) : nil,
             "createdAt" => Time.now,
             "updatedAt" => Time.now,
             "expiresAt" => record["expiresAt"] || (Time.now + ctx.context.options.session[:expires_in].to_i)
           }
         }
         ctx.context.set_current_session(session)
-        nil
+        session if ctx.path == "/get-session"
       end
     end
   end

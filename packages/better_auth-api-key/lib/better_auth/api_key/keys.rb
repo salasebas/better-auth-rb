@@ -44,11 +44,21 @@ module BetterAuth
         getter = config[:custom_api_key_getter]
         return getter.call(ctx) if getter.respond_to?(:call)
 
-        Array(config[:api_key_headers]).each do |header|
+        headers = config[:api_key_headers]
+        return ctx.headers[headers.to_s.downcase] unless headers.is_a?(Array)
+
+        headers.each do |header|
           value = ctx.headers[header.to_s.downcase]
-          return value if value
+          return value if truthy?(value)
         end
         nil
+      end
+
+      def truthy?(value)
+        return false if value.nil? || value == false || value == "" || value == 0
+        return false if value.respond_to?(:nan?) && value.nan?
+
+        true
       end
     end
   end
