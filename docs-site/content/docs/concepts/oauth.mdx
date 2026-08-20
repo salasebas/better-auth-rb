@@ -9,7 +9,7 @@ If your provider is not built in, use [`BetterAuth::Plugins.generic_oauth`](/doc
 
 ## Configuring Social Providers
 
-To enable a social provider, configure it with the Client ID and Client Secret issued by that provider. RubyAuth accepts idiomatic Ruby option names such as `client_id`, `client_secret`, and `redirect_uri`; camelCase provider options are normalized where the provider supports them.
+To enable a social provider, configure its Client ID. At factory/config construction, `client_secret` is optional except for TikTok and WeChat. Apple, Atlassian, Facebook, Figma, Google, Paybin, PayPal, and Salesforce require it when creating an authorization URL; Cognito does too when its explicit `require_client_secret` option is enabled. Other providers and OAuth flows may require a Client Secret during token exchange, so configure one whenever the provider issues it. RubyAuth accepts idiomatic Ruby option names such as `client_id`, `client_secret`, and `redirect_uri`; camelCase provider options are normalized where the provider supports them.
 
 ```ruby
 auth = BetterAuth.auth(

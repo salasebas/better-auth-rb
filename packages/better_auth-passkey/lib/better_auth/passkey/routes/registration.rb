@@ -10,8 +10,8 @@ module BetterAuth
         module_function
 
         def generate_passkey_registration_options_endpoint(config)
-          Endpoint.new(path: "/passkey/generate-register-options", method: "POST", metadata: Routes.openapi_for(:generate_registration_options)) do |ctx|
-            params = Utils.normalize_hash(ctx.query).merge(Utils.normalize_hash(ctx.body))
+          Endpoint.new(path: "/passkey/generate-register-options", method: "GET", metadata: Routes.openapi_for(:generate_registration_options)) do |ctx|
+            params = Utils.normalize_hash(ctx.query)
             Utils.validate_authenticator_attachment!(params[:authenticator_attachment])
             user = Utils.resolve_registration_user(config, ctx, params)
             relying_party = Utils.relying_party(config, ctx)

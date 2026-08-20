@@ -63,6 +63,33 @@ class BetterAuthHostTest < Minitest::Test
     end
   end
 
+  def test_classify_host_matches_upstream_ipv6_special_purpose_range_boundaries
+    special_cases = {
+      "2001:2::" => :benchmarking,
+      "2001:2::1" => :benchmarking,
+      "2001:2:0:ffff:ffff:ffff:ffff:ffff" => :benchmarking,
+      "64:ff9b:1::" => :reserved,
+      "64:ff9b:1::1" => :reserved,
+      "64:ff9b:1:ffff:ffff:ffff:ffff:ffff" => :reserved,
+      "3fff::" => :documentation,
+      "3fff::1" => :documentation,
+      "3fff:0fff:ffff:ffff:ffff:ffff:ffff:ffff" => :documentation,
+      "5f00::" => :reserved,
+      "5f00::1" => :reserved,
+      "5f00:ffff:ffff:ffff:ffff:ffff:ffff:ffff" => :reserved
+    }
+
+    special_cases.each do |host, kind|
+      assert_equal kind, BetterAuth::Host.classify_host(host)[:kind], host
+      refute BetterAuth::Host.public_routable_host?(host), host
+    end
+
+    ["2001:20::1", "2001:2:1::", "64:ff9b:2::", "3fff:1000::", "5f01::"].each do |host|
+      assert_equal :public, BetterAuth::Host.classify_host(host)[:kind], host
+      assert BetterAuth::Host.public_routable_host?(host), host
+    end
+  end
+
   def test_classify_host_handles_localhost_cloud_metadata_and_public_fqdns
     assert_equal :reserved, BetterAuth::Host.classify_host("  ")[:kind]
     assert_equal :localhost, BetterAuth::Host.classify_host("localhost")[:kind]

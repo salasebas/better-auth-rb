@@ -76,6 +76,24 @@ class BetterAuthRoutesSignUpTest < Minitest::Test
     assert_equal true, result[:user]["isAdmin"]
   end
 
+  def test_sign_up_email_keeps_omitted_required_additional_fields_optional_at_runtime
+    auth = build_auth(
+      user: {
+        additional_fields: {
+          plan: {type: "string"}
+        }
+      }
+    )
+
+    result = auth.api.sign_up_email(body: {
+      email: "omitted-required@example.com",
+      password: "password123",
+      name: "Omitted Required"
+    })
+
+    refute result[:user].key?("plan")
+  end
+
   def test_sign_up_email_rejects_input_false_additional_user_fields
     auth = build_auth(
       user: {

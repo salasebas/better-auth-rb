@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require "rack/utils"
+
 module BetterAuth
   module Middleware
     class OriginCheck
@@ -87,8 +89,14 @@ module BetterAuth
           "errorCallbackURL" => "errorCallbackURL",
           "newUserCallbackURL" => "newUserCallbackURL"
         }.each do |key, label|
-          value = fetch_data(endpoint_context.body, key) || fetch_data(endpoint_context.query, key)
-          next if value.nil? || value == ""
+          value = fetch_data(endpoint_context.body, key)
+          value = fetch_query_data(endpoint_context, key) if value.nil? || value == false || (value.is_a?(Numeric) && value.zero?)
+          next if value.nil? || value == "" || value == false
+          next if value.is_a?(Numeric) && value.zero?
+
+          unless value.is_a?(String)
+            raise APIError.new("BAD_REQUEST", message: "Invalid #{label}: expected a string")
+          end
 
           unless endpoint_context.context.trusted_origin?(value, allow_relative_paths: label != "origin")
             log(endpoint_context.context, :error, "Invalid #{label}: #{value}")
@@ -132,6 +140,16 @@ module BetterAuth
         return unless data.is_a?(Hash)
 
         data[key] || data[key.to_sym]
+      end
+
+      def fetch_query_data(endpoint_context, key)
+        value = fetch_data(endpoint_context.query, key)
+        return value unless key == "callbackURL" && endpoint_context.request
+
+        # Rack's nested parser keeps only the last plain duplicate, while
+        # upstream exposes duplicates as an array.
+        raw_value = Rack::Utils.parse_query(endpoint_context.request.query_string)[key]
+        raw_value.is_a?(Array) ? raw_value : value
       end
 
       def log(context, level, message)

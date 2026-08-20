@@ -4,7 +4,7 @@ module BetterAuth
   module SocialProviders
     module_function
 
-    def railway(client_id:, client_secret:, scopes: ["openid", "email", "profile"], **options)
+    def railway(client_id:, client_secret: nil, scopes: ["openid", "email", "profile"], **options)
       primary_client_id = Base.primary_client_id(client_id)
       credentials = Base64.strict_encode64("#{primary_client_id}:#{client_secret}")
       token_endpoint = options[:token_endpoint] || options[:tokenEndpoint] || "https://backboard.railway.com/oauth/token"

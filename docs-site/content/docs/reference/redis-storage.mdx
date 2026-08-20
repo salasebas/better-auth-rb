@@ -60,7 +60,7 @@ storage = BetterAuth::RedisStorage.new(
 
 ### `client`
 
-The Redis client must respond to `get`, `set` (including `nx:` and optional `ex:` keyword options), `setex`, `del`, `eval`, and `scan`. It should also respond to `keys` only when `scan_count: nil` is configured, and to `incr` when `atomic_clear: true` is enabled.
+The Redis client must respond to `get`, `set` (including `nx:` and optional `ex:` keyword options), `setex`, `del`, `eval`, and `scan`. It should also respond to `keys` only when `scan_count: nil` is configured. Atomic clear installs and rotates its generation marker with single-key Lua scripts through `eval`; it does not require `incr`.
 
 The storage exposes `get_and_delete` (`getAndDelete`) for atomic single-use
 consumption. It prefers Redis `GETDEL` and falls back to Lua for Redis versions
@@ -104,7 +104,7 @@ storage = BetterAuth::RedisStorage.new(
 )
 ```
 
-When enabled, data keys are stored under a generation prefix such as `better-auth:v1:<key>`. Calling `clear` atomically increments the generation key so new reads and writes immediately move to the next generation. The previous generation is then deleted best-effort.
+When enabled, data keys are stored under an opaque, 256-bit generation prefix such as `better-auth:v4f7c...:<key>`. A single-key Lua script atomically installs a fresh generation when the marker is missing or malformed, so concurrent processes converge on one marker instead of falling back to an older namespace. Calling `clear` atomically replaces the marker with a fresh token, moving new reads and writes to the new generation before best-effort cleanup of the previous generation. Positive decimal generation markers written by earlier releases remain valid, so existing versioned data stays readable; the next `clear` rotates a legacy marker to an opaque token without using `INCR`. Redis errors before marker replacement leave the current generation unchanged. If replacement commits but its reply is lost, or if physical cleanup later fails, the error propagates while the advanced marker keeps old keys logically hidden. This boundary assumes Redis preserves the committed marker and does not cover restoring an older Redis snapshot or an equivalent storage rollback. In Redis Cluster, each generation script touches only the marker key, but scanning and physical deletion retain the adapter's node-coverage and hash-slot constraints.
 
 ## When to Use It
 

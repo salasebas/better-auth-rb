@@ -82,6 +82,68 @@ class BetterAuthPostgresAdapterTest < Minitest::Test
     connection&.close
   end
 
+  def test_postgres_phone_number_disassociation_releases_unique_value_for_reclaim
+    require "pg"
+
+    sent = []
+    connection = PG.connect(ENV.fetch("BETTER_AUTH_POSTGRES_URL", "postgres://user:password@localhost:5432/better_auth"))
+    auth = BetterAuth.auth(
+      base_url: "http://localhost:3000",
+      secret: SECRET,
+      database: ->(options) { BetterAuth::Adapters::Postgres.new(options, connection: connection) },
+      email_and_password: {enabled: true},
+      session: {cookie_cache: {enabled: false}},
+      plugins: [
+        BetterAuth::Plugins.phone_number(send_otp: ->(data, _ctx = nil) { sent << data })
+      ]
+    )
+    reset_schema(connection)
+    create_schema(connection, auth.context.options)
+    phone_number = "+15551234569"
+
+    _status, original_headers, _body = auth.api.sign_up_email(
+      body: {email: "postgres-phone-owner@example.com", password: "password123", name: "Phone Owner"},
+      as_response: true
+    )
+    original_cookie = cookie_header(original_headers.fetch("set-cookie"))
+    original_user_id = auth.api.get_session(headers: {"cookie" => original_cookie})[:user]["id"]
+    auth.api.send_phone_number_otp(body: {phoneNumber: phone_number})
+    auth.api.verify_phone_number(
+      headers: {"cookie" => original_cookie},
+      body: {phoneNumber: phone_number, code: sent.last[:code], updatePhoneNumber: true}
+    )
+
+    auth.api.update_user(headers: {"cookie" => original_cookie}, body: {phoneNumber: nil})
+    released = connection.exec_params(
+      %(SELECT phone_number, phone_number_verified FROM "users" WHERE id = $1),
+      [original_user_id]
+    ).first
+    assert_nil released.fetch("phone_number")
+    assert_equal "f", released.fetch("phone_number_verified")
+
+    _status, reclaimer_headers, _body = auth.api.sign_up_email(
+      body: {email: "postgres-phone-reclaimer@example.com", password: "password123", name: "Phone Reclaimer"},
+      as_response: true
+    )
+    reclaimer_cookie = cookie_header(reclaimer_headers.fetch("set-cookie"))
+    auth.api.send_phone_number_otp(body: {phoneNumber: phone_number})
+    reclaimed = auth.api.verify_phone_number(
+      headers: {"cookie" => reclaimer_cookie},
+      body: {phoneNumber: phone_number, code: sent.last[:code], updatePhoneNumber: true}
+    )
+
+    assert_equal phone_number, reclaimed[:user]["phoneNumber"]
+    assert_equal true, reclaimed[:user]["phoneNumberVerified"]
+    assert_equal phone_number, direct_postgres_value(connection, %(SELECT phone_number FROM "users" WHERE id = $1), [reclaimed[:user]["id"]])
+    assert_nil direct_postgres_value(connection, %(SELECT phone_number FROM "users" WHERE id = $1), [original_user_id])
+  rescue LoadError
+    skip "pg gem is not installed"
+  rescue PG::ConnectionBad
+    skip "PostgreSQL test service is not available"
+  ensure
+    connection&.close
+  end
+
   def test_postgres_reservation_loser_keeps_outer_transaction_usable
     require "pg"
 

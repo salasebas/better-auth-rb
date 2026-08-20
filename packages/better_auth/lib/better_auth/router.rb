@@ -374,9 +374,7 @@ module BetterAuth
     def server_only?(endpoint)
       endpoint.metadata[:server_only] ||
         endpoint.metadata[:SERVER_ONLY] ||
-        endpoint.metadata["SERVER_ONLY"] ||
-        endpoint.metadata[:scope].to_s == "server" ||
-        endpoint.metadata["scope"].to_s == "server"
+        endpoint.metadata["SERVER_ONLY"]
     end
 
     def error_response(error, headers: {})
