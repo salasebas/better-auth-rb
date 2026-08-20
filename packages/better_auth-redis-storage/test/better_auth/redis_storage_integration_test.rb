@@ -12,6 +12,7 @@ class RedisStorageIntegrationTest < Minitest::Test
     skip "set REDIS_INTEGRATION=1 to run real Redis integration" unless ENV["REDIS_INTEGRATION"] == "1"
 
     redis_url = ENV["REDIS_URL"] || "redis://localhost:6379/15"
+    @redis_url = redis_url
     require "redis"
     @client = Redis.new(url: redis_url)
     @client.ping
@@ -339,6 +340,106 @@ class RedisStorageIntegrationTest < Minitest::Test
     storage&.clear
   end
 
+  def test_atomic_clear_repairs_missing_and_corrupt_markers_without_resurrection
+    [:missing, "corrupt"].each do |damaged_marker|
+      storage = BetterAuth::RedisStorage.new(
+        client: @client,
+        key_prefix: "#{@prefix_root}:repair-#{damaged_marker}:",
+        atomic_clear: true
+      )
+      marker_key = "#{storage.key_prefix}__generation__"
+      storage.set("session-token", "live-session")
+      revoked_generation = @client.get(marker_key)
+      storage.clear
+      cleared_generation = @client.get(marker_key)
+      @client.set("#{storage.key_prefix}v#{revoked_generation}:session-token", "late-session")
+      @client.set("#{storage.key_prefix}v#{revoked_generation}:verification:code", "late-verification")
+      if damaged_marker == :missing
+        @client.del(marker_key)
+      else
+        @client.set(marker_key, damaged_marker)
+      end
+
+      assert_nil storage.get("session-token")
+      assert_nil storage.get("verification:code")
+      repaired_generation = @client.get(marker_key)
+      assert_match(/\A[0-9a-f]{64}\z/, repaired_generation)
+      refute_includes [revoked_generation, cleared_generation], repaired_generation
+    end
+  end
+
+  def test_atomic_clear_preserves_legacy_numeric_generation_and_rotates_without_overflow
+    storage = BetterAuth::RedisStorage.new(
+      client: @client,
+      key_prefix: "#{@prefix_root}:legacy-generation:",
+      atomic_clear: true
+    )
+    marker_key = "#{storage.key_prefix}__generation__"
+    maximum = "9223372036854775807"
+    @client.set(marker_key, maximum)
+    @client.set("#{storage.key_prefix}v#{maximum}:session-token", "legacy-session")
+
+    assert_equal "legacy-session", storage.get("session-token")
+    storage.clear
+
+    assert_match(/\A[0-9a-f]{64}\z/, @client.get(marker_key))
+    assert_nil storage.get("session-token")
+  end
+
+  def test_atomic_clear_concurrent_repair_and_clear_serialize_across_clients
+    first_client = Redis.new(url: @redis_url)
+    second_client = Redis.new(url: @redis_url)
+    prefix = "#{@prefix_root}:concurrent-generation:"
+    marker_key = "#{prefix}__generation__"
+    first_storage = BetterAuth::RedisStorage.new(client: first_client, key_prefix: prefix, atomic_clear: true)
+    second_storage = BetterAuth::RedisStorage.new(client: second_client, key_prefix: prefix, atomic_clear: true)
+    first_client.del(marker_key)
+    ready = Queue.new
+    start = Queue.new
+    repair_threads = [[first_storage, first_client], [second_storage, second_client]].map do |storage, client|
+      Thread.new do
+        ready << true
+        start.pop
+        [storage.get("session-token"), client.get(marker_key)]
+      end
+    end
+    2.times { ready.pop }
+    2.times { start << true }
+    repair_results = repair_threads.map(&:value)
+    repaired_generations = repair_results.map(&:last)
+
+    assert_equal [nil, nil], repair_results.map(&:first)
+    assert_equal 1, repaired_generations.uniq.length
+    initial_generation = repaired_generations.first
+    assert_match(/\A[0-9a-f]{64}\z/, initial_generation)
+
+    first_storage.set("session-token", "live-session")
+    committed = Queue.new
+    release = Queue.new
+    blocking_client = BlockingAfterRotationRedisClient.new(first_client, committed: committed, release: release)
+    blocking_storage = BetterAuth::RedisStorage.new(client: blocking_client, key_prefix: prefix, atomic_clear: true)
+    first_clear = Thread.new { blocking_storage.clear }
+    middle_generation = committed.pop
+    begin
+      second_storage.clear
+    ensure
+      release << true
+    end
+    first_clear.value
+    final_generation = second_client.get(marker_key)
+
+    assert_equal 3, [initial_generation, middle_generation, final_generation].uniq.length
+    first_client.set("#{prefix}v#{initial_generation}:session-token", "late-session")
+    second_client.set("#{prefix}v#{middle_generation}:verification:code", "late-verification")
+    assert_nil first_storage.get("session-token")
+    assert_nil second_storage.get("verification:code")
+  ensure
+    release << true if defined?(release) && release && defined?(first_clear) && first_clear&.alive?
+    first_clear&.join
+    first_client&.close
+    second_client&.close
+  end
+
   def test_real_redis_hashed_verification_identifier_does_not_expose_raw_identifier
     storage = isolated_storage("hashed-verification")
     auth = BetterAuth.auth(
@@ -459,5 +560,32 @@ class RedisStorageIntegrationTest < Minitest::Test
       "rack.input" => StringIO.new(""),
       "CONTENT_LENGTH" => "0"
     }
+  end
+
+  class BlockingAfterRotationRedisClient
+    def initialize(client, committed:, release:)
+      @client = client
+      @committed = committed
+      @release = release
+      @blocked = false
+    end
+
+    def eval(script, keys: nil, argv: nil, **)
+      result = @client.eval(script, keys: keys, argv: argv)
+      if script.include?("better-auth:rotate-generation") && !@blocked
+        @blocked = true
+        @committed << @client.get(keys.fetch(0))
+        @release.pop
+      end
+      result
+    end
+
+    def method_missing(name, ...)
+      @client.public_send(name, ...)
+    end
+
+    def respond_to_missing?(name, include_private = false)
+      @client.respond_to?(name, include_private) || super
+    end
   end
 end
