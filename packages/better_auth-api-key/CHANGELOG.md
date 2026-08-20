@@ -11,6 +11,19 @@
 - Added a checked upstream test inventory for this plugin's pinned reference
   files.
 
+## [0.11.1](https://github.com/salasebas/better-auth-rb/compare/better_auth-api-key/v0.11.0...better_auth-api-key/v0.11.1) (2026-08-20)
+
+
+### Bug Fixes
+
+* **api-key:** align secondary storage with v1.7.1 ([#119](https://github.com/salasebas/better-auth-rb/issues/119)) ([f8721ce](https://github.com/salasebas/better-auth-rb/commit/f8721cec3bd9ed55cb68d10659f31c29173d5f68))
+* **api-key:** list SQL keys by reference ID ([#114](https://github.com/salasebas/better-auth-rb/issues/114)) ([6aea8a4](https://github.com/salasebas/better-auth-rb/commit/6aea8a4e5d64a5449da0b0c3dfd5720784b9e199))
+* **api-key:** mark internal endpoints server-only ([#110](https://github.com/salasebas/better-auth-rb/issues/110)) ([601f993](https://github.com/salasebas/better-auth-rb/commit/601f993de69e015641eb72afe83ecc42cc9a2140))
+* **api-key:** match v1.7.1 cleanup semantics ([#112](https://github.com/salasebas/better-auth-rb/issues/112)) ([ae0e975](https://github.com/salasebas/better-auth-rb/commit/ae0e975c97fbe424aec0d74906bdf7126580b9ac))
+* **api-key:** match v1.7.1 configuration and schema ([#115](https://github.com/salasebas/better-auth-rb/issues/115)) ([6d4b23b](https://github.com/salasebas/better-auth-rb/commit/6d4b23b81712c0e9bbf78778688732925772b5fe))
+* **api-key:** match v1.7.1 creation semantics ([#109](https://github.com/salasebas/better-auth-rb/issues/109)) ([8590c11](https://github.com/salasebas/better-auth-rb/commit/8590c11ea755165922c0604702f9b07b71bd5759))
+* **api-key:** match v1.7.1 session semantics ([#111](https://github.com/salasebas/better-auth-rb/issues/111)) ([aad5e14](https://github.com/salasebas/better-auth-rb/commit/aad5e147e4987a1c305c3d7bd25aa9e3149c8951))
+
 ## [0.11.0](https://github.com/salasebas/better-auth-rb/compare/better_auth-api-key-v0.10.0...better_auth-api-key/v0.11.0) (2026-07-23)
 
 

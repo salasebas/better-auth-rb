@@ -6,6 +6,13 @@
   handling with regression coverage for supported adapters.
 - Added a checked upstream test inventory for the SCIM plugin surface.
 
+## [0.11.1](https://github.com/salasebas/better-auth-rb/compare/better_auth-scim/v0.11.0...better_auth-scim/v0.11.1) (2026-08-20)
+
+
+### Bug Fixes
+
+* **scim:** persist canonical deactivation reason ([#81](https://github.com/salasebas/better-auth-rb/issues/81)) ([199f92a](https://github.com/salasebas/better-auth-rb/commit/199f92a94710d915d7682ad4c1e51e2d9356caae))
+
 ## [0.11.0](https://github.com/salasebas/better-auth-rb/compare/better_auth-scim-v0.10.0...better_auth-scim/v0.11.0) (2026-07-23)
 
 
