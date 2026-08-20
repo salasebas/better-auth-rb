@@ -588,7 +588,7 @@ class BetterAuthRoutesUserTest < Minitest::Test
     assert_equal "BAD_REQUEST", error.code
     assert_equal [[:before, "abort-delete@example.com"]], calls
     assert auth.context.internal_adapter.find_user_by_id(user_id)
-    assert auth.api.get_session(headers: {"cookie" => cookie})
+    assert_nil auth.api.get_session(headers: {"cookie" => cookie})
   end
 
   def test_delete_user_deletes_all_secondary_storage_sessions

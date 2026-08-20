@@ -7,6 +7,24 @@ require_relative "../../test_helper"
 class BetterAuthPluginsAnonymousTest < Minitest::Test
   SECRET = "phase-eight-secret-with-enough-entropy-123"
 
+  MemoryStorage = Struct.new(:store) do
+    def initialize
+      super({})
+    end
+
+    def set(key, value, _ttl = nil)
+      store[key] = value
+    end
+
+    def get(key)
+      store[key]
+    end
+
+    def delete(key)
+      store.delete(key)
+    end
+  end
+
   def test_anonymous_sign_in_creates_session_and_anonymous_user
     auth = build_auth(plugins: [BetterAuth::Plugins.anonymous])
 
@@ -105,18 +123,68 @@ class BetterAuthPluginsAnonymousTest < Minitest::Test
   end
 
   def test_delete_anonymous_user_removes_user_session_and_cookie
-    auth = build_auth(plugins: [BetterAuth::Plugins.anonymous])
+    storage = MemoryStorage.new
+    auth = build_auth(secondary_storage: storage, plugins: [BetterAuth::Plugins.anonymous])
     _status, headers, _body = auth.api.sign_in_anonymous(as_response: true)
     cookie = cookie_header(headers.fetch("set-cookie"))
-    user_id = auth.api.get_session(headers: {"cookie" => cookie})[:user]["id"]
+    session = auth.api.get_session(headers: {"cookie" => cookie})
+    user_id = session[:user]["id"]
+    token = session[:session]["token"]
+
+    assert storage.get(token)
+    assert storage.get("active-sessions-#{user_id}")
 
     status, response_headers, body = auth.api.delete_anonymous_user(headers: {"cookie" => cookie}, as_response: true)
 
     assert_equal 200, status
     assert_equal({"success" => true}, JSON.parse(body.join))
     assert_nil auth.context.internal_adapter.find_user_by_id(user_id)
+    assert_nil storage.get(token)
+    assert_nil storage.get("active-sessions-#{user_id}")
     assert_nil auth.api.get_session(headers: {"cookie" => cookie})
     assert_includes response_headers.fetch("set-cookie"), "better-auth.session_token="
+  end
+
+  def test_delete_anonymous_user_reports_session_cleanup_failure_when_logging_fails
+    storage = MemoryStorage.new
+    log_entries = []
+    logger = lambda do |level, message|
+      log_entries << [level, message]
+      raise "logger unavailable"
+    end
+    auth = build_auth(secondary_storage: storage, logger: logger, plugins: [BetterAuth::Plugins.anonymous])
+    _status, headers, _body = auth.api.sign_in_anonymous(as_response: true)
+    cookie = cookie_header(headers.fetch("set-cookie"))
+    user_id = auth.api.get_session(headers: {"cookie" => cookie})[:user]["id"]
+    storage.define_singleton_method(:delete) { |_key| raise "storage unavailable" }
+
+    error = assert_raises(BetterAuth::APIError) do
+      auth.api.delete_anonymous_user(headers: {"cookie" => cookie})
+    end
+
+    assert_equal 500, error.status_code
+    assert_equal BetterAuth::Plugins::ANONYMOUS_ERROR_CODES["FAILED_TO_DELETE_ANONYMOUS_USER_SESSIONS"], error.message
+    assert_equal [[:error, "Failed to delete anonymous user sessions"]], log_entries
+    assert auth.context.internal_adapter.find_user_by_id(user_id)
+  end
+
+  def test_delete_anonymous_user_logs_session_cleanup_error_when_supported
+    storage = MemoryStorage.new
+    log_entries = []
+    logger = ->(level, message, details) { log_entries << [level, message, details] }
+    auth = build_auth(secondary_storage: storage, logger: logger, plugins: [BetterAuth::Plugins.anonymous])
+    _status, headers, _body = auth.api.sign_in_anonymous(as_response: true)
+    cookie = cookie_header(headers.fetch("set-cookie"))
+    cleanup_error = RuntimeError.new("storage unavailable")
+    storage.define_singleton_method(:delete) { |_key| raise cleanup_error }
+
+    error = assert_raises(BetterAuth::APIError) do
+      auth.api.delete_anonymous_user(headers: {"cookie" => cookie})
+    end
+
+    assert_equal 500, error.status_code
+    assert_equal BetterAuth::Plugins::ANONYMOUS_ERROR_CODES["FAILED_TO_DELETE_ANONYMOUS_USER_SESSIONS"], error.message
+    assert_equal [:error, "Failed to delete anonymous user sessions", cleanup_error], log_entries.fetch(0)
   end
 
   def test_delete_anonymous_user_rejects_disabled_or_non_anonymous_users
@@ -141,7 +209,9 @@ class BetterAuthPluginsAnonymousTest < Minitest::Test
 
   def test_real_sign_in_links_and_deletes_previous_anonymous_user
     link_calls = []
+    storage = MemoryStorage.new
     auth = build_auth(
+      secondary_storage: storage,
       plugins: [
         BetterAuth::Plugins.anonymous(
           on_link_account: ->(data) { link_calls << data }
@@ -151,7 +221,9 @@ class BetterAuthPluginsAnonymousTest < Minitest::Test
     auth.api.sign_up_email(body: {email: "linked@example.com", password: "password123", name: "Linked"})
     _status, anon_headers, _body = auth.api.sign_in_anonymous(as_response: true)
     anon_cookie = cookie_header(anon_headers.fetch("set-cookie"))
-    anon_user_id = auth.api.get_session(headers: {"cookie" => anon_cookie})[:user]["id"]
+    anonymous_session = auth.api.get_session(headers: {"cookie" => anon_cookie})
+    anon_user_id = anonymous_session[:user]["id"]
+    anon_token = anonymous_session[:session]["token"]
 
     status, real_headers, body = auth.api.sign_in_email(
       headers: {"cookie" => anon_cookie},
@@ -165,6 +237,8 @@ class BetterAuthPluginsAnonymousTest < Minitest::Test
     assert_equal "linked@example.com", data.fetch("user").fetch("email")
     assert_equal false, data.fetch("user").fetch("isAnonymous")
     assert_nil auth.context.internal_adapter.find_user_by_id(anon_user_id)
+    assert_nil storage.get(anon_token)
+    assert_nil storage.get("active-sessions-#{anon_user_id}")
     assert_equal 1, link_calls.length
     assert_equal anon_user_id, link_calls.first[:anonymous_user][:user]["id"]
     assert_equal data.fetch("user").fetch("id"), link_calls.first[:new_user][:user]["id"]
