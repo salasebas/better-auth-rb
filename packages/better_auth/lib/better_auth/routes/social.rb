@@ -81,18 +81,17 @@ module BetterAuth
         end
 
         code_verifier = Crypto.random_string(128)
-        state = Crypto.sign_jwt(
-          {
+        state = generate_social_oauth_state!(
+          ctx,
+          safe_additional_state(body).merge(
             "callbackURL" => body["callbackURL"] || body["callbackUrl"] || body["callback_url"] || "/",
-            "errorCallbackURL" => body["errorCallbackURL"] || body["errorCallbackUrl"] || body["error_callback_url"],
-            "newUserCallbackURL" => body["newUserCallbackURL"] || body["newUserCallbackUrl"] || body["new_user_callback_url"],
-            "requestSignUp" => body["requestSignUp"] || body["request_sign_up"],
-            "codeVerifier" => code_verifier
-          }.merge(safe_additional_state(body)),
-          ctx.context.secret,
-          expires_in: 600
+            "errorURL" => body["errorCallbackURL"] || body["errorCallbackUrl"] || body["error_callback_url"],
+            "newUserURL" => body["newUserCallbackURL"] || body["newUserCallbackUrl"] || body["new_user_callback_url"],
+            "requestSignUp" => body.key?("requestSignUp") ? body["requestSignUp"] : body["request_sign_up"],
+            "codeVerifier" => code_verifier,
+            "expiresAt" => Time.now.to_i + 600
+          )
         )
-        store_oauth_state_cookie(ctx, state)
         url = call_provider(provider, :create_authorization_url, {
           state: state,
           codeVerifier: code_verifier,
@@ -284,18 +283,20 @@ module BetterAuth
         end
 
         code_verifier = Crypto.random_string(128)
-        state_data = {
-          "callbackURL" => body["callbackURL"] || body["callbackUrl"] || body["callback_url"] || ctx.context.base_url,
-          "errorCallbackURL" => body["errorCallbackURL"] || body["errorCallbackUrl"] || body["error_callback_url"],
-          "requestSignUp" => body["requestSignUp"] || body["request_sign_up"],
-          "codeVerifier" => code_verifier,
-          "link" => {
-            "userId" => session[:user]["id"],
-            "email" => session[:user]["email"]
-          }
-        }.merge(safe_additional_state(body))
-        state = Crypto.sign_jwt(state_data, ctx.context.secret, expires_in: 600)
-        store_oauth_state_cookie(ctx, state)
+        state = generate_social_oauth_state!(
+          ctx,
+          safe_additional_state(body).merge(
+            "callbackURL" => body["callbackURL"] || body["callbackUrl"] || body["callback_url"] || ctx.context.base_url,
+            "errorURL" => body["errorCallbackURL"] || body["errorCallbackUrl"] || body["error_callback_url"],
+            "requestSignUp" => body.key?("requestSignUp") ? body["requestSignUp"] : body["request_sign_up"],
+            "codeVerifier" => code_verifier,
+            "link" => {
+              "userId" => session[:user]["id"],
+              "email" => session[:user]["email"]
+            },
+            "expiresAt" => Time.now.to_i + 600
+          )
+        )
         url = call_provider(provider, :create_authorization_url, {
           state: state,
           codeVerifier: code_verifier,
@@ -430,20 +431,11 @@ module BetterAuth
       {session: session, user: user, new_user: new_user}
     end
 
-    def self.store_oauth_state_cookie(ctx, state)
-      return unless ctx.request
-
-      cookie = ctx.context.create_auth_cookie("state", max_age: 600)
-      ctx.set_signed_cookie(cookie.name, state, ctx.context.secret, cookie.attributes)
-    end
-
-    def self.valid_oauth_state_cookie?(ctx, state)
-      return true unless ctx.request
-
-      cookie = ctx.context.create_auth_cookie("state", max_age: 600)
-      stored = ctx.get_signed_cookie(cookie.name, ctx.context.secret)
-      Cookies.expire_cookie(ctx, cookie)
-      stored == state
+    def self.generate_social_oauth_state!(ctx, state_data)
+      OAuthState.generate(ctx, state_data)
+    rescue
+      social_log(ctx.context, :error, "Failed to create verification")
+      raise APIError.new("INTERNAL_SERVER_ERROR", message: BASE_ERROR_CODES["FAILED_TO_CREATE_VERIFICATION"])
     end
 
     def self.oauth_error_url(base_url, error, description = nil)
