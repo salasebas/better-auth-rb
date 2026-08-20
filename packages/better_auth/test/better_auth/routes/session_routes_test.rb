@@ -270,22 +270,25 @@ class BetterAuthRoutesSessionTest < Minitest::Test
     end
   end
 
-  def test_remember_me_false_stays_session_cookie_after_refresh
+  def test_remember_me_false_does_not_refresh_session
     auth = build_auth(session: {update_age: 0, expires_in: 120, cookie_cache: {enabled: false}})
     _signup_cookie = sign_up_cookie(auth, email: "browser-session@example.com")
 
-    status, headers, _body = auth.api.sign_in_email(
+    status, headers, body = auth.api.sign_in_email(
       body: {email: "browser-session@example.com", password: "password123", rememberMe: false},
       as_response: true
     )
     assert_equal 200, status
     cookie = cookie_header(headers.fetch("set-cookie"))
+    token = JSON.parse(body.join).fetch("token")
+    original_expiry = auth.context.internal_adapter.find_session(token).fetch(:session).fetch("expiresAt")
     session_cookie_line = headers.fetch("set-cookie").lines.find { |line| line.include?("session_token") }
     refute_includes session_cookie_line, "Max-Age="
 
     _status, refresh_headers, _refresh_body = auth.api.get_session(headers: {"cookie" => cookie}, as_response: true)
-    refreshed_session_cookie_line = refresh_headers.fetch("set-cookie").lines.find { |line| line.include?("session_token") }
-    refute_includes refreshed_session_cookie_line, "Max-Age="
+
+    refute refresh_headers.key?("set-cookie")
+    assert_equal original_expiry, auth.context.internal_adapter.find_session(token).fetch(:session).fetch("expiresAt")
   end
 
   def test_sign_out_deletes_current_session_and_clears_cookies

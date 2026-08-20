@@ -132,9 +132,7 @@ module BetterAuth
       dont_remember_me = dont_remember?(ctx) if dont_remember_me.nil?
       token_cookie = ctx.context.auth_cookies[:session_token]
       max_age = dont_remember_me ? nil : ctx.context.session_config[:expires_in]
-      token_attributes = token_cookie.attributes.merge(max_age: max_age).merge(overrides || {})
-      token_attributes[:max_age] = nil if dont_remember_me
-      ctx.set_signed_cookie(token_cookie.name, session.fetch(:session).fetch("token"), ctx.context.secret, token_attributes)
+      ctx.set_signed_cookie(token_cookie.name, session.fetch(:session).fetch("token"), ctx.context.secret, token_cookie.attributes.merge(max_age: max_age).merge(overrides || {}))
 
       if dont_remember_me
         dont_remember_cookie = ctx.context.auth_cookies[:dont_remember]

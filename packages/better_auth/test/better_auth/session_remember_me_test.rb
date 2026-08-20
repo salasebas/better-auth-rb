@@ -62,15 +62,19 @@ class BetterAuthSessionRememberMeTest < Minitest::Test
 
     inferred_with_override = endpoint_context(auth, cookie: marker_header)
     BetterAuth::Cookies.set_session_cookie(inferred_with_override, session, nil, max_age: 42)
-    assert_session_cookies(inferred_with_override.response_headers.fetch("set-cookie"), auth, persistent_for: nil)
+    assert_mixed_session_cookies(inferred_with_override.response_headers.fetch("set-cookie"), auth, token_persistent_for: 42, data_persistent_for: nil)
 
     explicit_remember = endpoint_context(auth, cookie: marker_header)
     BetterAuth::Cookies.set_session_cookie(explicit_remember, session, false, max_age: 42)
     assert_session_cookies(explicit_remember.response_headers.fetch("set-cookie"), auth, persistent_for: 42)
 
     explicit_dont_remember = endpoint_context(auth)
-    BetterAuth::Cookies.set_session_cookie(explicit_dont_remember, session, true, max_age: 42)
+    BetterAuth::Cookies.set_session_cookie(explicit_dont_remember, session, true)
     assert_session_cookies(explicit_dont_remember.response_headers.fetch("set-cookie"), auth, persistent_for: nil)
+
+    explicit_dont_remember_with_override = endpoint_context(auth)
+    BetterAuth::Cookies.set_session_cookie(explicit_dont_remember_with_override, session, true, max_age: 42)
+    assert_mixed_session_cookies(explicit_dont_remember_with_override.response_headers.fetch("set-cookie"), auth, token_persistent_for: 42, data_persistent_for: nil)
   end
 
   def test_stateless_cache_refresh_keeps_dont_remember_session_cookies_session_only
@@ -97,7 +101,7 @@ class BetterAuthSessionRememberMeTest < Minitest::Test
     end
   end
 
-  def test_stateful_backing_fallback_and_refresh_keep_dont_remember_session_cookies_session_only
+  def test_stateful_backing_fallback_does_not_refresh_dont_remember_session
     STRATEGIES.each do |strategy|
       auth = build_auth(strategy: strategy, update_age: 60)
       email = "stateful-#{strategy}@example.com"
@@ -112,7 +116,12 @@ class BetterAuthSessionRememberMeTest < Minitest::Test
         status, headers, _body = auth.api.get_session(headers: {"cookie" => initial_cookie}, as_response: true)
 
         assert_equal 200, status
-        assert_session_cookies(headers.fetch("set-cookie"), auth, persistent_for: nil)
+        refute headers.key?("set-cookie")
+
+        token_cookie = auth.context.auth_cookies[:session_token]
+        session_token = endpoint_context(auth, cookie: initial_cookie).get_signed_cookie(token_cookie.name, auth.context.secret)
+        stored = auth.context.internal_adapter.find_session(session_token).fetch(:session)
+        assert_equal CREATED_AT + 86_400, stored.fetch("expiresAt")
       end
     end
   end
@@ -180,6 +189,15 @@ class BetterAuthSessionRememberMeTest < Minitest::Test
         assert_session_cookie(cookie)
       end
     end
+  end
+
+  def assert_mixed_session_cookies(header, auth, token_persistent_for:, data_persistent_for:)
+    cookies = parsed_set_cookies(header)
+    token_cookie = cookies.fetch(auth.context.auth_cookies[:session_token].name)
+    data_cookie = cookies.fetch(auth.context.auth_cookies[:session_data].name)
+
+    token_persistent_for ? assert_persistent_cookie(token_cookie, token_persistent_for) : assert_session_cookie(token_cookie)
+    data_persistent_for ? assert_persistent_cookie(data_cookie, data_persistent_for) : assert_session_cookie(data_cookie)
   end
 
   def signed_cookie_value(auth, set_cookie, name)

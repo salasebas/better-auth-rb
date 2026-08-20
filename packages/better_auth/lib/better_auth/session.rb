@@ -35,8 +35,10 @@ module BetterAuth
       return missing_session(ctx) if expired?(session)
 
       result = {session: session, user: user}
-      result = refresh_session(ctx, result) if should_refresh?(ctx, session, disable_refresh)
-      Cookies.set_cookie_cache(ctx, result, Cookies.dont_remember?(ctx))
+      unless Cookies.dont_remember?(ctx)
+        result = refresh_session(ctx, result) if should_refresh?(ctx, session, disable_refresh)
+        Cookies.set_cookie_cache(ctx, result, false)
+      end
       ctx.context.set_current_session(result) if ctx.context.respond_to?(:set_current_session)
       result
     end
@@ -115,7 +117,9 @@ module BetterAuth
 
       remaining = expires_at && [(expires_at - now).floor, 0].max
       refreshed = {session: session, user: result[:user]}
-      Cookies.set_session_cookie(ctx, refreshed, Cookies.dont_remember?(ctx), max_age: remaining)
+      dont_remember_me = Cookies.dont_remember?(ctx)
+      overrides = dont_remember_me ? {} : {max_age: remaining}
+      Cookies.set_session_cookie(ctx, refreshed, dont_remember_me, overrides)
       refreshed
     end
 
