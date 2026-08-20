@@ -1319,7 +1319,7 @@
       "require_path": "better_auth/api_key",
       "local_exists": true,
       "upstream_exists": true,
-      "current_local_lines": 580,
+      "current_local_lines": 578,
       "upstream_lines": 760,
       "status": "thin"
     },
