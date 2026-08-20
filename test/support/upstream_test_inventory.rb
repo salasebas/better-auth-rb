@@ -88,13 +88,14 @@ end
 class UpstreamPackageTestLedger
   attr_reader :entries, :exclusions, :test_root, :active_plans
 
-  def initialize(repository_root:, upstream_subpath:, test_root:, entries:, exclusions: {}, active_plans: {})
+  def initialize(repository_root:, upstream_subpath:, test_root:, entries:, exclusions: {}, active_plans: {}, upstream_version: nil)
     @repository_root = repository_root
     @upstream_subpath = upstream_subpath
     @test_root = test_root
     @entries = entries.freeze
     @exclusions = exclusions.freeze
     @active_plans = active_plans.freeze
+    @upstream_version = upstream_version
   end
 
   def upstream_paths
@@ -117,6 +118,8 @@ class UpstreamPackageTestLedger
   private
 
   def upstream_version
+    return @upstream_version if @upstream_version
+
     version_file = File.join(@repository_root, "reference", "upstream-better-auth", "VERSION.md")
     version = File.read(version_file)[/^\| Version \| `(\d+\.\d+\.\d+)` \|$/, 1]
     raise "Could not read pinned upstream version from #{version_file}" unless version

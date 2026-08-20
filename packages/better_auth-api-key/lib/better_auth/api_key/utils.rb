@@ -42,7 +42,7 @@ module BetterAuth
 
       def public_record(record, reveal_key: nil, include_key_field: false)
         data = record.transform_keys(&:to_sym)
-        output = data.except(:key)
+        output = data.except(:key, :userId)
         output[:configId] ||= BetterAuth::APIKey::Types.record_config_id(record)
         output[:referenceId] ||= BetterAuth::APIKey::Types.record_reference_id(record)
         output[:key] = reveal_key if include_key_field && reveal_key

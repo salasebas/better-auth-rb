@@ -9,6 +9,7 @@ module BetterAuthAPIKeyUpstreamParity
     repository_root: ROOT,
     upstream_subpath: "packages/api-key",
     test_root: TEST_ROOT,
+    upstream_version: "1.7.1",
     entries: {
       "src/api-key.test.ts" => {
         owner: "better_auth/api_key_test.rb",

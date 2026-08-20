@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-08-20T06:02:48Z",
+  "generated_at": "2026-08-20T19:31:21Z",
   "route_count": 222,
   "routes": [
     {
@@ -819,11 +819,6 @@
       "endpoint_key": "delete_api_key",
       "body_fields": [
         {
-          "name": "configId",
-          "required": false,
-          "type": "string"
-        },
-        {
           "name": "keyId",
           "required": true,
           "type": "string"
@@ -993,7 +988,7 @@
         {
           "name": "permissions",
           "required": false,
-          "type": "object"
+          "type": "object | null"
         },
         {
           "name": "rateLimitEnabled",
@@ -1023,7 +1018,7 @@
         {
           "name": "remaining",
           "required": false,
-          "type": "number | null"
+          "type": "number"
         },
         {
           "name": "userId",
@@ -1144,7 +1139,7 @@
         "POST"
       ],
       "file": "packages/better_auth/lib/better_auth/routes/user.rb",
-      "line": 264,
+      "line": 271,
       "endpoint_key": "change_email",
       "plugin_hint": "core",
       "body_fields": [
@@ -5282,7 +5277,7 @@
         "POST"
       ],
       "file": "packages/better_auth/lib/better_auth/plugins/phone_number.rb",
-      "line": 262,
+      "line": 267,
       "endpoint_key": "request_password_reset_phone_number",
       "plugin_hint": "phone_number",
       "body_fields": [
@@ -5314,7 +5309,7 @@
         "POST"
       ],
       "file": "packages/better_auth/lib/better_auth/plugins/phone_number.rb",
-      "line": 298,
+      "line": 303,
       "endpoint_key": "reset_password_phone_number",
       "plugin_hint": "phone_number",
       "body_fields": [

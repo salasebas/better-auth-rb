@@ -20,11 +20,28 @@ class BetterAuthAPIKeyUtilsTest < Minitest::Test
   end
 
   def test_public_record_hides_secret_key_and_decodes_json_fields
+    now = Time.now
     record = {
       "id" => "key-id",
-      "key" => "hashed-secret",
-      "referenceId" => "user-id",
       "configId" => "default",
+      "name" => nil,
+      "start" => "test_",
+      "prefix" => "test_",
+      "key" => "hashed-secret",
+      "userId" => "user-id",
+      "refillInterval" => nil,
+      "refillAmount" => nil,
+      "lastRefillAt" => nil,
+      "enabled" => true,
+      "rateLimitEnabled" => true,
+      "rateLimitTimeWindow" => 60_000,
+      "rateLimitMax" => 10,
+      "requestCount" => 0,
+      "remaining" => nil,
+      "lastRequest" => nil,
+      "expiresAt" => nil,
+      "createdAt" => now,
+      "updatedAt" => now,
       "metadata" => JSON.generate({"tier" => "pro"}),
       "permissions" => JSON.generate({"repo" => ["read"]})
     }
@@ -33,11 +50,36 @@ class BetterAuthAPIKeyUtilsTest < Minitest::Test
     revealed = BetterAuth::APIKey::Utils.public_record(record, reveal_key: "raw-secret", include_key_field: true)
 
     refute hidden.key?(:key)
+    refute hidden.key?(:userId)
+    refute revealed.key?(:userId)
     assert_equal "raw-secret", revealed.fetch(:key)
     assert_equal({"tier" => "pro"}, hidden.fetch(:metadata))
     assert_equal({"repo" => ["read"]}, hidden.fetch(:permissions))
     assert_equal "user-id", hidden.fetch(:referenceId)
     assert_equal "default", hidden.fetch(:configId)
+    assert_equal %i[
+      configId
+      createdAt
+      enabled
+      expiresAt
+      id
+      lastRefillAt
+      lastRequest
+      metadata
+      name
+      permissions
+      prefix
+      rateLimitEnabled
+      rateLimitMax
+      rateLimitTimeWindow
+      referenceId
+      refillAmount
+      refillInterval
+      remaining
+      requestCount
+      start
+      updatedAt
+    ].sort, hidden.keys.sort
   end
 
   def test_sort_records_supports_camel_case_and_descending_direction

@@ -91,7 +91,10 @@ module BetterAuth
             description: "Create a new API key for a user",
             requestBody: BetterAuth::OpenAPI.json_request_body(api_key_create_body_schema, required: true),
             responses: {
-              "200" => BetterAuth::OpenAPI.json_response("API key created successfully", api_key_record_schema(include_secret: true))
+              "200" => BetterAuth::OpenAPI.json_response(
+                "API key created successfully",
+                api_key_openapi_record_schema(include_secret: true, legacy_owner: false)
+              )
             }
           }
         }
@@ -101,8 +104,14 @@ module BetterAuth
         response_schema = BetterAuth::OpenAPI.object_schema(
           {
             valid: {type: "boolean"},
-            error: {type: ["object", "null"], additionalProperties: true},
-            key: api_key_record_schema(include_secret: false).merge(type: ["object", "null"])
+            error: BetterAuth::OpenAPI.object_schema(
+              {
+                message: {type: "string"},
+                code: {type: "string"}
+              },
+              required: ["message", "code"]
+            ).merge(nullable: true),
+            key: api_key_public_record_schema.merge(type: ["object", "null"])
           },
           required: ["valid", "error", "key"]
         )
@@ -114,7 +123,7 @@ module BetterAuth
                 {
                   key: {type: "string", description: "The API key to verify"},
                   configId: {type: "string", description: "Configuration ID to use for the lookup"},
-                  permissions: api_key_permissions_schema.merge(description: "Permissions required for the request")
+                  permissions: api_key_request_permissions_schema.merge(description: "Permissions required for the request")
                 },
                 required: ["key"]
               )
@@ -134,13 +143,19 @@ module BetterAuth
       def get_api_key_openapi
         {
           openapi: {
-            description: "Get an API key by ID",
+            description: "Retrieve an existing API key by ID",
             parameters: [
-              BetterAuth::OpenAPI.query_parameter("id", required: true, description: "The API key ID"),
-              BetterAuth::OpenAPI.query_parameter("configId", description: "Configuration ID to use for the lookup")
+              BetterAuth::OpenAPI.query_parameter("id", required: true, description: "The id of the Api Key"),
+              BetterAuth::OpenAPI.query_parameter(
+                "configId",
+                description: "The configuration ID to use for the API key lookup. If not provided, the default configuration will be used."
+              )
             ],
             responses: {
-              "200" => BetterAuth::OpenAPI.json_response("API key retrieved successfully", api_key_record_schema(include_secret: false))
+              "200" => BetterAuth::OpenAPI.json_response(
+                "API key retrieved successfully",
+                api_key_openapi_record_schema(include_secret: false, legacy_owner: true)
+              )
             }
           }
         }
@@ -152,7 +167,10 @@ module BetterAuth
             description: "Update an existing API key by ID",
             requestBody: BetterAuth::OpenAPI.json_request_body(api_key_update_body_schema, required: true),
             responses: {
-              "200" => BetterAuth::OpenAPI.json_response("API key updated successfully", api_key_record_schema(include_secret: false))
+              "200" => BetterAuth::OpenAPI.json_response(
+                "API key updated successfully",
+                api_key_openapi_record_schema(include_secret: false, legacy_owner: true)
+              )
             }
           }
         }
@@ -161,15 +179,15 @@ module BetterAuth
       def delete_api_key_openapi
         {
           openapi: {
-            description: "Delete an API key by ID",
+            description: "Delete an existing API key",
             requestBody: BetterAuth::OpenAPI.json_request_body(
               BetterAuth::OpenAPI.object_schema(
                 {
-                  keyId: {type: "string", description: "The API key ID"},
-                  configId: {type: "string", description: "Configuration ID to use for the lookup"}
+                  keyId: {type: "string", description: "The id of the API key to delete"}
                 },
                 required: ["keyId"]
-              )
+              ),
+              required: false
             ),
             responses: {
               "200" => BetterAuth::OpenAPI.json_response("API key deleted successfully", BetterAuth::OpenAPI.success_response_schema)
@@ -183,11 +201,17 @@ module BetterAuth
           openapi: {
             description: "List all API keys for the authenticated user or for a specific organization",
             parameters: [
-              BetterAuth::OpenAPI.query_parameter("configId", description: "Filter by configuration ID"),
-              BetterAuth::OpenAPI.query_parameter("organizationId", description: "Organization ID to list keys for"),
+              BetterAuth::OpenAPI.query_parameter(
+                "configId",
+                description: "Filter by configuration ID. If not provided, returns keys from all configurations."
+              ),
+              BetterAuth::OpenAPI.query_parameter(
+                "organizationId",
+                description: "Organization ID to list keys for. If provided, returns organization-owned keys. If not provided, returns user-owned keys."
+              ),
               BetterAuth::OpenAPI.query_parameter("limit", schema: {type: "number"}, description: "The number of API keys to return"),
               BetterAuth::OpenAPI.query_parameter("offset", schema: {type: "number"}, description: "The offset to start from"),
-              BetterAuth::OpenAPI.query_parameter("sortBy", description: "The field to sort by"),
+              BetterAuth::OpenAPI.query_parameter("sortBy", description: "The field to sort by (e.g., createdAt, name, expiresAt)"),
               BetterAuth::OpenAPI.query_parameter("sortDirection", schema: {type: "string", enum: ["asc", "desc"]}, description: "The direction to sort by")
             ],
             responses: {
@@ -195,10 +219,10 @@ module BetterAuth
                 "API keys retrieved successfully",
                 BetterAuth::OpenAPI.object_schema(
                   {
-                    apiKeys: BetterAuth::OpenAPI.array_schema(api_key_record_schema(include_secret: false)),
-                    total: {type: "number"},
-                    limit: {type: ["number", "null"]},
-                    offset: {type: ["number", "null"]}
+                    apiKeys: BetterAuth::OpenAPI.array_schema(api_key_openapi_record_schema(include_secret: false, legacy_owner: true)),
+                    total: {type: "number", description: "Total number of API keys"},
+                    limit: {type: "number", nullable: true, description: "The limit used for pagination"},
+                    offset: {type: "number", nullable: true, description: "The offset used for pagination"}
                   },
                   required: ["apiKeys", "total"]
                 )
@@ -232,30 +256,60 @@ module BetterAuth
       def api_key_create_body_schema
         BetterAuth::OpenAPI.object_schema(
           {
-            configId: {type: "string", description: "The configuration ID to use for the API key"},
-            name: {type: "string", description: "Name of the API key"},
-            expiresIn: {type: ["number", "null"], description: "Expiration time of the API key in seconds"},
-            prefix: {type: "string", description: "Prefix of the API key"},
-            remaining: {type: ["number", "null"], description: "Remaining number of requests"},
-            metadata: {nullable: true, description: "Metadata associated with the API key"},
-            refillAmount: {type: "number", description: "Amount to refill the remaining count"},
-            refillInterval: {type: "number", description: "Interval to refill the API key in milliseconds"},
-            rateLimitTimeWindow: {type: "number", description: "Rate limit time window in milliseconds"},
-            rateLimitMax: {type: "number", description: "Maximum requests allowed within a window"},
-            rateLimitEnabled: {type: "boolean", description: "Whether the key has rate limiting enabled"},
-            permissions: api_key_permissions_schema.merge(description: "Permissions of the API key"),
-            userId: {type: "string", description: "User ID that the API key belongs to"},
-            organizationId: {type: "string", description: "Organization ID that the API key belongs to"}
+            configId: {
+              type: "string",
+              description: "The configuration ID to use for the API key. If not provided, the default configuration will be used."
+            },
+            name: {type: "string", description: "Name of the Api Key"},
+            expiresIn: {type: ["number", "null"], description: "Expiration time of the Api Key in seconds"},
+            prefix: {type: "string", description: "Prefix of the Api Key"},
+            remaining: {type: ["number", "null"], description: "Remaining number of requests. Server side only"},
+            metadata: {},
+            refillAmount: {type: "number", description: "Amount to refill the remaining count of the Api Key. server-only. Eg: 100"},
+            refillInterval: {type: "number", description: "Interval to refill the Api Key in milliseconds. server-only. Eg: 1000"},
+            rateLimitTimeWindow: {
+              type: "number",
+              description: "The duration in milliseconds where each request is counted. Once the `maxRequests` is reached, the request will be rejected until the `timeWindow` has passed, at which point the `timeWindow` will be reset. server-only. Eg: 1000"
+            },
+            rateLimitMax: {
+              type: "number",
+              description: "Maximum amount of requests allowed within a window. Once the `maxRequests` is reached, the request will be rejected until the `timeWindow` has passed, at which point the `timeWindow` will be reset. server-only. Eg: 100"
+            },
+            rateLimitEnabled: {type: "boolean", description: "Whether the key has rate limiting enabled. server-only. Eg: true"},
+            permissions: api_key_request_permissions_schema.merge(description: "Permissions of the Api Key."),
+            userId: {type: "string", description: "User Id of the user that the Api Key belongs to. server-only. Eg: \"user-id\""},
+            organizationId: {type: "string", description: "Organization Id of the organization that the Api Key belongs to. Eg: 'org-id'"}
           }
         )
       end
 
       def api_key_update_body_schema
         BetterAuth::OpenAPI.object_schema(
-          api_key_create_body_schema[:properties].merge(
-            keyId: {type: "string", description: "The API key ID"},
-            enabled: {type: "boolean", description: "Whether the API key is enabled"}
-          ).except(:prefix, :organizationId),
+          {
+            configId: {
+              type: "string",
+              description: "The configuration ID to use for the API key lookup. If not provided, the default configuration will be used."
+            },
+            keyId: {type: "string", description: "The id of the Api Key"},
+            userId: {type: "string", description: "The id of the user which the api key belongs to. server-only. Eg: \"some-user-id\""},
+            name: {type: "string", description: "The name of the key"},
+            enabled: {type: "boolean", description: "Whether the Api Key is enabled or not"},
+            remaining: {type: "number", description: "The number of remaining requests"},
+            refillAmount: {type: "number", description: "The refill amount"},
+            refillInterval: {type: "number", description: "The refill interval"},
+            metadata: {},
+            expiresIn: {type: ["number", "null"], description: "Expiration time of the Api Key in seconds"},
+            rateLimitEnabled: {type: "boolean", description: "Whether the key has rate limiting enabled."},
+            rateLimitTimeWindow: {type: "number", description: "The duration in milliseconds where each request is counted. server-only. Eg: 1000"},
+            rateLimitMax: {
+              type: "number",
+              description: "Maximum amount of requests allowed within a window. Once the `maxRequests` is reached, the request will be rejected until the `timeWindow` has passed, at which point the `timeWindow` will be reset. server-only. Eg: 100"
+            },
+            permissions: api_key_request_permissions_schema.merge(
+              type: ["object", "null"],
+              description: "Update the permissions on the API Key. server-only."
+            )
+          },
           required: ["keyId"]
         )
       end
@@ -270,31 +324,100 @@ module BetterAuth
         }
       end
 
-      def api_key_record_schema(include_secret:)
-        properties = {
-          id: {type: "string", description: "Unique identifier of the API key"},
-          createdAt: {type: "string", format: "date-time", description: "Creation timestamp"},
-          updatedAt: {type: "string", format: "date-time", description: "Last update timestamp"},
-          name: {type: ["string", "null"], description: "Name of the API key"},
-          start: {type: ["string", "null"], description: "Starting characters of the key"},
-          prefix: {type: ["string", "null"], description: "Prefix of the API key"},
-          enabled: {type: "boolean", description: "Whether the key is enabled"},
-          expiresAt: {type: ["string", "null"], format: "date-time", description: "Expiration timestamp"},
-          referenceId: {type: "string", description: "ID of the reference owning the key"},
-          lastRefillAt: {type: ["string", "null"], format: "date-time", description: "Last refill timestamp"},
-          lastRequest: {type: ["string", "null"], format: "date-time", description: "Last request timestamp"},
-          metadata: {type: ["object", "null"], additionalProperties: true, description: "Metadata associated with the key"},
-          rateLimitMax: {type: ["number", "null"], description: "Maximum requests in time window"},
-          rateLimitTimeWindow: {type: ["number", "null"], description: "Rate limit time window in milliseconds"},
-          rateLimitEnabled: {type: "boolean", description: "Whether rate limiting is enabled"},
-          remaining: {type: ["number", "null"], description: "Remaining number of requests"},
-          refillAmount: {type: ["number", "null"], description: "Amount to refill"},
-          refillInterval: {type: ["number", "null"], description: "Refill interval in milliseconds"},
-          permissions: api_key_permissions_schema.merge(nullable: true, description: "Permissions of the API key"),
-          userId: {type: ["string", "null"], description: "ID of the user owning the key"}
-        }
-        properties[:key] = {type: "string", description: "The full API key"} if include_secret
-        BetterAuth::OpenAPI.object_schema(properties)
+      def api_key_request_permissions_schema
+        api_key_permissions_schema.merge(propertyNames: {type: "string"})
+      end
+
+      # v1.7.1's get/list/update OpenAPI blocks still describe the legacy
+      # userId/string-permissions shape even though their runtime responses use
+      # referenceId and decoded permissions. Preserve both observable contracts.
+      def api_key_openapi_record_schema(include_secret:, legacy_owner:)
+        return legacy_api_key_openapi_record_schema if legacy_owner
+
+        properties = create_api_key_openapi_record_schema.fetch(:properties).dup
+        properties.delete(:key) unless include_secret
+        required = create_api_key_openapi_record_schema.fetch(:required).dup
+        required.delete("key") unless include_secret
+        BetterAuth::OpenAPI.object_schema(properties, required: required)
+      end
+
+      def create_api_key_openapi_record_schema
+        BetterAuth::OpenAPI.object_schema(
+          {
+            id: {type: "string", description: "Unique identifier of the API key"},
+            createdAt: {type: "string", format: "date-time", description: "Creation timestamp"},
+            updatedAt: {type: "string", format: "date-time", description: "Last update timestamp"},
+            name: {type: "string", nullable: true, description: "Name of the API key"},
+            prefix: {type: "string", nullable: true, description: "Prefix of the API key"},
+            start: {type: "string", nullable: true, description: "Starting characters of the key (if configured)"},
+            key: {type: "string", description: "The full API key (only returned on creation)"},
+            enabled: {type: "boolean", description: "Whether the key is enabled"},
+            expiresAt: {type: "string", format: "date-time", nullable: true, description: "Expiration timestamp"},
+            referenceId: {type: "string", description: "ID of the reference owning the key"},
+            lastRefillAt: {type: "string", format: "date-time", nullable: true, description: "Last refill timestamp"},
+            lastRequest: {type: "string", format: "date-time", nullable: true, description: "Last request timestamp"},
+            metadata: {type: "object", nullable: true, additionalProperties: true, description: "Metadata associated with the key"},
+            rateLimitMax: {type: "number", nullable: true, description: "Maximum requests in time window"},
+            rateLimitTimeWindow: {type: "number", nullable: true, description: "Rate limit time window in milliseconds"},
+            remaining: {type: "number", nullable: true, description: "Remaining requests"},
+            refillAmount: {type: "number", nullable: true, description: "Amount to refill"},
+            refillInterval: {type: "number", nullable: true, description: "Refill interval in milliseconds"},
+            rateLimitEnabled: {type: "boolean", description: "Whether rate limiting is enabled"},
+            requestCount: {type: "number", description: "Current request count in window"},
+            permissions: api_key_permissions_schema.merge(nullable: true, description: "Permissions associated with the key")
+          },
+          required: %w[id createdAt updatedAt key enabled referenceId rateLimitEnabled requestCount]
+        )
+      end
+
+      def legacy_api_key_openapi_record_schema
+        BetterAuth::OpenAPI.object_schema(
+          {
+            id: {type: "string", description: "ID"},
+            name: {type: "string", nullable: true, description: "The name of the key"},
+            start: {
+              type: "string",
+              nullable: true,
+              description: "Shows the first few characters of the API key, including the prefix. This allows you to show those few characters in the UI to make it easier for users to identify the API key."
+            },
+            prefix: {type: "string", nullable: true, description: "The API Key prefix. Stored as plain text."},
+            userId: {type: "string", description: "The owner of the user id"},
+            refillInterval: {
+              type: "number",
+              nullable: true,
+              description: "The interval in milliseconds between refills of the `remaining` count. Example: 3600000 // refill every hour (3600000ms = 1h)"
+            },
+            refillAmount: {type: "number", nullable: true, description: "The amount to refill"},
+            lastRefillAt: {type: "string", format: "date-time", nullable: true, description: "The last refill date"},
+            enabled: {type: "boolean", description: "Sets if key is enabled or disabled", default: true},
+            rateLimitEnabled: {type: "boolean", description: "Whether the key has rate limiting enabled"},
+            rateLimitTimeWindow: {type: "number", nullable: true, description: "The duration in milliseconds"},
+            rateLimitMax: {type: "number", nullable: true, description: "Maximum amount of requests allowed within a window"},
+            requestCount: {type: "number", description: "The number of requests made within the rate limit time window"},
+            remaining: {
+              type: "number",
+              nullable: true,
+              description: "Remaining requests (every time api key is used this should updated and should be updated on refill as well)"
+            },
+            lastRequest: {type: "string", format: "date-time", nullable: true, description: "When last request occurred"},
+            expiresAt: {type: "string", format: "date-time", nullable: true, description: "Expiry date of a key"},
+            createdAt: {type: "string", format: "date-time", description: "created at"},
+            updatedAt: {type: "string", format: "date-time", description: "updated at"},
+            metadata: {type: "object", nullable: true, additionalProperties: true, description: "Extra metadata about the apiKey"},
+            permissions: {type: "string", nullable: true, description: "Permissions for the api key (stored as JSON string)"}
+          },
+          required: %w[id userId enabled rateLimitEnabled requestCount createdAt updatedAt]
+        )
+      end
+
+      def api_key_public_record_schema
+        properties = create_api_key_openapi_record_schema.fetch(:properties).dup
+        properties.delete(:key)
+        properties[:configId] = {type: "string", description: "The configuration ID this key belongs to"}
+        BetterAuth::OpenAPI.object_schema(
+          properties,
+          required: %w[id configId createdAt updatedAt enabled referenceId rateLimitEnabled requestCount]
+        )
       end
     end
   end

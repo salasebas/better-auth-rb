@@ -4,7 +4,7 @@ module BetterAuth
   module APIKey
     module Routes
       module DeleteAPIKey
-        UPSTREAM_SOURCE = "reference/upstream-src/1.6.9/repository/packages/api-key/src/routes/delete-api-key.ts"
+        UPSTREAM_SOURCE = "reference/upstream-src/1.7.1/repository/packages/api-key/src/routes/delete-api-key.ts"
 
         module_function
 

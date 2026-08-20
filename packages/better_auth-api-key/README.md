@@ -204,6 +204,12 @@ Endpoint requests/responses always use the upstream `camelCase` field names, so
 TypeScript clients targeting `@better-auth/api-key/client` interoperate without
 configuration changes.
 
+For exact v1.7.1 compatibility, OpenAPI metadata and runtime response shapes are
+tracked separately. The upstream get, list, and update OpenAPI blocks still use
+legacy `userId` and string `permissions`, while their runtime responses use
+`configId`, `referenceId`, and decoded permissions. The Ruby metadata preserves
+that upstream inconsistency; Ruby runtime responses follow the upstream runtime.
+
 The cleanup route is also exposed through `auth.api.delete_all_expired_api_keys`
 and returns `{success: true, error: nil}` on success.
 
@@ -234,8 +240,6 @@ the appropriate `apiKey:*` permission to perform the corresponding action.
 
 The following decisions are explicit and locked behind tests:
 
-- **OpenAPI metadata blocks** embedded in upstream endpoint definitions are not
-  ported. OpenAPI generation is not part of `better_auth-api-key`'s scope.
 - **Browser-only `@better-auth/api-key/client`** helpers are not implemented in
   Ruby. Apps should call `/api-key/create`, `/api-key/verify`, `/api-key/get`,
   `/api-key/list`, `/api-key/update`, `/api-key/delete`, and
