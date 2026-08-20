@@ -12,6 +12,7 @@ module BetterAuth
       REFERENCE_STORAGE_PREFIX = "api-key:by-ref:"
       REFERENCE_LOCKS_GUARD = Mutex.new
       REFERENCE_LOCK_STRIPE_COUNT = 256
+      STORAGE_CONCURRENCY = 10
 
       module_function
 
@@ -64,7 +65,7 @@ module BetterAuth
 
       def find_by_id(ctx, id, config)
         if config[:storage] == "secondary-storage"
-          record = get(ctx, storage_key_by_id(id), config)
+          record = find_by_id_from_storage(ctx, id, config)
           return record if record
           return nil unless config[:fallback_to_database]
         end
@@ -79,8 +80,13 @@ module BetterAuth
             storage_instance = storage(config, ctx.context)
             raw_ids = storage_instance&.get(storage_key_by_reference(reference_id))
             ids = parse_id_list!(raw_ids)
-            records = ids.filter_map { |id| find_by_id(ctx, id, config) }
-            return records unless records.empty? && config[:fallback_to_database]
+            if ids.any?
+              records = BetterAuth::Async.map_concurrent(ids, concurrency: STORAGE_CONCURRENCY) do |id|
+                find_by_id_from_storage(ctx, id, config)
+              end
+              return records.compact
+            end
+            return [] unless config[:fallback_to_database]
           rescue JSON::ParserError, NoMethodError => error
             if ctx.context.respond_to?(:logger) && ctx.context.logger.respond_to?(:warn)
               ctx.context.logger.warn("[API KEY PLUGIN] Corrupt api-key reference index for #{reference_id.inspect}: #{error.class}: #{error.message}")
@@ -91,6 +97,10 @@ module BetterAuth
         records = ctx.context.adapter.find_many(model: BetterAuth::Plugins::API_KEY_TABLE_NAME, where: [{field: "referenceId", value: reference_id}])
         populate_reference(ctx, reference_id, records, config) if config[:storage] == "secondary-storage" && config[:fallback_to_database]
         records
+      end
+
+      def find_by_id_from_storage(ctx, id, config)
+        get(ctx, storage_key_by_id(id), config)
       end
 
       def update_record(ctx, record, update, config, defer: false)
@@ -275,20 +285,15 @@ module BetterAuth
 
       def populate_reference(ctx, reference_id, records, config)
         storage_instance = storage(config, ctx.context)
-        return unless storage_instance
+        return unless storage_instance && records.any?
 
-        batch(storage_instance) do
-          ids = []
-          records.each do |record|
-            serialized = JSON.generate(storage_record(record))
-            ttl = calculate_ttl(record)
-            storage_instance.set(storage_key_by_hash(record["key"]), serialized, ttl)
-            storage_instance.set(storage_key_by_id(record["id"]), serialized, ttl)
-            ids << record["id"]
-          end
-          reference_key = storage_key_by_reference(reference_id)
-          ids.empty? ? storage_instance.delete(reference_key) : storage_instance.set(reference_key, JSON.generate(ids))
+        BetterAuth::Async.map_concurrent(records, concurrency: STORAGE_CONCURRENCY) do |record|
+          serialized = JSON.generate(storage_record(record))
+          ttl = calculate_ttl(record)
+          storage_instance.set(storage_key_by_hash(record["key"]), serialized, ttl)
+          storage_instance.set(storage_key_by_id(record["id"]), serialized, ttl)
         end
+        storage_instance.set(storage_key_by_reference(reference_id), JSON.generate(records.map { |record| record["id"] }))
       end
 
       def batch_migrate_legacy_metadata(ctx, records, config)

@@ -53,6 +53,21 @@ class BetterAuthAPIKeyUtilsTest < Minitest::Test
     assert_equal %w[second first], by_created_desc.map { |record| record.fetch("name") }
   end
 
+  def test_sort_records_matches_upstream_null_order_and_keeps_ties_stable
+    records = [
+      {"id" => "null-first", "remaining" => nil},
+      {"id" => "two", "remaining" => 2},
+      {"id" => "one", "remaining" => 1},
+      {"id" => "null-second", "remaining" => nil}
+    ]
+
+    ascending = BetterAuth::APIKey::Utils.sort_records(records, "remaining", "asc")
+    descending = BetterAuth::APIKey::Utils.sort_records(records, "remaining", "desc")
+
+    assert_equal %w[null-first null-second one two], ascending.map { |record| record.fetch("id") }
+    assert_equal %w[two one null-first null-second], descending.map { |record| record.fetch("id") }
+  end
+
   def test_validate_list_query_accepts_numeric_strings_and_rejects_invalid_values
     BetterAuth::APIKey::Utils.validate_list_query!(limit: "10", offset: "0", sort_direction: "desc")
 
