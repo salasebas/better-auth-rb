@@ -75,10 +75,8 @@ module BetterAuth
           end
         end
         records = ctx.context.adapter.find_many(model: BetterAuth::Plugins::API_KEY_TABLE_NAME, where: [{field: "referenceId", value: reference_id}])
-        legacy = ctx.context.adapter.find_many(model: BetterAuth::Plugins::API_KEY_TABLE_NAME, where: [{field: "userId", value: reference_id}])
-        combined = (records + legacy).uniq { |record| record["id"] }
-        populate_reference(ctx, reference_id, combined, config) if config[:storage] == "secondary-storage" && config[:fallback_to_database]
-        combined
+        populate_reference(ctx, reference_id, records, config) if config[:storage] == "secondary-storage" && config[:fallback_to_database]
+        records
       end
 
       def update_record(ctx, record, update, config, defer: false)

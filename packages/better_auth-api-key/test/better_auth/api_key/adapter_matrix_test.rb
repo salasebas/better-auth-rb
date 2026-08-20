@@ -36,6 +36,29 @@ class BetterAuthAPIKeyAdapterMatrixTest < Minitest::Test
     skip "sqlite3 gem is not installed"
   end
 
+  def test_sqlite_adapter_lists_default_api_key_for_session_reference
+    require "sqlite3"
+
+    Tempfile.create(["better-auth-api-key-default-list", ".sqlite3"]) do |file|
+      connection = SQLite3::Database.new(file.path)
+      connection.results_as_hash = true
+      connection.execute("PRAGMA foreign_keys = ON")
+      with_sql_auth(:sqlite, connection) do |auth|
+        cookie = sign_up_cookie(auth, email: "sqlite-default-list-api-key@example.com")
+        created = auth.api.create_api_key(headers: {"cookie" => cookie}, body: {})
+
+        listed = auth.api.list_api_keys(headers: {"cookie" => cookie})
+
+        assert_equal 1, listed.fetch(:total)
+        assert_equal [created.fetch(:id)], listed.fetch(:apiKeys).map { |key| key.fetch(:id) }
+      end
+    ensure
+      connection&.close
+    end
+  rescue LoadError
+    skip "sqlite3 gem is not installed"
+  end
+
   def test_postgres_adapter_api_key_lifecycle
     require_adapter_integration!
 
