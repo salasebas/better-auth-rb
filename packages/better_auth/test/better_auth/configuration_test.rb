@@ -62,6 +62,25 @@ class BetterAuthConfigurationTest < Minitest::Test
     assert_equal "secondary-storage", config.rate_limit[:storage]
   end
 
+  def test_secondary_storage_defaults_oauth_state_to_verification_storage
+    config = BetterAuth::Configuration.new(secret: SECRET, secondary_storage: Object.new)
+
+    assert_equal "database", config.account[:store_state_strategy]
+    assert_equal true, config.account[:store_account_cookie]
+  end
+
+  def test_explicit_oauth_state_strategy_wins_with_secondary_storage
+    %w[cookie database].each do |strategy|
+      config = BetterAuth::Configuration.new(
+        secret: SECRET,
+        secondary_storage: Object.new,
+        account: {store_state_strategy: strategy}
+      )
+
+      assert_equal strategy, config.account[:store_state_strategy]
+    end
+  end
+
   def test_secondary_storage_disables_cookie_refresh_cache
     storage = Object.new
 

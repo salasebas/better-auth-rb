@@ -94,6 +94,8 @@ module BetterAuth
       end
 
       def delete(model:, where:)
+        return nil if where.nil? || where.empty?
+
         delete_many(model: model, where: where)
         nil
       end

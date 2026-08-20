@@ -180,7 +180,7 @@ module BetterAuth
           user = ctx.context.internal_adapter.find_user_by_id(record["userId"])
           raise device_authorization_error("INTERNAL_SERVER_ERROR", "server_error", DEVICE_AUTHORIZATION_ERROR_CODES["USER_NOT_FOUND"]) unless user
 
-          session = ctx.context.internal_adapter.create_session(user["id"])
+          session = ctx.context.internal_adapter.create_session(user["id"], false, nil, false, ctx)
           raise device_authorization_error("INTERNAL_SERVER_ERROR", "server_error", DEVICE_AUTHORIZATION_ERROR_CODES["FAILED_TO_CREATE_SESSION"]) unless session
 
           session_data = {session: session, user: user}

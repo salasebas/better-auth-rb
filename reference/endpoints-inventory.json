@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-07-16T01:47:43Z",
+  "generated_at": "2026-08-20T04:26:25Z",
   "route_count": 222,
   "routes": [
     {
@@ -5089,7 +5089,7 @@
     {
       "path": "/passkey/generate-authenticate-options",
       "methods": [
-        "POST"
+        "GET"
       ],
       "file": "packages/better_auth-passkey/lib/better_auth/passkey/routes/authentication.rb",
       "line": 13,
@@ -5103,29 +5103,28 @@
       "server_only": false,
       "hidden": false,
       "source": "static+runtime",
-      "method": "POST",
+      "method": "GET",
       "ruby_api_method": "generate_passkey_authentication_options",
       "ruby_api_call": "auth.api.generate_passkey_authentication_options",
+      "upstream_registry_key": "generatePasskeyAuthenticationOptions",
+      "upstream_api_call": "auth.api.generatePasskeyAuthenticationOptions",
+      "upstream_client_call": null,
       "plugin_id": "passkey",
       "operation_id": "passkeyGenerateAuthenticateOptions"
     },
     {
       "path": "/passkey/generate-register-options",
       "methods": [
-        "POST"
+        "GET"
       ],
       "file": "packages/better_auth-passkey/lib/better_auth/passkey/routes/registration.rb",
       "line": 13,
       "endpoint_key": "generate_passkey_registration_options",
       "plugin_hint": "better_auth/passkey/routes",
-      "body_fields": [
+      "body_fields": [],
+      "query_params": [
         {
           "name": "authenticatorAttachment",
-          "required": false,
-          "type": "string"
-        },
-        {
-          "name": "context",
           "required": false,
           "type": "string"
         },
@@ -5133,18 +5132,25 @@
           "name": "name",
           "required": false,
           "type": "string"
+        },
+        {
+          "name": "context",
+          "required": false,
+          "type": "string"
         }
       ],
-      "query_params": [],
       "path_params": [],
       "header_params": [],
       "disable_body": false,
       "server_only": false,
       "hidden": false,
       "source": "static+runtime",
-      "method": "POST",
+      "method": "GET",
       "ruby_api_method": "generate_passkey_registration_options",
       "ruby_api_call": "auth.api.generate_passkey_registration_options",
+      "upstream_registry_key": "generatePasskeyRegistrationOptions",
+      "upstream_api_call": "auth.api.generatePasskeyRegistrationOptions",
+      "upstream_client_call": null,
       "plugin_id": "passkey",
       "operation_id": "generatePasskeyRegistrationOptions"
     },

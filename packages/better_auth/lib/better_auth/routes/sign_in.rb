@@ -8,6 +8,7 @@ module BetterAuth
       Endpoint.new(
         path: "/sign-in/email",
         method: "POST",
+        use: [Middleware::OriginCheck.form_csrf],
         body_schema: request_body_schema(required_strings: %w[email password]),
         metadata: {
           allowed_media_types: [

@@ -87,6 +87,121 @@ class BetterAuthPluginsHaveIBeenPwnedTest < Minitest::Test
     assert_equal "have-i-been-pwned", plugin.id
   end
 
+  def test_default_paths_match_upstream
+    plugin = BetterAuth::Plugins.have_i_been_pwned
+
+    assert_equal [
+      "/sign-up/email",
+      "/change-password",
+      "/reset-password",
+      "/email-otp/reset-password",
+      "/phone-number/reset-password",
+      "/admin/create-user",
+      "/admin/set-user-password"
+    ], plugin.options[:paths]
+  end
+
+  def test_explicit_empty_paths_disable_password_checks
+    calls = []
+    auth = BetterAuth.auth(
+      secret: SECRET,
+      email_and_password: {enabled: true},
+      plugins: [
+        BetterAuth::Plugins.have_i_been_pwned(
+          paths: [],
+          range_lookup: ->(prefix) {
+            calls << prefix
+            suffix_for("123456789")
+          }
+        )
+      ]
+    )
+
+    result = auth.api.sign_up_email(body: {email: "empty-paths@example.com", password: "123456789", name: "HIBP"})
+
+    assert result[:user]
+    assert_empty calls
+  end
+
+  def test_default_paths_reject_email_otp_password_reset
+    sent = []
+    auth = build_auth_with_plugins(
+      compromised_password: "email-otp-compromised",
+      plugins: [
+        BetterAuth::Plugins.email_otp(send_verification_otp: ->(data, _ctx = nil) { sent << data })
+      ]
+    )
+    auth.api.sign_up_email(body: {email: "hibp-email-otp@example.com", password: "safe-password123", name: "HIBP"})
+    auth.api.request_password_reset_email_otp(body: {email: "hibp-email-otp@example.com"})
+
+    error = assert_raises(BetterAuth::APIError) do
+      auth.api.reset_password_email_otp(
+        body: {email: "hibp-email-otp@example.com", otp: sent.first[:otp], password: "email-otp-compromised"}
+      )
+    end
+
+    assert_equal 400, error.status_code
+    assert_equal "PASSWORD_COMPROMISED", error.code
+  end
+
+  def test_default_paths_reject_phone_number_password_reset
+    reset_sent = []
+    auth = build_auth_with_plugins(
+      compromised_password: "phone-reset-compromised",
+      plugins: [
+        BetterAuth::Plugins.phone_number(
+          send_otp: ->(*) {},
+          send_password_reset_otp: ->(data, _ctx = nil) { reset_sent << data }
+        )
+      ]
+    )
+    auth.api.sign_up_email(body: {email: "hibp-phone@example.com", password: "safe-password123", name: "HIBP"})
+    user = auth.context.internal_adapter.find_user_by_email("hibp-phone@example.com")[:user]
+    auth.context.internal_adapter.update_user(user["id"], phoneNumber: "+15105550183", phoneNumberVerified: true)
+    auth.api.request_password_reset_phone_number(body: {phoneNumber: "+15105550183"})
+
+    error = assert_raises(BetterAuth::APIError) do
+      auth.api.reset_password_phone_number(
+        body: {phoneNumber: "+15105550183", otp: reset_sent.first[:code], newPassword: "phone-reset-compromised"}
+      )
+    end
+
+    assert_equal 400, error.status_code
+    assert_equal "PASSWORD_COMPROMISED", error.code
+  end
+
+  def test_default_paths_reject_admin_password_endpoints
+    auth = build_auth_with_plugins(
+      compromised_password: "admin-compromised",
+      plugins: [BetterAuth::Plugins.admin]
+    )
+    admin_cookie = sign_up_cookie(auth, email: "hibp-admin@example.com", password: "safe-password123")
+    admin = auth.api.get_session(headers: {"cookie" => admin_cookie})[:user]
+    auth.context.internal_adapter.update_user(admin["id"], role: "admin")
+
+    create_error = assert_raises(BetterAuth::APIError) do
+      auth.api.create_user(
+        headers: {"cookie" => admin_cookie},
+        body: {email: "hibp-created@example.com", password: "admin-compromised", name: "Created"}
+      )
+    end
+    assert_equal 400, create_error.status_code
+    assert_equal "PASSWORD_COMPROMISED", create_error.code
+
+    target = auth.api.create_user(
+      headers: {"cookie" => admin_cookie},
+      body: {email: "hibp-target@example.com", password: "safe-password123", name: "Target"}
+    )[:user]
+    set_error = assert_raises(BetterAuth::APIError) do
+      auth.api.set_user_password(
+        headers: {"cookie" => admin_cookie},
+        body: {userId: target["id"], newPassword: "admin-compromised"}
+      )
+    end
+    assert_equal 400, set_error.status_code
+    assert_equal "PASSWORD_COMPROMISED", set_error.code
+  end
+
   def test_reset_password_invalid_token_does_not_check_hibp
     calls = []
     auth = BetterAuth.auth(
@@ -179,6 +294,20 @@ class BetterAuthPluginsHaveIBeenPwnedTest < Minitest::Test
       email_and_password: {enabled: true},
       plugins: [
         BetterAuth::Plugins.have_i_been_pwned(range_lookup: ->(_prefix) { compromised })
+      ]
+    )
+  end
+
+  def build_auth_with_plugins(compromised_password:, plugins:)
+    BetterAuth.auth(
+      secret: SECRET,
+      database: :memory,
+      email_and_password: {enabled: true},
+      plugins: [
+        BetterAuth::Plugins.have_i_been_pwned(
+          range_lookup: ->(_prefix) { suffix_for(compromised_password) }
+        ),
+        *plugins
       ]
     )
   end

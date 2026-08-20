@@ -189,7 +189,7 @@ class BetterAuthPluginsOrganizationTest < Minitest::Test
     duplicate = assert_raises(BetterAuth::APIError) do
       auth.api.create_invitation(headers: {"cookie" => owner_cookie}, body: {organizationId: organization.fetch("id"), email: "INVITEE@example.com", role: "member"})
     end
-    assert_equal 409, duplicate.status_code
+    assert_equal 400, duplicate.status_code
 
     wrong_recipient = assert_raises(BetterAuth::APIError) do
       auth.api.accept_invitation(headers: {"cookie" => other_cookie}, body: {invitationId: invitation.fetch("id")})
@@ -201,6 +201,182 @@ class BetterAuthPluginsOrganizationTest < Minitest::Test
       auth.api.accept_invitation(headers: {"cookie" => invitee_cookie}, body: {invitationId: invitation.fetch("id")})
     end
     assert_equal 400, expired.status_code
+  end
+
+  def test_resending_reuses_pending_invitation_and_bypasses_creation_gates
+    hook_calls = []
+    email_calls = []
+    limit_calls = []
+    auth = build_auth(
+      plugins: [
+        BetterAuth::Plugins.organization(
+          invitation_limit: lambda { |data, context|
+            raise "resend unexpectedly evaluated the invitation limit" if limit_calls.any?
+
+            limit_calls << [data, context]
+            1
+          },
+          teams: {enabled: true},
+          send_invitation_email: ->(data, _request) { email_calls << data },
+          organization_hooks: {
+            before_create_invitation: ->(_data, _ctx) { hook_calls << :before },
+            after_create_invitation: ->(_data, _ctx) { hook_calls << :after }
+          },
+          schema: {
+            invitation: {
+              additionalFields: {
+                note: {type: "string", required: false}
+              }
+            }
+          }
+        )
+      ]
+    )
+    owner_cookie = sign_up_cookie(auth, email: "resend-owner@example.com")
+    second_owner_cookie = sign_up_cookie(auth, email: "resend-second-owner@example.com")
+    second_owner = auth.api.get_session(headers: {"cookie" => second_owner_cookie}).fetch(:user)
+    organization = auth.api.create_organization(headers: {"cookie" => owner_cookie}, body: {name: "Resend", slug: "resend"})
+    auth.context.adapter.create(
+      model: "member",
+      data: {organizationId: organization.fetch("id"), userId: second_owner.fetch("id"), role: "owner", createdAt: Time.now}
+    )
+    original_team = auth.api.create_team(headers: {"cookie" => owner_cookie}, body: {organizationId: organization.fetch("id"), name: "Original Team"})
+    ignored_team = auth.api.create_team(headers: {"cookie" => owner_cookie}, body: {organizationId: organization.fetch("id"), name: "Ignored Team"})
+
+    original = auth.api.create_invitation(
+      headers: {"cookie" => owner_cookie},
+      body: {organizationId: organization.fetch("id"), email: "resend-invitee@example.com", role: "member", teamId: original_team.fetch("id"), additionalFields: {note: "original"}}
+    )
+    auth.context.adapter.update(
+      model: "invitation",
+      where: [{field: "id", value: original.fetch("id")}],
+      update: {expiresAt: Time.at(0)}
+    )
+
+    resent = auth.api.create_invitation(
+      headers: {"cookie" => second_owner_cookie},
+      body: {organizationId: organization.fetch("id"), email: "RESEND-INVITEE@example.com", role: "admin", teamId: ignored_team.fetch("id"), resend: true, additionalFields: {note: "ignored"}}
+    )
+
+    assert_equal original.fetch("id"), resent.fetch("id")
+    assert_equal "member", resent.fetch("role")
+    assert_equal original_team.fetch("id"), resent.fetch("teamId")
+    assert_equal original.fetch("inviterId"), resent.fetch("inviterId")
+    assert_equal "original", resent.fetch("note")
+    assert_operator resent.fetch("expiresAt"), :>, Time.now
+    assert_equal [:before, :after], hook_calls
+    assert_equal 1, limit_calls.length
+    assert_equal 2, email_calls.length
+    assert_equal original.fetch("id"), email_calls.last.fetch(:id)
+    assert_equal "member", email_calls.last.fetch(:role)
+    assert_equal original.fetch("id"), email_calls.last.fetch(:invitation).fetch("id")
+    assert_equal "original", email_calls.last.fetch(:invitation).fetch("note")
+    assert_equal "resend-second-owner@example.com", email_calls.last.fetch(:inviter).fetch("user").fetch("email")
+    pending = auth.context.adapter.find_many(model: "invitation", where: [{field: "organizationId", value: organization.fetch("id")}, {field: "status", value: "pending"}])
+    assert_equal 1, pending.length
+    assert_equal "original", pending.first.fetch("note")
+  end
+
+  def test_callable_invitation_limit_receives_server_member_and_uses_threshold_without_coercion
+    calls = []
+    auth = build_auth(
+      plugins: [
+        BetterAuth::Plugins.organization(
+          invitation_limit: lambda { |data, context|
+            calls << [data, context]
+            1.5
+          },
+          schema: {
+            member: {
+              additionalFields: {
+                limitMarker: {type: "string", required: false, returned: false}
+              }
+            }
+          }
+        )
+      ]
+    )
+    owner_cookie = sign_up_cookie(auth, email: "callable-invite-owner@example.com")
+    owner = auth.api.get_session(headers: {"cookie" => owner_cookie}).fetch(:user)
+    organization = auth.api.create_organization(headers: {"cookie" => owner_cookie}, body: {name: "Callable Invite", slug: "callable-invite"})
+    auth.context.adapter.update(
+      model: "member",
+      where: [{field: "organizationId", value: organization.fetch("id")}, {field: "userId", value: owner.fetch("id")}],
+      update: {limitMarker: "server-only"}
+    )
+
+    2.times do |index|
+      auth.api.create_invitation(
+        headers: {"cookie" => owner_cookie},
+        body: {organizationId: organization.fetch("id"), email: "callable-invitee-#{index}@example.com", role: "member"}
+      )
+    end
+    blocked = assert_raises(BetterAuth::APIError) do
+      auth.api.create_invitation(
+        headers: {"cookie" => owner_cookie},
+        body: {organizationId: organization.fetch("id"), email: "callable-invitee-blocked@example.com", role: "member"}
+      )
+    end
+
+    assert_equal 403, blocked.status_code
+    assert_equal BetterAuth::Plugins::ORGANIZATION_ERROR_CODES.fetch("INVITATION_LIMIT_REACHED"), blocked.message
+    assert_equal 3, calls.length
+    assert_equal auth.context, calls.first.fetch(1)
+    assert_equal [:member, :organization, :user], calls.first.fetch(0).keys.sort
+    assert_equal "callable-invite-owner@example.com", calls.first.fetch(0).fetch(:user).fetch("email")
+    assert_equal "Callable Invite", calls.first.fetch(0).fetch(:organization).fetch("name")
+    assert_equal "owner", calls.first.fetch(0).fetch(:member).fetch("role")
+    assert_equal "callable-invite-owner@example.com", calls.first.fetch(0).fetch(:member).fetch("user").fetch("email")
+    assert_equal "server-only", calls.first.fetch(0).fetch(:member).fetch("limitMarker")
+  end
+
+  def test_only_custom_creator_role_can_invite_another_creator
+    ac = BetterAuth::Plugins.create_access_control(
+      organization: ["update", "delete"],
+      member: ["create", "update", "delete"],
+      invitation: ["create", "cancel"],
+      team: ["create", "update", "delete"],
+      ac: ["create", "read", "update", "delete"]
+    )
+    auth = build_auth(
+      plugins: [
+        BetterAuth::Plugins.organization(
+          creator_role: "founder",
+          ac: ac,
+          roles: {
+            founder: ac.new_role(member: ["create"], invitation: ["create"]),
+            admin: ac.new_role(invitation: ["create"]),
+            member: ac.new_role({})
+          }
+        )
+      ]
+    )
+    founder_cookie = sign_up_cookie(auth, email: "invite-founder@example.com")
+    admin_cookie = sign_up_cookie(auth, email: "invite-admin@example.com")
+    admin_user = auth.api.get_session(headers: {"cookie" => admin_cookie}).fetch(:user)
+    organization = auth.api.create_organization(headers: {"cookie" => founder_cookie}, body: {name: "Custom Invite Creator", slug: "custom-invite-creator"})
+    auth.api.add_member(headers: {"cookie" => founder_cookie}, body: {organizationId: organization.fetch("id"), userId: admin_user.fetch("id"), role: "admin"})
+
+    blocked = assert_raises(BetterAuth::APIError) do
+      auth.api.create_invitation(
+        headers: {"cookie" => admin_cookie},
+        body: {organizationId: organization.fetch("id"), email: "blocked-founder@example.com", role: "founder"}
+      )
+    end
+    assert_equal 403, blocked.status_code
+    assert_equal BetterAuth::Plugins::ORGANIZATION_ERROR_CODES.fetch("YOU_ARE_NOT_ALLOWED_TO_INVITE_USER_WITH_THIS_ROLE"), blocked.message
+
+    founder = auth.api.get_session(headers: {"cookie" => founder_cookie}).fetch(:user)
+    auth.context.adapter.update(
+      model: "member",
+      where: [{field: "organizationId", value: organization.fetch("id")}, {field: "userId", value: founder.fetch("id")}],
+      update: {role: "founder,admin"}
+    )
+    invitation = auth.api.create_invitation(
+      headers: {"cookie" => founder_cookie},
+      body: {organizationId: organization.fetch("id"), email: "allowed-founder@example.com", role: "founder"}
+    )
+    assert_equal "founder", invitation.fetch("role")
   end
 
   def test_invitation_reinvite_cancel_and_user_lists_only_pending_states

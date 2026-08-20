@@ -227,20 +227,118 @@ class BetterAuthRoutesSessionTest < Minitest::Test
     assert_equal "Fresh User", result[:user]["name"]
   end
 
-  def test_stateless_cookie_cache_refresh_extends_session_token_cookie
-    auth = build_auth(database: nil, session: {expires_in: 300, cookie_cache: {enabled: true, strategy: "jwe", max_age: 300, refresh_cache: {update_age: 0}}})
-    cookie = sign_up_cookie(auth, email: "stateless-refresh@example.com")
-    session = auth.api.get_session(headers: {"cookie" => cookie})
-    auth.context.internal_adapter.delete_session(session[:session]["token"])
+  def test_stateless_cookie_cache_refresh_uses_remaining_ttl_with_strict_boundary_for_all_strategies
+    %w[compact jwt jwe].each do |strategy|
+      fixture = stateless_cookie_cache_fixture(
+        strategy: strategy,
+        refresh_cache: {update_age: 60},
+        email: "#{strategy}-remaining-ttl@example.com"
+      )
 
-    status, headers, body = auth.api.get_session(headers: {"cookie" => cookie}, as_response: true)
-    refreshed = JSON.parse(body.join)
+      [61, 240].each do |elapsed_seconds|
+        status, headers, result = stateless_session_response(fixture, elapsed_seconds)
 
-    assert_equal 200, status
-    assert_equal "stateless-refresh@example.com", refreshed.fetch("user").fetch("email")
-    assert_includes headers.fetch("set-cookie"), "better-auth.session_data="
-    assert_includes headers.fetch("set-cookie"), "better-auth.session_token="
-    assert_match(/Max-Age=(?:299|300)/, headers.fetch("set-cookie"))
+        assert_equal 200, status, strategy
+        assert_equal fixture[:original][:session], result.fetch("session"), strategy
+        assert_cookie_refresh_headers headers, expected: false, message: "#{strategy} at elapsed #{elapsed_seconds}"
+      end
+
+      status, headers, result = stateless_session_response(fixture, 241)
+
+      assert_equal 200, status, strategy
+      assert_equal fixture[:original][:session], result.fetch("session"), strategy
+      assert_equal fixture[:original][:session]["expiresAt"], result.fetch("session").fetch("expiresAt"), strategy
+      refresh_headers = assert_cookie_refresh_headers headers, expected: true, message: "#{strategy} below threshold"
+      assert_includes refresh_headers.fetch(:session_data), "Max-Age=300", strategy
+    end
+  end
+
+  def test_stateless_cookie_cache_refresh_true_and_empty_config_derive_twenty_percent_of_effective_max_age
+    {true_config: true, empty_config: {}}.each do |name, refresh_cache|
+      fixture = stateless_cookie_cache_fixture(
+        strategy: "compact",
+        refresh_cache: refresh_cache,
+        email: "#{name}-refresh@example.com",
+        max_age: nil,
+        expires_in: 305
+      )
+
+      _status, equality_headers, equality_result = stateless_session_response(fixture, 244)
+      assert_equal fixture[:original][:session], equality_result.fetch("session")
+      assert_cookie_refresh_headers equality_headers, expected: false, message: name
+
+      _status, below_headers, below_result = stateless_session_response(fixture, 245)
+      assert_equal fixture[:original][:session], below_result.fetch("session")
+      assert_cookie_refresh_headers below_headers, expected: true, message: name
+    end
+  end
+
+  def test_stateless_cookie_cache_refresh_preserves_fractional_custom_update_age
+    fixture = stateless_cookie_cache_fixture(
+      strategy: "compact",
+      refresh_cache: {update_age: 1.5},
+      email: "fractional-refresh@example.com",
+      max_age: 10
+    )
+
+    _status, equality_headers, equality_result = stateless_session_response(fixture, Rational(17, 2))
+    assert_equal fixture[:original][:session], equality_result.fetch("session")
+    assert_cookie_refresh_headers equality_headers, expected: false, message: "1.5 seconds remaining"
+
+    _status, below_headers, below_result = stateless_session_response(fixture, Rational(44, 5))
+    assert_equal fixture[:original][:session], below_result.fetch("session")
+    assert_cookie_refresh_headers below_headers, expected: true, message: "1.2 seconds remaining"
+  end
+
+  def test_stateless_cookie_cache_refresh_uses_implicit_defaults_with_strict_boundary
+    issued_at = Time.utc(2026, 7, 12, 12, 0, 0)
+    auth = build_auth(database: nil)
+    cookie = Time.stub(:now, issued_at) { sign_up_cookie(auth, email: "default-refresh@example.com") }
+    original = Time.stub(:now, issued_at) { auth.api.get_session(headers: {"cookie" => cookie}) }
+    auth.context.internal_adapter.delete_session(original[:session]["token"])
+    fixture = {auth: auth, cookie: cookie, issued_at: issued_at, original: original}
+
+    _status, equality_headers, equality_result = stateless_session_response(fixture, 483_840)
+    assert_equal original[:session], equality_result.fetch("session")
+    assert_cookie_refresh_headers equality_headers, expected: false, message: "implicit default equality"
+
+    _status, below_headers, below_result = stateless_session_response(fixture, 483_841)
+    assert_equal original[:session], below_result.fetch("session")
+    assert_cookie_refresh_headers below_headers, expected: true, message: "implicit default below threshold"
+  end
+
+  def test_stateless_cookie_cache_refresh_remember_me_false_uses_same_threshold
+    fixture = stateless_cookie_cache_fixture(
+      strategy: "jwe",
+      refresh_cache: {update_age: 60},
+      email: "remember-me-threshold@example.com",
+      remember_me: false
+    )
+
+    _status, equality_headers, equality_result = stateless_session_response(fixture, 240)
+    assert_equal fixture[:original][:session], equality_result.fetch("session")
+    assert_cookie_refresh_headers equality_headers, expected: false, message: "remember me equality"
+
+    _status, below_headers, below_result = stateless_session_response(fixture, 241)
+    assert_equal fixture[:original][:session], below_result.fetch("session")
+    assert_cookie_refresh_headers below_headers, expected: true, message: "remember me below threshold"
+  end
+
+  def test_stateless_cookie_cache_refresh_zero_and_false_do_not_refresh_before_expiry
+    {zero: {update_age: 0}, disabled: false}.each do |name, refresh_cache|
+      fixture = stateless_cookie_cache_fixture(
+        strategy: "jwt",
+        refresh_cache: refresh_cache,
+        email: "#{name}-refresh@example.com",
+        expires_in: 600
+      )
+
+      status, headers, result = stateless_session_response(fixture, 299)
+
+      assert_equal 200, status, name
+      assert_equal fixture[:original][:session], result.fetch("session"), name
+      assert_cookie_refresh_headers headers, expected: false, message: name
+    end
   end
 
   def test_stateless_cookie_cache_refresh_preserves_original_session_expiry
@@ -679,9 +777,11 @@ class BetterAuthRoutesSessionTest < Minitest::Test
     cookie_header(headers.fetch("set-cookie"))
   end
 
-  def sign_in_cookie(auth, email:)
+  def sign_in_cookie(auth, email:, remember_me: nil)
+    body = {email: email, password: "password123"}
+    body[:rememberMe] = remember_me unless remember_me.nil?
     _status, headers, _body = auth.api.sign_in_email(
-      body: {email: email, password: "password123"},
+      body: body,
       as_response: true
     )
     cookie_header(headers.fetch("set-cookie"))
@@ -689,6 +789,55 @@ class BetterAuthRoutesSessionTest < Minitest::Test
 
   def cookie_header(set_cookie)
     set_cookie.lines.map { |line| line.split(";").first }.join("; ")
+  end
+
+  def stateless_cookie_cache_fixture(strategy:, refresh_cache:, email:, max_age: 300, expires_in: 3600, remember_me: true)
+    issued_at = Time.utc(2026, 7, 12, 12, 0, 0)
+    cookie_cache = {enabled: true, strategy: strategy, refresh_cache: refresh_cache}
+    cookie_cache[:max_age] = max_age if max_age
+    auth = build_auth(
+      database: nil,
+      session: {update_age: 30, expires_in: expires_in, cookie_cache: cookie_cache}
+    )
+    cookie = Time.stub(:now, issued_at) do
+      sign_up = sign_up_cookie(auth, email: email)
+      next sign_in_cookie(auth, email: email, remember_me: false) unless remember_me
+
+      sign_up
+    end
+    original = Time.stub(:now, issued_at) { auth.api.get_session(headers: {"cookie" => cookie}) }
+    auth.context.internal_adapter.delete_session(original[:session]["token"])
+
+    {auth: auth, cookie: cookie, issued_at: issued_at, original: original}
+  end
+
+  def stateless_session_response(fixture, elapsed_seconds)
+    status, headers, body = Time.stub(:now, fixture[:issued_at] + elapsed_seconds) do
+      fixture[:auth].api.get_session(headers: {"cookie" => fixture[:cookie]}, as_response: true)
+    end
+
+    [status, headers, JSON.parse(body.join)]
+  end
+
+  def assert_cookie_refresh_headers(headers, expected:, message: nil)
+    lines = headers.fetch("set-cookie", "").to_s.lines(chomp: true)
+    refresh_headers = {}
+    {session_data: "better-auth.session_data", session_token: "better-auth.session_token"}.each do |key, name|
+      matching = lines.select { |line| line.start_with?("#{name}=") }
+
+      unless expected
+        assert_empty matching, message
+        next
+      end
+
+      nonempty = matching.find do |line|
+        !line.start_with?("#{name}=;") && !line.include?("Max-Age=0")
+      end
+      refute_nil nonempty, message
+      refresh_headers[key] = nonempty
+    end
+
+    refresh_headers
   end
 
   class ObjectStorage

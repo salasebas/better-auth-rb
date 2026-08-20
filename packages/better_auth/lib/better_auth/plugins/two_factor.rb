@@ -103,7 +103,7 @@ module BetterAuth
         backup = two_factor_generate_backup_codes(ctx.context.secret_config, config[:backup_code_options])
         if config[:skip_verification_on_enable]
           updated_user = ctx.context.internal_adapter.update_user(session[:user]["id"], twoFactorEnabled: true)
-          new_session = ctx.context.internal_adapter.create_session(updated_user["id"], false)
+          new_session = ctx.context.internal_adapter.create_session(updated_user["id"], false, nil, false, ctx)
           Cookies.set_session_cookie(ctx, {session: new_session, user: updated_user})
           ctx.context.internal_adapter.delete_session(session[:session]["token"])
         end
@@ -137,7 +137,7 @@ module BetterAuth
 
         updated_user = ctx.context.internal_adapter.update_user(session[:user]["id"], twoFactorEnabled: false)
         ctx.context.adapter.delete(model: TWO_FACTOR_MODEL, where: [{field: "userId", value: updated_user["id"]}])
-        new_session = ctx.context.internal_adapter.create_session(updated_user["id"], false)
+        new_session = ctx.context.internal_adapter.create_session(updated_user["id"], false, nil, false, ctx)
         Cookies.set_session_cookie(ctx, {session: new_session, user: updated_user})
         ctx.context.internal_adapter.delete_session(session[:session]["token"])
 
@@ -204,14 +204,14 @@ module BetterAuth
         if record["verified"] != true
           if !data[:session][:user]["twoFactorEnabled"] && data[:session][:session]
             updated_user = ctx.context.internal_adapter.update_user(data[:session][:user]["id"], twoFactorEnabled: true)
-            new_session = ctx.context.internal_adapter.create_session(updated_user["id"], false)
+            new_session = ctx.context.internal_adapter.create_session(updated_user["id"], false, nil, false, ctx)
             ctx.context.internal_adapter.delete_session(data[:session][:session]["token"])
             Cookies.set_session_cookie(ctx, {session: new_session, user: updated_user})
           end
           ctx.context.adapter.update(model: TWO_FACTOR_MODEL, where: [{field: "id", value: record["id"]}], update: {verified: true})
         elsif !data[:session][:user]["twoFactorEnabled"] && data[:session][:session]
           updated_user = ctx.context.internal_adapter.update_user(data[:session][:user]["id"], twoFactorEnabled: true)
-          new_session = ctx.context.internal_adapter.create_session(updated_user["id"], false)
+          new_session = ctx.context.internal_adapter.create_session(updated_user["id"], false, nil, false, ctx)
           ctx.context.internal_adapter.delete_session(data[:session][:session]["token"])
           Cookies.set_session_cookie(ctx, {session: new_session, user: updated_user})
         end
@@ -275,7 +275,7 @@ module BetterAuth
 
         if !data[:session][:user]["twoFactorEnabled"] && data[:session][:session]
           updated_user = ctx.context.internal_adapter.update_user(data[:session][:user]["id"], twoFactorEnabled: true)
-          new_session = ctx.context.internal_adapter.create_session(updated_user["id"], false)
+          new_session = ctx.context.internal_adapter.create_session(updated_user["id"], false, nil, false, ctx)
           ctx.context.internal_adapter.delete_session(data[:session][:session]["token"])
           Cookies.set_session_cookie(ctx, {session: new_session, user: updated_user})
           next ctx.json({token: new_session["token"], user: Schema.parse_output(ctx.context.options, "user", updated_user)})
@@ -494,7 +494,7 @@ module BetterAuth
         end
 
         dont_remember_me = Cookies.dont_remember?(ctx)
-        new_session = ctx.context.internal_adapter.create_session(user["id"], dont_remember_me)
+        new_session = ctx.context.internal_adapter.create_session(user["id"], dont_remember_me, nil, false, ctx)
         raise APIError.new("INTERNAL_SERVER_ERROR", message: "failed to create session") unless new_session
 
         Cookies.set_session_cookie(ctx, {session: new_session, user: user}, dont_remember_me)

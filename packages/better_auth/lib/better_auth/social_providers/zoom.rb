@@ -4,7 +4,7 @@ module BetterAuth
   module SocialProviders
     module_function
 
-    def zoom(client_id:, client_secret:, scopes: [], **options)
+    def zoom(client_id:, client_secret: nil, scopes: [], **options)
       Base.oauth_provider(
         id: "zoom",
         name: "Zoom",
