@@ -295,7 +295,10 @@ module BetterAuth
         else
           account_cookie(ctx, provider_id, nil, user_id)
         end
-        raise APIError.new("BAD_REQUEST", message: BASE_ERROR_CODES["ACCOUNT_NOT_FOUND"]) unless account && account["userId"] == user_id
+        matches_session_user = account && (
+          !StoreCapabilities.should_bind_account_cookie_to_session_user?(ctx.context.options) || account["userId"] == user_id
+        )
+        raise APIError.new("BAD_REQUEST", message: BASE_ERROR_CODES["ACCOUNT_NOT_FOUND"]) unless matches_session_user
 
         provider = social_provider(ctx.context, account["providerId"])
         unless provider && provider_callable(provider, :get_user_info)
@@ -369,7 +372,9 @@ module BetterAuth
       return nil unless account
       return nil if provider_id && account["providerId"] != provider_id
       return nil unless account_id.to_s.empty? || account["id"] == account_id || account["accountId"] == account_id
-      return nil unless user_id.to_s.empty? || account["userId"].to_s.empty? || account["userId"] == user_id
+      if StoreCapabilities.should_bind_account_cookie_to_session_user?(ctx.context.options)
+        return nil unless user_id.to_s.empty? || account["userId"].to_s.empty? || account["userId"] == user_id
+      end
 
       account
     end

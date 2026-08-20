@@ -169,6 +169,8 @@ module BetterAuth
         store.set_cookies(store.clean) if store.chunks?
         ctx.set_cookie(cookie.name, value, attributes)
       end
+
+      sync_account_cookie(ctx, session)
     end
 
     def set_account_cookie(ctx, account_data)
@@ -193,6 +195,24 @@ module BetterAuth
       return nil unless value
 
       Crypto.symmetric_decode_jwt(value, ctx.context.secret_config, "better-auth-account")
+    end
+
+    def sync_account_cookie(ctx, session)
+      return unless ctx.context.options.account[:store_account_cookie]
+
+      cookie = ctx.context.auth_cookies[:account_data]
+      return if pending_set_cookie?(ctx, cookie.name)
+
+      account_data = get_account_cookie(ctx)
+      return unless account_data
+
+      if !StoreCapabilities.should_bind_account_cookie_to_session_user?(ctx.context.options) || account_data["userId"] == session.fetch(:user).fetch("id")
+        set_account_cookie(ctx, account_data)
+      else
+        expire_cookie(ctx, cookie)
+        store = SessionStore.new(cookie.name, cookie.attributes, ctx)
+        store.set_cookies(store.clean)
+      end
     end
 
     def get_cookie_cache(request_or_cookie_header, secret:, strategy: "compact", version: nil, cookie_prefix: "better-auth", cookie_name: "session_data", is_secure: nil, cookie_full_name: nil, include_expiry: false)
@@ -325,6 +345,14 @@ module BetterAuth
         ctx.response_headers.delete("set-cookie")
       else
         ctx.response_headers["set-cookie"] = survivors.join("\n")
+      end
+    end
+
+    def pending_set_cookie?(ctx, cookie_name)
+      exact = "#{cookie_name}="
+      chunk = "#{cookie_name}."
+      split_set_cookie_header(ctx.response_headers["set-cookie"]).any? do |entry|
+        entry.start_with?(exact, chunk)
       end
     end
 
