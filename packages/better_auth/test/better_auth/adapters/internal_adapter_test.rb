@@ -409,6 +409,33 @@ class BetterAuthInternalAdapterTest < Minitest::Test
     assert_equal "database-normalized", cached.dig("session", "userAgent")
   end
 
+  def test_dual_write_session_ignores_override_id_and_uses_adapter_generated_id
+    storage = MemoryStorage.new
+    hook_ids = []
+    internal = internal_adapter(
+      advanced: {database: {generate_id: "serial"}},
+      secondary_storage: storage,
+      session: {store_session_in_database: true},
+      database_hooks: {
+        session: {create: {after: ->(session, _context) { hook_ids << session["id"] }}}
+      }
+    )
+    user = internal.create_user(name: "Ada", email: "session-serial-id@example.com")
+    token = "session-serial-id-token"
+
+    session = internal.create_session(user["id"], false, {id: "caller-supplied-id", token: token}, true)
+    persisted = internal.adapter.find_one(model: "session", where: [{field: "token", value: token}])
+    cached = JSON.parse(storage.get(token))
+    active_sessions = JSON.parse(storage.get("active-sessions-#{user["id"]}"))
+
+    assert_equal 1, session["id"]
+    refute_equal "caller-supplied-id", session["id"]
+    assert_equal session["id"], persisted["id"]
+    assert_equal session["id"], cached.dig("session", "id")
+    assert_equal [session["id"]], hook_ids
+    assert_equal [token], active_sessions.map { |entry| entry["token"] }
+  end
+
   def test_update_session_with_secondary_storage_updates_database_copy_when_enabled
     storage = MemoryStorage.new
     internal = internal_adapter(secondary_storage: storage, session: {store_session_in_database: true})

@@ -72,6 +72,7 @@ module BetterAuth
 
       def create_session(user_id, dont_remember_me = false, override = nil, override_all = false, context = nil)
         override = stringify_keys(override || {})
+        override.delete("id")
         token = override.delete("token") || SecureRandom.hex(16)
         base = {
           "ipAddress" => "",
@@ -80,7 +81,7 @@ module BetterAuth
           "userId" => user_id,
           "token" => token
         }.merge(timestamps)
-        base["id"] = generated_id if secondary_storage
+        base["id"] = generated_id if secondary_storage && !options.session[:store_session_in_database]
         data = override_all ? base.merge(override) : override.merge(base)
 
         custom = secondary_storage && lambda do |session_data|
