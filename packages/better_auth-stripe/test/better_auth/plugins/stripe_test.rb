@@ -771,7 +771,7 @@ class BetterAuthPluginsStripeTest < Minitest::Test
     assert_nil stripe.webhooks.constructed_sync_args
   end
 
-  def test_webhook_processing_errors_are_logged_without_failing_response
+  def test_webhook_on_event_failure_raises_parity_error_for_direct_api_calls
     stripe = FakeStripeClient.new
     auth = build_auth(
       stripe_client: stripe,
@@ -779,7 +779,13 @@ class BetterAuthPluginsStripeTest < Minitest::Test
       on_event: ->(_event) { raise "processing failed" }
     )
 
-    assert_equal({success: true}, auth.api.stripe_webhook(headers: {"stripe-signature" => "valid"}, body: {type: "invoice.paid"}))
+    error = assert_raises(BetterAuth::APIError) do
+      auth.api.stripe_webhook(headers: {"stripe-signature" => "valid"}, body: {type: "invoice.paid"})
+    end
+
+    assert_equal 400, error.status_code
+    assert_equal "STRIPE_WEBHOOK_ERROR", error.code
+    assert_equal BetterAuth::Stripe::ERROR_CODES.fetch("STRIPE_WEBHOOK_ERROR"), error.message
   end
 
   def test_webhook_rejects_missing_signature
@@ -1770,15 +1776,29 @@ class BetterAuthPluginsStripeTest < Minitest::Test
     assert_empty auth.context.adapter.find_many(model: "subscription", where: [{field: "stripeSubscriptionId", value: "sub_disabled"}])
   end
 
-  def test_valid_webhook_processing_errors_do_not_fail_response
+  def test_rack_webhook_on_event_failure_returns_parity_error_envelope
     stripe = FakeStripeClient.new
+    stripe.webhooks.async_event = {type: "invoice.paid"}
     auth = build_auth(
       stripe_client: stripe,
       stripe_webhook_secret: "whsec_test",
       on_event: ->(_event) { raise "handler failed" }
     )
 
-    assert_equal({success: true}, auth.api.stripe_webhook(headers: {"stripe-signature" => "valid"}, body: {type: "invoice.paid"}))
+    status, _headers, body = auth.call(
+      rack_env(
+        "POST",
+        "/api/auth/stripe/webhook",
+        raw_body: JSON.generate({type: "invoice.paid"}),
+        headers: {"HTTP_STRIPE_SIGNATURE" => "valid"}
+      )
+    )
+
+    assert_equal 400, status
+    assert_equal(
+      {"code" => "STRIPE_WEBHOOK_ERROR", "message" => BetterAuth::Stripe::ERROR_CODES.fetch("STRIPE_WEBHOOK_ERROR")},
+      JSON.parse(body.join)
+    )
   end
 
   def test_success_and_cancel_callbacks_do_not_mutate_another_users_subscription
