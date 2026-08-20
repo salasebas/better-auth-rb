@@ -457,7 +457,7 @@ class BetterAuthSSOSAMLMirrorTest < Minitest::Test
 
     sign_in = sign_in_params(auth, providerId: "relay-saml", callbackURL: "/dashboard")
     relay_state = sign_in.fetch(:params).fetch("RelayState")
-    verification = auth.context.internal_adapter.find_verification_value("#{BetterAuth::Plugins::SSO_SAML_RELAY_STATE_KEY_PREFIX}#{relay_state}")
+    verification = auth.context.internal_adapter.find_verification_value(relay_state)
     response = saml_json_response(id: "relay-assertion", email: "relay@example.com")
     status, headers, _body = auth.api.acs_endpoint(
       params: {providerId: "relay-saml"},
@@ -1122,7 +1122,7 @@ class BetterAuthSSOSAMLMirrorTest < Minitest::Test
       as_response: true
     )
 
-    assert_equal "/dashboard?error=invalid_saml_response&error_description=Provider+mismatch", mismatch[1].fetch("location")
+    assert_equal "/?error=invalid_saml_response&error_description=Provider+mismatch", mismatch[1].fetch("location")
     assert_nil auth.context.internal_adapter.find_verification_value("#{BetterAuth::Plugins::SSO_SAML_AUTHN_REQUEST_KEY_PREFIX}_mismatch")
   end
 

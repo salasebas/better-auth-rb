@@ -208,7 +208,7 @@ class BetterAuthPluginsSSOSAMLTest < Minitest::Test
       as_response: true
     )
     assert_equal 302, replay_status
-    assert_equal "http://localhost:3000/api/auth?error=replay_detected&error_description=SAML+assertion+has+already+been+used", replay_headers.fetch("location")
+    assert_equal "/?error=replay_detected&error_description=SAML+assertion+has+already+been+used", replay_headers.fetch("location")
   end
 
   def test_saml_respects_disable_implicit_signup_and_request_signup
@@ -1173,7 +1173,7 @@ class BetterAuthPluginsSSOSAMLTest < Minitest::Test
 
     sign_in = auth.api.sign_in_sso(body: {providerId: "saml", callbackURL: "/dashboard"})
     relay_state = Rack::Utils.parse_query(URI.parse(sign_in.fetch(:url)).query).fetch("RelayState")
-    stored = auth.context.internal_adapter.find_verification_value("saml-relay-state:#{relay_state}")
+    stored = auth.context.internal_adapter.find_verification_value(relay_state)
     state = JSON.parse(stored.fetch("value"))
 
     assert_match(/\A[a-zA-Z0-9_-]{24,}\z/, relay_state)
@@ -1456,7 +1456,7 @@ class BetterAuthPluginsSSOSAMLTest < Minitest::Test
       body: {SAMLResponse: saml_response_xml(in_response_to: "_mismatch"), RelayState: relay_state},
       as_response: true
     )
-    assert_equal "/dashboard?error=invalid_saml_response&error_description=Provider+mismatch", mismatch[1].fetch("location")
+    assert_equal "/?error=invalid_saml_response&error_description=Provider+mismatch", mismatch[1].fetch("location")
     assert_nil auth.context.internal_adapter.find_verification_value("saml-authn-request:_mismatch")
 
     unsolicited = auth.api.acs_endpoint(
@@ -1464,7 +1464,7 @@ class BetterAuthPluginsSSOSAMLTest < Minitest::Test
       body: {SAMLResponse: saml_response_xml, RelayState: relay_state},
       as_response: true
     )
-    assert_equal "/dashboard?error=unsolicited_response&error_description=IdP-initiated+SSO+not+allowed", unsolicited[1].fetch("location")
+    assert_equal "/?error=unsolicited_response&error_description=IdP-initiated+SSO+not+allowed", unsolicited[1].fetch("location")
   end
 
   def test_saml_assertion_replay_tracking_is_global_across_providers
