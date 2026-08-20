@@ -22,8 +22,8 @@ module BetterAuth
             record_config = BetterAuth::Plugins.api_key_resolve_config(ctx.context, config, BetterAuth::Plugins.api_key_record_config_id(record))
             BetterAuth::Plugins.api_key_authorize_reference!(ctx, record_config, session[:user]["id"], BetterAuth::Plugins.api_key_record_reference_id(record), "read")
 
+            BetterAuth::Plugins.api_key_schedule_unawaited_cleanup(ctx, record_config)
             record = BetterAuth::Plugins.api_key_migrate_legacy_metadata(ctx, record, record_config)
-            BetterAuth::Plugins.api_key_delete_expired(ctx.context, record_config)
             ctx.json(BetterAuth::Plugins.api_key_public(record, include_key_field: false))
           end
         end

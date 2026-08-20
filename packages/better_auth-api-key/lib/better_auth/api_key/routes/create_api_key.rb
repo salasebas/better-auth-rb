@@ -27,7 +27,7 @@ module BetterAuth
             reference_id = BetterAuth::Plugins.api_key_create_reference_id!(ctx, body, session, resolved_config)
 
             BetterAuth::Plugins.api_key_validate_create_update!(body, resolved_config, create: true, client: client_request)
-            BetterAuth::Plugins.api_key_delete_expired(ctx.context, resolved_config)
+            BetterAuth::Plugins.api_key_schedule_unawaited_cleanup(ctx, resolved_config)
             key_prefix = body.key?(:prefix) ? body[:prefix] : resolved_config[:default_prefix]
             key = BetterAuth::Plugins.api_key_generate_key(resolved_config, key_prefix)
             now = Time.now

@@ -55,4 +55,57 @@ class BetterAuthAPIKeyDeleteRouteTest < Minitest::Test
     assert_nil storage.get("api-key:by-id:#{created[:id]}")
     refute_includes JSON.parse(storage.get("api-key:by-ref:#{user_id}") || "[]"), created[:id]
   end
+
+  def test_fallback_delete_removes_secondary_cache_before_database
+    events = []
+    storage = APIKeyTestSupport::MemoryStorage.new
+    auth = build_api_key_auth(
+      storage: "secondary-storage",
+      fallback_to_database: true,
+      secondary_storage: storage,
+      default_key_length: 12
+    )
+    cookie = sign_up_cookie(auth, email: "delete-route-fallback-order-key@example.com")
+    created = auth.api.create_api_key(headers: {"cookie" => cookie}, body: {})
+    original_storage_delete = storage.method(:delete)
+    storage.define_singleton_method(:delete) do |key|
+      events << :secondary
+      original_storage_delete.call(key)
+    end
+    original_database_delete = auth.context.adapter.method(:delete)
+    auth.context.adapter.define_singleton_method(:delete) do |**kwargs|
+      events << :database if kwargs[:model].to_s == "apikey"
+      original_database_delete.call(**kwargs)
+    end
+
+    result = auth.api.delete_api_key(headers: {"cookie" => cookie}, body: {keyId: created[:id]})
+
+    assert_equal({success: true}, result)
+    assert_equal :database, events.last
+    assert events[0...-1].all? { |event| event == :secondary }
+  end
+
+  def test_delete_route_wraps_cache_failure_and_leaves_fallback_database_record
+    storage = APIKeyTestSupport::MemoryStorage.new
+    auth = build_api_key_auth(
+      storage: "secondary-storage",
+      fallback_to_database: true,
+      secondary_storage: storage,
+      default_key_length: 12
+    )
+    cookie = sign_up_cookie(auth, email: "delete-route-fallback-error-key@example.com")
+    created = auth.api.create_api_key(headers: {"cookie" => cookie}, body: {})
+    storage.define_singleton_method(:delete) do |_key|
+      raise StandardError, "simulated cache delete failure"
+    end
+
+    error = assert_raises(BetterAuth::APIError) do
+      auth.api.delete_api_key(headers: {"cookie" => cookie}, body: {keyId: created[:id]})
+    end
+    stored = auth.context.adapter.find_one(model: "apikey", where: [{field: "id", value: created[:id]}])
+
+    assert_equal "INTERNAL_SERVER_ERROR", error.status
+    assert_equal "simulated cache delete failure", error.message
+    refute_nil stored
+  end
 end

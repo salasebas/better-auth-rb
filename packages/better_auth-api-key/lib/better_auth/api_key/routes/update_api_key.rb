@@ -37,16 +37,14 @@ module BetterAuth
             update = BetterAuth::Plugins.api_key_update_payload(body, record_config)
             raise BetterAuth::APIError.new("BAD_REQUEST", message: BetterAuth::Plugins::API_KEY_ERROR_CODES["NO_VALUES_TO_UPDATE"]) if update.empty?
 
-            updated = BetterAuth::Plugins.api_key_update_record(ctx, record, update.merge(updatedAt: Time.now), record_config)
-            unless updated
-              raise BetterAuth::APIError.new(
-                "INTERNAL_SERVER_ERROR",
-                message: BetterAuth::Plugins::API_KEY_ERROR_CODES["FAILED_TO_UPDATE_API_KEY"],
-                code: "FAILED_TO_UPDATE_API_KEY"
-              )
+            begin
+              updated = BetterAuth::Plugins.api_key_update_record(ctx, record, update.merge(updatedAt: Time.now), record_config)
+            rescue => error
+              raise BetterAuth::APIError.new("INTERNAL_SERVER_ERROR", message: error.message)
             end
+            updated ||= record
+            BetterAuth::Plugins.api_key_schedule_unawaited_cleanup(ctx, record_config)
             updated = BetterAuth::Plugins.api_key_migrate_legacy_metadata(ctx, updated, record_config)
-            BetterAuth::Plugins.api_key_delete_expired(ctx.context, record_config)
             ctx.json(BetterAuth::Plugins.api_key_public(updated, include_key_field: false))
           end
         end
