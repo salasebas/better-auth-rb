@@ -195,14 +195,69 @@ class BetterAuthRequestIPTest < Minitest::Test
     assert_nil BetterAuth::RequestIP.client_ip(request, config)
   end
 
-  def test_masks_ipv6_addresses
+  def test_masks_ipv6_addresses_to_canonical_full_form
     config = BetterAuth::Configuration.new(
       secret: SECRET,
       advanced: {ip_address: {ip_address_headers: ["x-forwarded-for"], ipv6_subnet: 64}}
     )
+    request = Rack::Request.new(Rack::MockRequest.env_for("/", "HTTP_X_FORWARDED_FOR" => "2001:DB8:ABCD:1234:FFFF::1"))
+
+    assert_equal "2001:0db8:abcd:1234:0000:0000:0000:0000", BetterAuth::RequestIP.client_ip(request, config)
+  end
+
+  def test_defaults_ipv6_subnet_to_64
+    config = BetterAuth::Configuration.new(
+      secret: SECRET,
+      advanced: {ip_address: {ip_address_headers: ["x-forwarded-for"]}}
+    )
     request = Rack::Request.new(Rack::MockRequest.env_for("/", "HTTP_X_FORWARDED_FOR" => "2001:db8:abcd:1234:ffff::1"))
 
-    assert_equal "2001:db8:abcd:1234::", BetterAuth::RequestIP.client_ip(request, config)
+    assert_equal "2001:0db8:abcd:1234:0000:0000:0000:0000", BetterAuth::RequestIP.client_ip(request, config)
+  end
+
+  def test_clamps_negative_ipv6_subnet_to_zero
+    config = BetterAuth::Configuration.new(
+      secret: SECRET,
+      advanced: {ip_address: {ip_address_headers: ["x-forwarded-for"], ipv6_subnet: -1}}
+    )
+    request = Rack::Request.new(Rack::MockRequest.env_for("/", "HTTP_X_FORWARDED_FOR" => "2001:db8:abcd:1234:ffff::1"))
+
+    assert_equal "0000:0000:0000:0000:0000:0000:0000:0000", BetterAuth::RequestIP.client_ip(request, config)
+  end
+
+  def test_clamps_ipv6_subnet_above_128_to_128
+    config = BetterAuth::Configuration.new(
+      secret: SECRET,
+      advanced: {ip_address: {ip_address_headers: ["x-forwarded-for"], ipv6_subnet: 129}}
+    )
+    request = Rack::Request.new(Rack::MockRequest.env_for("/", "HTTP_X_FORWARDED_FOR" => "2001:db8:abcd:1234:ffff::1"))
+
+    assert_equal "2001:0db8:abcd:1234:ffff:0000:0000:0001", BetterAuth::RequestIP.client_ip(request, config)
+  end
+
+  def test_honors_ipv6_subnet_boundaries
+    {
+      0 => "0000:0000:0000:0000:0000:0000:0000:0000",
+      128 => "2001:0db8:abcd:1234:ffff:0000:0000:0001"
+    }.each do |subnet, expected|
+      config = BetterAuth::Configuration.new(
+        secret: SECRET,
+        advanced: {ip_address: {ip_address_headers: ["x-forwarded-for"], ipv6_subnet: subnet}}
+      )
+      request = Rack::Request.new(Rack::MockRequest.env_for("/", "HTTP_X_FORWARDED_FOR" => "2001:db8:abcd:1234:ffff::1"))
+
+      assert_equal expected, BetterAuth::RequestIP.client_ip(request, config)
+    end
+  end
+
+  def test_masks_ipv6_with_partial_group_subnet
+    config = BetterAuth::Configuration.new(
+      secret: SECRET,
+      advanced: {ip_address: {ip_address_headers: ["x-forwarded-for"], ipv6_subnet: 40}}
+    )
+    request = Rack::Request.new(Rack::MockRequest.env_for("/", "HTTP_X_FORWARDED_FOR" => "2001:db8:abff:1234:5678:9abc:def0:1234"))
+
+    assert_equal "2001:0db8:ab00:0000:0000:0000:0000:0000", BetterAuth::RequestIP.client_ip(request, config)
   end
 
   def test_converts_ipv4_mapped_ipv6_to_ipv4

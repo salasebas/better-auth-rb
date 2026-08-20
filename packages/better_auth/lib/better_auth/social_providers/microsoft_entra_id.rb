@@ -7,7 +7,7 @@ module BetterAuth
 
     module_function
 
-    def microsoft_entra_id(client_id:, client_secret:, tenant_id: "common", scopes: ["openid", "profile", "email", "User.Read", "offline_access"], **options)
+    def microsoft_entra_id(client_id:, client_secret: nil, tenant_id: "common", scopes: ["openid", "profile", "email", "User.Read", "offline_access"], **options)
       normalized = Base.normalize_options(options)
       microsoft_provider(
         provider_id: "microsoft-entra-id",

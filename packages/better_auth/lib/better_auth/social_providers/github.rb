@@ -4,7 +4,7 @@ module BetterAuth
   module SocialProviders
     module_function
 
-    def github(client_id:, client_secret:, scopes: ["read:user", "user:email"], **options)
+    def github(client_id:, client_secret: nil, scopes: ["read:user", "user:email"], **options)
       normalized = Base.normalize_options(options)
       token_endpoint = normalized[:token_endpoint] || "https://github.com/login/oauth/access_token"
       user_info_endpoint = normalized[:user_info_endpoint] || "https://api.github.com/user"

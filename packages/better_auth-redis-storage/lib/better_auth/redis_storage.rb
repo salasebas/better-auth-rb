@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require "better_auth"
+require "securerandom"
 require_relative "redis_storage/version"
 
 module BetterAuth
@@ -9,6 +10,7 @@ module BetterAuth
     DEFAULT_KEY_PREFIX = "better-auth:"
     SCAN_DEFAULT_COUNT = 100
     DELETE_CHUNK_SIZE = 500
+    GENERATION_TOKEN_BYTES = 32
     GET_AND_DELETE_SCRIPT = <<~LUA
       local value = redis.call("GET", KEYS[1])
       if value ~= false then
@@ -77,6 +79,48 @@ module BetterAuth
       end
       if #values == 0 then redis.call("DEL", KEYS[1]) else redis.call("SET", KEYS[1], cjson.encode(values)) end
       return removed
+    LUA
+    GENERATION_VALIDATION_LUA = <<~LUA
+      local function valid_generation(value)
+        if value == false then return false end
+        if string.match(value, "^[1-9][0-9]*$") ~= nil then return true end
+        return string.len(value) == 64 and string.match(value, "^[0-9a-f]+$") ~= nil
+      end
+    LUA
+    RESOLVE_GENERATION_SCRIPT = <<~LUA
+      -- better-auth:resolve-generation
+      #{GENERATION_VALIDATION_LUA}
+
+      local current = redis.call("GET", KEYS[1])
+      if valid_generation(current) then return current end
+
+      local candidate = ARGV[1]
+      if not valid_generation(candidate) or string.len(candidate) ~= 64 then
+        return redis.error_reply("ERR invalid generation candidate")
+      end
+
+      redis.call("SET", KEYS[1], candidate)
+      return candidate
+    LUA
+    ROTATE_GENERATION_SCRIPT = <<~LUA
+      -- better-auth:rotate-generation
+      #{GENERATION_VALIDATION_LUA}
+
+      local current = redis.call("GET", KEYS[1])
+      if not valid_generation(current) then
+        return redis.error_reply("ERR invalid current generation")
+      end
+
+      local candidate = ARGV[1]
+      if not valid_generation(candidate) or string.len(candidate) ~= 64 then
+        return redis.error_reply("ERR invalid generation candidate")
+      end
+      if candidate == current then
+        return redis.error_reply("ERR generation candidate must differ from current generation")
+      end
+
+      redis.call("SET", KEYS[1], candidate)
+      return current
     LUA
 
     attr_reader :client, :key_prefix, :scan_count, :atomic_clear
@@ -224,7 +268,7 @@ module BetterAuth
       key.sub(/\A#{Regexp.escape(prefix)}/, "")
     end
 
-    def storage_prefix(generation = current_generation)
+    def storage_prefix(generation = resolve_generation)
       return key_prefix unless atomic_clear
 
       "#{key_prefix}v#{generation}:"
@@ -234,23 +278,20 @@ module BetterAuth
       "#{key_prefix}__generation__"
     end
 
-    def current_generation
+    def resolve_generation
       return nil unless atomic_clear
 
-      generation = client.get(generation_key).to_i
-      generation.positive? ? generation : 1
+      eval_script(RESOLVE_GENERATION_SCRIPT, keys: [generation_key], argv: [new_generation]).to_s
     end
 
     def clear_current_generation
-      generation = current_generation
-      bump_generation(generation)
-      delete_matching_keys(storage_prefix(generation), single_key: true)
+      resolve_generation
+      previous_generation = eval_script(ROTATE_GENERATION_SCRIPT, keys: [generation_key], argv: [new_generation]).to_s
+      delete_matching_keys(storage_prefix(previous_generation), single_key: true)
     end
 
-    def bump_generation(previous_generation)
-      generation = client.incr(generation_key).to_i
-      generation = client.incr(generation_key).to_i if generation <= previous_generation.to_i
-      generation
+    def new_generation
+      SecureRandom.hex(GENERATION_TOKEN_BYTES)
     end
 
     def storage_keys(prefix = storage_prefix)

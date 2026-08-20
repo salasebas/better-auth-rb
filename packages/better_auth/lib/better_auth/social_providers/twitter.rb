@@ -4,7 +4,7 @@ module BetterAuth
   module SocialProviders
     module_function
 
-    def twitter(client_id:, client_secret:, scopes: ["users.read", "tweet.read", "offline.access", "users.email"], **options)
+    def twitter(client_id:, client_secret: nil, scopes: ["users.read", "tweet.read", "offline.access", "users.email"], **options)
       normalized = Base.normalize_options(options)
       provider = Base.oauth_provider(
         id: "twitter",

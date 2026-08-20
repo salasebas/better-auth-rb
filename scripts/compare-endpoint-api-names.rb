@@ -13,10 +13,6 @@ module EndpointApiComparison
   OUTPUT_JSON = File.join(ROOT, "reference", "endpoints-api-comparison.json")
   UNSUPPORTED_PLUGINS = %w[mcp electron oidc-provider].freeze
   KNOWN_GAPS = [].freeze
-  PASSKEY_METHOD_OVERRIDES = {
-    "GET /passkey/generate-authenticate-options" => "POST",
-    "GET /passkey/generate-register-options" => "POST"
-  }.freeze
   RUBY_ONLY_ROUTES = [
     ["POST", "/admin/oauth2/create-client", "Ruby OAuth Provider administrative management endpoint"],
     ["PATCH", "/admin/oauth2/update-client", "Ruby OAuth Provider administrative management endpoint"],
@@ -168,8 +164,7 @@ module EndpointApiComparison
   end
 
   def normalized_upstream_method(upstream)
-    method = upstream[:method].to_s.upcase
-    PASSKEY_METHOD_OVERRIDES.fetch("#{method} #{upstream[:path]}", method)
+    upstream[:method].to_s.upcase
   end
 
   def unsupported?(row)

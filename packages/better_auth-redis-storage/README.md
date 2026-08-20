@@ -55,10 +55,11 @@ storage = BetterAuth::RedisStorage.new(
 )
 ```
 
-`client` must respond to `get`, `set`, `setex`, `del`, `eval`, and `scan`. It should
-also respond to `keys` only when `scan_count: nil` is configured, and to `incr`
-when `atomic_clear:` is enabled. This matches the interfaces exposed by the
-`redis` and `redis-namespace` gems.
+`client` must respond to `get`, `set`, `setex`, `del`, `eval`, and `scan`. It
+should also respond to `keys` only when `scan_count: nil` is configured.
+`atomic_clear:` uses single-key Lua scripts through `eval` to install and rotate
+its generation marker. This matches the interfaces exposed by the `redis` and
+`redis-namespace` gems.
 
 `key_prefix` defaults to `"better-auth:"`. `keyPrefix:` is accepted for
 upstream-shaped call sites. Passing `nil` falls back to the default. Any other
@@ -103,11 +104,18 @@ storage = BetterAuth::RedisStorage.new(
 )
 ```
 
-When enabled, data keys are stored under a generation prefix such as
-`better-auth:v1:<key>`. Calling `clear` atomically increments the generation key
-so new reads and writes immediately move to the next generation. The previous
-generation is then deleted best-effort, but correctness does not depend on that
-physical cleanup finishing immediately.
+When enabled, data keys are stored under an opaque, 256-bit generation prefix
+such as `better-auth:v4f7c...:<key>`. A single-key Lua script atomically installs
+a fresh generation when the marker is missing or malformed, so concurrent
+processes converge on one marker instead of falling back to an older namespace.
+Calling `clear` atomically replaces the marker with a fresh token, so new reads
+and writes immediately move to the new generation. The previous generation is
+then deleted best-effort, but correctness does not depend on that physical
+cleanup finishing immediately.
+
+Positive decimal markers written by earlier releases remain valid, so data in
+an existing prefix such as `better-auth:v7:<key>` stays readable. The next
+`clear` rotates that legacy marker to an opaque token without using `INCR`.
 
 ## Behavior
 
@@ -164,19 +172,24 @@ When keys do exist, `clear` deletes them in batches of
 large Redis argument lists. The SCAN path collects the matched key set before
 deleting it so cursor iteration is not affected by mutating the keyspace.
 
-With `atomic_clear: true`, `clear` increments a generation key with Redis
-`INCR`, making old generation keys immediately invisible to `get`, `set`,
-`delete`, `list_keys`, and Better Auth itself. Cleanup of the old generation is
-best-effort and uses `SCAN` by default.
+With `atomic_clear: true`, single-key Redis Lua scripts atomically repair and
+rotate the generation marker across processes. Rotation makes old generation
+keys immediately invisible to `get`, `set`, `delete`, `list_keys`, and Better
+Auth itself. Cleanup of the old generation uses `SCAN` by default. Redis errors
+before the marker replacement leave the current generation unchanged. If the
+replacement commits but its reply is lost, or if later cleanup fails, the error
+is propagated while the advanced marker keeps old keys logically hidden. These
+guarantees assume Redis preserves the committed marker; they do not extend
+across restoration of an older Redis snapshot or equivalent storage rollback.
 
 Redis Cluster users should treat `list_keys` and `clear` as operationally
 constrained helpers. This adapter does not scan every cluster node, and
 multi-key `del` calls require keys to live in a compatible hash slot. Prefer a
 single-slot prefix strategy such as Redis hash tags when using these helpers in
 clustered deployments. `atomic_clear: true` improves the logical `clear`
-contract because correctness uses a single `INCR` generation key, but physical
-cleanup of old generations remains subject to the connected client's scan
-coverage.
+contract because each generation script touches only the single marker key,
+but physical cleanup of old generations remains subject to the connected
+client's scan coverage and multi-key deletion constraints.
 
 ## Better Auth Usage
 

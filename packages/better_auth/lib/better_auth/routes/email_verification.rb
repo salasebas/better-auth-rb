@@ -120,12 +120,12 @@ module BetterAuth
         update_to = payload["updateTo"] || payload["update_to"]
         preflight_follow_up_verification_token_link!(ctx, payload, update_to)
         user_data = ctx.context.internal_adapter.find_user_by_email(email)
-        return redirect_or_error(ctx, callback_url, "user_not_found") unless user_data
+        return redirect_or_error(ctx, callback_url, BASE_ERROR_CODES["USER_NOT_FOUND"], code: "USER_NOT_FOUND") unless user_data
 
         user = user_data[:user]
         if update_to
           session = current_session(ctx, allow_nil: true)
-          return redirect_or_error(ctx, callback_url, "invalid_user") if session && session[:user]["email"] != email
+          return redirect_or_error(ctx, callback_url, BASE_ERROR_CODES["INVALID_USER"], code: "INVALID_USER") if session && session[:user]["email"] != email
 
           consume_change_email_token!(ctx, change_email_token_identifier, callback_url)
           request_type = payload["requestType"] || payload["request_type"]
@@ -260,7 +260,7 @@ module BetterAuth
       session_data = if session && session[:user]["id"] == user["id"]
         session[:session]
       else
-        ctx.context.internal_adapter.create_session(user["id"])
+        ctx.context.internal_adapter.create_session(user["id"], false, nil, false, ctx)
       end
       Cookies.set_session_cookie(ctx, {session: session_data, user: user})
     end
@@ -268,7 +268,7 @@ module BetterAuth
     def self.email_change_session_data(ctx, session, user)
       return session[:session] if session && session[:user]["id"] == user["id"]
 
-      session_data = ctx.context.internal_adapter.create_session(user["id"])
+      session_data = ctx.context.internal_adapter.create_session(user["id"], false, nil, false, ctx)
       unless session_data
         raise APIError.new("INTERNAL_SERVER_ERROR", message: BASE_ERROR_CODES["FAILED_TO_CREATE_SESSION"])
       end

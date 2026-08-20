@@ -10,7 +10,7 @@ module BetterAuth
         module_function
 
         def generate_passkey_authentication_options_endpoint(config)
-          Endpoint.new(path: "/passkey/generate-authenticate-options", method: "POST", metadata: Routes.openapi_for(:generate_authentication_options)) do |ctx|
+          Endpoint.new(path: "/passkey/generate-authenticate-options", method: "GET", metadata: Routes.openapi_for(:generate_authentication_options)) do |ctx|
             session = BetterAuth::Routes.current_session(ctx, allow_nil: true)
             relying_party = Utils.relying_party(config, ctx)
             passkeys = if session
@@ -91,7 +91,7 @@ module BetterAuth
               user = ctx.context.internal_adapter.find_user_by_id(passkey.fetch("userId"))
               raise APIError.new("INTERNAL_SERVER_ERROR", message: "User not found") unless user
 
-              session = ctx.context.internal_adapter.create_session(passkey.fetch("userId"))
+              session = ctx.context.internal_adapter.create_session(passkey.fetch("userId"), false, nil, false, ctx)
               raise APIError.new("INTERNAL_SERVER_ERROR", message: ErrorCodes::PASSKEY_ERROR_CODES.fetch("UNABLE_TO_CREATE_SESSION")) unless session
 
               Cookies.set_session_cookie(ctx, {session: session, user: user})

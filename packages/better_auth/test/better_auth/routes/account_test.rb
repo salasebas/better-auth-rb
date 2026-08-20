@@ -246,6 +246,27 @@ class BetterAuthRoutesAccountTest < Minitest::Test
     refute_includes body.join, "new-refresh"
   end
 
+  def test_rack_get_access_token_rejects_revoked_cached_session
+    assert_rack_provider_route_rejects_revoked_cached_session(
+      route: "/get-access-token",
+      method: "POST"
+    )
+  end
+
+  def test_rack_refresh_token_rejects_revoked_cached_session
+    assert_rack_provider_route_rejects_revoked_cached_session(
+      route: "/refresh-token",
+      method: "POST"
+    )
+  end
+
+  def test_rack_account_info_rejects_revoked_cached_session
+    assert_rack_provider_route_rejects_revoked_cached_session(
+      route: "/account-info",
+      method: "GET"
+    )
+  end
+
   def test_direct_get_access_token_allows_server_user_id_without_session
     auth = build_auth(social_providers: {github: {id: "github"}})
     cookie = sign_up_cookie(auth, email: "direct-access-boundary@example.com")
@@ -903,5 +924,64 @@ class BetterAuthRoutesAccountTest < Minitest::Test
       "CONTENT_TYPE" => body ? "application/json" : nil,
       "CONTENT_LENGTH" => payload.bytesize.to_s
     }.compact
+  end
+
+  def assert_rack_provider_route_rejects_revoked_cached_session(route:, method:)
+    provider_calls = {refresh: 0, account_info: 0}
+    provider = {
+      id: "github",
+      refresh_access_token: ->(_refresh_token) {
+        provider_calls[:refresh] += 1
+        {accessToken: "new-access", refreshToken: "new-refresh", accessTokenExpiresAt: Time.now + 3600}
+      },
+      get_user_info: ->(_tokens) {
+        provider_calls[:account_info] += 1
+        {user: {id: "github-user"}, data: {provider: "github"}}
+      }
+    }
+    auth = build_auth(
+      session: {cookie_cache: {enabled: true, strategy: "jwe", max_age: 300}},
+      social_providers: {github: provider}
+    )
+    cookie = sign_up_cookie(auth, email: "revoked-cache-#{route.delete_prefix("/")}@example.com")
+    session = auth.api.get_session(headers: {"cookie" => cookie})
+    account = auth.context.internal_adapter.create_account(
+      userId: session[:user]["id"],
+      providerId: "github",
+      accountId: "revoked-cache-github",
+      accessToken: "stored-access",
+      refreshToken: "stored-refresh",
+      accessTokenExpiresAt: Time.now + 3600
+    )
+    body = {providerId: "github", accountId: account["accountId"]}
+    query = URI.encode_www_form(body)
+
+    assert_includes cookie, "better-auth.session_data="
+    before_status, = rack_provider_response(auth, method, route, cookie, body: body, query: query)
+    assert_equal 200, before_status
+
+    auth.context.internal_adapter.delete_session(session[:session]["token"])
+    auth.context.set_current_session(nil)
+    control_status, _control_headers, control_body = rack_provider_response(auth, "GET", "/get-session", cookie)
+    assert_equal 200, control_status
+    refute_nil JSON.parse(control_body.join)
+
+    auth.context.set_current_session(nil)
+    calls_before_revoked_request = provider_calls.dup
+    revoked_status, = rack_provider_response(auth, method, route, cookie, body: body, query: query)
+
+    assert_equal 401, revoked_status
+    assert_equal calls_before_revoked_request, provider_calls
+  end
+
+  def rack_provider_response(auth, method, route, cookie, body: nil, query: nil)
+    env = rack_env(
+      method,
+      "/api/auth#{route}",
+      body: (body if method == "POST"),
+      query: (query if method == "GET")
+    ).merge("HTTP_COOKIE" => cookie)
+    env["HTTP_ORIGIN"] = "http://localhost:3000" if method == "POST"
+    auth.call(env)
   end
 end

@@ -97,6 +97,88 @@ class BetterAuthPluginsAdminTest < Minitest::Test
     assert_equal user.fetch("id"), auth.api.get_session(headers: {"cookie" => user_cookie}).fetch(:user).fetch("id")
   end
 
+  def test_admin_authorization_matches_roles_case_sensitively
+    default_auth = build_auth
+    assert_equal(
+      {
+        "admin" => :allowed,
+        "ADMIN" => 403,
+        "Admin" => 403,
+        "user,admin" => :allowed,
+        "user,ADMIN" => 403,
+        "ADMIN,admin" => :allowed,
+        "admin,user" => :allowed
+      },
+      observe_admin_role_matrix(default_auth, "default", ["admin", "ADMIN", "Admin", "user,admin", "user,ADMIN", "ADMIN,admin", "admin,user"]) do |cookie, _user|
+        default_auth.api.list_users(headers: {"cookie" => cookie})
+        :allowed
+      rescue BetterAuth::APIError => error
+        error.status_code
+      end
+    )
+
+    ac = BetterAuth::Plugins.create_access_control(user: ["list"])
+    configured_auth = build_auth(
+      plugins: [
+        BetterAuth::Plugins.admin(
+          ac: ac,
+          roles: {
+            "Admin" => ac.new_role(user: ["list"]),
+            "user" => ac.new_role(user: [])
+          },
+          admin_roles: ["Admin"]
+        )
+      ]
+    )
+    assert_equal(
+      {
+        "Admin" => :allowed,
+        "admin" => 403,
+        "ADMIN" => 403,
+        "user,Admin" => :allowed,
+        "user,admin" => 403,
+        "ADMIN,Admin" => :allowed
+      },
+      observe_admin_role_matrix(configured_auth, "configured", ["Admin", "admin", "ADMIN", "user,Admin", "user,admin", "ADMIN,Admin"]) do |cookie, _user|
+        configured_auth.api.list_users(headers: {"cookie" => cookie})
+        :allowed
+      rescue BetterAuth::APIError => error
+        error.status_code
+      end
+    )
+  end
+
+  def test_configured_role_assignment_matches_case_sensitively
+    ac = BetterAuth::Plugins.create_access_control(user: ["set-role"])
+    auth = build_auth(
+      plugins: [
+        BetterAuth::Plugins.admin(
+          ac: ac,
+          roles: {
+            "Admin" => ac.new_role(user: ["set-role"]),
+            "user" => ac.new_role(user: [])
+          },
+          admin_roles: ["Admin"]
+        )
+      ]
+    )
+    admin_cookie = sign_up_cookie(auth, email: "case-assignment-admin@example.com")
+    target_cookie = sign_up_cookie(auth, email: "case-assignment-target@example.com")
+    admin = auth.api.get_session(headers: {"cookie" => admin_cookie}).fetch(:user)
+    target = auth.api.get_session(headers: {"cookie" => target_cookie}).fetch(:user)
+    auth.context.internal_adapter.update_user(admin.fetch("id"), role: "Admin")
+
+    error = assert_raises(BetterAuth::APIError) do
+      auth.api.set_role(headers: {"cookie" => admin_cookie}, body: {userId: target.fetch("id"), role: "admin"})
+    end
+    assert_equal 400, error.status_code
+    assert_equal "YOU_ARE_NOT_ALLOWED_TO_SET_NON_EXISTENT_VALUE", error.code
+    assert_equal "user", auth.context.internal_adapter.find_user_by_id(target.fetch("id")).fetch("role")
+
+    result = auth.api.set_role(headers: {"cookie" => admin_cookie}, body: {userId: target.fetch("id"), role: "Admin"})
+    assert_equal "Admin", result.fetch(:user).fetch("role")
+  end
+
   def test_admin_permission_rechecks_demoted_user_despite_cookie_cache
     auth = build_auth(session: {cookie_cache: {enabled: true, strategy: "jwe", max_age: 300}})
     original_cookie = sign_up_cookie(auth, email: "cached-admin@example.com")
@@ -139,6 +221,43 @@ class BetterAuthPluginsAdminTest < Minitest::Test
 
     without_alpha = auth.api.list_users(headers: {"cookie" => admin_cookie}, query: {filterField: "_id", filterOperator: "ne", filterValue: alpha.fetch("id")})
     refute_includes without_alpha.fetch(:users).map { |user| user.fetch("id") }, alpha.fetch("id")
+  end
+
+  def test_admin_list_users_returns_empty_result_when_listing_fails
+    auth = build_auth
+    admin_cookie = sign_up_cookie(auth, email: "list-failure-admin@example.com")
+    admin = auth.api.get_session(headers: {"cookie" => admin_cookie}).fetch(:user)
+    adapter = auth.context.internal_adapter
+    adapter.update_user(admin.fetch("id"), role: "admin")
+    count_called = false
+
+    result = adapter.stub(:list_users, ->(**_kwargs) { raise "list users failed" }) do
+      adapter.stub(:count_total_users, ->(**_kwargs) { count_called = true }) do
+        auth.api.list_users(headers: {"cookie" => admin_cookie}, query: {limit: 1, offset: 1})
+      end
+    end
+
+    assert_equal({users: [], total: 0}, result)
+    refute count_called
+  end
+
+  def test_admin_list_users_discards_fetched_users_when_counting_fails
+    auth = build_auth
+    admin_cookie = sign_up_cookie(auth, email: "count-failure-admin@example.com")
+    admin = auth.api.get_session(headers: {"cookie" => admin_cookie}).fetch(:user)
+    adapter = auth.context.internal_adapter
+    adapter.update_user(admin.fetch("id"), role: "admin")
+    listed_users = nil
+    list_users = adapter.method(:list_users)
+
+    result = adapter.stub(:list_users, ->(**kwargs) { listed_users = list_users.call(**kwargs) }) do
+      adapter.stub(:count_total_users, ->(**_kwargs) { raise "count users failed" }) do
+        auth.api.list_users(headers: {"cookie" => admin_cookie}, query: {limit: 1, offset: 0})
+      end
+    end
+
+    refute_empty listed_users
+    assert_equal({users: [], total: 0}, result)
   end
 
   def test_admin_update_user_requires_set_role_permission_for_role_changes
@@ -691,6 +810,46 @@ class BetterAuthPluginsAdminTest < Minitest::Test
     assert_equal super_admin.fetch("id"), allowed.fetch(:session).fetch("impersonatedBy")
   end
 
+  def test_admin_impersonation_matches_admin_roles_case_sensitively
+    ac = BetterAuth::Plugins.create_access_control(user: ["impersonate"])
+    auth = build_auth(
+      plugins: [
+        BetterAuth::Plugins.admin(
+          ac: ac,
+          roles: {
+            "operator" => ac.new_role(user: ["impersonate"]),
+            "Admin" => ac.new_role(user: []),
+            "user" => ac.new_role(user: [])
+          },
+          admin_roles: ["Admin"]
+        )
+      ]
+    )
+    operator_cookie = sign_up_cookie(auth, email: "case-operator@example.com")
+    operator = auth.api.get_session(headers: {"cookie" => operator_cookie}).fetch(:user)
+    auth.context.internal_adapter.update_user(operator.fetch("id"), role: "operator")
+
+    roles = ["Admin", "admin", "ADMIN", "user,Admin", "user,admin", "ADMIN,Admin"]
+    outcomes = observe_admin_role_matrix(auth, "case-target", roles) do |_cookie, target|
+      auth.api.impersonate_user(headers: {"cookie" => operator_cookie}, body: {userId: target.fetch("id")})
+      :allowed
+    rescue BetterAuth::APIError => error
+      error.code
+    end
+
+    assert_equal(
+      {
+        "Admin" => "YOU_CANNOT_IMPERSONATE_ADMINS",
+        "admin" => :allowed,
+        "ADMIN" => :allowed,
+        "user,Admin" => "YOU_CANNOT_IMPERSONATE_ADMINS",
+        "user,admin" => :allowed,
+        "ADMIN,Admin" => "YOU_CANNOT_IMPERSONATE_ADMINS"
+      },
+      outcomes
+    )
+  end
+
   def test_admin_set_password_edges_and_config_role_validation
     config_error = assert_raises(BetterAuth::Error) do
       BetterAuth::Plugins.admin(admin_roles: ["missing"])
@@ -732,6 +891,16 @@ class BetterAuthPluginsAdminTest < Minitest::Test
       email_and_password: {enabled: true},
       plugins: [BetterAuth::Plugins.admin(admin_options)]
     }.merge(options))
+  end
+
+  def observe_admin_role_matrix(auth, email_prefix, roles)
+    roles.each_with_index.to_h do |role, index|
+      cookie = sign_up_cookie(auth, email: "#{email_prefix}-role-#{index}@example.com")
+      user = auth.api.get_session(headers: {"cookie" => cookie}).fetch(:user)
+      auth.context.internal_adapter.update_user(user.fetch("id"), role: role)
+      assert_equal role, auth.context.internal_adapter.find_user_by_id(user.fetch("id")).fetch("role")
+      [role, yield(cookie, user)]
+    end
   end
 
   def sign_up_cookie(auth, email:, name: nil)

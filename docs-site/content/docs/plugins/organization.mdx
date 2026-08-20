@@ -1990,7 +1990,7 @@ Current Ruby options accepted by `BetterAuth::Plugins.organization`:
 * `send_invitation_email`: callable used to send invitation email.
 * `invitation_expires_in`: invitation lifetime in seconds. Defaults to 48 hours.
 * `cancel_pending_invitations_on_re_invite`: whether to cancel pending invitations when the user is invited again.
-* `invitation_limit`: maximum number of pending invitations allowed.
+* `invitation_limit`: maximum number of pending invitations allowed across the organization. Defaults to `100`. Accepts a number or a callable receiving a symbol-keyed `{user:, organization:, member:}` data hash and the `BetterAuth::Context`; the callable must return the numeric threshold, which is used without integer coercion.
 * `require_email_verification_on_invitation`: requires verified email before accepting or rejecting invitations.
 * `disable_organization_deletion`: rejects organization deletion with `ORGANIZATION_DELETION_DISABLED` when set to `true`.
 * `ac`: access control instance.
