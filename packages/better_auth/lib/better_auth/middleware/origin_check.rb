@@ -38,7 +38,7 @@ module BetterAuth
       def validate_origin(endpoint_context, force: false)
         return if skip_csrf_check?(endpoint_context)
         return if skip_csrf_for_backward_compat?(endpoint_context)
-        return if skip_origin_path?(endpoint_context)
+        return if skip_origin_check?(endpoint_context) || skip_origin_path?(endpoint_context)
 
         headers = endpoint_context.headers
         should_validate = force || headers.key?("cookie")
