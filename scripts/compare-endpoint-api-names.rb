@@ -16,8 +16,6 @@ module EndpointApiComparison
   RUBY_ONLY_ROUTES = [
     ["POST", "/admin/oauth2/create-client", "Ruby OAuth Provider administrative management endpoint"],
     ["PATCH", "/admin/oauth2/update-client", "Ruby OAuth Provider administrative management endpoint"],
-    ["POST", "/api-key/delete-all-expired-api-keys", "Ruby exposes upstream cleanup behavior as an explicit maintenance endpoint"],
-    ["POST", "/api-key/verify", "Ruby exposes API-key verification over HTTP as well as direct server calls"],
     ["POST", "/dub/link", "Ruby Dub integration endpoint"],
     ["GET", "/error", "Ruby core diagnostic route intentionally omitted from the upstream public registry"],
     ["DELETE", "/oauth2/consent", "Ruby OAuth Provider REST adaptation for consent management"],

@@ -47,12 +47,14 @@ Ruby does not expose a separate `apiKeyClient()` equivalent; the public Ruby sur
 | Method | Path | Ruby API method |
 | --- | --- | --- |
 | `POST` | `/api-key/create` | `auth.api.create_api_key` |
-| `POST` | `/api-key/verify` | `auth.api.verify_api_key` |
 | `GET` | `/api-key/get` | `auth.api.get_api_key` |
 | `GET` | `/api-key/list` | `auth.api.list_api_keys` |
 | `POST` | `/api-key/update` | `auth.api.update_api_key` |
 | `POST` | `/api-key/delete` | `auth.api.delete_api_key` |
-| `POST` | `/api-key/delete-all-expired-api-keys` | `auth.api.delete_all_expired_api_keys` |
+
+Verification and expired-key cleanup are server-only operations. Call
+`auth.api.verify_api_key` and `auth.api.delete_all_expired_api_keys` from trusted
+Ruby code; neither operation is mounted over HTTP or included in OpenAPI.
 
 ## Operational notes
 
@@ -127,8 +129,8 @@ Organization-owned keys require `BetterAuth::Plugins.organization` and use organ
 
 Secondary-storage mode uses upstream storage keys such as `api-key:<hash>`, `api-key:by-id:<id>`, and `api-key:by-ref:<referenceId>`. With `fallback_to_database: true`, the database is authoritative: verification re-reads the row after a cache hit, and a missing authoritative row invalidates the cache and can never authorize. A cache entry may remain stale, or be briefly re-created from a row, during the unavoidable cross-store window after a database update and before its cache write; that does not weaken verification because authorization always requires the authoritative row. Generic custom storage gets an in-process lock for reference-list updates only; RedisStorage uses atomic cross-process JSON-list scripts.
 
-Verification rate-limit failures return HTTP `429` with error code
-`RATE_LIMITED` and `details.tryAgainIn` (authentication failures remain `401`).
+Verification rate-limit failures use error code `RATE_LIMITED` with
+`details.tryAgainIn`.
 An exhausted non-refillable key remains an inert authoritative row and returns
 `USAGE_EXCEEDED`; Ruby deliberately avoids eager deletion during verification
 because deletion cannot be made cross-process atomic with the winning counter
@@ -204,8 +206,8 @@ Endpoint requests/responses always use the upstream `camelCase` field names, so
 TypeScript clients targeting `@better-auth/api-key/client` interoperate without
 configuration changes.
 
-The cleanup route is also exposed through `auth.api.delete_all_expired_api_keys`
-and returns `{success: true, error: nil}` on success.
+The server-only cleanup method `auth.api.delete_all_expired_api_keys` returns
+`{success: true, error: nil}` on success.
 
 ## Organization-owned API keys
 
@@ -237,7 +239,7 @@ The following decisions are explicit and locked behind tests:
 - **OpenAPI metadata blocks** embedded in upstream endpoint definitions are not
   ported. OpenAPI generation is not part of `better_auth-api-key`'s scope.
 - **Browser-only `@better-auth/api-key/client`** helpers are not implemented in
-  Ruby. Apps should call `/api-key/create`, `/api-key/verify`, `/api-key/get`,
-  `/api-key/list`, `/api-key/update`, `/api-key/delete`, and
-  `/api-key/delete-all-expired-api-keys` directly via JSON.
+  Ruby. Apps should call `/api-key/create`, `/api-key/get`, `/api-key/list`,
+  `/api-key/update`, and `/api-key/delete` directly via JSON. API-key
+  verification and expired-key cleanup remain server-only Ruby API methods.
 - **`apikey` table name** mirrors the upstream package (no `_` separator).

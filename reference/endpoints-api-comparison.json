@@ -1,15 +1,15 @@
 {
-  "generated_at": "2026-07-16T01:47:43Z",
+  "generated_at": "2026-08-20T18:30:54Z",
   "upstream_route_count": 236,
   "upstream_http_route_count": 222,
   "upstream_server_only_count": 14,
-  "ruby_route_count": 222,
+  "ruby_route_count": 220,
   "aligned_count": 203,
   "registry_key_mismatch_count": 0,
   "api_name_mismatch_count": 0,
   "missing_ruby_count": 0,
   "missing_upstream_count": 0,
-  "ruby_only_classified_count": 17,
+  "ruby_only_classified_count": 15,
   "deprecated_pair_count": 0,
   "visibility_mismatch_count": 10,
   "excluded_unsupported_count": 18,
@@ -4342,64 +4342,6 @@
       "plugin_id": "oauth-provider",
       "operation_id": null,
       "reason": "Ruby OAuth Provider administrative management endpoint"
-    },
-    {
-      "path": "/api-key/delete-all-expired-api-keys",
-      "methods": [
-        "POST"
-      ],
-      "plugin_id": "api-key",
-      "endpoint_key": "delete_all_expired_api_keys",
-      "body_fields": [],
-      "query_params": [],
-      "path_params": [],
-      "header_params": [],
-      "disable_body": false,
-      "server_only": false,
-      "hidden": false,
-      "operation_id": "postApiKeyDeleteAllExpiredApiKeys",
-      "source": "runtime",
-      "method": "POST",
-      "ruby_api_method": "delete_all_expired_api_keys",
-      "ruby_api_call": "auth.api.delete_all_expired_api_keys",
-      "reason": "Ruby exposes upstream cleanup behavior as an explicit maintenance endpoint"
-    },
-    {
-      "path": "/api-key/verify",
-      "methods": [
-        "POST"
-      ],
-      "plugin_id": "api-key",
-      "endpoint_key": "verify_api_key",
-      "body_fields": [
-        {
-          "name": "configId",
-          "required": false,
-          "type": "string"
-        },
-        {
-          "name": "key",
-          "required": true,
-          "type": "string"
-        },
-        {
-          "name": "permissions",
-          "required": false,
-          "type": "object"
-        }
-      ],
-      "query_params": [],
-      "path_params": [],
-      "header_params": [],
-      "disable_body": false,
-      "server_only": false,
-      "hidden": false,
-      "operation_id": "postApiKeyVerify",
-      "source": "runtime",
-      "method": "POST",
-      "ruby_api_method": "verify_api_key",
-      "ruby_api_call": "auth.api.verify_api_key",
-      "reason": "Ruby exposes API-key verification over HTTP as well as direct server calls"
     },
     {
       "path": "/dub/link",
