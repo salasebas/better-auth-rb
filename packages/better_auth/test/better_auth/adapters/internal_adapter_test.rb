@@ -373,6 +373,68 @@ class BetterAuthInternalAdapterTest < Minitest::Test
     assert_equal user["id"], found[:user]["id"]
   end
 
+  def test_find_session_fails_closed_when_secondary_storage_contains_corrupt_json
+    storage = MemoryStorage.new
+    internal = internal_adapter(secondary_storage: storage, session: {store_session_in_database: true})
+    user = internal.create_user(name: "Ada", email: "corrupt-cache@example.com")
+    session = internal.create_session(user["id"], false, {token: "token-corrupt-db"}, true)
+
+    stored_db_session = internal.adapter.find_one(model: "session", where: [{field: "token", value: session["token"]}])
+    assert_equal session["token"], stored_db_session["token"]
+
+    storage.set(session["token"], "{bad-json", 60)
+
+    assert_nil internal.find_session(session["token"])
+  end
+
+  def test_find_session_falls_back_to_database_when_secondary_storage_is_javascript_falsy
+    storage = MemoryStorage.new
+    internal = internal_adapter(secondary_storage: storage, session: {store_session_in_database: true})
+    user = internal.create_user(name: "Ada", email: "empty-cache@example.com")
+    session = internal.create_session(user["id"], false, {token: "token-empty-db"}, true)
+
+    stored_db_session = internal.adapter.find_one(model: "session", where: [{field: "token", value: session["token"]}])
+    assert_equal session["token"], stored_db_session["token"]
+
+    [false, "", 0, Float::NAN].each do |value|
+      storage.set(session["token"], value, 60)
+
+      found = internal.find_session(session["token"])
+
+      assert_equal session["token"], found[:session]["token"]
+      assert_equal user["id"], found[:user]["id"]
+    end
+  end
+
+  def test_find_session_fails_closed_when_secondary_storage_decodes_to_javascript_falsy_value
+    storage = MemoryStorage.new
+    internal = internal_adapter(secondary_storage: storage, session: {store_session_in_database: true})
+    user = internal.create_user(name: "Ada", email: "decoded-zero-cache@example.com")
+    session = internal.create_session(user["id"], false, {token: "token-decoded-zero-db"}, true)
+
+    stored_db_session = internal.adapter.find_one(model: "session", where: [{field: "token", value: session["token"]}])
+    assert_equal session["token"], stored_db_session["token"]
+
+    ["0", JSON.generate(""), "false", "null"].each do |value|
+      storage.set(session["token"], value, 60)
+
+      assert_nil internal.find_session(session["token"])
+    end
+  end
+
+  def test_find_session_rejects_doubly_encoded_cached_session_payload
+    storage = MemoryStorage.new
+    internal = internal_adapter(secondary_storage: storage)
+    user = internal.create_user(name: "Ada", email: "doubly-encoded-cache@example.com")
+    session = internal.create_session(user["id"], false, {token: "token-doubly-encoded"}, true)
+
+    assert_equal session["token"], internal.find_session(session["token"])[:session]["token"]
+
+    storage.set(session["token"], JSON.generate(storage.get(session["token"])), 60)
+
+    assert_raises(NoMethodError) { internal.find_session(session["token"]) }
+  end
+
   def test_update_session_with_secondary_storage_updates_database_copy_when_enabled
     storage = MemoryStorage.new
     internal = internal_adapter(secondary_storage: storage, session: {store_session_in_database: true})

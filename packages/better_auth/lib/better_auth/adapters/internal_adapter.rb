@@ -94,17 +94,18 @@ module BetterAuth
 
       def find_session(token)
         if secondary_storage
-          data = parse_storage(secondary_storage.get(token))
-          unless data
-            return nil unless options.session[:store_session_in_database] && !options.session[:preserve_session_in_database]
-          end
+          stored = secondary_storage.get(token)
+          unless javascript_falsy?(stored)
+            data = parse_session_storage(stored)
+            return nil if javascript_falsy?(data)
 
-          if data
             return {
               session: normalize_session_dates(data["session"]),
               user: normalize_user_dates(data["user"])
             }
           end
+
+          return nil unless options.session[:store_session_in_database] && !options.session[:preserve_session_in_database]
         end
 
         found = find_session_with_user(token)
@@ -663,6 +664,19 @@ module BetterAuth
         parse_storage(parsed)
       rescue JSON::ParserError
         nil
+      end
+
+      def parse_session_storage(value)
+        return parse_storage(value) if value.is_a?(Hash) || value.is_a?(Array)
+        return value unless value.is_a?(String)
+
+        JSON.parse(value)
+      rescue JSON::ParserError
+        nil
+      end
+
+      def javascript_falsy?(value)
+        value.nil? || value == false || value == "" || value == 0 || (value.is_a?(Float) && value.nan?)
       end
 
       def normalize_session_dates(session)
