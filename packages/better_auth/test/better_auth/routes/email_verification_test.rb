@@ -403,10 +403,17 @@ class BetterAuthRoutesEmailVerificationTest < Minitest::Test
     assert_includes confirmations.first.fetch(:url), "/verify-email?token="
     assert_includes confirmations.first.fetch(:url), "callbackURL=%2Fsettings"
 
-    auth.api.verify_email(headers: {"cookie" => cookie}, query: {token: confirmations.first.fetch(:token)})
+    confirmation_status, confirmation_headers, = auth.api.verify_email(
+      headers: {"cookie" => cookie},
+      query: {token: confirmations.first.fetch(:token), callbackURL: "/settings"},
+      as_response: true
+    )
+    assert_equal 302, confirmation_status
+    assert_equal "/settings", confirmation_headers.fetch("location")
     assert_equal 1, verifications.length
     assert_equal "confirmed-new@example.com", verifications.first.fetch(:user).fetch("email")
     assert_includes verifications.first.fetch(:url), "/verify-email?token="
+    assert_includes verifications.first.fetch(:url), "callbackURL=%2Fsettings"
     assert auth.context.internal_adapter.find_user_by_email("confirmed-old@example.com")
     assert_nil auth.context.internal_adapter.find_user_by_email("confirmed-new@example.com")
 
@@ -427,6 +434,34 @@ class BetterAuthRoutesEmailVerificationTest < Minitest::Test
     assert_equal true, session[:user]["emailVerified"]
     assert_nil auth.context.internal_adapter.find_user_by_email("confirmed-old@example.com")
     assert_equal ["confirmed-new@example.com"], after_calls
+  end
+
+  def test_change_email_rejects_confirmation_only_configuration_before_target_lookup
+    confirmations = []
+    auth = build_auth(
+      user: {
+        change_email: {
+          enabled: true,
+          send_change_email_confirmation: ->(data, _request = nil) { confirmations << data }
+        }
+      }
+    )
+    cookie = sign_up_cookie(auth, email: "confirmation-only@example.com")
+    auth.context.internal_adapter.update_user_by_email("confirmation-only@example.com", emailVerified: true)
+    sign_up_cookie(auth, email: "existing-target@example.com")
+
+    errors = ["existing-target@example.com", "unreachable@example.com"].map do |new_email|
+      assert_raises(BetterAuth::APIError) do
+        auth.api.change_email(
+          headers: {"cookie" => cookie},
+          body: {newEmail: new_email, callbackURL: "/settings"}
+        )
+      end
+    end
+
+    assert_equal [400, 400], errors.map(&:status_code)
+    assert_equal [BetterAuth::BASE_ERROR_CODES["VERIFICATION_EMAIL_NOT_ENABLED"]] * 2, errors.map(&:message)
+    assert_empty confirmations
   end
 
   def test_change_email_verification_rejects_a_different_users_session_without_mutation

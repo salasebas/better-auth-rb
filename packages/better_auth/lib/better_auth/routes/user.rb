@@ -308,8 +308,8 @@ module BetterAuth
         sender = ctx.context.options.email_verification[:send_verification_email]
         confirmation_sender = ctx.context.options.user.dig(:change_email, :send_change_email_confirmation)
         can_update_without_verification = !session[:user]["emailVerified"] && ctx.context.options.user.dig(:change_email, :update_email_without_verification)
-        can_send_confirmation = session[:user]["emailVerified"] && confirmation_sender.respond_to?(:call)
         can_send_verification = sender.respond_to?(:call)
+        can_send_confirmation = can_send_verification && session[:user]["emailVerified"] && confirmation_sender.respond_to?(:call)
         unless can_update_without_verification || can_send_confirmation || can_send_verification
           raise APIError.new("BAD_REQUEST", message: BASE_ERROR_CODES["VERIFICATION_EMAIL_NOT_ENABLED"])
         end
