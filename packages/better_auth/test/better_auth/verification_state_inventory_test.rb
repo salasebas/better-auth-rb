@@ -11,7 +11,6 @@ class BetterAuthVerificationStateInventoryTest < Minitest::Test
     "packages/better_auth/lib/better_auth/routes/email_verification.rb" => ["consume_verification_value(identifier)"],
     "packages/better_auth/lib/better_auth/plugins/one_time_token.rb" => ["consume_verification_value(\"one-time-token:\#{stored_token}\")"],
     "packages/better_auth/lib/better_auth/plugins/siwe.rb" => ["consume_verification_value(siwe_identifier(wallet_address, chain_id))"],
-    "packages/better_auth/lib/better_auth/oauth_state.rb" => ["consume_verification_value(state)"],
     "packages/better_auth/lib/better_auth/plugins/email_otp.rb" => ["consume_verification_value(identifier)"],
     "packages/better_auth/lib/better_auth/plugins/phone_number.rb" => ["consume_verification_value(identifier)", "Custom verify_otp owns single-use and expiry state completely"],
     "packages/better_auth/lib/better_auth/plugins/two_factor.rb" => ["consume_verification_value(identifier)"],
@@ -19,8 +18,14 @@ class BetterAuthVerificationStateInventoryTest < Minitest::Test
     "packages/better_auth-passkey/lib/better_auth/passkey/challenges.rb" => ["consume_verification_value(verification_token)"],
     "packages/better_auth-passkey/lib/better_auth/passkey/routes/authentication.rb" => ["adapter.increment_one("],
     "packages/better_auth-saml/lib/better_auth/sso/plugin/saml_response.rb" => ["reserve_verification_value("],
-    "packages/better_auth-oidc/lib/better_auth/sso/plugin/oidc_runtime.rb" => ["consume_verification_value(identifier)", "sso_restore_oidc_pkce_verifier"],
     "packages/better_auth/lib/better_auth/plugins/oauth_protocol.rb" => ["consume_verification_value(stored_code)", "rescue JSON::ParserError"]
+  }.freeze
+
+  UPSTREAM_FIND_THEN_DELETE_CONSUMERS = {
+    "packages/better_auth/lib/better_auth/oauth_state.rb" => [
+      "find_verification_value(state)",
+      "delete_verification_by_identifier(state)"
+    ]
   }.freeze
 
   REUSABLE_READS = {
@@ -41,6 +46,11 @@ class BetterAuthVerificationStateInventoryTest < Minitest::Test
     REUSABLE_READS.each do |relative_path, patterns|
       source = File.read(File.join(REPOSITORY_ROOT, relative_path))
       patterns.each { |pattern| assert_includes source, pattern, "#{relative_path} lost documented reusable read #{pattern}" }
+    end
+
+    UPSTREAM_FIND_THEN_DELETE_CONSUMERS.each do |relative_path, patterns|
+      source = File.read(File.join(REPOSITORY_ROOT, relative_path))
+      patterns.each { |pattern| assert_includes source, pattern, "#{relative_path} lost upstream state-consumption parity #{pattern}" }
     end
   end
 

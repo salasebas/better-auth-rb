@@ -10,7 +10,7 @@ module BetterAuth
       nil
     end
 
-    def sso_oidc_authorization_url(provider, ctx, state, plugin_config = {}, body = {})
+    def sso_oidc_authorization_url(provider, ctx, state, plugin_config = {}, body = {}, code_verifier: nil)
       config = sso_provider_config_hash(provider["oidcConfig"])
       endpoint = config[:authorization_endpoint] || config[:authorization_url]
       raise APIError.new("BAD_REQUEST", message: "Invalid OIDC configuration. Authorization URL not found.") if endpoint.to_s.empty?
@@ -23,14 +23,10 @@ module BetterAuth
         scope: scopes.join(" "),
         state: state
       }.compact
-      decoded_state = sso_decode_state(state, ctx.context.secret)
-      nonce = decoded_state&.fetch("nonce", nil)
-      query[:nonce] = nonce if nonce && !nonce.to_s.empty?
       login_hint = body[:login_hint] || body[:email]
       query[:login_hint] = login_hint if login_hint
-      code_challenge = decoded_state&.fetch("codeChallenge", nil)
-      if code_challenge
-        query[:code_challenge] = code_challenge
+      if config[:pkce] && code_verifier
+        query[:code_challenge] = sso_base64_urlsafe(OpenSSL::Digest::SHA256.digest(code_verifier))
         query[:code_challenge_method] = "S256"
       end
       "#{endpoint}?#{URI.encode_www_form(query)}"
@@ -170,45 +166,31 @@ module BetterAuth
       ctx.context.adapter.find_one(model: "ssoProvider", where: [{field: "providerId", value: provider_id.to_s}])
     end
 
-    def sso_oidc_tokens(ctx, provider, oidc_config, state, plugin_config, raw_state: nil)
-      raw_state_value = raw_state || state["state"] || state[:state]
-      verification = sso_consume_oidc_pkce_verifier(ctx, raw_state_value)
-      code_verifier = verification&.fetch("value", nil)
+    def sso_oidc_tokens(ctx, provider, oidc_config, state, plugin_config)
+      code_verifier = state["codeVerifier"] || state[:codeVerifier]
       return nil if oidc_config[:pkce] && code_verifier.to_s.empty?
-      restoration_attempted = false
-      restore_once = lambda do
-        next if restoration_attempted
-
-        restoration_attempted = true
-        sso_restore_oidc_pkce_verifier(ctx, raw_state_value, verification)
-      end
 
       token_callback = oidc_config[:get_token]
       if token_callback.respond_to?(:call)
         raw_tokens = token_callback.call(
           code: ctx.query[:code] || ctx.query["code"],
-          codeVerifier: code_verifier,
+          codeVerifier: oidc_config[:pkce] ? code_verifier : nil,
           redirectURI: sso_oidc_redirect_uri(ctx.context, provider.fetch("providerId")),
           provider: provider,
           context: ctx
         )
-        unless raw_tokens
-          restore_once.call
-          return nil
-        end
+        return nil unless raw_tokens
+
         return normalize_hash(raw_tokens)
       end
 
       token_endpoint = oidc_config[:token_endpoint]
-      if token_endpoint.to_s.empty?
-        restore_once.call
-        return nil
-      end
+      return nil if token_endpoint.to_s.empty?
 
-      tokens = sso_exchange_oidc_code(
+      sso_exchange_oidc_code(
         token_endpoint: token_endpoint,
         code: ctx.query[:code] || ctx.query["code"],
-        code_verifier: code_verifier,
+        code_verifier: oidc_config[:pkce] ? code_verifier : nil,
         redirect_uri: sso_oidc_redirect_uri(ctx.context, provider.fetch("providerId")),
         client_id: oidc_config[:client_id],
         client_secret: oidc_config[:client_secret],
@@ -217,10 +199,7 @@ module BetterAuth
         max_body_size: plugin_config[:oidc_http_max_body_size],
         trusted_origin: sso_oidc_trusted_origin_check(ctx)
       )
-      restore_once.call unless tokens
-      tokens
     rescue
-      restore_once&.call if verification
       nil
     end
 
@@ -398,41 +377,6 @@ module BetterAuth
       nil
     end
 
-    def sso_oidc_pkce_state(provider)
-      return {} unless sso_provider_config_hash(provider["oidcConfig"])[:pkce]
-
-      verifier = BetterAuth::Crypto.random_string(128)
-      {
-        codeVerifier: verifier,
-        codeChallenge: sso_base64_urlsafe(OpenSSL::Digest::SHA256.digest(verifier))
-      }
-    end
-
-    def sso_store_oidc_pkce_verifier(ctx, state, verifier)
-      ctx.context.internal_adapter.reserve_verification_value(
-        identifier: "#{SSO_OIDC_PKCE_VERIFIER_KEY_PREFIX}#{state}",
-        value: verifier,
-        expiresAt: Time.now + 600
-      )
-    end
-
-    def sso_consume_oidc_pkce_verifier(ctx, state)
-      return nil if state.to_s.empty?
-
-      identifier = "#{SSO_OIDC_PKCE_VERIFIER_KEY_PREFIX}#{state}"
-      ctx.context.internal_adapter.consume_verification_value(identifier)
-    end
-
-    def sso_restore_oidc_pkce_verifier(ctx, state, verification)
-      return unless verification && verification["expiresAt"] > Time.now
-
-      ctx.context.internal_adapter.create_verification_value(
-        identifier: "#{SSO_OIDC_PKCE_VERIFIER_KEY_PREFIX}#{state}",
-        value: verification.fetch("value"),
-        expiresAt: verification.fetch("expiresAt")
-      )
-    end
-
     def sso_oidc_http_timeout(value)
       timeout = value || SSO_DEFAULT_OIDC_HTTP_TIMEOUT
       timeout.to_f.positive? ? timeout.to_f : SSO_DEFAULT_OIDC_HTTP_TIMEOUT
@@ -441,12 +385,6 @@ module BetterAuth
     def sso_oidc_http_max_body_size(value)
       size = value || SSO_DEFAULT_OIDC_HTTP_MAX_BODY_SIZE
       size.to_i.positive? ? size.to_i : SSO_DEFAULT_OIDC_HTTP_MAX_BODY_SIZE
-    end
-
-    def sso_decode_state(state, secret)
-      BetterAuth::Crypto.verify_jwt(state.to_s, secret)
-    rescue
-      nil
     end
 
     def sso_base64_urlsafe(value)
