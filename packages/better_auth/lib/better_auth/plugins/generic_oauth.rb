@@ -570,7 +570,9 @@ module BetterAuth
         account = ctx.context.internal_adapter.update_account(existing_account["id"], account_info)
       else
         account = ctx.context.internal_adapter.create_account(account_info)
+        redirect_error.call("unable_to_link_account") unless account
       end
+      Routes.update_social_user_info_on_link(ctx, link["user_id"], user_info)
       Cookies.set_account_cookie(ctx, account) if account
     end
 

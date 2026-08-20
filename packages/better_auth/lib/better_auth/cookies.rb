@@ -128,7 +128,8 @@ module BetterAuth
       candidates.lazy.filter_map { |candidate| parsed[candidate] }.first
     end
 
-    def set_session_cookie(ctx, session, dont_remember_me = false, overrides = {})
+    def set_session_cookie(ctx, session, dont_remember_me = nil, overrides = {})
+      dont_remember_me = dont_remember?(ctx) if dont_remember_me.nil?
       token_cookie = ctx.context.auth_cookies[:session_token]
       max_age = dont_remember_me ? nil : ctx.context.session_config[:expires_in]
       ctx.set_signed_cookie(token_cookie.name, session.fetch(:session).fetch("token"), ctx.context.secret, token_cookie.attributes.merge(max_age: max_age).merge(overrides || {}))
