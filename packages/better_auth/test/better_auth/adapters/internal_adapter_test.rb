@@ -529,6 +529,57 @@ class BetterAuthInternalAdapterTest < Minitest::Test
     assert_equal "initial", found["value"]
   end
 
+  def test_dual_stored_verification_does_not_write_secondary_storage_when_database_create_fails
+    storage = MemoryStorage.new
+    config = BetterAuth::Configuration.new(
+      secret: SECRET,
+      database: :memory,
+      secondary_storage: storage,
+      verification: {store_in_database: true}
+    )
+    adapter = FailingVerificationCreateAdapter.new(config)
+    internal = BetterAuth::Adapters::InternalAdapter.new(adapter, config)
+
+    error = assert_raises(RuntimeError) do
+      internal.create_verification_value(identifier: "failed-dual-write", value: "secret", expiresAt: Time.now + 120)
+    end
+
+    assert_equal "verification create failed", error.message
+    assert_nil internal.find_verification_value("failed-dual-write")
+    assert_empty storage.store
+  end
+
+  def test_dual_stored_verification_uses_adapter_created_record_for_storage_and_after_hooks
+    storage = MemoryStorage.new
+    after_values = []
+    config = BetterAuth::Configuration.new(
+      secret: SECRET,
+      database: :memory,
+      secondary_storage: storage,
+      verification: {store_in_database: true},
+      database_hooks: {
+        verification: {
+          create: {
+            after: ->(verification, _context) { after_values << verification }
+          }
+        }
+      }
+    )
+    adapter = NormalizingVerificationCreateAdapter.new(config)
+    internal = BetterAuth::Adapters::InternalAdapter.new(adapter, config)
+
+    verification = internal.create_verification_value(identifier: "normalized-dual-write", value: "initial", expiresAt: Time.now + 120)
+    stored = JSON.parse(storage.get("verification:normalized-dual-write"))
+
+    assert_equal "adapter-normalized-id", verification.fetch("id")
+    assert_equal "adapter-normalized", verification.fetch("value")
+    assert_equal verification, adapter.find_one(model: "verification", where: [{field: "id", value: verification.fetch("id")}])
+    assert_equal verification.fetch("id"), stored.fetch("id")
+    assert_equal verification.fetch("value"), stored.fetch("value")
+    assert_equal "normalized-dual-write", storage.get("verification-id:adapter-normalized-id")
+    assert_equal [verification], after_values
+  end
+
   def test_verification_secondary_storage_hashes_identifiers_when_configured
     storage = MemoryStorage.new
     internal = internal_adapter(secondary_storage: storage, verification: {store_identifier: "hashed"})
@@ -770,6 +821,24 @@ class BetterAuthInternalAdapterTest < Minitest::Test
 
     def delete(model:, where:)
       deleted_models << model.to_s
+      super
+    end
+  end
+
+  class FailingVerificationCreateAdapter < BetterAuth::Adapters::Memory
+    def create(model:, data:, force_allow_id: false)
+      raise "verification create failed" if model.to_s == "verification"
+
+      super
+    end
+  end
+
+  class NormalizingVerificationCreateAdapter < BetterAuth::Adapters::Memory
+    def create(model:, data:, force_allow_id: false)
+      if model.to_s == "verification"
+        data = data.merge("id" => "adapter-normalized-id", "value" => "adapter-normalized")
+      end
+
       super
     end
   end

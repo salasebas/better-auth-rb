@@ -266,10 +266,15 @@ module BetterAuth
         payload["identifier"] = stored_identifier
 
         custom = secondary_storage && lambda do |verification_data|
-          actual = apply_schema_create("verification", verification_data)
-          actual["id"] ||= generated_id
+          actual = if verification_store_in_database?
+            created = adapter.create(model: "verification", data: verification_data, force_allow_id: true)
+            created.nil? ? verification_data : created
+          else
+            storage_record = apply_schema_create("verification", verification_data)
+            storage_record["id"] ||= generated_id
+            storage_record
+          end
           store_verification(actual)
-          adapter.create(model: "verification", data: actual, force_allow_id: true) if verification_store_in_database?
           actual
         end
 
