@@ -54,7 +54,7 @@
       "ruby_source": "packages/better_auth/test/better_auth/adapters/mysql_test.rb",
       "local_exists": true,
       "upstream_exists": true,
-      "current_local_lines": 190,
+      "current_local_lines": 251,
       "upstream_lines": 110,
       "status": "needs_manual_review"
     },
