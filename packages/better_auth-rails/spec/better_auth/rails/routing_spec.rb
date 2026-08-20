@@ -105,17 +105,18 @@ RSpec.describe BetterAuth::Rails::Routing do
     expect(JSON.parse(session.body).dig("user", "email")).to eq("rails-session@example.com")
   end
 
-  it "keeps server-only plugin endpoints unreachable through the Rails mount" do
-    called = false
+  it "only blocks explicitly server-only plugin endpoints through the Rails mount" do
+    private_called = false
+    scoped_called = false
     plugin = BetterAuth::Plugin.new(
       id: "server-only",
       endpoints: {
         private_probe: BetterAuth::Endpoint.new(path: "/private-probe", method: "GET", metadata: {SERVER_ONLY: true}) do |_ctx|
-          called = true
+          private_called = true
           {private: true}
         end,
         scoped_probe: BetterAuth::Endpoint.new(path: "/scoped-probe", method: "GET", metadata: {scope: "server"}) do |_ctx|
-          called = true
+          scoped_called = true
           {private: true}
         end
       }
@@ -129,8 +130,10 @@ RSpec.describe BetterAuth::Rails::Routing do
     scoped_response = Rack::MockRequest.new(app).get("/api/auth/scoped-probe")
 
     expect(private_response.status).to eq(403)
-    expect(scoped_response.status).to eq(403)
-    expect(called).to be(false)
+    expect(private_called).to be(false)
+    expect(scoped_response.status).to eq(200)
+    expect(JSON.parse(scoped_response.body)).to eq("private" => true)
+    expect(scoped_called).to be(true)
   end
 
   it "keeps core origin checks active for mutating mounted requests with cookies" do

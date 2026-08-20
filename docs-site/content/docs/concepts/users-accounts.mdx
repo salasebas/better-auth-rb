@@ -189,6 +189,8 @@ auth.api.delete_user(
 
 For added security, configure `send_delete_account_verification` to send a verification token or generated callback URL before deleting the account. This is especially useful for OAuth-only users who cannot confirm deletion with a password.
 
+Delete-account verification tokens expire after 86,400 seconds (one day) by default. Use `delete_token_expires_in` to set a positive override in seconds. Already-issued tokens retain the expiry stored when they were issued.
+
 ```ruby
 user: {
   delete_user: {

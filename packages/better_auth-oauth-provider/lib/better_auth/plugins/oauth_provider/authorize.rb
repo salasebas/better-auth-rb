@@ -47,14 +47,17 @@ module BetterAuth
         raise ctx.redirect(oauth_authorize_error_redirect(ctx, query, "unsupported_response_type", "response_type must be code"))
       end
 
-      scopes = OAuthProtocol.parse_scopes(query["scope"])
-      scopes = OAuthProtocol.parse_scopes(OAuthProtocol.stringify_keys(client)["scopes"] || config[:scopes]) if scopes.empty?
+      client_scopes = client_data["scopes"]
+      scopes = if query.key?("scope")
+        OAuthProtocol.parse_scopes(query["scope"])
+      else
+        OAuthProtocol.parse_scopes(client_scopes.nil? ? config[:scopes] : client_scopes)
+      end
       prompts = OAuthProtocol.parse_scopes(query["prompt"])
       if prompts.include?("none") && (prompts - ["none"]).any?
         raise ctx.redirect(oauth_authorize_error_redirect(ctx, query, "invalid_request", "prompt none cannot be combined with other prompts"))
       end
-      allowed_scopes = OAuthProtocol.parse_scopes(client_data["scopes"])
-      allowed_scopes = OAuthProtocol.parse_scopes(config[:scopes]) if allowed_scopes.empty?
+      allowed_scopes = OAuthProtocol.parse_scopes(client_scopes.nil? ? config[:scopes] : client_scopes)
       unless scopes.all? { |scope| allowed_scopes.include?(scope) }
         raise ctx.redirect(oauth_authorize_error_redirect(ctx, query, "invalid_scope", "invalid scope"))
       end

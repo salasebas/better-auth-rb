@@ -12,10 +12,6 @@ class BetterAuthEndpointRegistryParityTest < Minitest::Test
   INVENTORY_PATH = File.expand_path("../reference/endpoints-inventory.json", __dir__)
   SKIP_PLUGINS = %w[mcp electron oidc-provider].freeze
   KNOWN_GAPS = [].freeze
-  PASSKEY_METHOD_OVERRIDES = {
-    "GET /passkey/generate-authenticate-options" => "POST",
-    "GET /passkey/generate-register-options" => "POST"
-  }.freeze
 
   def setup
     assert_path_exists REGISTRY_PATH, "Run `ruby scripts/generate-upstream-endpoint-registry.rb` first"
@@ -121,9 +117,6 @@ class BetterAuthEndpointRegistryParityTest < Minitest::Test
   end
 
   def normalized_upstream_method(entry)
-    override = PASSKEY_METHOD_OVERRIDES["#{entry["method"].to_s.upcase} #{entry["path"]}"]
-    return override if override
-
     entry["method"].to_s.upcase
   end
 

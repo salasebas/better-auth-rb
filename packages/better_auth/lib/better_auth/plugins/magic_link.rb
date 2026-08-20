@@ -167,7 +167,7 @@ module BetterAuth
           end
         end
 
-        session = ctx.context.internal_adapter.create_session(user["id"])
+        session = ctx.context.internal_adapter.create_session(user["id"], false, nil, false, ctx)
         redirect_with_error.call("failed_to_create_session") unless session
 
         Cookies.set_session_cookie(ctx, {session: session, user: user})

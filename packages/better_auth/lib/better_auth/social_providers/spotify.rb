@@ -4,7 +4,7 @@ module BetterAuth
   module SocialProviders
     module_function
 
-    def spotify(client_id:, client_secret:, scopes: ["user-read-email"], **options)
+    def spotify(client_id:, client_secret: nil, scopes: ["user-read-email"], **options)
       Base.oauth_provider(
         id: "spotify",
         name: "Spotify",

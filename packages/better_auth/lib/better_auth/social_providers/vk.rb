@@ -4,7 +4,7 @@ module BetterAuth
   module SocialProviders
     module_function
 
-    def vk(client_id:, client_secret:, scopes: ["email", "phone"], **options)
+    def vk(client_id:, client_secret: nil, scopes: ["email", "phone"], **options)
       normalized = Base.normalize_options(options)
       provider = Base.oauth_provider(
         id: "vk",

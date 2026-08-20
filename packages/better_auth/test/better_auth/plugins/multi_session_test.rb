@@ -58,6 +58,72 @@ class BetterAuthPluginsMultiSessionTest < Minitest::Test
     assert_equal 401, revoke.status_code
   end
 
+  def test_set_active_uses_verified_cookie_token_instead_of_body_token
+    auth = build_auth(plugins: [BetterAuth::Plugins.multi_session(maximum_sessions: 3)])
+    caller_cookie = merge_cookie("", sign_up_response(auth, email: "binding-caller@example.com"))
+    other_cookie = merge_cookie("", sign_up_response(auth, email: "binding-other@example.com"))
+    caller_token = auth.api.get_session(headers: {"cookie" => caller_cookie})[:session]["token"]
+    other_token = auth.api.get_session(headers: {"cookie" => other_cookie})[:session]["token"]
+    caller_multi_cookie = cookie_pairs(caller_cookie).fetch(multi_session_cookie_name(caller_token))
+
+    tampered_cookie = with_cookie(
+      caller_cookie,
+      multi_session_cookie_name(other_token),
+      tamper_signed_cookie(caller_multi_cookie)
+    )
+    tampered = assert_raises(BetterAuth::APIError) do
+      auth.api.set_active_session(headers: {"cookie" => tampered_cookie}, body: {sessionToken: other_token})
+    end
+    assert_equal 401, tampered.status_code
+
+    mismatched_cookie = with_cookie(caller_cookie, multi_session_cookie_name(other_token), caller_multi_cookie)
+    selected = auth.api.set_active_session(
+      headers: {"cookie" => mismatched_cookie},
+      body: {sessionToken: other_token}
+    )
+
+    assert_equal "binding-caller@example.com", selected[:user]["email"]
+
+    valid = auth.api.set_active_session(headers: {"cookie" => other_cookie}, body: {sessionToken: other_token})
+    assert_equal "binding-other@example.com", valid[:user]["email"]
+  end
+
+  def test_revoke_uses_verified_cookie_token_instead_of_body_token
+    auth = build_auth(plugins: [BetterAuth::Plugins.multi_session(maximum_sessions: 3)])
+    caller_cookie = merge_cookie("", sign_up_response(auth, email: "revoke-binding-caller@example.com"))
+    other_cookie = merge_cookie("", sign_up_response(auth, email: "revoke-binding-other@example.com"))
+    caller_token = auth.api.get_session(headers: {"cookie" => caller_cookie})[:session]["token"]
+    other_token = auth.api.get_session(headers: {"cookie" => other_cookie})[:session]["token"]
+    caller_multi_cookie = cookie_pairs(caller_cookie).fetch(multi_session_cookie_name(caller_token))
+
+    tampered_cookie = with_cookie(
+      caller_cookie,
+      multi_session_cookie_name(other_token),
+      tamper_signed_cookie(caller_multi_cookie)
+    )
+    tampered = assert_raises(BetterAuth::APIError) do
+      auth.api.revoke_device_session(headers: {"cookie" => tampered_cookie}, body: {sessionToken: other_token})
+    end
+    assert_equal 401, tampered.status_code
+    assert auth.context.internal_adapter.find_session(caller_token)
+    assert auth.context.internal_adapter.find_session(other_token)
+
+    mismatched_cookie = with_cookie(caller_cookie, multi_session_cookie_name(other_token), caller_multi_cookie)
+    status, headers, _body = auth.api.revoke_device_session(
+      headers: {"cookie" => mismatched_cookie},
+      body: {sessionToken: other_token},
+      as_response: true
+    )
+
+    assert_equal 200, status
+    assert_includes headers.fetch("set-cookie"), "better-auth.session_token=;"
+    assert auth.context.internal_adapter.find_session(caller_token).nil?, "verified cookie session should be revoked"
+    assert auth.context.internal_adapter.find_session(other_token)
+
+    auth.api.revoke_device_session(headers: {"cookie" => other_cookie}, body: {sessionToken: other_token})
+    assert auth.context.internal_adapter.find_session(other_token).nil?, "matching session should be revoked"
+  end
+
   def test_same_user_replaces_old_multi_session_cookie_even_at_maximum
     auth = build_auth(plugins: [BetterAuth::Plugins.multi_session(maximum_sessions: 1)])
     cookie = merge_cookie("", sign_up_response(auth, email: "same-user@example.com"))
@@ -208,6 +274,24 @@ class BetterAuthPluginsMultiSessionTest < Minitest::Test
       end
     end
     cookies.map { |name, value| "#{name}=#{value}" }.join("; ")
+  end
+
+  def cookie_pairs(cookie)
+    cookie.to_s.split("; ").reject(&:empty?).to_h { |part| part.split("=", 2) }
+  end
+
+  def with_cookie(cookie, name, value)
+    cookie_pairs(cookie).merge(name => value).map { |key, entry| "#{key}=#{entry}" }.join("; ")
+  end
+
+  def multi_session_cookie_name(token)
+    "better-auth.session_token_multi-#{token.downcase}"
+  end
+
+  def tamper_signed_cookie(value)
+    payload, separator, signature = value.rpartition(".")
+    replacement = signature.end_with?("A") ? "B" : "A"
+    "#{payload}#{separator}#{signature[0...-1]}#{replacement}"
   end
 
   def cookie_header(set_cookie)

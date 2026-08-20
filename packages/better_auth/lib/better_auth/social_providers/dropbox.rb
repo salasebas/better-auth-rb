@@ -4,7 +4,7 @@ module BetterAuth
   module SocialProviders
     module_function
 
-    def dropbox(client_id:, client_secret:, scopes: ["account_info.read"], **options)
+    def dropbox(client_id:, client_secret: nil, scopes: ["account_info.read"], **options)
       Base.oauth_provider(
         id: "dropbox",
         name: "Dropbox",

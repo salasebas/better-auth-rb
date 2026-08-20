@@ -52,7 +52,8 @@ module BetterAuth
         version: config[:version],
         cookie_prefix: ctx.context.options.advanced[:cookie_prefix] || "better-auth",
         is_secure: ctx.context.auth_cookies[:session_data].name.start_with?(Cookies::SECURE_COOKIE_PREFIX),
-        cookie_full_name: ctx.context.auth_cookies[:session_data].name
+        cookie_full_name: ctx.context.auth_cookies[:session_data].name,
+        include_expiry: true
       )
       return nil unless payload
       return nil if payload["session"]["token"] && payload["session"]["token"] != token
@@ -124,13 +125,19 @@ module BetterAuth
       return false if refresh_cache == false || refresh_cache.nil?
 
       max_age = (config[:max_age] || 60 * 5).to_i
-      update_age = if refresh_cache.is_a?(Hash)
-        (refresh_cache[:update_age] || refresh_cache["updateAge"] || refresh_cache["update_age"]).to_i
-      else
-        (max_age * 0.2).to_i
+      update_age_key = [:update_age, "updateAge", "update_age"].find do |key|
+        refresh_cache.is_a?(Hash) && refresh_cache.key?(key)
       end
-      updated_at = payload["updatedAt"].to_i
-      updated_at.positive? && updated_at + (update_age * 1000) <= (Time.now.to_f * 1000).to_i
+      update_age = update_age_key ? refresh_cache[update_age_key].to_f : (max_age * 0.2).floor
+      expires_at = if payload["expiresAt"]
+        payload["expiresAt"].to_i
+      elsif payload["exp"]
+        payload["exp"].to_i * 1000
+      end
+      return false unless expires_at&.positive?
+
+      remaining_ms = expires_at - (Time.now.to_f * 1000).to_i
+      remaining_ms < update_age * 1000
     end
 
     def normalize_time(value)

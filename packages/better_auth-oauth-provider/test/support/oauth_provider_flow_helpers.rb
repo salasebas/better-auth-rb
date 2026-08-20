@@ -51,6 +51,19 @@ module OAuthProviderFlowHelpers
     )
   end
 
+  def build_auth_without_scope_configuration
+    BetterAuth.auth(
+      base_url: "http://localhost:3000",
+      secret: SECRET,
+      database: :memory,
+      email_and_password: {enabled: true},
+      plugins: [
+        BetterAuth::Plugins.jwt(jwks: {key_pair_config: {alg: "EdDSA"}}),
+        BetterAuth::Plugins.oauth_provider
+      ]
+    )
+  end
+
   def sign_up_cookie(auth, email: "oauth-provider@example.com", name: "OAuth Owner")
     _status, headers, _body = auth.api.sign_up_email(
       body: {email: email, password: "password123", name: name},

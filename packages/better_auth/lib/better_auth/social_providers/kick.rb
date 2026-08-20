@@ -4,7 +4,7 @@ module BetterAuth
   module SocialProviders
     module_function
 
-    def kick(client_id:, client_secret:, scopes: ["user:read"], **options)
+    def kick(client_id:, client_secret: nil, scopes: ["user:read"], **options)
       Base.oauth_provider(
         id: "kick",
         name: "Kick",
