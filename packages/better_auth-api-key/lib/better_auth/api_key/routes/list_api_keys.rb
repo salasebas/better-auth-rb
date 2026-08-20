@@ -4,15 +4,19 @@ module BetterAuth
   module APIKey
     module Routes
       module ListAPIKeys
-        UPSTREAM_SOURCE = "reference/upstream-src/1.6.9/repository/packages/api-key/src/routes/list-api-keys.ts"
+        UPSTREAM_SOURCE = "reference/upstream-src/1.7.1/repository/packages/api-key/src/routes/list-api-keys.ts"
 
         module_function
 
         def endpoint(config)
-          BetterAuth::Endpoint.new(path: "/api-key/list", method: "GET", metadata: Routes.openapi_for(:list_api_keys)) do |ctx|
+          BetterAuth::Endpoint.new(
+            path: "/api-key/list",
+            method: "GET",
+            query_schema: BetterAuth::APIKey::RequestContract.list_query_schema,
+            metadata: Routes.openapi_for(:list_api_keys)
+          ) do |ctx|
             session = BetterAuth::Routes.current_session(ctx)
             query = BetterAuth::Plugins.normalize_hash(ctx.query)
-            BetterAuth::Plugins.api_key_validate_list_query!(query)
             configs = query[:config_id] ? [BetterAuth::Plugins.api_key_resolve_config(ctx.context, config, query[:config_id])] : storage_groups(config.fetch(:configurations, [config]))
             reference_id = query[:organization_id] || session[:user]["id"]
             expected_reference = query[:organization_id] ? "organization" : "user"

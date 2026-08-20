@@ -18,6 +18,32 @@ class BetterAuthAPIKeyCreateRouteTest < Minitest::Test
     assert_equal({"plan" => "pro"}, created[:metadata])
   end
 
+  def test_create_route_ignores_javascript_falsy_metadata_values
+    auth = build_api_key_auth(default_key_length: 12, enable_metadata: true)
+    user_id = auth.api.get_session(headers: {"cookie" => sign_up_cookie(auth, email: "create-route-falsy-metadata-key@example.com")})[:user]["id"]
+
+    [false, 0, ""].each do |metadata|
+      created = auth.api.create_api_key(body: {userId: user_id, metadata: metadata})
+      stored = auth.context.adapter.find_one(model: "apikey", where: [{field: "id", value: created[:id]}])
+
+      assert_equal metadata, created[:metadata]
+      assert_nil stored["metadata"]
+    end
+  end
+
+  def test_create_route_ignores_falsy_metadata_when_metadata_is_disabled
+    auth = build_api_key_auth(default_key_length: 12, enable_metadata: false)
+    user_id = auth.api.get_session(headers: {"cookie" => sign_up_cookie(auth, email: "create-route-disabled-falsy-metadata-key@example.com")})[:user]["id"]
+
+    [false, 0, ""].each do |metadata|
+      created = auth.api.create_api_key(body: {userId: user_id, metadata: metadata})
+      stored = auth.context.adapter.find_one(model: "apikey", where: [{field: "id", value: created[:id]}])
+
+      assert_equal metadata, created[:metadata]
+      assert_nil stored["metadata"]
+    end
+  end
+
   def test_create_route_applies_defaults_hashing_start_and_rate_limit
     auth = build_api_key_auth(default_key_length: 12, default_prefix: "ba_", rate_limit: {enabled: false, time_window: 1000, max_requests: 25})
     cookie = sign_up_cookie(auth, email: "create-route-defaults-key@example.com")
@@ -38,12 +64,22 @@ class BetterAuthAPIKeyCreateRouteTest < Minitest::Test
     auth = build_api_key_auth(default_key_length: 12)
     cookie = sign_up_cookie(auth, email: "create-route-server-only-key@example.com")
 
-    %i[permissions refillAmount refillInterval rateLimitMax rateLimitTimeWindow rateLimitEnabled remaining].each do |field|
+    server_only_values = {
+      permissions: {repo: ["read"]},
+      refillAmount: 10,
+      refillInterval: 10,
+      rateLimitMax: 10,
+      rateLimitTimeWindow: 10,
+      rateLimitEnabled: true,
+      remaining: 10
+    }
+    server_only_values.each do |field, value|
       error = assert_raises(BetterAuth::APIError) do
-        auth.api.create_api_key(headers: {"cookie" => cookie}, body: {field => 10})
+        auth.api.create_api_key(headers: {"cookie" => cookie}, body: {field => value})
       end
 
       assert_equal "BAD_REQUEST", error.status
+      assert_equal "SERVER_ONLY_PROPERTY", error.code
       assert_equal BetterAuth::APIKey::ERROR_CODES.fetch("SERVER_ONLY_PROPERTY"), error.message
     end
   end
@@ -206,6 +242,20 @@ class BetterAuthAPIKeyCreateRouteTest < Minitest::Test
     assert storage.get("api-key:by-id:#{created[:id]}")
   end
 
+  def test_create_route_uses_default_expiration_for_omitted_and_null_values
+    auth = build_api_key_auth(default_key_length: 12, key_expiration: {default_expires_in: 3600})
+    user_id = auth.api.get_session(headers: {"cookie" => sign_up_cookie(auth, email: "create-route-default-expiration-key@example.com")})[:user]["id"]
+    before = Time.now
+
+    omitted = auth.api.create_api_key(body: {userId: user_id})
+    nullable = auth.api.create_api_key(body: {userId: user_id, expiresIn: nil})
+
+    [omitted, nullable].each do |created|
+      assert_operator created[:expiresAt], :>=, before + 3599
+      assert_operator created[:expiresAt], :<, before + 3602
+    end
+  end
+
   def test_create_route_rejects_non_positive_refill_amount
     auth = build_api_key_auth(default_key_length: 12)
     cookie = sign_up_cookie(auth, email: "create-route-invalid-refill-key@example.com")
@@ -216,7 +266,8 @@ class BetterAuthAPIKeyCreateRouteTest < Minitest::Test
     end
 
     assert_equal "BAD_REQUEST", error.status
-    assert_equal BetterAuth::APIKey::ERROR_CODES.fetch("INVALID_REMAINING"), error.message
+    assert_equal "VALIDATION_ERROR", error.code
+    assert_equal "[body.refillAmount] Too small: expected number to be >=1", error.message
   end
 
   def test_create_route_rejects_revoked_cookie_cache_session

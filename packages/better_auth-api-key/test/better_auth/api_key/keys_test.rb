@@ -39,15 +39,15 @@ class BetterAuthAPIKeyKeysTest < Minitest::Test
     before = Time.now
     body_expiration = BetterAuth::APIKey::Keys.expires_at({expires_in: 60}, {key_expiration: {default_expires_in: 120}})
     default_expiration = BetterAuth::APIKey::Keys.expires_at({}, {key_expiration: {default_expires_in: 120}})
-    nil_expiration = BetterAuth::APIKey::Keys.expires_at({expires_in: nil}, {key_expiration: {default_expires_in: 120}})
+    nullable_default_expiration = BetterAuth::APIKey::Keys.expires_at({expires_in: nil}, {key_expiration: {default_expires_in: 120}})
     no_expiration = BetterAuth::APIKey::Keys.expires_at({expires_in: nil}, {key_expiration: {default_expires_in: nil}})
 
     assert_operator body_expiration, :>=, before + 59
     assert_operator body_expiration, :<, before + 62
     assert_operator default_expiration, :>=, before + 119
     assert_operator default_expiration, :<, before + 122
-    assert_operator nil_expiration, :>=, before + 119
-    assert_operator nil_expiration, :<, before + 122
+    assert_operator nullable_default_expiration, :>=, before + 119
+    assert_operator nullable_default_expiration, :<, before + 122
     assert_nil no_expiration
   end
 

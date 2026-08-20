@@ -4,12 +4,17 @@ module BetterAuth
   module APIKey
     module Routes
       module CreateAPIKey
-        UPSTREAM_SOURCE = "reference/upstream-src/1.6.9/repository/packages/api-key/src/routes/create-api-key.ts"
+        UPSTREAM_SOURCE = "reference/upstream-src/1.7.1/repository/packages/api-key/src/routes/create-api-key.ts"
 
         module_function
 
         def endpoint(config)
-          BetterAuth::Endpoint.new(path: "/api-key/create", method: "POST", metadata: Routes.openapi_for(:create_api_key)) do |ctx|
+          BetterAuth::Endpoint.new(
+            path: "/api-key/create",
+            method: "POST",
+            body_schema: BetterAuth::APIKey::RequestContract.create_body_schema,
+            metadata: Routes.openapi_for(:create_api_key)
+          ) do |ctx|
             body = BetterAuth::Plugins.api_key_normalize_body(ctx.body)
             resolved_config = BetterAuth::Plugins.api_key_resolve_config(ctx.context, config, body[:config_id])
             # API-key ownership and authorization are sensitive operations. A
@@ -19,7 +24,7 @@ module BetterAuth
             client_request = BetterAuth::Plugins.api_key_auth_required?(ctx)
             BetterAuth::Plugins.api_key_validate_server_only!(body, create: true, client: client_request)
             if !session && BetterAuth::Plugins.api_key_auth_required?(ctx)
-              raise BetterAuth::APIError.new("UNAUTHORIZED", message: BetterAuth::Plugins::API_KEY_ERROR_CODES["UNAUTHORIZED_SESSION"])
+              raise BetterAuth::APIKey.error("UNAUTHORIZED", "UNAUTHORIZED_SESSION")
             end
             if ctx.request && body.key?(:user_id)
               raise BetterAuth::APIError.new("UNAUTHORIZED", message: BetterAuth::Plugins::API_KEY_ERROR_CODES["UNAUTHORIZED_SESSION"])

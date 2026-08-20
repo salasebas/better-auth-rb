@@ -35,5 +35,15 @@ module BetterAuth
       "NO_DEFAULT_API_KEY_CONFIGURATION_FOUND" => "No default api-key configuration found.",
       "ORGANIZATION_PLUGIN_REQUIRED" => "Organization plugin is required for organization-owned API keys. Please install and configure the organization plugin."
     }.freeze
+
+    def self.error(status, code, message: nil, headers: {}, body: nil)
+      BetterAuth::APIError.new(
+        status,
+        code: code,
+        message: message || ERROR_CODES.fetch(code),
+        headers: headers,
+        body: body
+      )
+    end
   end
 end

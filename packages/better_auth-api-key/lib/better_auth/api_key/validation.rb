@@ -8,50 +8,50 @@ module BetterAuth
       def validate_create_update!(body, config, create:, client:)
         name = body[:name]
         if create && config[:require_name] && name.to_s.empty?
-          raise BetterAuth::APIError.new("BAD_REQUEST", message: BetterAuth::Plugins::API_KEY_ERROR_CODES["NAME_REQUIRED"])
+          raise BetterAuth::APIKey.error("BAD_REQUEST", "NAME_REQUIRED")
         end
         if name && (!create || !name.to_s.empty?) && !name.to_s.length.between?(config[:minimum_name_length].to_i, config[:maximum_name_length].to_i)
-          raise BetterAuth::APIError.new("BAD_REQUEST", message: BetterAuth::Plugins::API_KEY_ERROR_CODES["INVALID_NAME_LENGTH"])
+          raise BetterAuth::APIKey.error("BAD_REQUEST", "INVALID_NAME_LENGTH")
         end
         prefix = body[:prefix]
         if prefix && !prefix.to_s.length.between?(config[:minimum_prefix_length].to_i, config[:maximum_prefix_length].to_i)
-          raise BetterAuth::APIError.new("BAD_REQUEST", message: BetterAuth::Plugins::API_KEY_ERROR_CODES["INVALID_PREFIX_LENGTH"])
+          raise BetterAuth::APIKey.error("BAD_REQUEST", "INVALID_PREFIX_LENGTH")
         end
         if prefix && !prefix.to_s.match?(/\A[a-zA-Z0-9_-]+\z/)
-          raise BetterAuth::APIError.new("BAD_REQUEST", message: BetterAuth::Plugins::API_KEY_ERROR_CODES["INVALID_PREFIX_LENGTH"])
+          raise BetterAuth::APIKey.error("BAD_REQUEST", "INVALID_PREFIX_LENGTH")
         end
         if body.key?(:remaining) && !body[:remaining].nil?
           minimum = create ? 0 : 1
-          raise BetterAuth::APIError.new("BAD_REQUEST", message: BetterAuth::Plugins::API_KEY_ERROR_CODES["INVALID_REMAINING"]) if body[:remaining].to_i < minimum
+          raise BetterAuth::APIKey.error("BAD_REQUEST", "INVALID_REMAINING") if body[:remaining].to_i < minimum
         end
-        if body.key?(:refill_amount) && !body[:refill_amount].nil? && body[:refill_amount].to_i < 1
-          raise BetterAuth::APIError.new("BAD_REQUEST", message: BetterAuth::Plugins::API_KEY_ERROR_CODES["INVALID_REMAINING"])
+        if create && body.key?(:refill_amount) && !body[:refill_amount].nil? && body[:refill_amount].to_i < 1
+          raise BetterAuth::APIKey.error("BAD_REQUEST", "INVALID_REMAINING")
         end
-        if create && BetterAuth::APIKey::Utils.javascript_truthy?(body[:metadata])
-          raise BetterAuth::APIError.new("BAD_REQUEST", message: BetterAuth::Plugins::API_KEY_ERROR_CODES["METADATA_DISABLED"]) unless config[:enable_metadata]
-          unless body[:metadata].is_a?(Hash) || body[:metadata].is_a?(Array)
-            raise BetterAuth::APIError.new("BAD_REQUEST", message: BetterAuth::Plugins::API_KEY_ERROR_CODES["INVALID_METADATA_TYPE"])
-          end
-        elsif !create && body[:metadata] && config[:enable_metadata]
-          raise BetterAuth::APIError.new("BAD_REQUEST", message: BetterAuth::Plugins::API_KEY_ERROR_CODES["INVALID_METADATA_TYPE"]) unless body[:metadata].is_a?(Hash)
+        metadata = body[:metadata]
+        if create && BetterAuth::APIKey::Utils.javascript_truthy?(metadata)
+          raise BetterAuth::APIKey.error("BAD_REQUEST", "METADATA_DISABLED") unless config[:enable_metadata]
+          raise BetterAuth::APIKey.error("BAD_REQUEST", "INVALID_METADATA_TYPE") unless js_object?(metadata)
+        elsif !create && body.key?(:metadata) && config[:enable_metadata] && !js_object?(metadata)
+          raise BetterAuth::APIKey.error("BAD_REQUEST", "INVALID_METADATA_TYPE")
         end
         validate_server_only!(body, create: create, client: client)
         amount_present = create ? BetterAuth::APIKey::Utils.javascript_truthy?(body[:refill_amount]) : body.key?(:refill_amount)
         interval_present = create ? BetterAuth::APIKey::Utils.javascript_truthy?(body[:refill_interval]) : body.key?(:refill_interval)
         if amount_present && !interval_present
-          raise BetterAuth::APIError.new("BAD_REQUEST", message: BetterAuth::Plugins::API_KEY_ERROR_CODES["REFILL_AMOUNT_AND_INTERVAL_REQUIRED"])
+          raise BetterAuth::APIKey.error("BAD_REQUEST", "REFILL_AMOUNT_AND_INTERVAL_REQUIRED")
         end
         if interval_present && !amount_present
-          raise BetterAuth::APIError.new("BAD_REQUEST", message: BetterAuth::Plugins::API_KEY_ERROR_CODES["REFILL_INTERVAL_AND_AMOUNT_REQUIRED"])
+          raise BetterAuth::APIKey.error("BAD_REQUEST", "REFILL_INTERVAL_AND_AMOUNT_REQUIRED")
         end
         if body.key?(:expires_in)
+          return if create && body[:expires_in].nil?
+
+          raise BetterAuth::APIKey.error("BAD_REQUEST", "KEY_DISABLED_EXPIRATION") if config[:key_expiration][:disable_custom_expires_time]
           return if body[:expires_in].nil?
 
-          raise BetterAuth::APIError.new("BAD_REQUEST", message: BetterAuth::Plugins::API_KEY_ERROR_CODES["KEY_DISABLED_EXPIRATION"]) if config[:key_expiration][:disable_custom_expires_time]
-
           days = body[:expires_in].to_f / 86_400
-          raise BetterAuth::APIError.new("BAD_REQUEST", message: BetterAuth::Plugins::API_KEY_ERROR_CODES["EXPIRES_IN_IS_TOO_SMALL"]) if days < config[:key_expiration][:min_expires_in].to_f
-          raise BetterAuth::APIError.new("BAD_REQUEST", message: BetterAuth::Plugins::API_KEY_ERROR_CODES["EXPIRES_IN_IS_TOO_LARGE"]) if days > config[:key_expiration][:max_expires_in].to_f
+          raise BetterAuth::APIKey.error("BAD_REQUEST", "EXPIRES_IN_IS_TOO_SMALL") if days < config[:key_expiration][:min_expires_in].to_f
+          raise BetterAuth::APIKey.error("BAD_REQUEST", "EXPIRES_IN_IS_TOO_LARGE") if days > config[:key_expiration][:max_expires_in].to_f
         end
       end
 
@@ -61,7 +61,7 @@ module BetterAuth
         server_only_keys = %i[refill_amount refill_interval rate_limit_max rate_limit_time_window rate_limit_enabled remaining permissions]
         return unless server_only_keys.any? { |key| (create && key == :remaining) ? !body[:remaining].nil? : body.key?(key) }
 
-        raise BetterAuth::APIError.new("BAD_REQUEST", message: BetterAuth::Plugins::API_KEY_ERROR_CODES["SERVER_ONLY_PROPERTY"])
+        raise BetterAuth::APIKey.error("BAD_REQUEST", "SERVER_ONLY_PROPERTY")
       end
 
       def update_payload(body, config)
@@ -78,6 +78,10 @@ module BetterAuth
         update[:metadata] = BetterAuth::APIKey::Utils.encode_json(body[:metadata]) if body.key?(:metadata) && config[:enable_metadata]
         update[:permissions] = BetterAuth::APIKey::Utils.encode_json(body[:permissions]) if body.key?(:permissions)
         update
+      end
+
+      def js_object?(value)
+        value.nil? || value.is_a?(Hash) || value.is_a?(Array)
       end
 
       def validate_api_key!(ctx, key, config, permissions: nil)
@@ -108,10 +112,10 @@ module BetterAuth
         unless BetterAuth::APIKey::Routes.config_id_matches?(BetterAuth::APIKey::Types.record_config_id(record), config[:config_id])
           raise invalid_api_key_error
         end
-        raise BetterAuth::APIError.new("UNAUTHORIZED", message: BetterAuth::Plugins::API_KEY_ERROR_CODES["KEY_DISABLED"]) if record["enabled"] == false
+        raise BetterAuth::APIKey.error("UNAUTHORIZED", "KEY_DISABLED") if record["enabled"] == false
         if record["expiresAt"] && BetterAuth::APIKey::Utils.normalize_time(record["expiresAt"]) <= Time.now
           BetterAuth::APIKey::Adapter.schedule_record_delete(ctx, record, config)
-          raise BetterAuth::APIError.new("UNAUTHORIZED", message: BetterAuth::Plugins::API_KEY_ERROR_CODES["KEY_EXPIRED"])
+          raise BetterAuth::APIKey.error("UNAUTHORIZED", "KEY_EXPIRED")
         end
         # Keep an exhausted row inert until an explicit cleanup pass. Eager
         # deletion here can race a concurrent winner between its guarded quota
@@ -315,11 +319,11 @@ module BetterAuth
       end
 
       def invalid_api_key_error
-        BetterAuth::APIError.new("UNAUTHORIZED", message: BetterAuth::Plugins::API_KEY_ERROR_CODES["INVALID_API_KEY"])
+        BetterAuth::APIKey.error("UNAUTHORIZED", "INVALID_API_KEY")
       end
 
       def usage_exceeded_error
-        BetterAuth::APIError.new("TOO_MANY_REQUESTS", message: BetterAuth::Plugins::API_KEY_ERROR_CODES["USAGE_EXCEEDED"])
+        BetterAuth::APIKey.error("TOO_MANY_REQUESTS", "USAGE_EXCEEDED")
       end
 
       def warn_best_effort_secondary(ctx, config)
@@ -338,7 +342,7 @@ module BetterAuth
         actual = BetterAuth::APIKey::Utils.decode_json(record["permissions"]) || {}
         result = BetterAuth::Plugins::Role.new(actual).authorize(required)
         unless result[:success]
-          raise BetterAuth::APIError.new("UNAUTHORIZED", message: BetterAuth::Plugins::API_KEY_ERROR_CODES["KEY_NOT_FOUND"], code: "KEY_NOT_FOUND")
+          raise BetterAuth::APIKey.error("UNAUTHORIZED", "KEY_NOT_FOUND")
         end
       end
     end
