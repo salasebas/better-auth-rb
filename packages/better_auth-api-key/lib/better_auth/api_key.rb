@@ -3,6 +3,7 @@
 require "better_auth"
 require_relative "api_key/version"
 require_relative "api_key/error_codes"
+require_relative "api_key/request_contract"
 require_relative "api_key/types"
 require_relative "api_key/utils"
 require_relative "api_key/rate_limit"

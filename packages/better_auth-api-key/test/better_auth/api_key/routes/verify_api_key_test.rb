@@ -15,13 +15,19 @@ class BetterAuthAPIKeyVerifyRouteTest < Minitest::Test
     assert_nil result[:key]
   end
 
-  def test_verify_route_returns_http_401_for_missing_key
+  def test_verify_route_returns_http_validation_error_for_missing_key
     auth = build_api_key_auth(default_key_length: 12)
 
     status, body = rack_json_response(auth, "POST", "/api-key/verify", body: {})
 
-    assert_equal 401, status
-    assert_equal "INVALID_API_KEY", body.fetch("error").fetch("code")
+    assert_equal 400, status
+    assert_equal(
+      {
+        "code" => "VALIDATION_ERROR",
+        "message" => "[body.key] Invalid input: expected string, received undefined"
+      },
+      body
+    )
   end
 
   def test_verify_route_returns_http_401_for_invalid_key
@@ -50,11 +56,13 @@ class BetterAuthAPIKeyVerifyRouteTest < Minitest::Test
     cookie = sign_up_cookie(auth, email: "verify-route-header-key@example.com")
     created = auth.api.create_api_key(headers: {"cookie" => cookie}, body: {})
 
-    result = auth.api.verify_api_key(headers: {"x-api-key" => created[:key]}, body: {})
+    error = assert_raises(BetterAuth::APIError) do
+      auth.api.verify_api_key(headers: {"x-api-key" => created[:key]}, body: {})
+    end
 
-    assert_equal false, result[:valid]
-    assert_equal "INVALID_API_KEY", result[:error][:code]
-    assert_nil result[:key]
+    assert_equal "BAD_REQUEST", error.status
+    assert_equal "VALIDATION_ERROR", error.code
+    assert_equal "[body.key] Invalid input: expected string, received undefined", error.message
   end
 
   def test_verify_route_includes_rate_limit_retry_details

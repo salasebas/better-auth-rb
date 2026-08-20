@@ -30,8 +30,8 @@ module BetterAuth
       endpoint_context = Endpoint::Context.new(
         path: endpoint.path,
         method: input[:method] || request_method(request) || Array(endpoint.methods).first,
-        query: input[:query] || {},
-        body: input[:body] || {},
+        query: input.key?(:query) ? input[:query] : {},
+        body: input.key?(:body) ? input[:body] : {},
         params: input[:params] || {},
         headers: headers,
         context: context,

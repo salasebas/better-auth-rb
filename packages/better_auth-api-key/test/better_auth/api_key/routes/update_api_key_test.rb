@@ -27,14 +27,24 @@ class BetterAuthAPIKeyUpdateRouteTest < Minitest::Test
     end
     assert_equal BetterAuth::APIKey::ERROR_CODES.fetch("NO_VALUES_TO_UPDATE"), no_values.message
 
-    %i[permissions refillAmount refillInterval rateLimitMax rateLimitTimeWindow rateLimitEnabled remaining].each do |field|
+    server_only_values = {
+      permissions: {repo: ["read"]},
+      refillAmount: 10,
+      refillInterval: 10,
+      rateLimitMax: 10,
+      rateLimitTimeWindow: 10,
+      rateLimitEnabled: true,
+      remaining: 10
+    }
+    server_only_values.each do |field, value|
       error = assert_raises(BetterAuth::APIError) do
         body = {keyId: created[:id]}
-        body[field] = 10
+        body[field] = value
         auth.api.update_api_key(headers: {"cookie" => cookie}, body: body)
       end
 
       assert_equal "BAD_REQUEST", error.status
+      assert_equal "SERVER_ONLY_PROPERTY", error.code
       assert_equal BetterAuth::APIKey::ERROR_CODES.fetch("SERVER_ONLY_PROPERTY"), error.message
     end
   end
@@ -92,6 +102,19 @@ class BetterAuthAPIKeyUpdateRouteTest < Minitest::Test
     assert_equal "default", updated[:configId]
     assert_equal({"tier" => "pro"}, updated[:metadata])
     assert_equal({"repo" => ["read"]}, updated[:permissions])
+  end
+
+  def test_update_route_rejects_false_metadata_when_metadata_is_enabled
+    auth = build_api_key_auth(default_key_length: 12, enable_metadata: true)
+    user_id = auth.api.get_session(headers: {"cookie" => sign_up_cookie(auth, email: "update-route-false-metadata-key@example.com")})[:user]["id"]
+    created = auth.api.create_api_key(body: {userId: user_id})
+
+    error = assert_raises(BetterAuth::APIError) do
+      auth.api.update_api_key(body: {userId: user_id, keyId: created[:id], metadata: false})
+    end
+
+    assert_equal "INVALID_METADATA_TYPE", error.code
+    assert_equal BetterAuth::APIKey::ERROR_CODES.fetch("INVALID_METADATA_TYPE"), error.message
   end
 
   def test_update_route_rejects_revoked_cookie_cache_session
@@ -161,17 +184,15 @@ class BetterAuthAPIKeyUpdateRouteTest < Minitest::Test
     assert_equal BetterAuth::APIKey::ERROR_CODES.fetch("EXPIRES_IN_IS_TOO_LARGE"), large_expiration.message
   end
 
-  def test_update_route_rejects_non_positive_refill_amount
+  def test_update_route_accepts_zero_refill_amount_like_upstream_schema
     auth = build_api_key_auth(default_key_length: 12)
     cookie = sign_up_cookie(auth, email: "update-route-invalid-refill-key@example.com")
     user_id = auth.api.get_session(headers: {"cookie" => cookie})[:user]["id"]
     created = auth.api.create_api_key(body: {userId: user_id})
 
-    error = assert_raises(BetterAuth::APIError) do
-      auth.api.update_api_key(body: {userId: user_id, keyId: created[:id], refillAmount: 0, refillInterval: 1000})
-    end
+    updated = auth.api.update_api_key(body: {userId: user_id, keyId: created[:id], refillAmount: 0, refillInterval: 1000})
 
-    assert_equal "BAD_REQUEST", error.status
-    assert_equal BetterAuth::APIKey::ERROR_CODES.fetch("INVALID_REMAINING"), error.message
+    assert_equal 0, updated[:refillAmount]
+    assert_equal 1000, updated[:refillInterval]
   end
 end

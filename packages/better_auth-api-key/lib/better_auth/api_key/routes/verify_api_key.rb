@@ -4,7 +4,7 @@ module BetterAuth
   module APIKey
     module Routes
       module VerifyAPIKey
-        UPSTREAM_SOURCE = "reference/upstream-src/1.6.9/repository/packages/api-key/src/routes/verify-api-key.ts"
+        UPSTREAM_SOURCE = "reference/upstream-src/1.7.1/repository/packages/api-key/src/routes/verify-api-key.ts"
 
         module_function
 
@@ -12,7 +12,7 @@ module BetterAuth
           BetterAuth::Endpoint.new(
             path: "/api-key/verify",
             method: "POST",
-            body_schema: ->(value) { value },
+            body_schema: BetterAuth::APIKey::RequestContract.verify_body_schema,
             metadata: Routes.openapi_for(:verify_api_key)
           ) do |ctx|
             body = BetterAuth::Plugins.normalize_hash(ctx.body)

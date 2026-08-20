@@ -345,8 +345,8 @@ module BetterAuth
       def initialize(path:, method:, query:, body:, params:, headers:, context:, request: nil, raw_body: nil)
         @path = path
         @method = method.to_s.upcase
-        @query = query || {}
-        @body = body || {}
+        @query = query
+        @body = body
         @params = params || {}
         @headers = normalize_headers(headers || {})
         @raw_body = raw_body

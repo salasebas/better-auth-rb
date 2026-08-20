@@ -48,7 +48,7 @@ class BetterAuthAPIKeyRoutesIndexTest < Minitest::Test
       BetterAuth::APIKey::Routes.resolve_config(context, config)
     end
 
-    assert_equal "BAD_REQUEST", error.code
+    assert_equal "NO_DEFAULT_API_KEY_CONFIGURATION_FOUND", error.code
     assert_equal BetterAuth::Plugins::API_KEY_ERROR_CODES["NO_DEFAULT_API_KEY_CONFIGURATION_FOUND"], error.message
     assert_equal [BetterAuth::APIKey::Routes::NO_DEFAULT_CONFIGURATION_LOG_MESSAGE], messages
     assert_equal "second", BetterAuth::APIKey::Routes.resolve_config(context, config, "second")[:config_id]

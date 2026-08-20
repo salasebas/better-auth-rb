@@ -41,22 +41,31 @@ class BetterAuthAPIKeyValidationTest < Minitest::Test
     assert_equal BetterAuth::APIKey::ERROR_CODES.fetch("REFILL_AMOUNT_AND_INTERVAL_REQUIRED"), amount_error.message
   end
 
-  def test_validate_create_update_rejects_non_positive_refill_amount
+  def test_validate_create_rejects_non_positive_refill_amount
     config = BetterAuth::APIKey::Configuration.normalize({})
 
-    [true, false].each do |create|
-      error = assert_raises(BetterAuth::APIError) do
-        BetterAuth::APIKey::Validation.validate_create_update!(
-          {refill_amount: 0, refill_interval: 1000},
-          config,
-          create: create,
-          client: false
-        )
-      end
-
-      assert_equal "BAD_REQUEST", error.status
-      assert_equal BetterAuth::APIKey::ERROR_CODES.fetch("INVALID_REMAINING"), error.message
+    error = assert_raises(BetterAuth::APIError) do
+      BetterAuth::APIKey::Validation.validate_create_update!(
+        {refill_amount: 0, refill_interval: 1000},
+        config,
+        create: true,
+        client: false
+      )
     end
+
+    assert_equal "BAD_REQUEST", error.status
+    assert_equal BetterAuth::APIKey::ERROR_CODES.fetch("INVALID_REMAINING"), error.message
+  end
+
+  def test_validate_update_allows_zero_refill_amount
+    config = BetterAuth::APIKey::Configuration.normalize({})
+
+    BetterAuth::APIKey::Validation.validate_create_update!(
+      {refill_amount: 0, refill_interval: 1000},
+      config,
+      create: false,
+      client: false
+    )
   end
 
   def test_update_payload_preserves_false_zero_nil_and_encodes_objects

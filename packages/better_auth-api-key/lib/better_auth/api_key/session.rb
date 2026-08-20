@@ -24,31 +24,23 @@ module BetterAuth
         config = result.fetch(:config)
         key = result.fetch(:key)
         unless key.is_a?(String)
-          raise BetterAuth::APIError.new("BAD_REQUEST", message: BetterAuth::Plugins::API_KEY_ERROR_CODES["INVALID_API_KEY_GETTER_RETURN_TYPE"])
+          raise BetterAuth::APIKey.error("BAD_REQUEST", "INVALID_API_KEY_GETTER_RETURN_TYPE")
         end
-        raise BetterAuth::APIError.new("FORBIDDEN", message: BetterAuth::Plugins::API_KEY_ERROR_CODES["INVALID_API_KEY"]) if key.length < config[:default_key_length].to_i
+        raise BetterAuth::APIKey.error("FORBIDDEN", "INVALID_API_KEY") if key.length < config[:default_key_length].to_i
 
         if config[:custom_api_key_validator].respond_to?(:call) && !config[:custom_api_key_validator].call({ctx: ctx, key: key})
-          raise BetterAuth::APIError.new("FORBIDDEN", message: BetterAuth::Plugins::API_KEY_ERROR_CODES["INVALID_API_KEY"])
+          raise BetterAuth::APIKey.error("FORBIDDEN", "INVALID_API_KEY")
         end
 
         record = BetterAuth::Plugins.api_key_validate!(ctx, key, config)
         BetterAuth::APIKey::Routes.schedule_cleanup(ctx, config)
         if config[:references].to_s != "user"
-          raise BetterAuth::APIError.new(
-            "UNAUTHORIZED",
-            message: BetterAuth::Plugins::API_KEY_ERROR_CODES["INVALID_REFERENCE_ID_FROM_API_KEY"],
-            code: "INVALID_REFERENCE_ID_FROM_API_KEY"
-          )
+          raise BetterAuth::APIKey.error("UNAUTHORIZED", "INVALID_REFERENCE_ID_FROM_API_KEY")
         end
         reference_id = BetterAuth::APIKey::Types.record_reference_id(record)
         user = ctx.context.internal_adapter.find_user_by_id(reference_id)
         unless user
-          raise BetterAuth::APIError.new(
-            "UNAUTHORIZED",
-            message: BetterAuth::Plugins::API_KEY_ERROR_CODES["INVALID_REFERENCE_ID_FROM_API_KEY"],
-            code: "INVALID_REFERENCE_ID_FROM_API_KEY"
-          )
+          raise BetterAuth::APIKey.error("UNAUTHORIZED", "INVALID_REFERENCE_ID_FROM_API_KEY")
         end
 
         session = {

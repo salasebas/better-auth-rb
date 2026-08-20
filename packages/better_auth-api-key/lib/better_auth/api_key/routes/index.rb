@@ -27,7 +27,7 @@ module BetterAuth
         return default.merge(config_id: "default") if default
 
         context.logger.error(NO_DEFAULT_CONFIGURATION_LOG_MESSAGE) if context.respond_to?(:logger) && context.logger.respond_to?(:error)
-        raise BetterAuth::APIError.new("BAD_REQUEST", message: BetterAuth::Plugins::API_KEY_ERROR_CODES["NO_DEFAULT_API_KEY_CONFIGURATION_FOUND"])
+        raise BetterAuth::APIKey.error("BAD_REQUEST", "NO_DEFAULT_API_KEY_CONFIGURATION_FOUND")
       end
 
       def default_config_id?(value)

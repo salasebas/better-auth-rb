@@ -434,7 +434,8 @@ class BetterAuthPluginsAPIKeyTest < Minitest::Test
     prefix_error = assert_raises(BetterAuth::APIError) do
       auth.api.create_api_key(headers: {"cookie" => cookie}, body: {prefix: "bad prefix"})
     end
-    assert_equal BetterAuth::Plugins::API_KEY_ERROR_CODES["INVALID_PREFIX_LENGTH"], prefix_error.message
+    assert_equal "VALIDATION_ERROR", prefix_error.code
+    assert_equal "[body.prefix] Invalid prefix format, must be alphanumeric and contain only underscores and hyphens.", prefix_error.message
 
     max_expiration_error = assert_raises(BetterAuth::APIError) do
       auth.api.create_api_key(body: {userId: user_id, expiresIn: 60 * 60 * 24 * 365 * 10})
@@ -590,12 +591,13 @@ class BetterAuthPluginsAPIKeyTest < Minitest::Test
     cookie = sign_up_cookie(auth, email: "verify-header-fallback-key@example.com")
     created = auth.api.create_api_key(headers: {"cookie" => cookie}, body: {})
 
-    result = auth.api.verify_api_key(headers: {"x-api-key" => created[:key]}, body: {})
+    error = assert_raises(BetterAuth::APIError) do
+      auth.api.verify_api_key(headers: {"x-api-key" => created[:key]}, body: {})
+    end
 
-    assert_equal false, result[:valid]
-    assert_equal BetterAuth::Plugins::API_KEY_ERROR_CODES["INVALID_API_KEY"], result[:error][:message]
-    assert_equal "INVALID_API_KEY", result[:error][:code]
-    assert_nil result[:key]
+    assert_equal "BAD_REQUEST", error.status
+    assert_equal "VALIDATION_ERROR", error.code
+    assert_equal "[body.key] Invalid input: expected string, received undefined", error.message
   end
 
   def test_verify_runs_custom_validator_before_database_validation
@@ -673,7 +675,7 @@ class BetterAuthPluginsAPIKeyTest < Minitest::Test
     assert_equal true, reset[:valid]
     assert_equal 1, reset[:key][:requestCount]
 
-    no_permissions = auth.api.create_api_key(body: {userId: user_id, permissions: nil})
+    no_permissions = auth.api.create_api_key(body: {userId: user_id})
     permission_result = auth.api.verify_api_key(body: {key: no_permissions[:key], permissions: {files: ["write"]}})
     assert_equal false, permission_result[:valid]
     assert_equal "KEY_NOT_FOUND", permission_result[:error][:code]
@@ -726,7 +728,8 @@ class BetterAuthPluginsAPIKeyTest < Minitest::Test
     invalid_prefix = assert_raises(BetterAuth::APIError) do
       auth.api.create_api_key(body: {userId: user_id, prefix: "bad prefix"})
     end
-    assert_equal BetterAuth::Plugins::API_KEY_ERROR_CODES["INVALID_PREFIX_LENGTH"], invalid_prefix.message
+    assert_equal "VALIDATION_ERROR", invalid_prefix.code
+    assert_equal "[body.prefix] Invalid prefix format, must be alphanumeric and contain only underscores and hyphens.", invalid_prefix.message
 
     created = auth.api.create_api_key(body: {userId: user_id})
     assert_equal({"repo" => ["read"]}, created[:permissions])
@@ -937,7 +940,11 @@ class BetterAuthPluginsAPIKeyTest < Minitest::Test
 
     %i[refillAmount refillInterval rateLimitMax rateLimitTimeWindow rateLimitEnabled remaining permissions].each do |field|
       payload = {keyId: created[:id]}
-      payload[field] = (field == :rateLimitEnabled) ? true : 1
+      payload[field] = case field
+      when :rateLimitEnabled then true
+      when :permissions then {repo: ["admin"]}
+      else 1
+      end
       error = assert_raises(BetterAuth::APIError) do
         auth.api.update_api_key(headers: {"cookie" => cookie}, body: payload)
       end
