@@ -175,7 +175,7 @@ class BetterAuthPluginTest < Minitest::Test
     status, headers, body = auth.call(rack_env("GET", "/api/auth/chain"))
 
     assert_equal 200, status
-    assert_equal ["middleware", "request", "response"], order
+    assert_equal ["request", "middleware", "response"], order
     assert_equal "yes", headers["x-plugin-response"]
     assert_equal({"middleware" => "yes", "request" => "yes"}, JSON.parse(body.join))
   end

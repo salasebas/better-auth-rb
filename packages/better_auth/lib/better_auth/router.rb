@@ -53,9 +53,19 @@ module BetterAuth
       request = Rack::Request.new(env)
       context.prepare_for_request!(request) if context.respond_to?(:prepare_for_request!)
 
-      route_path = route_path_for(request.path_info)
-      return not_found unless route_path
+      original_route_path = route_path_for(request.path_info)
+      return not_found unless original_route_path
 
+      return not_found if disabled_path?(original_route_path)
+
+      response = rate_limiter.call(request, context, original_route_path)
+      return response if response
+
+      request = run_on_request_chain(request)
+      return run_on_response_chain(request) if rack_response?(request)
+
+      route_path = route_path_for(request.path_info)
+      return run_on_response_chain(not_found) unless route_path
       query = parse_query(request)
       endpoint, params, allowed_methods = find_endpoint(route_path, request.request_method)
       return run_on_response_chain(not_found) unless endpoint
@@ -72,14 +82,6 @@ module BetterAuth
 
       response = run_plugin_middlewares(endpoint_context)
       return run_on_response_chain(response) if response
-
-      return run_on_response_chain(not_found) if disabled_path?(route_path)
-
-      response = rate_limiter.call(request, context, route_path)
-      return run_on_response_chain(response) if response
-
-      request = run_on_request_chain(request)
-      return run_on_response_chain(request) if rack_response?(request)
 
       endpoint_context = rebuild_endpoint_context(endpoint_context, request, route_path, params, endpoint)
       result = API.new(context, endpoints).execute(endpoint, endpoint_context)
