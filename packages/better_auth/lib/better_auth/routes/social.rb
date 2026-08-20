@@ -404,7 +404,8 @@ module BetterAuth
       }.compact)
       state = OAuthState.generate(ctx, state_data)
 
-      redirect_uri = "#{ctx.context.canonical_base_url}/callback/#{provider_id}"
+      redirect_base = ctx.instance_variable_get(:@oauth_proxy_redirect_uri) || ctx.context.canonical_base_url
+      redirect_uri = "#{redirect_base}/callback/#{provider_id}"
       url = call_provider(provider, :create_authorization_url, {
         state: state,
         codeVerifier: code_verifier,
