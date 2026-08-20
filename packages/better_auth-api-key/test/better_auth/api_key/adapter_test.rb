@@ -12,7 +12,7 @@ class BetterAuthAPIKeyAdapterTest < Minitest::Test
   end
 
   def test_storage_record_serializes_and_deserializes_times
-    now = Time.now
+    now = Time.new(2026, 8, 20, 12, 34, 56.789123, "+06:00")
     record = {
       "id" => "key-id",
       "createdAt" => now,
@@ -25,9 +25,11 @@ class BetterAuthAPIKeyAdapterTest < Minitest::Test
     serialized = BetterAuth::APIKey::Adapter.storage_record(record)
     restored = BetterAuth::APIKey::Adapter.deserialize_record(serialized.dup)
 
-    assert_instance_of String, serialized.fetch("createdAt")
+    assert_equal "2026-08-20T06:34:56.789Z", serialized.fetch("createdAt")
     assert_instance_of Time, restored.fetch("createdAt")
     assert_instance_of Time, restored.fetch("lastRequest")
+    assert_equal 789_000, restored.fetch("createdAt").usec
+    assert_equal 6 * 60 * 60, record.fetch("createdAt").utc_offset
   end
 
   def test_secondary_storage_ttl_is_set_for_expiring_key
@@ -37,6 +39,113 @@ class BetterAuthAPIKeyAdapterTest < Minitest::Test
     created = auth.api.create_api_key(headers: {"cookie" => cookie}, body: {expiresIn: 60 * 60 * 24 + 1})
 
     assert_operator storage.ttls.fetch("api-key:by-id:#{created[:id]}"), :>, 0
+  end
+
+  def test_secondary_storage_omits_nonpositive_and_sub_second_ttls
+    storage = APIKeyTestSupport::MemoryStorage.new
+    ctx = Struct.new(:context).new(nil)
+    config = {storage: "secondary-storage", fallback_to_database: false, custom_storage: storage}
+    now = Time.utc(2026, 8, 20, 12, 0, 0)
+
+    Time.stub(:now, now) do
+      [2.9, 0.9, 0, -0.1].each_with_index do |offset, index|
+        BetterAuth::APIKey::Adapter.set(ctx, {
+          "id" => "ttl-#{index}",
+          "key" => "hash-#{index}",
+          "referenceId" => "reference",
+          "expiresAt" => now + offset
+        }, config)
+      end
+    end
+
+    ttl_calls = storage.set_calls.select { |key, _value, _ttl| key.start_with?("api-key:by-id:ttl-") }
+    assert_equal [2, nil, nil, nil], ttl_calls.map(&:last)
+  end
+
+  def test_by_hash_and_id_treat_non_string_storage_values_as_cache_misses
+    storage = APIKeyTestSupport::MemoryStorage.new
+    ctx = Struct.new(:context).new(nil)
+    config = {storage: "secondary-storage", fallback_to_database: false, custom_storage: storage}
+    storage.values["api-key:hash"] = {"id" => "key-id"}
+    storage.values["api-key:by-id:key-id"] = ["key-id"]
+    storage.values["api-key:by-id:null-key"] = "null"
+
+    assert_nil BetterAuth::APIKey::Adapter.find_by_hash(ctx, "hash", config)
+    assert_nil BetterAuth::APIKey::Adapter.find_by_id(ctx, "key-id", config)
+    assert_nil BetterAuth::APIKey::Adapter.find_by_id(ctx, "null-key", config)
+    assert_equal ["api-key:hash", "api-key:by-id:key-id", "api-key:by-id:null-key"], storage.get_calls
+  end
+
+  def test_json_scalar_and_array_storage_values_match_upstream_object_spread
+    storage = APIKeyTestSupport::MemoryStorage.new
+    database = Object.new
+    database.define_singleton_method(:find_one) { |**| raise "database fallback must not run" }
+    context = Struct.new(:adapter).new(database)
+    ctx = Struct.new(:context).new(context)
+    config = {storage: "secondary-storage", fallback_to_database: true, custom_storage: storage}
+    storage.values["api-key:false"] = "false"
+    storage.values["api-key:by-id:array"] = JSON.generate(["first", "second"])
+
+    scalar = BetterAuth::APIKey::Adapter.find_by_hash(ctx, "false", config)
+    array = BetterAuth::APIKey::Adapter.find_by_id(ctx, "array", config)
+
+    assert_equal({
+      "createdAt" => nil,
+      "updatedAt" => nil,
+      "expiresAt" => nil,
+      "lastRefillAt" => nil,
+      "lastRequest" => nil
+    }, scalar)
+    assert_equal "first", array["0"]
+    assert_equal "second", array["1"]
+    assert array.key?("createdAt")
+  end
+
+  def test_non_string_by_id_cache_value_falls_back_to_database
+    storage = APIKeyTestSupport::MemoryStorage.new
+    auth = build_api_key_auth(
+      storage: "secondary-storage",
+      secondary_storage: storage,
+      fallback_to_database: true,
+      default_key_length: 12
+    )
+    cookie = sign_up_cookie(auth, email: "adapter-invalid-cache-key@example.com")
+    created = auth.api.create_api_key(headers: {"cookie" => cookie}, body: {})
+    storage.values["api-key:by-id:#{created[:id]}"] = {"invalid" => true}
+
+    fetched = auth.api.get_api_key(headers: {"cookie" => cookie}, query: {id: created[:id]})
+
+    assert_equal created[:id], fetched[:id]
+    assert_instance_of String, storage.values.fetch("api-key:by-id:#{created[:id]}")
+  end
+
+  def test_secondary_storage_uses_only_upstream_key_namespaces
+    storage = APIKeyTestSupport::MemoryStorage.new
+    ctx = Struct.new(:context).new(nil)
+    config = {storage: "secondary-storage", fallback_to_database: false, custom_storage: storage}
+    record = {"id" => "key-id", "key" => "hash", "referenceId" => "reference"}
+    serialized = JSON.generate(record)
+    storage.values["api-key:key:hash"] = serialized
+    storage.values["api-key:id:key-id"] = serialized
+    storage.values["api-key:user:reference"] = JSON.generate(["key-id"])
+
+    assert_nil BetterAuth::APIKey::Adapter.find_by_hash(ctx, "hash", config)
+    assert_nil BetterAuth::APIKey::Adapter.find_by_id(ctx, "key-id", config)
+    assert_equal [], BetterAuth::APIKey::Adapter.list_for_reference(ctx, "reference", config)
+
+    BetterAuth::APIKey::Adapter.delete(ctx, record, config)
+
+    assert_equal [
+      "api-key:hash",
+      "api-key:by-id:key-id",
+      "api-key:by-ref:reference",
+      "api-key:by-ref:reference"
+    ], storage.get_calls
+    assert_equal [
+      "api-key:hash",
+      "api-key:by-id:key-id",
+      "api-key:by-ref:reference"
+    ], storage.delete_calls
   end
 
   def test_migrate_legacy_metadata_updates_double_stringified_database_value

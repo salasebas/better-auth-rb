@@ -143,19 +143,13 @@ is required.
 
 ## Storage layout
 
-The Ruby gem writes only to the upstream layout; legacy prefixes are read for
-backward compatibility but never produced by new writes:
+The Ruby gem reads and writes the upstream layout:
 
-| Purpose                          | Upstream key (read + write) | Ruby legacy key (read only) |
-|----------------------------------|------------------------------|------------------------------|
-| Lookup by hashed key             | `api-key:<hash>`             | `api-key:key:<hash>`         |
-| Lookup by id                     | `api-key:by-id:<id>`         | `api-key:id:<id>`            |
-| Reference -> [id] list           | `api-key:by-ref:<refId>`     | `api-key:user:<userId>`      |
-
-When upgrading from older Ruby releases the new server transparently keeps
-serving cached entries from the legacy keys while populating the upstream layout
-on the next mutation. Once a key is rewritten, the legacy entry is also deleted
-on `delete-api-key` to keep the layout converging on a single source of truth.
+| Purpose                          | Storage key                  |
+|----------------------------------|------------------------------|
+| Lookup by hashed key             | `api-key:<hash>`             |
+| Lookup by id                     | `api-key:by-id:<id>`         |
+| Reference -> [id] list           | `api-key:by-ref:<refId>`     |
 
 ## Plugin metadata
 
@@ -247,7 +241,3 @@ The following decisions are explicit and locked behind tests:
   `/api-key/list`, `/api-key/update`, `/api-key/delete`, and
   `/api-key/delete-all-expired-api-keys` directly via JSON.
 - **`apikey` table name** mirrors the upstream package (no `_` separator).
-- **Legacy secondary-storage prefixes** (`api-key:key:*`, `api-key:id:*`,
-  `api-key:user:*`) are still honored on read so existing deployments do not
-  lose data when upgrading. New writes always use the upstream layout
-  documented above.
