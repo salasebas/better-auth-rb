@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-07-16T01:47:43Z",
+  "generated_at": "2026-08-20T05:46:44Z",
   "route_count": 222,
   "routes": [
     {
@@ -96,7 +96,7 @@
         "POST"
       ],
       "file": "packages/better_auth/lib/better_auth/plugins/admin.rb",
-      "line": 379,
+      "line": 396,
       "endpoint_key": "ban_user",
       "plugin_hint": "admin",
       "body_fields": [
@@ -138,7 +138,7 @@
         "POST"
       ],
       "file": "packages/better_auth/lib/better_auth/plugins/admin.rb",
-      "line": 202,
+      "line": 219,
       "endpoint_key": "create_user",
       "plugin_hint": "admin",
       "body_fields": [
@@ -199,16 +199,6 @@
           "name": "id",
           "required": false,
           "type": "string"
-        },
-        {
-          "name": "userId",
-          "required": false,
-          "type": "string"
-        },
-        {
-          "name": "email",
-          "required": false,
-          "type": "string"
         }
       ],
       "path_params": [],
@@ -232,7 +222,7 @@
         "POST"
       ],
       "file": "packages/better_auth/lib/better_auth/plugins/admin.rb",
-      "line": 649,
+      "line": 666,
       "endpoint_key": "user_has_permission",
       "plugin_hint": "admin",
       "body_fields": [
@@ -274,7 +264,7 @@
         "POST"
       ],
       "file": "packages/better_auth/lib/better_auth/plugins/admin.rb",
-      "line": 430,
+      "line": 447,
       "endpoint_key": "impersonate_user",
       "plugin_hint": "admin",
       "body_fields": [
@@ -306,7 +296,7 @@
         "POST"
       ],
       "file": "packages/better_auth/lib/better_auth/plugins/admin.rb",
-      "line": 363,
+      "line": 380,
       "endpoint_key": "list_user_sessions",
       "plugin_hint": "admin",
       "body_fields": [
@@ -338,7 +328,7 @@
         "GET"
       ],
       "file": "packages/better_auth/lib/better_auth/plugins/admin.rb",
-      "line": 320,
+      "line": 337,
       "endpoint_key": "list_users",
       "plugin_hint": "admin",
       "body_fields": [],
@@ -467,7 +457,7 @@
         "POST"
       ],
       "file": "packages/better_auth/lib/better_auth/plugins/admin.rb",
-      "line": 573,
+      "line": 590,
       "endpoint_key": "remove_user",
       "plugin_hint": "admin",
       "body_fields": [
@@ -499,7 +489,7 @@
         "POST"
       ],
       "file": "packages/better_auth/lib/better_auth/plugins/admin.rb",
-      "line": 517,
+      "line": 534,
       "endpoint_key": "revoke_user_session",
       "plugin_hint": "admin",
       "body_fields": [
@@ -531,7 +521,7 @@
         "POST"
       ],
       "file": "packages/better_auth/lib/better_auth/plugins/admin.rb",
-      "line": 545,
+      "line": 562,
       "endpoint_key": "revoke_user_sessions",
       "plugin_hint": "admin",
       "body_fields": [
@@ -600,7 +590,7 @@
         "POST"
       ],
       "file": "packages/better_auth/lib/better_auth/plugins/admin.rb",
-      "line": 604,
+      "line": 621,
       "endpoint_key": "set_user_password",
       "plugin_hint": "admin",
       "body_fields": [
@@ -637,7 +627,7 @@
         "POST"
       ],
       "file": "packages/better_auth/lib/better_auth/plugins/admin.rb",
-      "line": 476,
+      "line": 493,
       "endpoint_key": "stop_impersonating",
       "plugin_hint": "admin",
       "body_fields": [],
@@ -663,7 +653,7 @@
         "POST"
       ],
       "file": "packages/better_auth/lib/better_auth/plugins/admin.rb",
-      "line": 407,
+      "line": 424,
       "endpoint_key": "unban_user",
       "plugin_hint": "admin",
       "body_fields": [
@@ -695,7 +685,7 @@
         "POST"
       ],
       "file": "packages/better_auth/lib/better_auth/plugins/admin.rb",
-      "line": 258,
+      "line": 275,
       "endpoint_key": "admin_update_user",
       "plugin_hint": "admin",
       "body_fields": [
@@ -6901,7 +6891,7 @@
         "POST"
       ],
       "file": "packages/better_auth-sso/lib/better_auth/sso/plugin/providers.rb",
-      "line": 130,
+      "line": 131,
       "endpoint_key": "delete_sso_provider",
       "plugin_hint": "better_auth/sso/plugin",
       "body_fields": [
