@@ -220,29 +220,22 @@ class BetterAuthAPIKeyAdapterTest < Minitest::Test
     assert_equal (0...20).map { |index| "id-#{index}" }.sort, JSON.parse(storage.get(reference_key)).sort
   end
 
-  def test_populate_reference_batches_fallback_cache_writes_when_supported
-    storage = BatchTrackingStorage.new
+  # Upstream: packages/api-key/src/adapter.ts:8,725-734.
+  def test_populate_reference_bounds_parallel_cache_writes_and_sets_reference_last
+    storage = ConcurrentTrackingStorage.new
     auth = build_api_key_auth(storage: "secondary-storage", secondary_storage: storage, fallback_to_database: true, default_key_length: 12)
     ctx = Struct.new(:context).new(auth.context)
     now = Time.now
-    records = [
+    records = 12.times.map do |index|
       {
-        "id" => "first-key",
-        "key" => "hashed-first",
-        "referenceId" => "user-batch",
-        "createdAt" => now,
-        "updatedAt" => now,
-        "expiresAt" => nil
-      },
-      {
-        "id" => "second-key",
-        "key" => "hashed-second",
+        "id" => "key-#{index}",
+        "key" => "hashed-#{index}",
         "referenceId" => "user-batch",
         "createdAt" => now,
         "updatedAt" => now,
         "expiresAt" => nil
       }
-    ]
+    end
     config = BetterAuth::APIKey::Configuration.normalize(
       storage: "secondary-storage",
       fallback_to_database: true
@@ -250,14 +243,88 @@ class BetterAuthAPIKeyAdapterTest < Minitest::Test
 
     BetterAuth::APIKey::Adapter.populate_reference(ctx, "user-batch", records, config)
 
-    assert_equal 1, storage.write_groups.length
-    assert_equal [
-      "api-key:hashed-first",
-      "api-key:by-id:first-key",
-      "api-key:hashed-second",
-      "api-key:by-id:second-key",
-      "api-key:by-ref:user-batch"
-    ], storage.write_groups.first
+    assert_equal 10, storage.max_concurrent_id_sets
+    assert_equal "api-key:by-ref:user-batch", storage.write_order.last
+    assert_equal records.map { |record| record.fetch("id") }, JSON.parse(storage.get("api-key:by-ref:user-batch"))
+  end
+
+  # Upstream: packages/api-key/src/adapter.ts:8,657-692,739-778.
+  def test_list_for_reference_bounds_parallel_secondary_reads_and_preserves_id_order
+    storage = ConcurrentTrackingStorage.new
+    auth = build_api_key_auth(storage: "secondary-storage", secondary_storage: storage, default_key_length: 12)
+    ctx = Struct.new(:context).new(auth.context)
+    now = Time.now
+    ids = 12.times.map { |index| "key-#{index}" }
+    ids.each do |id|
+      storage.values["api-key:by-id:#{id}"] = JSON.generate(
+        "id" => id,
+        "key" => "hashed-#{id}",
+        "referenceId" => "user-read",
+        "configId" => "default",
+        "createdAt" => now,
+        "updatedAt" => now
+      )
+    end
+    storage.values["api-key:by-ref:user-read"] = JSON.generate(ids)
+    config = BetterAuth::APIKey::Configuration.normalize(storage: "secondary-storage")
+
+    records = BetterAuth::APIKey::Adapter.list_for_reference(ctx, "user-read", config)
+
+    assert_equal 10, storage.max_concurrent_id_gets
+    assert_equal ids, records.map { |record| record.fetch("id") }
+  end
+
+  # A non-empty fallback reference list is authoritative in upstream v1.7.1,
+  # even when none of its per-key cache entries exist (adapter.ts:675-693).
+  def test_list_for_reference_does_not_fallback_when_nonempty_index_records_are_missing
+    storage = APIKeyTestSupport::MemoryStorage.new
+    auth = build_api_key_auth(storage: "secondary-storage", secondary_storage: storage, fallback_to_database: true, default_key_length: 12)
+    ctx = Struct.new(:context).new(auth.context)
+    now = Time.now
+    database_record = auth.context.adapter.create(
+      model: "apikey",
+      force_allow_id: true,
+      data: {
+        configId: "default",
+        referenceId: "user-stale-index",
+        key: "database-hash",
+        createdAt: now,
+        updatedAt: now
+      }
+    )
+    storage.set("api-key:by-ref:user-stale-index", JSON.generate([database_record.fetch("id")]))
+    config = BetterAuth::APIKey::Configuration.normalize(storage: "secondary-storage", fallback_to_database: true)
+
+    records = BetterAuth::APIKey::Adapter.list_for_reference(ctx, "user-stale-index", config)
+
+    assert_empty records
+    assert_nil storage.get("api-key:by-id:#{database_record.fetch("id")}")
+    assert_equal [database_record.fetch("id")], JSON.parse(storage.get("api-key:by-ref:user-stale-index"))
+  end
+
+  def test_find_by_id_treats_non_string_secondary_value_as_cache_miss
+    storage = APIKeyTestSupport::MemoryStorage.new
+    auth = build_api_key_auth(storage: "secondary-storage", secondary_storage: storage, fallback_to_database: true, default_key_length: 12)
+    ctx = Struct.new(:context).new(auth.context)
+    now = Time.now
+    database_record = auth.context.adapter.create(
+      model: "apikey",
+      force_allow_id: true,
+      data: {
+        configId: "default",
+        referenceId: "user-invalid-cache",
+        key: "database-hash",
+        createdAt: now,
+        updatedAt: now
+      }
+    )
+    storage.values["api-key:by-id:#{database_record.fetch("id")}"] = {"invalid" => true}
+    config = BetterAuth::APIKey::Configuration.normalize(storage: "secondary-storage", fallback_to_database: true)
+
+    record = BetterAuth::APIKey::Adapter.find_by_id(ctx, database_record.fetch("id"), config)
+
+    assert_equal database_record.fetch("id"), record.fetch("id")
+    assert_instance_of String, storage.get("api-key:by-id:#{database_record.fetch("id")}")
   end
 
   def test_list_for_reference_warns_on_corrupt_reference_index_json
@@ -336,39 +403,66 @@ class BetterAuthAPIKeyAdapterTest < Minitest::Test
     assert_match(/simulated delete failure/, errors.first)
   end
 
-  class BatchTrackingStorage < APIKeyTestSupport::MemoryStorage
-    attr_reader :write_groups
+  class ConcurrentTrackingStorage < APIKeyTestSupport::MemoryStorage
+    attr_reader :max_concurrent_id_gets, :max_concurrent_id_sets, :write_order
 
     def initialize
       super
-      @write_groups = []
-      @current_group = nil
+      @tracking_lock = Mutex.new
+      @active_id_gets = 0
+      @active_id_sets = 0
+      @max_concurrent_id_gets = 0
+      @max_concurrent_id_sets = 0
+      @write_order = []
+    end
+
+    def get(key)
+      return super unless key.start_with?("api-key:by-id:")
+
+      begin_operation(:get)
+      sleep 0.01
+      super
+    ensure
+      end_operation(:get)
     end
 
     def set(key, value, ttl = nil)
-      record_write(key)
-      super
-    end
-
-    def delete(key)
-      record_write(key)
-      super
-    end
-
-    def batch
-      @current_group = []
-      yield
-      @write_groups << @current_group unless @current_group.empty?
-      @current_group = nil
+      if key.start_with?("api-key:by-id:")
+        begin_operation(:set)
+        begin
+          sleep 0.01
+          result = super
+        ensure
+          end_operation(:set)
+        end
+      else
+        result = super
+      end
+      @tracking_lock.synchronize { @write_order << key }
+      result
     end
 
     private
 
-    def record_write(key)
-      if @current_group
-        @current_group << key
-      else
-        @write_groups << [key]
+    def begin_operation(operation)
+      @tracking_lock.synchronize do
+        if operation == :get
+          @active_id_gets += 1
+          @max_concurrent_id_gets = [@max_concurrent_id_gets, @active_id_gets].max
+        else
+          @active_id_sets += 1
+          @max_concurrent_id_sets = [@max_concurrent_id_sets, @active_id_sets].max
+        end
+      end
+    end
+
+    def end_operation(operation)
+      @tracking_lock.synchronize do
+        if operation == :get
+          @active_id_gets -= 1 if @active_id_gets.positive?
+        elsif @active_id_sets.positive?
+          @active_id_sets -= 1
+        end
       end
     end
   end

@@ -55,12 +55,31 @@ module BetterAuth
         return records unless sort_by
 
         key = BetterAuth::Schema.storage_key(sort_by)
-        sorted = records.sort_by { |record| record[key] || record[key.to_sym] || "" }
-        if direction.to_s.downcase == "desc"
-          sorted.reverse
-        else
-          sorted
+        descending = direction.to_s.downcase == "desc"
+        records.each_with_index.sort do |(left, left_index), (right, right_index)|
+          comparison = compare_sort_values(record_sort_value(left, key), record_sort_value(right, key))
+          comparison = -comparison if descending
+          comparison.zero? ? (left_index <=> right_index) : comparison
+        end.map(&:first)
+      end
+
+      def record_sort_value(record, key)
+        return record[key] if record.key?(key)
+        return record[key.to_sym] if record.key?(key.to_sym)
+
+        nil
+      end
+
+      def compare_sort_values(left, right)
+        return 0 if left.nil? && right.nil?
+        return -1 if left.nil?
+        return 1 if right.nil?
+
+        if [left, right].all? { |value| value == true || value == false }
+          return (left ? 1 : 0) <=> (right ? 1 : 0)
         end
+
+        left <=> right || 0
       end
 
       def validate_list_query!(query)
