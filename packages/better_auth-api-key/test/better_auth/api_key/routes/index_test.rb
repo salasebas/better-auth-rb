@@ -37,6 +37,34 @@ class BetterAuthAPIKeyRoutesIndexTest < Minitest::Test
     assert_empty logger.messages
   end
 
+  def test_resolve_config_requires_default_when_id_is_omitted
+    context, messages = logging_context
+    config = BetterAuth::APIKey::Configuration.normalize([
+      {config_id: "first"},
+      {config_id: "second"}
+    ])
+
+    error = assert_raises(BetterAuth::APIError) do
+      BetterAuth::APIKey::Routes.resolve_config(context, config)
+    end
+
+    assert_equal "BAD_REQUEST", error.code
+    assert_equal BetterAuth::Plugins::API_KEY_ERROR_CODES["NO_DEFAULT_API_KEY_CONFIGURATION_FOUND"], error.message
+    assert_equal [BetterAuth::APIKey::Routes::NO_DEFAULT_CONFIGURATION_LOG_MESSAGE], messages
+    assert_equal "second", BetterAuth::APIKey::Routes.resolve_config(context, config, "second")[:config_id]
+  end
+
+  def test_empty_configuration_array_resolves_through_no_default_error
+    context, = logging_context
+    config = BetterAuth::APIKey::Configuration.normalize([])
+
+    error = assert_raises(BetterAuth::APIError) do
+      BetterAuth::APIKey::Routes.resolve_config(context, config)
+    end
+
+    assert_equal BetterAuth::Plugins::API_KEY_ERROR_CODES["NO_DEFAULT_API_KEY_CONFIGURATION_FOUND"], error.message
+  end
+
   def test_delete_expired_throttles_regular_cleanup_and_bypass_deletes_immediately
     auth = build_api_key_auth(default_key_length: 12)
     config = BetterAuth::APIKey::Configuration.normalize({})
@@ -60,15 +88,18 @@ class BetterAuthAPIKeyRoutesIndexTest < Minitest::Test
 
     expired = auth.context.adapter.create(
       model: "apikey",
-      data: base_api_key_row("expired", now - 120, reference_id: "r1")
+      data: base_api_key_row("expired", now - 120, reference_id: "r1"),
+      force_allow_id: true
     )
     future = auth.context.adapter.create(
       model: "apikey",
-      data: base_api_key_row("future", now + 3600, reference_id: "r2")
+      data: base_api_key_row("future", now + 3600, reference_id: "r2"),
+      force_allow_id: true
     )
     no_expiry = auth.context.adapter.create(
       model: "apikey",
-      data: base_api_key_row("no-expiry", nil, reference_id: "r3")
+      data: base_api_key_row("no-expiry", nil, reference_id: "r3"),
+      force_allow_id: true
     )
 
     BetterAuth::APIKey::Routes.delete_expired(auth.context, config, bypass_last_check: true)
@@ -138,9 +169,22 @@ class BetterAuthAPIKeyRoutesIndexTest < Minitest::Test
 
   private
 
+  def logging_context
+    logger = Struct.new(:messages) do
+      def error(message)
+        messages << message
+      end
+    end.new([])
+    [Struct.new(:logger).new(logger), logger.messages]
+  end
+
   def create_expired_record(auth, key)
     now = Time.now
-    auth.context.adapter.create(model: "apikey", data: base_api_key_row(key, now - 60, reference_id: "reference-id"))
+    auth.context.adapter.create(
+      model: "apikey",
+      data: base_api_key_row(key, now - 60, reference_id: "reference-id"),
+      force_allow_id: true
+    )
   end
 
   def base_api_key_row(key_material, expires_at, reference_id:)
