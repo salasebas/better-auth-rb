@@ -7,6 +7,24 @@ require_relative "../../test_helper"
 class BetterAuthPluginsAdminTest < Minitest::Test
   SECRET = "phase-ten-admin-secret-with-enough-entropy"
 
+  MemoryStorage = Struct.new(:store) do
+    def initialize
+      super({})
+    end
+
+    def set(key, value, _ttl = nil)
+      store[key] = value
+    end
+
+    def get(key)
+      store[key]
+    end
+
+    def delete(key)
+      store.delete(key)
+    end
+  end
+
   def test_admin_manages_users_roles_bans_sessions_and_passwords
     auth = build_auth
     admin_cookie = sign_up_cookie(auth, email: "admin@example.com")
@@ -632,7 +650,8 @@ class BetterAuthPluginsAdminTest < Minitest::Test
   end
 
   def test_admin_sessions_and_destructive_endpoints_match_upstream_shapes
-    auth = build_auth
+    storage = MemoryStorage.new
+    auth = build_auth(secondary_storage: storage)
     admin_cookie = sign_up_cookie(auth, email: "sessions-admin@example.com")
     user_cookie = sign_up_cookie(auth, email: "sessions-user@example.com")
     admin = auth.api.get_session(headers: {"cookie" => admin_cookie}).fetch(:user)
@@ -649,6 +668,17 @@ class BetterAuthPluginsAdminTest < Minitest::Test
     fresh = auth.api.get_session(headers: {"cookie" => fresh_cookie}).fetch(:user)
     assert_equal({success: true}, auth.api.revoke_user_sessions(headers: {"cookie" => admin_cookie}, body: {userId: fresh.fetch("id")}))
     assert_equal({success: true}, auth.api.remove_user(headers: {"cookie" => admin_cookie}, body: {userId: fresh.fetch("id")}))
+
+    removable_cookie = sign_up_cookie(auth, email: "removable-secondary@example.com")
+    removable_session = auth.api.get_session(headers: {"cookie" => removable_cookie})
+    removable_user_id = removable_session.fetch(:user).fetch("id")
+    removable_token = removable_session.fetch(:session).fetch("token")
+
+    assert storage.get(removable_token)
+    assert storage.get("active-sessions-#{removable_user_id}")
+    assert_equal({success: true}, auth.api.remove_user(headers: {"cookie" => admin_cookie}, body: {userId: removable_user_id}))
+    assert_nil storage.get(removable_token)
+    assert_nil storage.get("active-sessions-#{removable_user_id}")
 
     missing = assert_raises(BetterAuth::APIError) do
       auth.api.remove_user(headers: {"cookie" => admin_cookie}, body: {userId: "missing"})

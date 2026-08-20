@@ -10,6 +10,7 @@ module BetterAuth
       "COULD_NOT_CREATE_SESSION" => "Could not create session",
       "ANONYMOUS_USERS_CANNOT_SIGN_IN_AGAIN_ANONYMOUSLY" => "Anonymous users cannot sign in again anonymously",
       "FAILED_TO_DELETE_ANONYMOUS_USER" => "Failed to delete anonymous user",
+      "FAILED_TO_DELETE_ANONYMOUS_USER_SESSIONS" => "Failed to delete anonymous user sessions",
       "USER_IS_NOT_ANONYMOUS" => "User is not anonymous",
       "DELETE_ANONYMOUS_USER_DISABLED" => "Deleting anonymous users is disabled"
     }.freeze
@@ -115,8 +116,16 @@ module BetterAuth
         end
 
         begin
+          ctx.context.internal_adapter.delete_user_sessions(session[:user]["id"])
+        rescue => error
+          anonymous_log(ctx, "Failed to delete anonymous user sessions", error)
+          raise APIError.new("INTERNAL_SERVER_ERROR", message: ANONYMOUS_ERROR_CODES["FAILED_TO_DELETE_ANONYMOUS_USER_SESSIONS"])
+        end
+
+        begin
           ctx.context.internal_adapter.delete_user(session[:user]["id"])
-        rescue
+        rescue => error
+          anonymous_log(ctx, "Failed to delete anonymous user", error)
           raise APIError.new("INTERNAL_SERVER_ERROR", message: ANONYMOUS_ERROR_CODES["FAILED_TO_DELETE_ANONYMOUS_USER"])
         end
 
@@ -190,7 +199,30 @@ module BetterAuth
       return if new_user["id"] == anonymous_session[:user]["id"]
       return if new_user["isAnonymous"]
 
-      ctx.context.internal_adapter.delete_user(anonymous_session[:user]["id"])
+      begin
+        ctx.context.internal_adapter.delete_user_sessions(anonymous_session[:user]["id"])
+        ctx.context.internal_adapter.delete_user(anonymous_session[:user]["id"])
+      rescue => error
+        anonymous_log(
+          ctx,
+          "Failed to clean up anonymous user during post-link cleanup",
+          {anonymous_user_id: anonymous_session[:user]["id"], error: error}
+        )
+      end
+      nil
+    end
+
+    def anonymous_log(ctx, message, details)
+      logger = ctx.context.logger
+      if logger.respond_to?(:call)
+        arity = logger.respond_to?(:arity) ? logger.arity : logger.method(:call).arity
+        arguments = [:error, message]
+        arguments << details unless arity == 2
+        logger.call(*arguments)
+      elsif logger.respond_to?(:error)
+        logger.error(message, details)
+      end
+    rescue
       nil
     end
 
