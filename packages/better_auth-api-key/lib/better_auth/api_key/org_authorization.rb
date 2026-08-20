@@ -28,7 +28,8 @@ module BetterAuth
           )
         end
 
-        return member if member["role"].to_s == (org_plugin.options[:creator_role] || "owner").to_s
+        creator_role = (org_plugin.options[:creator_role] || "owner").to_s
+        return member if member["role"].to_s.split(",").include?(creator_role)
 
         permissions = {"apiKey" => [action]}
         return member if BetterAuth::Plugins.organization_permission?(ctx, org_plugin.options, member["role"], permissions, organization_id)

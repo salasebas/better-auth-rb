@@ -24,6 +24,13 @@ module BetterAuth
         nil
       end
 
+      def javascript_truthy?(value)
+        return false if value.nil? || value == false || value == ""
+        return false if value.is_a?(Numeric) && (value.zero? || (value.respond_to?(:nan?) && value.nan?))
+
+        true
+      end
+
       def normalize_time(value)
         return value if value.is_a?(Time)
         return nil if value.nil?

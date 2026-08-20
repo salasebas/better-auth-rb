@@ -32,9 +32,23 @@ module BetterAuth
         if config[:storage] == "database" || config[:fallback_to_database]
           record = ctx.context.adapter.create(model: BetterAuth::Plugins::API_KEY_TABLE_NAME, data: data)
         end
-        record ||= data.transform_keys { |key| BetterAuth::Schema.storage_key(key) }.merge("id" => SecureRandom.hex(16))
+        record ||= data.transform_keys { |key| BetterAuth::Schema.storage_key(key) }.merge("id" => generated_id(ctx))
         set(ctx, record, config) if config[:storage] == "secondary-storage"
         record
+      end
+
+      def generated_id(ctx)
+        advanced = ctx.context.options.advanced
+        generator = advanced[:generate_id]
+        generator = advanced.dig(:database, :generate_id) unless generator.respond_to?(:call)
+
+        generated = if generator.respond_to?(:call)
+          generator.method(:call).arity.zero? ? generator.call : generator.call({model: BetterAuth::Plugins::API_KEY_TABLE_NAME})
+        elsif generator == "uuid"
+          SecureRandom.uuid
+        end
+
+        BetterAuth::APIKey::Utils.javascript_truthy?(generated) ? generated : SecureRandom.alphanumeric(32)
       end
 
       def find_by_hash(ctx, hashed, config)

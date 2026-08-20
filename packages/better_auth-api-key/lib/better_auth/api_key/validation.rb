@@ -10,7 +10,7 @@ module BetterAuth
         if create && config[:require_name] && name.to_s.empty?
           raise BetterAuth::APIError.new("BAD_REQUEST", message: BetterAuth::Plugins::API_KEY_ERROR_CODES["NAME_REQUIRED"])
         end
-        if name && !name.to_s.length.between?(config[:minimum_name_length].to_i, config[:maximum_name_length].to_i)
+        if name && (!create || !name.to_s.empty?) && !name.to_s.length.between?(config[:minimum_name_length].to_i, config[:maximum_name_length].to_i)
           raise BetterAuth::APIError.new("BAD_REQUEST", message: BetterAuth::Plugins::API_KEY_ERROR_CODES["INVALID_NAME_LENGTH"])
         end
         prefix = body[:prefix]
@@ -27,16 +27,17 @@ module BetterAuth
         if body.key?(:refill_amount) && !body[:refill_amount].nil? && body[:refill_amount].to_i < 1
           raise BetterAuth::APIError.new("BAD_REQUEST", message: BetterAuth::Plugins::API_KEY_ERROR_CODES["INVALID_REMAINING"])
         end
-        if body[:metadata] && (create || config[:enable_metadata])
+        if create && BetterAuth::APIKey::Utils.javascript_truthy?(body[:metadata])
           raise BetterAuth::APIError.new("BAD_REQUEST", message: BetterAuth::Plugins::API_KEY_ERROR_CODES["METADATA_DISABLED"]) unless config[:enable_metadata]
-          raise BetterAuth::APIError.new("BAD_REQUEST", message: BetterAuth::Plugins::API_KEY_ERROR_CODES["INVALID_METADATA_TYPE"]) unless body[:metadata].nil? || body[:metadata].is_a?(Hash)
+          unless body[:metadata].is_a?(Hash) || body[:metadata].is_a?(Array)
+            raise BetterAuth::APIError.new("BAD_REQUEST", message: BetterAuth::Plugins::API_KEY_ERROR_CODES["INVALID_METADATA_TYPE"])
+          end
+        elsif !create && body[:metadata] && config[:enable_metadata]
+          raise BetterAuth::APIError.new("BAD_REQUEST", message: BetterAuth::Plugins::API_KEY_ERROR_CODES["INVALID_METADATA_TYPE"]) unless body[:metadata].is_a?(Hash)
         end
-        server_only_keys = %i[refill_amount refill_interval rate_limit_max rate_limit_time_window rate_limit_enabled remaining permissions]
-        if client && server_only_keys.any? { |key| (create && key == :remaining) ? !body[:remaining].nil? : body.key?(key) }
-          raise BetterAuth::APIError.new("BAD_REQUEST", message: BetterAuth::Plugins::API_KEY_ERROR_CODES["SERVER_ONLY_PROPERTY"])
-        end
-        amount_present = body.key?(:refill_amount)
-        interval_present = body.key?(:refill_interval)
+        validate_server_only!(body, create: create, client: client)
+        amount_present = create ? BetterAuth::APIKey::Utils.javascript_truthy?(body[:refill_amount]) : body.key?(:refill_amount)
+        interval_present = create ? BetterAuth::APIKey::Utils.javascript_truthy?(body[:refill_interval]) : body.key?(:refill_interval)
         if amount_present && !interval_present
           raise BetterAuth::APIError.new("BAD_REQUEST", message: BetterAuth::Plugins::API_KEY_ERROR_CODES["REFILL_AMOUNT_AND_INTERVAL_REQUIRED"])
         end
@@ -44,13 +45,23 @@ module BetterAuth
           raise BetterAuth::APIError.new("BAD_REQUEST", message: BetterAuth::Plugins::API_KEY_ERROR_CODES["REFILL_INTERVAL_AND_AMOUNT_REQUIRED"])
         end
         if body.key?(:expires_in)
-          raise BetterAuth::APIError.new("BAD_REQUEST", message: BetterAuth::Plugins::API_KEY_ERROR_CODES["KEY_DISABLED_EXPIRATION"]) if config[:key_expiration][:disable_custom_expires_time]
           return if body[:expires_in].nil?
+
+          raise BetterAuth::APIError.new("BAD_REQUEST", message: BetterAuth::Plugins::API_KEY_ERROR_CODES["KEY_DISABLED_EXPIRATION"]) if config[:key_expiration][:disable_custom_expires_time]
 
           days = body[:expires_in].to_f / 86_400
           raise BetterAuth::APIError.new("BAD_REQUEST", message: BetterAuth::Plugins::API_KEY_ERROR_CODES["EXPIRES_IN_IS_TOO_SMALL"]) if days < config[:key_expiration][:min_expires_in].to_f
           raise BetterAuth::APIError.new("BAD_REQUEST", message: BetterAuth::Plugins::API_KEY_ERROR_CODES["EXPIRES_IN_IS_TOO_LARGE"]) if days > config[:key_expiration][:max_expires_in].to_f
         end
+      end
+
+      def validate_server_only!(body, create:, client:)
+        return unless client
+
+        server_only_keys = %i[refill_amount refill_interval rate_limit_max rate_limit_time_window rate_limit_enabled remaining permissions]
+        return unless server_only_keys.any? { |key| (create && key == :remaining) ? !body[:remaining].nil? : body.key?(key) }
+
+        raise BetterAuth::APIError.new("BAD_REQUEST", message: BetterAuth::Plugins::API_KEY_ERROR_CODES["SERVER_ONLY_PROPERTY"])
       end
 
       def update_payload(body, config)
