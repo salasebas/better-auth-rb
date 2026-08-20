@@ -70,10 +70,10 @@ presented API key. Treat that response as sensitive. This API-key hook returns
 before the native session route, so it also bypasses native session-refresh
 behavior and does not add the native route's cache-control headers.
 
-`defer_updates` can defer explicit API-key updates and cleanup when a background
-task handler is configured. Verification counter claims remain synchronous;
-database-backed claims use guarded atomic operations, while pure secondary-only
-claims retain the best-effort limitation described below.
+`defer_updates` defers pure secondary-storage verification counter writes,
+expired or exhausted key deletion, and successful-verification cleanup.
+Database-backed verification counter claims remain synchronous and use guarded
+atomic operations.
 
 ## Configuration
 
@@ -125,14 +125,13 @@ BetterAuth::Plugins.api_key([
 
 Organization-owned keys require `BetterAuth::Plugins.organization` and use organization permissions for `apiKey` actions: `create`, `read`, `update`, and `delete`.
 
-Secondary-storage mode uses upstream storage keys such as `api-key:<hash>`, `api-key:by-id:<id>`, and `api-key:by-ref:<referenceId>`. With `fallback_to_database: true`, the database is authoritative: verification re-reads the row after a cache hit, and a missing authoritative row invalidates the cache and can never authorize. A cache entry may remain stale, or be briefly re-created from a row, during the unavoidable cross-store window after a database update and before its cache write; that does not weaken verification because authorization always requires the authoritative row. Generic custom storage gets an in-process lock for reference-list updates only; RedisStorage uses atomic cross-process JSON-list scripts.
+Secondary-storage mode uses upstream storage keys such as `api-key:<hash>`, `api-key:by-id:<id>`, and `api-key:by-ref:<referenceId>`. With `fallback_to_database: true`, verification accepts a cache hit without re-reading the database and queries the database only on a cache miss. Counter claims still write through the database, then refresh the cache from the resulting row. Generic custom storage gets an in-process lock for reference-list updates only; RedisStorage uses atomic cross-process JSON-list scripts.
 
 Verification rate-limit failures return HTTP `429` with error code
 `RATE_LIMITED` and `details.tryAgainIn` (authentication failures remain `401`).
-An exhausted non-refillable key remains an inert authoritative row and returns
-`USAGE_EXCEEDED`; Ruby deliberately avoids eager deletion during verification
-because deletion cannot be made cross-process atomic with the winning counter
-update. Cleanup routes/jobs can remove such rows separately.
+An exhausted non-refillable key is deleted during verification and returns
+`USAGE_EXCEEDED`; deletion is scheduled in the background when
+`defer_updates` is enabled.
 Database-backed keys, including `secondary-storage` with
 `fallback_to_database: true`, consume remaining and rate-limit counters with
 guarded atomic updates; concurrent requests cannot drive `remaining` below zero

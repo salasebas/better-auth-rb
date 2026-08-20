@@ -590,15 +590,15 @@ class BetterAuthPluginsAPIKeyTest < Minitest::Test
     cookie = sign_up_cookie(auth, email: "verify-header-fallback-key@example.com")
     created = auth.api.create_api_key(headers: {"cookie" => cookie}, body: {})
 
-    result = auth.api.verify_api_key(headers: {"x-api-key" => created[:key]}, body: {})
+    error = assert_raises(BetterAuth::APIError) do
+      auth.api.verify_api_key(headers: {"x-api-key" => created[:key]}, body: {})
+    end
 
-    assert_equal false, result[:valid]
-    assert_equal BetterAuth::Plugins::API_KEY_ERROR_CODES["INVALID_API_KEY"], result[:error][:message]
-    assert_equal "INVALID_API_KEY", result[:error][:code]
-    assert_nil result[:key]
+    assert_equal 400, error.status_code
+    assert_equal BetterAuth::BASE_ERROR_CODES["VALIDATION_ERROR"], error.message
   end
 
-  def test_verify_runs_custom_validator_before_database_validation
+  def test_unscoped_verify_runs_custom_validator_after_finding_the_key
     auth = build_auth(default_key_length: 12, custom_api_key_validator: ->(_options) { false })
     cookie = sign_up_cookie(auth, email: "validator-key@example.com")
     user_id = auth.api.get_session(headers: {"cookie" => cookie})[:user]["id"]
@@ -607,7 +607,7 @@ class BetterAuthPluginsAPIKeyTest < Minitest::Test
     result = auth.api.verify_api_key(body: {key: created[:key]})
 
     assert_equal false, result[:valid]
-    assert_equal BetterAuth::Plugins::API_KEY_ERROR_CODES["INVALID_API_KEY"], result[:error][:message]
+    assert_equal BetterAuth::Plugins::API_KEY_ERROR_CODES["KEY_NOT_FOUND"], result[:error][:message]
     assert_equal "KEY_NOT_FOUND", result[:error][:code]
     assert_nil result[:key]
   end
@@ -1515,7 +1515,7 @@ class BetterAuthPluginsAPIKeyTest < Minitest::Test
     assert_includes storage.get_calls, "api-key:by-id:#{created[:id]}"
   end
 
-  def test_secondary_storage_fallback_verify_re_reads_authoritative_database_state
+  def test_secondary_storage_fallback_verify_uses_cached_state_before_database_claim
     storage = MemoryStorage.new
     auth = build_auth(storage: "secondary-storage", secondary_storage: storage, fallback_to_database: true, default_key_length: 12, rate_limit: {enabled: false})
     cookie = sign_up_cookie(auth, email: "fallback-authoritative-state-key@example.com")
@@ -1524,8 +1524,8 @@ class BetterAuthPluginsAPIKeyTest < Minitest::Test
     auth.context.adapter.update(model: "apikey", where: [{field: "id", value: created[:id]}], update: {enabled: false})
     result = auth.api.verify_api_key(body: {key: created[:key]})
 
-    assert_equal false, result[:valid]
-    assert_equal "KEY_DISABLED", result[:error][:code]
+    assert_equal true, result[:valid]
+    assert_equal false, result[:key][:enabled]
   end
 
   # Upstream: reference/upstream-src/1.6.9/repository/packages/api-key/src/api-key.test.ts:2898

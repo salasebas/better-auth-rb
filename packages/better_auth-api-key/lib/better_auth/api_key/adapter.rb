@@ -116,8 +116,12 @@ module BetterAuth
       end
 
       def delete_record(ctx, record, config)
-        ctx.context.adapter.delete(model: BetterAuth::Plugins::API_KEY_TABLE_NAME, where: [{field: "id", value: record["id"]}]) if config[:storage] == "database" || config[:fallback_to_database]
-        delete(ctx, record, config) if config[:storage] == "secondary-storage"
+        if config[:storage] == "secondary-storage"
+          delete(ctx, record, config)
+          ctx.context.adapter.delete(model: BetterAuth::Plugins::API_KEY_TABLE_NAME, where: [{field: "id", value: record["id"]}]) if config[:fallback_to_database]
+        else
+          ctx.context.adapter.delete(model: BetterAuth::Plugins::API_KEY_TABLE_NAME, where: [{field: "id", value: record["id"]}])
+        end
       end
 
       def schedule_record_delete(ctx, record, config)
@@ -138,9 +142,15 @@ module BetterAuth
 
         updated = record.merge("metadata" => encoded)
         if config[:storage] == "database" || config[:fallback_to_database]
-          ctx.context.adapter.update(model: BetterAuth::Plugins::API_KEY_TABLE_NAME, where: [{field: "id", value: record["id"]}], update: {metadata: encoded})
+          begin
+            ctx.context.adapter.update(model: BetterAuth::Plugins::API_KEY_TABLE_NAME, where: [{field: "id", value: record["id"]}], update: {metadata: encoded})
+          rescue => error
+            logger = ctx.context.logger if ctx.context.respond_to?(:logger)
+            if logger.respond_to?(:warn)
+              logger.warn("Failed to migrate double-stringified metadata for API key #{record["id"]}: #{error.message}")
+            end
+          end
         end
-        set(ctx, updated, config) if config[:storage] == "secondary-storage"
         updated
       end
 

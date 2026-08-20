@@ -385,11 +385,9 @@ Check secondary storage first, then fallback to database if not found.
 **Write behavior:**
 
 * Writes to **both** database and secondary storage
-* The database is authoritative for verification. Cache refresh follows a
-  successful guarded database write, but the cross-store window before that
-  cache write can leave a stale entry or briefly re-create one. Verification
-  always re-reads the database; a missing authoritative row invalidates the
-  cache and can never authorize.
+* Verification accepts a cache hit without re-reading the database and queries
+  the database only on a cache miss. Counter claims write through the database,
+  then refresh the cache from the resulting row.
 * Generic custom storage serializes reference-list updates within one Ruby
   process only. Redis-backed storage uses atomic JSON-list operations for
   cross-process writers.
@@ -496,9 +494,9 @@ The remaining count is the number of requests left before the API key is disable
 
 Whenever an API key is used, the `remaining` count is updated. If the `remaining` count is `null`, then there is no cap to key usage. Otherwise, the `remaining` count is decremented by 1. Guarded database updates prevent it from becoming negative; an exhausted key is rejected with HTTP `429`.
 
-Ruby keeps an exhausted non-refillable row inert during verification instead of
-eagerly deleting it: a cross-process atomic delete-plus-counter operation is
-not available. Cleanup routes or jobs may remove exhausted rows separately.
+An exhausted non-refillable key is deleted during verification and rejected
+with `USAGE_EXCEEDED`. With `defer_updates`, deletion runs through the configured
+background task handler.
 
 #### refillInterval & refillAmount:
 
