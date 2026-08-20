@@ -64,6 +64,12 @@ purge secondary-only keys.
 The scheduled expired-key cleanup throttle is per Ruby process. It is not
 coordinated across web workers, hosts, or background job runners.
 
+When `enable_session_for_api_keys` is enabled, `/get-session` follows upstream
+v1.7.1 and returns a synthesized session whose `session["token"]` is the
+presented API key. Treat that response as sensitive. This API-key hook returns
+before the native session route, so it also bypasses native session-refresh
+behavior and does not add the native route's cache-control headers.
+
 `defer_updates` can defer explicit API-key updates and cleanup when a background
 task handler is configured. Verification counter claims remain synchronous;
 database-backed claims use guarded atomic operations, while pure secondary-only

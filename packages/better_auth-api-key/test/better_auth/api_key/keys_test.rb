@@ -54,6 +54,12 @@ class BetterAuthAPIKeyKeysTest < Minitest::Test
     assert_equal "secret", BetterAuth::APIKey::Keys.from_headers(ctx, api_key_headers: ["x-api-key", "x-secondary-key"])
   end
 
+  def test_from_headers_skips_empty_configured_headers
+    ctx = Context.new({"x-api-key" => "", "x-secondary-key" => "secret"})
+
+    assert_equal "secret", BetterAuth::APIKey::Keys.from_headers(ctx, api_key_headers: ["x-api-key", "x-secondary-key"])
+  end
+
   def test_from_headers_delegates_to_custom_getter
     ctx = Context.new({})
     config = {custom_api_key_getter: ->(request_ctx) { request_ctx.headers.fetch("custom", "generated-key") }}
