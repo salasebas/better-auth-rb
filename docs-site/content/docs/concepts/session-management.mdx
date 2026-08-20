@@ -440,8 +440,8 @@ auth = BetterAuth.auth(
 
 The Ruby `refresh_cache` option maps to upstream `refreshCache` and controls automatic cookie refresh **before expiry** without querying any database:
 
-* **`false`** (default): No automatic refresh. When the cookie cache expires (reaches `max_age`), it will attempt to fetch from the database if available.
-* **`true`**: Enable automatic refresh with default settings. Refreshes when 80% of `max_age` is reached (20% time remaining).
+* **`false`** (default for stateful/server-store configurations): No automatic refresh. When the cookie cache expires (reaches `max_age`), it will attempt to fetch from the database if available. Fully stateless, database-less configurations default to `true`.
+* **`true`**: Enable automatic refresh with default settings. Refreshes after 80% of `max_age` has elapsed, when less than 20% remains.
 * **`object`**: Custom refresh configuration with `update_age` property.
 
 ```ruby title="config/better_auth.rb"
@@ -453,7 +453,7 @@ auth = BetterAuth.auth(
       enabled: true,
       max_age: 300, # 5 minutes
       refresh_cache: {
-        update_age: 60 # Refresh when 60 seconds remain before expiry
+        update_age: 60 # Refresh when fewer than 60 seconds remain before expiry
       }
     }
   }
