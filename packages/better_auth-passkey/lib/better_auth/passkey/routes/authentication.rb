@@ -91,7 +91,7 @@ module BetterAuth
               user = ctx.context.internal_adapter.find_user_by_id(passkey.fetch("userId"))
               raise APIError.new("INTERNAL_SERVER_ERROR", message: "User not found") unless user
 
-              session = ctx.context.internal_adapter.create_session(passkey.fetch("userId"))
+              session = ctx.context.internal_adapter.create_session(passkey.fetch("userId"), false, nil, false, ctx)
               raise APIError.new("INTERNAL_SERVER_ERROR", message: ErrorCodes::PASSKEY_ERROR_CODES.fetch("UNABLE_TO_CREATE_SESSION")) unless session
 
               Cookies.set_session_cookie(ctx, {session: session, user: user})

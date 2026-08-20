@@ -260,7 +260,7 @@ module BetterAuth
       session_data = if session && session[:user]["id"] == user["id"]
         session[:session]
       else
-        ctx.context.internal_adapter.create_session(user["id"])
+        ctx.context.internal_adapter.create_session(user["id"], false, nil, false, ctx)
       end
       Cookies.set_session_cookie(ctx, {session: session_data, user: user})
     end
@@ -268,7 +268,7 @@ module BetterAuth
     def self.email_change_session_data(ctx, session, user)
       return session[:session] if session && session[:user]["id"] == user["id"]
 
-      session_data = ctx.context.internal_adapter.create_session(user["id"])
+      session_data = ctx.context.internal_adapter.create_session(user["id"], false, nil, false, ctx)
       unless session_data
         raise APIError.new("INTERNAL_SERVER_ERROR", message: BASE_ERROR_CODES["FAILED_TO_CREATE_SESSION"])
       end

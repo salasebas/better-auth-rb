@@ -13,6 +13,13 @@ module BetterAuth
       Plugin.new(
         id: "last-login-method",
         schema: last_login_method_schema(config),
+        init: ->(_context) {
+          {
+            options: {
+              database_hooks: last_login_method_database_hooks(config)
+            }
+          }
+        },
         hooks: {
           after: [
             {
@@ -43,6 +50,56 @@ module BetterAuth
       }
     end
 
+    def last_login_method_database_hooks(config)
+      {
+        user: {
+          create: {
+            before: ->(user, ctx) { apply_last_login_method_to_new_user(user, ctx, config) }
+          }
+        },
+        session: {
+          create: {
+            after: ->(session, ctx) { persist_last_login_method(session, ctx, config) }
+          }
+        }
+      }
+    end
+
+    def apply_last_login_method_to_new_user(user, ctx, config)
+      return unless config[:store_in_database] && ctx
+
+      method = resolve_login_method(ctx, config)
+      return unless method && method != ""
+
+      {data: user.merge("lastLoginMethod" => method)}
+    end
+
+    def persist_last_login_method(session, ctx, config)
+      return unless config[:store_in_database] && ctx
+
+      method = resolve_login_method(ctx, config)
+      user_id = fetch_value(session, "userId")
+      return unless method && method != "" && user_id
+
+      begin
+        ctx.context.internal_adapter.update_user(user_id, lastLoginMethod: method)
+      rescue => error
+        log_last_login_method_update_error(ctx, error)
+      end
+      nil
+    end
+
+    def log_last_login_method_update_error(ctx, error)
+      logger = ctx.context.logger
+      if logger.respond_to?(:call)
+        logger.call(:error, "Failed to update lastLoginMethod", error)
+      elsif logger.respond_to?(:error)
+        logger.error("Failed to update lastLoginMethod", error)
+      end
+    rescue
+      nil
+    end
+
     def apply_last_login_method(ctx, config)
       method = resolve_login_method(ctx, config)
       return unless method
@@ -52,11 +109,6 @@ module BetterAuth
 
       attributes = ctx.context.auth_cookies[:session_token].attributes.merge(max_age: config[:max_age], http_only: false)
       ctx.set_cookie(config[:cookie_name], method, attributes)
-
-      if config[:store_in_database] && ctx.context.new_session&.dig(:user, "id")
-        updated = ctx.context.internal_adapter.update_user(ctx.context.new_session[:user]["id"], lastLoginMethod: method)
-        ctx.context.new_session[:user].merge!(updated) if updated
-      end
       nil
     end
 
