@@ -83,6 +83,14 @@ jobs:
       - name: Fetch upstream Better Auth sources
         run: ./scripts/fetch-upstream-better-auth.sh
 
+      - name: Install FreeTDS headers
+        run: |
+          if [ -f /etc/apt/apt-mirrors.txt ]; then
+            echo "https://archive.ubuntu.com/ubuntu/" | sudo tee /etc/apt/apt-mirrors.txt
+          fi
+          sudo apt-get update -o Acquire::Retries=3 -o Acquire::http::Timeout=10 -o Acquire::https::Timeout=10
+          sudo apt-get install -y --no-install-recommends freetds-dev
+
       - name: Set up Ruby
         uses: ruby/setup-ruby@95ef2b042f9d7a56d8268cba8559e2842e2ad01b # v1.321.0
         with:
@@ -107,6 +115,14 @@ jobs:
 
       - name: Fetch upstream Better Auth sources
         run: ./scripts/fetch-upstream-better-auth.sh
+
+      - name: Install FreeTDS headers
+        run: |
+          if [ -f /etc/apt/apt-mirrors.txt ]; then
+            echo "https://archive.ubuntu.com/ubuntu/" | sudo tee /etc/apt/apt-mirrors.txt
+          fi
+          sudo apt-get update -o Acquire::Retries=3 -o Acquire::http::Timeout=10 -o Acquire::https::Timeout=10
+          sudo apt-get install -y --no-install-recommends freetds-dev
 
       - name: Set up Ruby
         uses: ruby/setup-ruby@95ef2b042f9d7a56d8268cba8559e2842e2ad01b # v1.321.0
@@ -158,6 +174,14 @@ jobs:
 
       - name: Fetch upstream Better Auth sources
         run: ./scripts/fetch-upstream-better-auth.sh
+
+      - name: Install FreeTDS headers
+        run: |
+          if [ -f /etc/apt/apt-mirrors.txt ]; then
+            echo "https://archive.ubuntu.com/ubuntu/" | sudo tee /etc/apt/apt-mirrors.txt
+          fi
+          sudo apt-get update -o Acquire::Retries=3 -o Acquire::http::Timeout=10 -o Acquire::https::Timeout=10
+          sudo apt-get install -y --no-install-recommends freetds-dev
 
       - name: Set up Ruby
         uses: ruby/setup-ruby@95ef2b042f9d7a56d8268cba8559e2842e2ad01b # v1.321.0
