@@ -816,7 +816,225 @@ class BetterAuthPluginsEmailOTPTest < Minitest::Test
     assert_match(/\A[0-9a-f]{32}\z/, auth.api.sign_in_email_otp(body: {email: "camel-store@example.com", otp: "998877"})[:token])
   end
 
+  def test_email_otp_replacement_keeps_the_previous_verification_until_create_completes
+    verification_storage_modes.each do |mode, storage_options, _storage|
+      sent = []
+      otp_values = %w[111111 222222]
+      create_calls = 0
+      block_replacement = false
+      create_started = Queue.new
+      continue_create = Queue.new
+      auth = build_auth(
+        storage_options.merge(
+          database_hooks: {
+            verification: {
+              create: {
+                before: lambda do |_data, _context|
+                  create_calls += 1
+                  if block_replacement && create_calls == 2
+                    create_started << true
+                    continue_create.pop
+                  end
+                end
+              }
+            }
+          },
+          plugins: [
+            BetterAuth::Plugins.email_otp(
+              generate_otp: ->(_data, _ctx = nil) { otp_values.shift },
+              send_verification_otp: ->(data, _ctx = nil) { sent << data }
+            )
+          ]
+        )
+      )
+      email = "replace-#{mode}@example.com"
+      identifier = "sign-in-otp-#{email}"
+
+      auth.api.send_verification_otp(body: {email: email, type: "sign-in"})
+      previous = auth.context.internal_adapter.find_verification_value(identifier)
+      block_replacement = true
+      result = Queue.new
+      replacement = Thread.new do
+        result << [:success, auth.api.send_verification_otp(body: {email: email, type: "sign-in"})]
+      rescue => error
+        result << [:error, error]
+      end
+
+      create_started.pop
+      begin
+        observable = auth.context.internal_adapter.find_verification_value(identifier)
+        assert_equal previous["id"], observable&.fetch("id"), mode
+        assert_equal previous["value"], observable&.fetch("value"), mode
+      ensure
+        continue_create << true
+        replacement.join
+      end
+
+      assert_equal [:success, {success: true}], result.pop, mode
+      assert_equal "222222", sent.last[:otp], mode
+    end
+  end
+
+  def test_email_otp_replacement_retries_a_raised_write_once_after_deleting_the_previous_verification
+    verification_storage_modes.each do |mode, storage_options, storage|
+      sent = []
+      otp_values = %w[333333 444444]
+      events = []
+      attempts = []
+      fail_next_create = false
+      auth = build_auth(
+        storage_options.merge(
+          database_hooks: {
+            verification: {
+              create: {
+                before: lambda do |data, _context|
+                  next unless mode == :database_only
+
+                  events << :create
+                  attempts << verification_write_payload(data)
+                  if fail_next_create
+                    fail_next_create = false
+                    sleep 1.01
+                    raise TransientVerificationWriteError, "temporary verification write failure"
+                  end
+                end
+              },
+              delete: {
+                before: ->(_data, _context) { events << :delete if mode == :database_only }
+              }
+            }
+          },
+          plugins: [
+            BetterAuth::Plugins.email_otp(
+              generate_otp: ->(_data, _ctx = nil) { otp_values.shift },
+              send_verification_otp: ->(data, _ctx = nil) { sent << data }
+            )
+          ]
+        )
+      )
+      email = "retry-#{mode}@example.com"
+
+      auth.api.send_verification_otp(body: {email: email, type: "sign-in"})
+      events.clear
+      attempts.clear
+      storage&.clear_events
+      storage&.clear_verification_writes
+      if storage
+        storage.fail_next_verification_write!
+      else
+        fail_next_create = true
+      end
+
+      assert_equal({success: true}, auth.api.send_verification_otp(body: {email: email, type: "sign-in"}), mode)
+
+      if storage
+        assert_equal [:create, :delete, :create], storage.events, mode
+        assert_retried_verification_payload(storage.verification_writes.first, storage.verification_writes.last, mode)
+      else
+        assert_equal [:create, :delete, :create], events, mode
+        assert_retried_verification_payload(attempts.first, attempts.last, mode)
+      end
+      assert_match(/\A[0-9a-f]{32}\z/, auth.api.sign_in_email_otp(body: {email: email, otp: sent.last[:otp]})[:token], mode)
+    end
+  end
+
+  def test_email_otp_replacement_does_not_delete_when_creation_is_vetoed
+    verification_storage_modes.each do |mode, storage_options, _storage|
+      sent = []
+      otp_values = %w[555555 666666]
+      veto_replacement = false
+      auth = build_auth(
+        storage_options.merge(
+          database_hooks: {
+            verification: {
+              create: {
+                before: ->(_data, _context) { veto_replacement ? false : nil }
+              }
+            }
+          },
+          plugins: [
+            BetterAuth::Plugins.email_otp(
+              generate_otp: ->(_data, _ctx = nil) { otp_values.shift },
+              send_verification_otp: ->(data, _ctx = nil) { sent << data }
+            )
+          ]
+        )
+      )
+      email = "veto-#{mode}@example.com"
+      identifier = "sign-in-otp-#{email}"
+
+      auth.api.send_verification_otp(body: {email: email, type: "sign-in"})
+      previous = auth.context.internal_adapter.find_verification_value(identifier)
+      veto_replacement = true
+
+      assert_equal({success: true}, auth.api.send_verification_otp(body: {email: email, type: "sign-in"}), mode)
+      retained = auth.context.internal_adapter.find_verification_value(identifier)
+      assert_equal previous["id"], retained&.fetch("id"), mode
+      assert_equal previous["value"], retained&.fetch("value"), mode
+    end
+  end
+
+  def test_email_otp_replacement_propagates_pre_create_storage_errors_without_deleting
+    sent = []
+    otp_values = %w[777777 888888]
+    fail_transformation = false
+    auth = build_auth(
+      plugins: [
+        BetterAuth::Plugins.email_otp(
+          store_otp: {
+            encrypt: lambda { |otp|
+              raise PreCreateOTPStorageError, "temporary OTP storage transformation failure" if fail_transformation
+
+              otp
+            }
+          },
+          generate_otp: ->(_data, _ctx = nil) { otp_values.shift },
+          send_verification_otp: ->(data, _ctx = nil) { sent << data }
+        )
+      ]
+    )
+    email = "pre-create-storage-error@example.com"
+    identifier = "sign-in-otp-#{email}"
+
+    auth.api.send_verification_otp(body: {email: email, type: "sign-in"})
+    previous = auth.context.internal_adapter.find_verification_value(identifier)
+    fail_transformation = true
+
+    assert_raises(PreCreateOTPStorageError) do
+      auth.api.send_verification_otp(body: {email: email, type: "sign-in"})
+    end
+
+    retained = auth.context.internal_adapter.find_verification_value(identifier)
+    assert_equal previous["id"], retained&.fetch("id")
+    assert_equal previous["value"], retained&.fetch("value")
+    assert_equal 1, sent.length
+  end
+
   private
+
+  def verification_storage_modes
+    secondary_only = ObservableVerificationStorage.new
+    dual = ObservableVerificationStorage.new
+    [
+      [:database_only, {}, nil],
+      [:secondary_only, {secondary_storage: secondary_only}, secondary_only],
+      [:secondary_and_database, {secondary_storage: dual, verification: {store_in_database: true}}, dual]
+    ]
+  end
+
+  def verification_write_payload(data)
+    data.slice("identifier", "value", "expiresAt")
+  end
+
+  def assert_retried_verification_payload(first, last, mode)
+    assert_equal first.slice("identifier", "value"), last.slice("identifier", "value"), mode
+    assert_operator verification_expiration(last), :>, verification_expiration(first), mode
+  end
+
+  def verification_expiration(payload)
+    value = payload.fetch("expiresAt")
+    value.is_a?(Time) ? value : Time.parse(value)
+  end
 
   def build_auth(options = {})
     email_and_password = {enabled: true}.merge(options.fetch(:email_and_password, {}))
@@ -869,6 +1087,82 @@ class BetterAuthPluginsEmailOTPTest < Minitest::Test
 
     def keys
       @store.keys
+    end
+  end
+
+  class TransientVerificationWriteError < StandardError
+  end
+
+  class PreCreateOTPStorageError < StandardError
+  end
+
+  class ObservableVerificationStorage
+    def initialize
+      @store = {}
+      @events = []
+      @verification_writes = []
+      @fail_next_verification_write = false
+      @mutex = Mutex.new
+    end
+
+    def set(key, value, _ttl = nil)
+      @mutex.synchronize do
+        if verification_key?(key)
+          @events << :create
+          @verification_writes << verification_write_payload(value)
+          if @fail_next_verification_write
+            @fail_next_verification_write = false
+            sleep 1.01
+            raise TransientVerificationWriteError, "temporary verification storage failure"
+          end
+        end
+        @store[key] = value
+      end
+    end
+
+    def get(key)
+      @mutex.synchronize { @store[key] }
+    end
+
+    def delete(key)
+      @mutex.synchronize do
+        @events << :delete if verification_key?(key)
+        @store.delete(key)
+      end
+    end
+
+    def get_and_delete(key)
+      @mutex.synchronize { @store.delete(key) }
+    end
+
+    def fail_next_verification_write!
+      @mutex.synchronize { @fail_next_verification_write = true }
+    end
+
+    def events
+      @mutex.synchronize { @events.dup }
+    end
+
+    def clear_events
+      @mutex.synchronize { @events.clear }
+    end
+
+    def verification_writes
+      @mutex.synchronize { @verification_writes.dup }
+    end
+
+    def clear_verification_writes
+      @mutex.synchronize { @verification_writes.clear }
+    end
+
+    private
+
+    def verification_key?(key)
+      key.start_with?("verification:")
+    end
+
+    def verification_write_payload(value)
+      JSON.parse(value).slice("identifier", "value", "expiresAt")
     end
   end
 end
