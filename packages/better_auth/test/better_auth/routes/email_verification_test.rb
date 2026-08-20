@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require "json"
+require "rack/mock"
 require_relative "../../test_helper"
 
 class BetterAuthRoutesEmailVerificationTest < Minitest::Test
@@ -159,10 +160,14 @@ class BetterAuthRoutesEmailVerificationTest < Minitest::Test
     assert_equal 200, status
     assert_equal({"status" => true, "user" => nil}, JSON.parse(body.join))
     assert_includes headers.fetch("set-cookie"), "better-auth.session_token="
-    assert_equal ["before:verified@example.com", "on:verified@example.com", "after:verified@example.com"], verified
     user = auth.context.internal_adapter.find_user_by_email("verified@example.com")[:user]
     assert_equal true, user["emailVerified"]
     assert_nil auth.context.internal_adapter.find_verification_value("change-email:#{BetterAuth::Crypto.sha256(token, encoding: :base64url)}")
+
+    sessions_after_first_use = auth.context.adapter.find_many(model: "session").length
+    assert_equal({status: true, user: nil}, auth.api.verify_email(query: {token: token}))
+    assert_equal ["before:verified@example.com", "on:verified@example.com", "after:verified@example.com"], verified
+    assert_equal sessions_after_first_use, auth.context.adapter.find_many(model: "session").length
   end
 
   def test_verify_email_auto_sign_in_exposes_bearer_set_auth_token_header
@@ -228,6 +233,39 @@ class BetterAuthRoutesEmailVerificationTest < Minitest::Test
     assert_equal 401, error.status_code
     assert_equal "TOKEN_EXPIRED", error.code
     assert_equal BetterAuth::BASE_ERROR_CODES["TOKEN_EXPIRED"], error.message
+    assert_equal({code: "TOKEN_EXPIRED", message: "Token expired"}, error.to_h)
+  end
+
+  def test_verify_email_rejects_invalid_token
+    auth = build_auth
+
+    error = assert_raises(BetterAuth::APIError) do
+      auth.api.verify_email(query: {token: "invalid-token"})
+    end
+
+    assert_equal 401, error.status_code
+    assert_equal "INVALID_TOKEN", error.code
+    assert_equal BetterAuth::BASE_ERROR_CODES["INVALID_TOKEN"], error.message
+    assert_equal({code: "INVALID_TOKEN", message: "Invalid token"}, error.to_h)
+  end
+
+  def test_verify_email_rejects_token_for_missing_user_without_consuming_it
+    auth = build_auth
+    token = BetterAuth::Crypto.sign_jwt({"email" => "missing-user@example.com"}, SECRET, expires_in: 3600)
+
+    error = assert_raises(BetterAuth::APIError) do
+      auth.api.verify_email(query: {token: token})
+    end
+
+    assert_equal 401, error.status_code
+    assert_equal "USER_NOT_FOUND", error.code
+    assert_equal BetterAuth::BASE_ERROR_CODES["USER_NOT_FOUND"], error.message
+    assert_equal({code: "USER_NOT_FOUND", message: "User not found"}, error.to_h)
+    assert_nil auth.context.internal_adapter.find_user_by_email("missing-user@example.com")
+
+    auth.api.sign_up_email(body: {email: "missing-user@example.com", password: "password123", name: "Recovered"})
+    assert_equal({status: true, user: nil}, auth.api.verify_email(query: {token: token}))
+    assert_equal true, auth.context.internal_adapter.find_user_by_email("missing-user@example.com")[:user]["emailVerified"]
   end
 
   def test_verify_email_rejects_untrusted_callback_url
@@ -285,16 +323,75 @@ class BetterAuthRoutesEmailVerificationTest < Minitest::Test
     assert_empty sent
   end
 
-  def test_verify_email_invalid_token_redirects_with_error_when_callback_is_present
+  def test_verify_email_rack_invalid_token_redirect_uses_question_mark_without_existing_query
     auth = build_auth
+    request = Rack::MockRequest.new(auth)
 
-    error = assert_raises(BetterAuth::APIError) do
-      auth.api.verify_email(query: {token: "invalid-token", callbackURL: "/dashboard"})
+    response = rack_verify_email(request, token: "invalid-token", callback_url: "/dashboard")
+
+    assert_equal 302, response.status
+    assert_equal "/dashboard?error=INVALID_TOKEN", response["location"]
+  end
+
+  def test_verify_email_rack_failures_use_canonical_json_and_callback_errors
+    auth = build_auth
+    sign_up_cookie(auth, email: "rack-change-owner@example.com")
+    other_cookie = sign_up_cookie(auth, email: "rack-signed-in-other@example.com")
+    auth.context.internal_adapter.update_user_by_email("rack-change-owner@example.com", emailVerified: true)
+
+    cases = [
+      {
+        token: "invalid-token",
+        code: "INVALID_TOKEN",
+        message: "Invalid token"
+      },
+      {
+        token: BetterAuth::Crypto.sign_jwt({"email" => "rack-expired@example.com"}, SECRET, expires_in: -1),
+        code: "TOKEN_EXPIRED",
+        message: "Token expired"
+      },
+      {
+        token: BetterAuth::Crypto.sign_jwt({"email" => "rack-missing@example.com"}, SECRET, expires_in: 3600),
+        code: "USER_NOT_FOUND",
+        message: "User not found"
+      },
+      {
+        token: BetterAuth::Crypto.sign_jwt(
+          {"email" => "rack-change-owner@example.com", "updateTo" => "rack-change-target@example.com"},
+          SECRET,
+          expires_in: 3600
+        ),
+        code: "INVALID_USER",
+        message: "Invalid user",
+        cookie: other_cookie
+      }
+    ]
+    request = Rack::MockRequest.new(auth)
+
+    cases.each do |failure|
+      response = rack_verify_email(request, token: failure.fetch(:token), cookie: failure[:cookie])
+
+      assert_equal 401, response.status, failure.fetch(:code)
+      assert_equal(
+        {"code" => failure.fetch(:code), "message" => failure.fetch(:message)},
+        JSON.parse(response.body),
+        failure.fetch(:code)
+      )
+
+      callback_response = rack_verify_email(
+        request,
+        token: failure.fetch(:token),
+        callback_url: "/verification-error?source=email",
+        cookie: failure[:cookie]
+      )
+
+      assert_equal 302, callback_response.status, failure.fetch(:code)
+      assert_equal "/verification-error?source=email&error=#{failure.fetch(:code)}", callback_response["location"]
     end
 
-    assert_equal 302, error.status_code
-    assert_includes error.headers.fetch("location"), "/dashboard"
-    assert_includes error.headers.fetch("location"), "error=INVALID_TOKEN"
+    assert auth.context.internal_adapter.find_user_by_email("rack-change-owner@example.com")
+    assert auth.context.internal_adapter.find_user_by_email("rack-signed-in-other@example.com")
+    assert_nil auth.context.internal_adapter.find_user_by_email("rack-change-target@example.com")
   end
 
   def test_verify_email_auto_sign_in_stores_session_in_secondary_storage
@@ -480,15 +577,19 @@ class BetterAuthRoutesEmailVerificationTest < Minitest::Test
     end
 
     assert_equal 401, error.status_code
-    assert_equal "invalid_user", error.message
+    assert_equal "INVALID_USER", error.code
+    assert_equal BetterAuth::BASE_ERROR_CODES["INVALID_USER"], error.message
+    assert_equal({code: "INVALID_USER", message: "Invalid user"}, error.to_h)
     assert auth.context.internal_adapter.find_user_by_email("change-owner@example.com")
     assert_nil auth.context.internal_adapter.find_user_by_email("change-target@example.com")
+    assert_equal 1, sent.length
 
     status, headers, _body = auth.api.verify_email(query: {token: sent.fetch(0).fetch(:token)}, as_response: true)
     session = auth.api.get_session(headers: {"cookie" => cookie_header(headers.fetch("set-cookie"))})
 
     assert_equal 200, status
     assert_equal "change-target@example.com", session[:user]["email"]
+    assert_equal 1, sent.length
   end
 
   def test_change_email_verification_creates_session_before_mutating_email
@@ -691,6 +792,14 @@ class BetterAuthRoutesEmailVerificationTest < Minitest::Test
 
   def cookie_header(set_cookie)
     set_cookie.lines.map { |line| line.split(";").first }.join("; ")
+  end
+
+  def rack_verify_email(request, token:, callback_url: nil, cookie: nil)
+    query = {token: token}
+    query[:callbackURL] = callback_url if callback_url
+    env = {}
+    env["HTTP_COOKIE"] = cookie if cookie
+    request.get("/api/auth/verify-email?#{URI.encode_www_form(query)}", env)
   end
 
   class StringStorage

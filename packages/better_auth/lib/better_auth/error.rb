@@ -13,6 +13,7 @@ module BetterAuth
     "INVALID_PASSWORD" => "Invalid password",
     "INVALID_EMAIL" => "Invalid email",
     "INVALID_EMAIL_OR_PASSWORD" => "Invalid email or password",
+    "INVALID_USER" => "Invalid user",
     "SOCIAL_ACCOUNT_ALREADY_LINKED" => "Social account already linked",
     "PROVIDER_NOT_FOUND" => "Provider not found",
     "INVALID_TOKEN" => "Invalid token",
