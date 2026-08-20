@@ -141,7 +141,7 @@ with `jwt_config` if the JWT plugin is missing — oauth-provider does **not** a
 it. Set `disable_jwt_plugin: true` only for legacy HS256-only deployments that intentionally
 omit the JWT plugin.
 
-`store_client_secret` defaults to `"hashed"`. Set `store_client_secret: "plain"` only when migrating an existing app that still depends on plaintext client secrets. `store_tokens` defaults to `"hashed"` for opaque access tokens, refresh tokens, and authorization codes; custom hash callbacks may be supplied with `hash: ->(token, type) { ... }`.
+`store_client_secret` defaults to `"hashed"` while the JWT plugin is enabled and to `"encrypted"` when `disable_jwt_plugin: true`. The encrypted mode uses Better Auth's authenticated-encryption path so the original credential remains available for HS256 signing and verification; deployments configured with `secrets` get a versioned `SecretConfig` envelope. Custom encrypted storage must provide both `encrypt` and `decrypt` callbacks. Set `store_client_secret: "plain"` only when migrating an existing Ruby app that still depends on plaintext client secrets; this mode is a Ruby compatibility adaptation and is not supported upstream. `store_tokens` defaults to `"hashed"` for opaque access tokens, refresh tokens, and authorization codes; custom hash callbacks may be supplied with `hash: ->(token, type) { ... }`.
 
 Token, introspection, and revocation client authentication is method-strict: `client_secret_basic` clients must authenticate with HTTP Basic credentials, `client_secret_post` clients must use body credentials, and public clients cannot authenticate to introspection or revocation. Authorization-code clients receive refresh tokens only when the granted scope includes `offline_access`.
 
@@ -191,7 +191,13 @@ BetterAuth::Plugins.oauth_provider(
 
 `oauthAccessToken` now uses the upstream canonical columns `token`, `expiresAt`, `scopes`, `clientId`, `sessionId`, `userId`, `referenceId`, and `refreshId`. Legacy `access_token`, `refresh_token`, `access_token_expires_at`, and `scope` columns should be copied forward then dropped. `oauthConsent#consent_given` is also removed; a consent row means consent was granted.
 
-After enabling the hashed defaults, newly created OAuth client secrets and opaque tokens are stored hashed. Existing plaintext rows continue to require either a migration that re-registers/rotates secrets and tokens or a temporary explicit `store_client_secret: "plain"` setting for old clients during rollout.
+With the JWT plugin enabled, newly created OAuth client secrets are stored hashed. With `disable_jwt_plugin: true`, newly created and rotated secrets are encrypted instead. Deployments upgrading from the earlier Ruby default may already have hashed client-secret rows under an implicit JWT-disabled configuration. A correct client authentication detects only the exact legacy SHA-256 base64url format, replaces that row with encrypted storage, and then signs new ID tokens with the original client credential. Wrong credentials and explicit `store_client_secret: "encrypted"` configurations never use this compatibility path. Rotate inactive client secrets to migrate rows that do not authenticate during the rollout.
+
+Previously issued JWT-disabled ID tokens used a server-derived key. The end-session endpoint keeps a verify-only fallback for those tokens when the old implicit configuration is eligible; newly issued ID tokens always use the original client credential. Existing plaintext rows cannot be auto-detected and still require either secret rotation or a temporary explicit `store_client_secret: "plain"` setting.
+
+Treat this upgrade as a coordinated cutover for JWT-disabled deployments. Drain old application processes before allowing the new version to authenticate or create clients: old implicit-default processes cannot read ciphertext written by the new version, and running both versions against the same client table is unsafe. Rolling back after encrypted writes is also unsafe unless affected credentials are restored or rotated, or the old release is configured with an explicit encrypted mode that is compatible with every OAuth flow the application uses.
+
+The legacy derived-key logout fallback is enabled only by the omitted JWT-disabled default. After every legacy hash has authenticated and migrated or has been rotated, wait at least the maximum ID-token lifetime used before the upgrade (`id_token_expires_in`, 10 hours by default). Then set `store_client_secret: "encrypted"` explicitly. That keeps encrypted storage while disabling both legacy hash migration and derived-key token verification.
 
 OAuth continuation URLs use a canonical signed-query format. Post-login continuations are single-use and session-bound, but still re-check the live post-login gate when resumed. During an upgrade, already-issued login, account-selection, and post-login continuation URLs should restart authorization at `/oauth2/authorize`; the legacy format is intentionally not dual-verified. For large tables, add the `oauthRefreshToken.sessionId` and `oauthAccessToken.sessionId` indexes with your database's online/concurrent-index migration option where available.
 
@@ -211,7 +217,7 @@ Then drop the legacy access-token and consent columns. Rails apps using `better_
 
 ## Ruby Adaptations
 
-When the JWT plugin is registered, JWT access tokens and ID tokens use the JWT plugin's configured `jwks.key_pair_config.alg`, defaulting to `EdDSA` like upstream, and discovery metadata publishes the active JWKS URI. If the JWT plugin is not registered, or `disable_jwt_plugin: true` is set, Ruby intentionally falls back to HS256 for compatibility; with hashed client-secret storage, that fallback uses a server-derived per-client key.
+When the JWT plugin is registered, JWT access tokens and ID tokens use the JWT plugin's configured `jwks.key_pair_config.alg`, defaulting to `EdDSA` like upstream, and discovery metadata publishes the active JWKS URI. With `disable_jwt_plugin: true`, confidential-client ID tokens use HS256 with the original client credential, matching upstream; public clients do not receive an ID token in this mode.
 
 Upstream `oauthProviderResourceClient` and MCP protected-resource helpers are available through `BetterAuth::Plugins::OAuthProvider::ClientResource` and `BetterAuth::Plugins::OAuthProvider::MCP`.
 

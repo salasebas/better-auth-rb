@@ -14,6 +14,7 @@ module BetterAuth
       REFRESH_GRANT = "refresh_token"
       CLIENT_CREDENTIALS_GRANT = "client_credentials"
       DEVICE_CODE_GRANT = "urn:ietf:params:oauth:grant-type:device_code"
+      CLIENT_SECRET_FIELDS = %w[clientSecret client_secret __providedClientSecret].freeze
 
       module_function
 
@@ -368,15 +369,19 @@ module BetterAuth
         client
       end
 
-      def authenticate_client!(ctx, model, store_client_secret: "plain", prefix: {}, require_confidential: false)
+      def authenticate_client!(ctx, model, store_client_secret: "plain", prefix: {}, require_confidential: false, migrate_legacy_hashed: false)
         body = request_body!(ctx.body || {})
         client_id = body["client_id"]
-        client_secret = strip_prefix(body["client_secret"], prefix, :client_secret) || body["client_secret"]
+        client_secret = body["client_secret"]
 
         authorization = ctx.headers["authorization"]
         auth_method_used = client_secret.to_s.empty? ? nil : "client_secret_post"
         if authorization.to_s.start_with?("Basic ")
-          decoded = Base64.strict_decode64(authorization.delete_prefix("Basic "))
+          begin
+            decoded = Base64.strict_decode64(authorization.delete_prefix("Basic "))
+          rescue ArgumentError
+            raise APIError.new("BAD_REQUEST", message: "invalid authorization header format", body: {error: "invalid_client", error_description: "invalid authorization header format"})
+          end
           unless decoded.include?(":")
             raise APIError.new("BAD_REQUEST", message: "invalid authorization header format", body: {error: "invalid_client", error_description: "invalid authorization header format"})
           end
@@ -401,16 +406,60 @@ module BetterAuth
         end
         expected_method = (method == "client_secret_post") ? "client_secret_post" : "client_secret_basic"
         raise APIError.new("UNAUTHORIZED", message: "invalid_client") unless auth_method_used == expected_method
+        client_secret = normalized_client_secret_credential!(client_secret, prefix)
         if client_secret_expired?(client_data["clientSecretExpiresAt"])
           raise APIError.new("UNAUTHORIZED", message: "invalid_client")
         end
-        if method != "none" && !verify_client_secret(ctx, stringify_keys(client)["clientSecret"], client_secret, store_client_secret)
-          raise APIError.new("UNAUTHORIZED", message: "invalid_client")
+        if method != "none"
+          stored_secret = client_data["clientSecret"]
+          verified = verify_client_secret(ctx, stored_secret, client_secret, store_client_secret)
+          if !verified && migrate_legacy_hashed && legacy_hashed_client_secret?(stored_secret) && verify_legacy_hashed_client_secret(stored_secret, client_secret)
+            encrypted_secret = store_client_secret_value(ctx, client_secret, "encrypted")
+            migrated_client = ctx.context.adapter.update(
+              model: model,
+              where: [
+                {field: "clientId", value: client_data["clientId"]},
+                {field: "clientSecret", value: stored_secret}
+              ],
+              update: {clientSecret: encrypted_secret, updatedAt: Time.now}
+            )
+            client = if migrated_client
+              migrated_client
+            else
+              current_client = ctx.context.adapter.find_one(model: model, where: [{field: "clientId", value: client_data["clientId"]}])
+              current_secret = stringify_keys(current_client || {})["clientSecret"]
+              current_client if current_client && verify_client_secret(ctx, current_secret, client_secret, "encrypted")
+            end
+            raise APIError.new("UNAUTHORIZED", message: "invalid_client") unless client
+
+            trusted_client_cache[client_data["clientId"].to_s] = client if trusted_client_cache.key?(client_data["clientId"].to_s)
+            verified = true
+          end
+          raise APIError.new("UNAUTHORIZED", message: "invalid_client") unless verified
         end
 
         client.merge("__providedClientSecret" => client_secret)
-      rescue ArgumentError
-        raise APIError.new("BAD_REQUEST", message: "invalid authorization header format", body: {error: "invalid_client", error_description: "invalid authorization header format"})
+      end
+
+      def normalized_client_secret_credential!(client_secret, prefix)
+        credential = client_secret.to_s
+        expected_prefix = token_prefix(prefix, :client_secret)
+        return credential if expected_prefix.empty?
+
+        unless credential.start_with?(expected_prefix)
+          raise APIError.new("UNAUTHORIZED", message: "invalid_client")
+        end
+
+        credential.delete_prefix(expected_prefix)
+      end
+
+      def legacy_hashed_client_secret?(value)
+        value.to_s.match?(/\A[A-Za-z0-9_-]{43}\z/)
+      end
+
+      def verify_legacy_hashed_client_secret(stored_secret, provided_secret)
+        expected = Crypto.sha256(provided_secret, encoding: :base64url)
+        Crypto.constant_time_compare(expected, stored_secret.to_s)
       end
 
       def client_secret_expired?(value)
@@ -493,7 +542,9 @@ module BetterAuth
         data = stringify_keys(session || {})
         user = stringify_keys(data["user"] || data[:user] || {})
         session_data = stringify_keys(data["session"] || data[:session] || {})
-        client_data = stringify_keys(client)
+        raw_client_data = stringify_keys(client)
+        provided_client_secret = raw_client_data["__providedClientSecret"]
+        client_data = redact_client_secret_fields(raw_client_data)
         subject = subject_identifier(user["id"], client_data, pairwise_secret)
         token_auth_time = auth_time || session_auth_time({"session" => session_data})
         token_reference_id = reference_id || client_data["referenceId"]
@@ -566,8 +617,8 @@ module BetterAuth
         }
         response[:audience] = audience if audience
         response[:refresh_token] = refresh_token if refresh_token
-        id_token_client_data = client_data.merge("clientSecret" => client_data["__providedClientSecret"] || client_data["clientSecret"])
-        response[:id_token] = id_token(user.merge("id" => subject), client_data["clientId"], issuer || issuer(ctx), jwt_audience || client_data["clientId"], ctx: ctx, signer: id_token_signer, session_id: session_data["id"], include_sid: !!client_data["enableEndSession"], nonce: nonce, auth_time: token_auth_time, custom_claims: custom_id_token_claims, scopes: parse_scopes(scope), client: id_token_client_data, filter_claims_by_scope: filter_id_token_claims_by_scope, expires_in: id_token_expires_in, use_jwt_plugin: use_jwt_plugin) if parse_scopes(scope).include?("openid")
+        issue_id_token = parse_scopes(scope).include?("openid") && (use_jwt_plugin || !provided_client_secret.to_s.empty?)
+        response[:id_token] = id_token(user.merge("id" => subject), client_data["clientId"], issuer || issuer(ctx), jwt_audience || client_data["clientId"], ctx: ctx, signer: id_token_signer, session_id: session_data["id"], include_sid: !!client_data["enableEndSession"], nonce: nonce, auth_time: token_auth_time, custom_claims: custom_id_token_claims, scopes: parse_scopes(scope), client: client_data, filter_claims_by_scope: filter_id_token_claims_by_scope, expires_in: id_token_expires_in, use_jwt_plugin: use_jwt_plugin, hs256_secret: provided_client_secret) if issue_id_token
         if custom_token_response_fields.respond_to?(:call)
           extra = custom_token_response_fields.call({grant_type: grant_type, user: user.empty? ? nil : user, scopes: parse_scopes(scope), metadata: stringify_keys(client_data["metadata"] || {})})
           response.merge!(stringify_keys(extra).reject { |key, _value| standard_token_response_field?(key) }.transform_keys(&:to_sym)) if extra.is_a?(Hash)
@@ -580,6 +631,7 @@ module BetterAuth
         raise APIError.new("BAD_REQUEST", message: "invalid_grant") if refresh_token_value.to_s.empty?
         data = store[:refresh_tokens][refresh_token_value]
         raise APIError.new("BAD_REQUEST", message: "invalid_grant") unless data
+        scrub_token_record_client!(data)
         if data["revoked"]
           revoke_refresh_family!(ctx, store, data)
           raise APIError.new("BAD_REQUEST", message: "invalid_grant")
@@ -676,6 +728,7 @@ module BetterAuth
         token = authorization.to_s.delete_prefix("Bearer ").strip
         record = token_record(store, token, prefix: prefix)
         return jwt_userinfo(token, jwt_secret, additional_claim: additional_claim, ctx: ctx, issuer: issuer) unless record
+        scrub_token_record_client!(record)
         user = stringify_keys(record["user"])
         scopes = parse_scopes(record["scopes"])
         raise userinfo_openid_scope_error unless scopes.include?("openid")
@@ -873,7 +926,7 @@ module BetterAuth
         end
       end
 
-      def id_token(user, client_id, issuer_value, audience, ctx: nil, signer: nil, session_id: nil, include_sid: false, nonce: nil, auth_time: nil, custom_claims: nil, scopes: [], client: {}, filter_claims_by_scope: false, expires_in: 3600, use_jwt_plugin: false)
+      def id_token(user, client_id, issuer_value, audience, ctx: nil, signer: nil, session_id: nil, include_sid: false, nonce: nil, auth_time: nil, custom_claims: nil, scopes: [], client: {}, filter_claims_by_scope: false, expires_in: 3600, use_jwt_plugin: false, hs256_secret: nil)
         requested_scopes = parse_scopes(scopes)
         payload = {
           sub: user["id"],
@@ -903,21 +956,17 @@ module BetterAuth
           return sign_oauth_jwt!(ctx, payload, issuer: issuer_value, audience: audience)
         end
 
-        Crypto.sign_jwt(
-          payload,
-          id_token_hs256_key(ctx, client_id, stringify_keys(client)["clientSecret"] || stringify_keys(client)["client_secret"]),
-          expires_in: expires_in
-        )
+        signing_key = id_token_hs256_key(ctx, client_id, hs256_secret)
+        raise Error, "client secret is required for HS256 ID token signing" if signing_key.empty?
+
+        Crypto.sign_jwt(payload, signing_key, expires_in: expires_in)
       end
 
-      def id_token_hs256_key(ctx, client_id, client_secret = nil)
-        oauth_provider = ctx&.context&.options&.plugins&.find { |plugin| plugin.id == "oauth-provider" }
-        if oauth_provider&.options&.fetch(:store_client_secret, nil).to_s == "hashed"
-          label = client_id.to_s.empty? ? "better-auth" : client_id.to_s
-          return OpenSSL::HMAC.hexdigest("SHA256", ctx.context.secret.to_s, "oidc.id_token.#{label}")
-        end
-        return client_secret.to_s unless client_secret.to_s.empty?
+      def id_token_hs256_key(_ctx, _client_id, client_secret = nil)
+        client_secret.to_s
+      end
 
+      def legacy_id_token_hs256_key(ctx, client_id)
         label = client_id.to_s.empty? ? "better-auth" : client_id.to_s
         OpenSSL::HMAC.hexdigest("SHA256", ctx.context.secret.to_s, "oidc.id_token.#{label}")
       end
@@ -958,6 +1007,10 @@ module BetterAuth
         return verified if verified
 
         ::JWT.decode(token, hs256_secret.to_s, true, algorithm: "HS256").first
+      end
+
+      def verify_oauth_hs256_jwt(token, hs256_secret, issuer:)
+        ::JWT.decode(token, hs256_secret.to_s, true, algorithm: "HS256", iss: issuer, verify_iss: true).first
       end
 
       def standard_token_response_field?(key)
@@ -1045,18 +1098,63 @@ module BetterAuth
         mode = normalize_secret_storage_mode(mode)
         return Crypto.constant_time_compare(Crypto.sha256(provided_secret, encoding: :base64url), stored_secret.to_s) if mode == "hashed"
         if mode == "encrypted"
-          decrypted = Crypto.symmetric_decrypt(key: ctx.context.secret_config, data: stored_secret)
-          return Crypto.constant_time_compare(decrypted.to_s, provided_secret.to_s)
+          begin
+            decrypted = Crypto.symmetric_decrypt(key: ctx.context.secret_config, data: stored_secret)
+            return Crypto.constant_time_compare(decrypted.to_s, provided_secret.to_s)
+          rescue Error, ArgumentError
+            return false
+          end
         end
 
         if mode.is_a?(Hash)
+          return !!mode[:verify].call(provided_secret, stored_secret) if mode[:verify].respond_to?(:call)
           return Crypto.constant_time_compare(mode[:hash].call(provided_secret).to_s, stored_secret.to_s) if mode[:hash].respond_to?(:call)
           return Crypto.constant_time_compare(mode[:decrypt].call(stored_secret).to_s, provided_secret.to_s) if mode[:decrypt].respond_to?(:call)
         end
 
         Crypto.constant_time_compare(stored_secret.to_s, provided_secret.to_s)
-      rescue Error, ArgumentError
-        false
+      end
+
+      def decrypt_stored_client_secret(ctx, stored_secret, mode)
+        mode = normalize_secret_storage_mode(mode)
+        if mode == "encrypted"
+          begin
+            return Crypto.symmetric_decrypt(key: ctx.context.secret_config, data: stored_secret)
+          rescue Error, ArgumentError
+            return nil
+          end
+        end
+        return mode[:decrypt].call(stored_secret) if mode.is_a?(Hash) && mode[:decrypt].respond_to?(:call)
+        return stored_secret.to_s if mode == "plain"
+
+        nil
+      end
+
+      def redact_client_secret_fields(client)
+        stringify_keys(client || {}).except(*CLIENT_SECRET_FIELDS)
+      end
+
+      def scrub_token_record_client!(record)
+        return record unless record.is_a?(Hash)
+
+        client = record["client"] || record[:client]
+        return record unless client.is_a?(Hash)
+
+        record.delete(:client)
+        record["client"] = redact_client_secret_fields(client)
+        record
+      end
+
+      def scrub_client_secret_snapshots!(store)
+        return store unless store.respond_to?(:[])
+
+        [:tokens, :refresh_tokens].each do |kind|
+          records = store[kind] || store[kind.to_s]
+          next unless records.respond_to?(:each_value)
+
+          records.each_value { |record| scrub_token_record_client!(record) }
+        end
+        store
       end
 
       def normalize_secret_storage_mode(mode)

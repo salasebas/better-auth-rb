@@ -4,7 +4,7 @@ module BetterAuth
   module Plugins
     module_function
 
-    def oauth_end_session_endpoint
+    def oauth_end_session_endpoint(config)
       Endpoint.new(path: "/oauth2/end-session", method: ["GET", "POST"], metadata: oauth_openapi_for(:end_session).merge(allowed_media_types: ["application/x-www-form-urlencoded", "application/json"])) do |ctx|
         input = OAuthProtocol.stringify_keys((ctx.method == "GET") ? ctx.query : ctx.body)
         id_token_hint = input["id_token_hint"].to_s
@@ -19,12 +19,7 @@ module BetterAuth
         raise APIError.new("BAD_REQUEST", message: "invalid_client") if client_data["disabled"]
         raise APIError.new("UNAUTHORIZED", message: "client unable to logout") unless client_data["enableEndSession"]
 
-        payload = OAuthProtocol.verify_oauth_jwt(
-          ctx,
-          id_token_hint,
-          issuer: OAuthProvider.validate_issuer_url(OAuthProtocol.issuer(ctx)),
-          hs256_secret: OAuthProtocol.id_token_hs256_key(ctx, client_data["clientId"], client_data["clientSecret"])
-        )
+        payload = oauth_verify_end_session_id_token(ctx, id_token_hint, client_data, config)
         raise APIError.new("UNAUTHORIZED", message: "invalid id token") unless payload
         raise APIError.new("BAD_REQUEST", message: "audience mismatch") if input["client_id"] && payload["aud"] != input["client_id"]
 
@@ -45,6 +40,37 @@ module BetterAuth
       rescue ::JWT::DecodeError
         raise APIError.new("UNAUTHORIZED", message: "invalid id token")
       end
+    end
+
+    def oauth_verify_end_session_id_token(ctx, id_token_hint, client, config)
+      issuer = OAuthProvider.validate_issuer_url(OAuthProtocol.issuer(ctx))
+      stored_secret = client["clientSecret"]
+      decrypted_secret = OAuthProtocol.decrypt_stored_client_secret(ctx, stored_secret, config[:store_client_secret])
+      candidate_secrets = []
+      candidate_secrets << decrypted_secret.to_s unless decrypted_secret.to_s.empty?
+      unless config[:disable_jwt_plugin]
+        jwt_enabled_fallback = if config[:store_client_secret].to_s == "hashed"
+          OAuthProtocol.legacy_id_token_hs256_key(ctx, client["clientId"])
+        else
+          stored_secret.to_s
+        end
+        candidate_secrets << jwt_enabled_fallback unless jwt_enabled_fallback.empty?
+      end
+      legacy_row = OAuthProtocol.legacy_hashed_client_secret?(stored_secret)
+      if config[:migrate_legacy_hashed_client_secrets] && (!decrypted_secret.to_s.empty? || legacy_row)
+        candidate_secrets << OAuthProtocol.legacy_id_token_hs256_key(ctx, client["clientId"])
+      end
+
+      candidate_secrets.uniq.each do |secret|
+        if config[:disable_jwt_plugin]
+          return OAuthProtocol.verify_oauth_hs256_jwt(id_token_hint, secret, issuer: issuer)
+        end
+
+        return OAuthProtocol.verify_oauth_jwt(ctx, id_token_hint, issuer: issuer, hs256_secret: secret)
+      rescue ::JWT::DecodeError
+        next
+      end
+      nil
     end
   end
 end

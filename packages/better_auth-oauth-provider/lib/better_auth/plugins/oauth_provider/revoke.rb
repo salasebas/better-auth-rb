@@ -6,7 +6,14 @@ module BetterAuth
 
     def oauth_revoke_endpoint(config)
       Endpoint.new(path: "/oauth2/revoke", method: "POST", metadata: oauth_openapi_for(:revoke).merge(allowed_media_types: ["application/x-www-form-urlencoded", "application/json"])) do |ctx|
-        client = OAuthProtocol.authenticate_client!(ctx, "oauthClient", store_client_secret: config[:store_client_secret], prefix: config[:prefix], require_confidential: true)
+        client = OAuthProtocol.authenticate_client!(
+          ctx,
+          "oauthClient",
+          store_client_secret: config[:store_client_secret],
+          prefix: config[:prefix],
+          require_confidential: true,
+          migrate_legacy_hashed: config[:migrate_legacy_hashed_client_secrets]
+        )
         client_id = OAuthProtocol.stringify_keys(client)["clientId"]
         body = OAuthProtocol.stringify_keys(ctx.body)
         token_options = oauth_token_options(config)
