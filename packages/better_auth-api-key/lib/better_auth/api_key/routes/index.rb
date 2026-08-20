@@ -12,26 +12,26 @@ module BetterAuth
         list_api_keys
         delete_all_expired_api_keys
       ].freeze
+      NO_DEFAULT_CONFIGURATION_LOG_MESSAGE = "No default api-key configuration found. Either provide an api-key configuration with configId 'default' or provide a configuration with no `configId` set."
 
       module_function
 
       def resolve_config(context, config, config_id = nil)
         configurations = config.fetch(:configurations, [config])
-        return configurations.find { |entry| default_config_id?(entry[:config_id]) } || configurations.first if config_id.to_s.empty?
+        unless default_config_id?(config_id)
+          selected = configurations.find { |entry| entry[:config_id].to_s == config_id.to_s }
+          return selected if selected
+        end
 
-        configurations.find { |entry| entry[:config_id].to_s == config_id.to_s } ||
-          begin
-            default = configurations.find { |entry| default_config_id?(entry[:config_id]) }
-            unless default
-              context.logger.error(BetterAuth::Plugins::API_KEY_ERROR_CODES["NO_DEFAULT_API_KEY_CONFIGURATION_FOUND"]) if context.respond_to?(:logger) && context.logger.respond_to?(:error)
-              raise BetterAuth::APIError.new("BAD_REQUEST", message: BetterAuth::Plugins::API_KEY_ERROR_CODES["NO_DEFAULT_API_KEY_CONFIGURATION_FOUND"])
-            end
-            default
-          end
+        default = configurations.find { |entry| default_config_id?(entry[:config_id]) }
+        return default.merge(config_id: "default") if default
+
+        context.logger.error(NO_DEFAULT_CONFIGURATION_LOG_MESSAGE) if context.respond_to?(:logger) && context.logger.respond_to?(:error)
+        raise BetterAuth::APIError.new("BAD_REQUEST", message: BetterAuth::Plugins::API_KEY_ERROR_CODES["NO_DEFAULT_API_KEY_CONFIGURATION_FOUND"])
       end
 
       def default_config_id?(value)
-        value.nil? || value.to_s.empty? || value.to_s == "default"
+        value.nil? || value == false || value == 0 || value == "" || value.to_s == "default" || (value.respond_to?(:nan?) && value.nan?)
       end
 
       def config_id_matches?(record_config_id, expected_config_id)

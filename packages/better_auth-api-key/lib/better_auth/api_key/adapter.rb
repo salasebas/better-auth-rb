@@ -30,7 +30,7 @@ module BetterAuth
       def store(ctx, data, config)
         record = nil
         if config[:storage] == "database" || config[:fallback_to_database]
-          record = ctx.context.adapter.create(model: BetterAuth::Plugins::API_KEY_TABLE_NAME, data: data)
+          record = ctx.context.adapter.create(model: BetterAuth::Plugins::API_KEY_TABLE_NAME, data: data, force_allow_id: true)
         end
         record ||= data.transform_keys { |key| BetterAuth::Schema.storage_key(key) }.merge("id" => generated_id(ctx))
         set(ctx, record, config) if config[:storage] == "secondary-storage"
