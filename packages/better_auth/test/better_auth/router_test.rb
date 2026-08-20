@@ -359,7 +359,7 @@ class BetterAuthRouterTest < Minitest::Test
     assert_equal "yes", headers["x-b"]
   end
 
-  def test_origin_check_validates_callbacks_origins_and_fetch_metadata
+  def test_origin_check_validates_callbacks_and_cookie_origins_without_global_form_csrf
     auth = BetterAuth.auth(
       base_url: "http://localhost:3000",
       secret: SECRET,
@@ -389,9 +389,8 @@ class BetterAuthRouterTest < Minitest::Test
         }
       )
     )
-    assert_equal 403, status
-    assert_equal "Cross-site navigation login blocked. This request appears to be a CSRF attack.",
-      JSON.parse(body.join)["message"]
+    assert_equal 200, status
+    assert_equal({"ok" => true}, JSON.parse(body.join))
   end
 
   def test_cookieless_sign_up_validates_present_origin_without_fetch_metadata
@@ -527,7 +526,7 @@ class BetterAuthRouterTest < Minitest::Test
     assert_equal 1, endpoint_calls
   end
 
-  def test_fetch_metadata_same_site_modes_and_missing_metadata
+  def test_form_csrf_fetch_metadata_is_not_applied_to_arbitrary_posts
     auth = BetterAuth.auth(
       base_url: "http://localhost:3000",
       secret: SECRET,
@@ -546,7 +545,8 @@ class BetterAuthRouterTest < Minitest::Test
     assert_equal 200, auth.call(rack_env("POST", "/api/auth/post", headers: fetch_metadata_headers(site: "same-origin", mode: "navigate", origin: "http://localhost:3000"))).first
     assert_equal 200, auth.call(rack_env("POST", "/api/auth/post", headers: fetch_metadata_headers(site: "same-site", mode: "navigate", origin: "https://app.example"))).first
     assert_equal 200, auth.call(rack_env("POST", "/api/auth/post", headers: fetch_metadata_headers(site: "same-origin", mode: "cors", dest: "empty", origin: "http://localhost:3000"))).first
-    assert_equal 403, auth.call(rack_env("POST", "/api/auth/post", headers: fetch_metadata_headers(site: "cross-site", mode: "no-cors", dest: "empty", origin: "https://evil.example"))).first
+    assert_equal 200, auth.call(rack_env("POST", "/api/auth/post", headers: fetch_metadata_headers(site: "cross-site", mode: "no-cors", dest: "empty", origin: "https://evil.example"))).first
+    assert_equal 200, auth.call(rack_env("POST", "/api/auth/post", headers: fetch_metadata_headers(site: "cross-site", mode: "navigate", origin: "https://evil.example"))).first
     assert_equal 200, auth.call(rack_env("POST", "/api/auth/post", headers: fetch_metadata_headers(site: "cross-site", mode: "cors", dest: "empty", origin: "https://app.example"))).first
   end
 

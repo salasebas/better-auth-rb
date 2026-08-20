@@ -7,15 +7,19 @@ module BetterAuth
     class OriginCheck
       DEPRECATION_WARNING = "[Deprecation] disableOriginCheck: true currently also disables CSRF checks. In a future version, disableOriginCheck will ONLY disable URL validation. To keep CSRF disabled, add disableCSRFCheck: true to your config."
 
-      def initialize
+      def self.form_csrf
+        new(warn_backward_compat: false).method(:call_form_csrf)
+      end
+
+      def initialize(warn_backward_compat: true)
         @warned_backward_compat = false
+        @warn_backward_compat = warn_backward_compat
       end
 
       def call(endpoint_context)
         return if %w[GET OPTIONS HEAD].include?(endpoint_context.method)
 
         validate_origin(endpoint_context)
-        validate_fetch_metadata(endpoint_context)
         return if skip_origin_check?(endpoint_context) || skip_origin_path?(endpoint_context)
 
         validate_callback_urls(endpoint_context)
@@ -24,12 +28,19 @@ module BetterAuth
         Endpoint::Result.new(response: error.to_h, status: error.status_code, headers: error.headers).to_rack_response
       end
 
+      def call_form_csrf(endpoint_context)
+        return unless endpoint_context.request
+
+        validate_fetch_metadata(endpoint_context)
+        nil
+      end
+
       private
 
       def validate_origin(endpoint_context, force: false)
         return if skip_csrf_check?(endpoint_context)
         return if skip_csrf_for_backward_compat?(endpoint_context)
-        return if skip_origin_path?(endpoint_context)
+        return if skip_origin_check?(endpoint_context) || skip_origin_path?(endpoint_context)
 
         headers = endpoint_context.headers
         should_validate = force || headers.key?("cookie")
@@ -51,7 +62,7 @@ module BetterAuth
         return if skip_csrf_for_backward_compat?(endpoint_context)
 
         headers = endpoint_context.headers
-        return if headers.key?("cookie")
+        return validate_origin(endpoint_context) if headers.key?("cookie")
 
         site = headers["sec-fetch-site"]
         mode = headers["sec-fetch-mode"]
@@ -107,7 +118,7 @@ module BetterAuth
         return false unless advanced[:disable_origin_check] == true
         return false if advanced.key?(:disable_csrf_check)
 
-        unless @warned_backward_compat
+        if @warn_backward_compat && !@warned_backward_compat
           log(endpoint_context.context, :warn, DEPRECATION_WARNING)
           @warned_backward_compat = true
         end

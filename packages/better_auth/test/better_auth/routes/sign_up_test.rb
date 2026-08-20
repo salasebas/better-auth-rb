@@ -243,6 +243,26 @@ class BetterAuthRoutesSignUpTest < Minitest::Test
     assert_equal BetterAuth::BASE_ERROR_CODES["CROSS_SITE_NAVIGATION_LOGIN_BLOCKED"], data.fetch("message")
   end
 
+  def test_sign_up_email_uses_origin_validation_when_cookies_exist
+    auth = build_auth(trusted_origins: ["http://localhost:3000"])
+
+    status, _headers, _body = auth.call(
+      rack_env(
+        "POST",
+        "/api/auth/sign-up/email",
+        body: JSON.generate(email: "cookie-origin-sign-up@example.com", password: "password123", name: "CSRF"),
+        extra_headers: {
+          "HTTP_COOKIE" => "some_cookie=value",
+          "HTTP_SEC_FETCH_SITE" => "cross-site",
+          "HTTP_SEC_FETCH_MODE" => "navigate",
+          "HTTP_ORIGIN" => "http://localhost:3000"
+        }
+      )
+    )
+
+    assert_equal 200, status
+  end
+
   def test_sign_up_email_rejects_invalid_email_and_short_password
     auth = build_auth
 
