@@ -10,6 +10,7 @@ class BetterAuthPluginsStripeTest < Minitest::Test
   SECRET = "phase-twelve-secret-with-enough-entropy-123"
   FakeStripeClient = BetterAuthStripeTestHelpers::FakeStripeClient
   RawBodyWebhookVerifier = BetterAuthStripeTestHelpers::RawBodyWebhookVerifier
+  UserCreateFailingMemoryAdapter = BetterAuthStripeTestHelpers::UserCreateFailingMemoryAdapter
 
   def test_creates_customer_on_sign_up_and_subscription_checkout
     stripe = FakeStripeClient.new
@@ -90,11 +91,15 @@ class BetterAuthPluginsStripeTest < Minitest::Test
   def test_customer_create_params_and_callback_receive_upstream_shape
     stripe = FakeStripeClient.new
     payloads = []
+    users_observed_from_callback = []
     auth = build_auth(
       stripe_client: stripe,
       create_customer_on_sign_up: true,
       get_customer_create_params: ->(user, _ctx) { {phone: "+1234567890", metadata: {customField: "customValue", userId: "fake"}} },
-      on_customer_create: ->(payload, _ctx) { payloads << payload }
+      on_customer_create: lambda do |payload, ctx|
+        payloads << payload
+        users_observed_from_callback << ctx.context.internal_adapter.find_user_by_id(payload.fetch(:user).fetch("id"))
+      end
     )
 
     auth.api.sign_up_email(
@@ -112,6 +117,9 @@ class BetterAuthPluginsStripeTest < Minitest::Test
     assert_equal created, payloads.fetch(0).fetch(:stripeCustomer)
     assert_equal created, payloads.fetch(0).fetch(:stripe_customer)
     assert_equal created.fetch("id"), payloads.fetch(0).fetch(:user).fetch("stripeCustomerId")
+    assert_equal user.fetch("id"), users_observed_from_callback.fetch(0).fetch("id")
+    assert_equal created.fetch("id"), users_observed_from_callback.fetch(0).fetch("stripeCustomerId")
+    assert_equal created.fetch("id"), user.fetch("stripeCustomerId")
   end
 
   def test_create_customer_on_sign_up_falls_back_to_customer_list_when_search_unavailable
@@ -131,6 +139,29 @@ class BetterAuthPluginsStripeTest < Minitest::Test
     assert_equal({email: "fallback@example.com", limit: 100}, stripe.customers.list_calls.fetch(0))
   end
 
+  def test_customer_callback_failure_preserves_persisted_stripe_customer_link
+    stripe = FakeStripeClient.new
+    callback_calls = 0
+    auth = build_auth(
+      stripe_client: stripe,
+      create_customer_on_sign_up: true,
+      on_customer_create: lambda do |_payload, _ctx|
+        callback_calls += 1
+        raise "callback failed"
+      end
+    )
+
+    status, = auth.api.sign_up_email(
+      body: {email: "failing-callback@example.com", password: "password123", name: "Failing Callback"},
+      as_response: true
+    )
+
+    user = auth.context.internal_adapter.find_user_by_email("failing-callback@example.com")[:user]
+    assert_equal 200, status
+    assert_equal 1, callback_calls
+    assert_equal stripe.customers.created.fetch(0).fetch("id"), user.fetch("stripeCustomerId")
+  end
+
   def test_create_customer_on_sign_up_does_not_block_sign_up_when_stripe_fails
     stripe = FakeStripeClient.new
     stripe.customers.search_error = RuntimeError.new("search unavailable")
@@ -146,6 +177,30 @@ class BetterAuthPluginsStripeTest < Minitest::Test
     assert_equal 200, status
     assert_equal "tolerant-signup@example.com", user.fetch("email")
     assert_nil user["stripeCustomerId"]
+  end
+
+  def test_failed_user_insert_does_not_create_stripe_customer
+    stripe = FakeStripeClient.new
+    callback_payloads = []
+    auth = build_auth(
+      database: ->(options) { UserCreateFailingMemoryAdapter.new(options) },
+      stripe_client: stripe,
+      create_customer_on_sign_up: true,
+      on_customer_create: ->(payload, _ctx) { callback_payloads << payload }
+    )
+
+    error = assert_raises(BetterAuth::APIError) do
+      auth.api.sign_up_email(
+        body: {email: "failed-insert@example.com", password: "password123", name: "Failed Insert"}
+      )
+    end
+
+    assert_equal 422, error.status_code
+    assert_nil auth.context.internal_adapter.find_user_by_email("failed-insert@example.com")
+    assert_empty stripe.customers.search_calls
+    assert_empty stripe.customers.list_calls
+    assert_empty stripe.customers.created
+    assert_empty callback_payloads
   end
 
   def test_upgrade_falls_back_to_customer_list_when_search_unavailable
@@ -1165,6 +1220,20 @@ class BetterAuthPluginsStripeTest < Minitest::Test
     stripe.customers.retrieve_data[user.fetch("stripeCustomerId")] = {"id" => user.fetch("stripeCustomerId"), "email" => "nested-customer@example.com", "deleted" => false}
     auth.context.internal_adapter.update_user(user.fetch("id"), email: "renamed-customer@example.com")
     assert_equal({id: user.fetch("stripeCustomerId"), params: {email: "renamed-customer@example.com"}}, stripe.customers.updated.last)
+  end
+
+  def test_user_customer_email_sync_remains_enabled_when_signup_customer_creation_is_disabled
+    stripe = FakeStripeClient.new
+    auth = build_auth(stripe_client: stripe, create_customer_on_sign_up: false)
+    user = create_user(auth, email: "original-customer@example.com", stripeCustomerId: "cus_existing")
+    stripe.customers.retrieve_data["cus_existing"] = {"id" => "cus_existing", "email" => "original-customer@example.com", "deleted" => false}
+
+    auth.context.internal_adapter.update_user(user.fetch("id"), email: "updated-customer@example.com")
+
+    assert_equal({id: "cus_existing", params: {email: "updated-customer@example.com"}}, stripe.customers.updated.fetch(0))
+    assert_empty stripe.customers.search_calls
+    assert_empty stripe.customers.list_calls
+    assert_empty stripe.customers.created
   end
 
   def test_webhook_rejects_missing_secret_null_event_and_supports_sync_construct_event
