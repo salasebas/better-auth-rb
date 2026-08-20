@@ -109,7 +109,7 @@ module BetterAuth
           raise invalid_api_key_error
         end
         raise BetterAuth::APIError.new("UNAUTHORIZED", message: BetterAuth::Plugins::API_KEY_ERROR_CODES["KEY_DISABLED"]) if record["enabled"] == false
-        if record["expiresAt"] && BetterAuth::APIKey::Utils.normalize_time(record["expiresAt"]) <= Time.now
+        if record["expiresAt"] && BetterAuth::APIKey::Utils.normalize_time(record["expiresAt"]) < Time.now
           BetterAuth::APIKey::Adapter.schedule_record_delete(ctx, record, config)
           raise BetterAuth::APIError.new("UNAUTHORIZED", message: BetterAuth::Plugins::API_KEY_ERROR_CODES["KEY_EXPIRED"])
         end
