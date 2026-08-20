@@ -375,7 +375,7 @@ module BetterAuth
               {
                 user: session[:user],
                 organization: organization_wire(ctx, organization),
-                member: member_wire(ctx, member)
+                member: member.merge("user" => session[:user].slice("id", "name", "email", "image"))
               },
               ctx.context
             )
@@ -402,8 +402,10 @@ module BetterAuth
         end
         invitation = invitation_outcome.fetch(:invitation)
         sender = config[:send_invitation_email]
-        inviter = member_wire(ctx, member).merge("user" => session[:user])
-        sender.call({id: invitation["id"], role: invitation["role"], email: invitation["email"].to_s.downcase, organization: organization_wire(ctx, organization), invitation: invitation_wire(ctx, invitation), inviter: inviter}, ctx.request) if sender.respond_to?(:call)
+        if sender.respond_to?(:call)
+          inviter = member.merge("user" => session[:user])
+          sender.call({id: invitation["id"], role: invitation["role"], email: invitation["email"].to_s.downcase, organization: organization_wire(ctx, organization), invitation: invitation_wire(ctx, invitation), inviter: inviter}, ctx.request)
+        end
         unless invitation_outcome.fetch(:reused)
           run_org_hook(config, :after_create_invitation, {invitation: invitation_wire(ctx, invitation), inviter: session[:user], organization: organization_wire(ctx, organization)}, ctx)
         end

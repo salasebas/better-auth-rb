@@ -277,7 +277,7 @@ class BetterAuthPluginsOrganizationTest < Minitest::Test
     assert_equal "original", pending.first.fetch("note")
   end
 
-  def test_callable_invitation_limit_uses_returned_threshold_without_coercion
+  def test_callable_invitation_limit_receives_server_member_and_uses_threshold_without_coercion
     calls = []
     auth = build_auth(
       plugins: [
@@ -285,12 +285,25 @@ class BetterAuthPluginsOrganizationTest < Minitest::Test
           invitation_limit: lambda { |data, context|
             calls << [data, context]
             1.5
+          },
+          schema: {
+            member: {
+              additionalFields: {
+                limitMarker: {type: "string", required: false, returned: false}
+              }
+            }
           }
         )
       ]
     )
     owner_cookie = sign_up_cookie(auth, email: "callable-invite-owner@example.com")
+    owner = auth.api.get_session(headers: {"cookie" => owner_cookie}).fetch(:user)
     organization = auth.api.create_organization(headers: {"cookie" => owner_cookie}, body: {name: "Callable Invite", slug: "callable-invite"})
+    auth.context.adapter.update(
+      model: "member",
+      where: [{field: "organizationId", value: organization.fetch("id")}, {field: "userId", value: owner.fetch("id")}],
+      update: {limitMarker: "server-only"}
+    )
 
     2.times do |index|
       auth.api.create_invitation(
@@ -314,6 +327,7 @@ class BetterAuthPluginsOrganizationTest < Minitest::Test
     assert_equal "Callable Invite", calls.first.fetch(0).fetch(:organization).fetch("name")
     assert_equal "owner", calls.first.fetch(0).fetch(:member).fetch("role")
     assert_equal "callable-invite-owner@example.com", calls.first.fetch(0).fetch(:member).fetch("user").fetch("email")
+    assert_equal "server-only", calls.first.fetch(0).fetch(:member).fetch("limitMarker")
   end
 
   def test_only_custom_creator_role_can_invite_another_creator
