@@ -405,6 +405,48 @@ class BetterAuthPluginsGenericOAuthTest < Minitest::Test
     assert_equal true, user["emailVerified"]
   end
 
+  def test_callback_resolves_account_id_from_mapped_raw_and_subject_ids
+    absent = Object.new
+    cases = [
+      {mapped_id: "mapped-id", raw_id: "raw-id", sub: "subject-id", expected: "mapped-id"},
+      {mapped_id: "", raw_id: "raw-id", sub: "subject-id", expected: "raw-id"},
+      {mapped_id: nil, raw_id: "", sub: "subject-id", expected: "subject-id"},
+      {mapped_id: absent, raw_id: absent, sub: "subject-id", expected: "subject-id"},
+      {mapped_id: "  ", raw_id: "raw-id", sub: "subject-id", expected: "raw-id"},
+      {mapped_id: nil, raw_id: "  ", sub: "subject-id", expected: "subject-id"}
+    ]
+
+    cases.each_with_index do |entry, index|
+      email = "id-resolution-#{index}@example.com"
+      profile = {sub: entry.fetch(:sub), email: email, name: "ID Resolution", emailVerified: true}
+      profile[:id] = entry.fetch(:raw_id) unless entry.fetch(:raw_id).equal?(absent)
+      mapper = lambda do |_profile|
+        mapped = {}
+        mapped[:id] = entry.fetch(:mapped_id) unless entry.fetch(:mapped_id).equal?(absent)
+        mapped
+      end
+      auth = build_auth(user_info: profile, provider_overrides: {map_profile_to_user: mapper})
+      sign_in = auth.api.sign_in_with_oauth2(body: {
+        providerId: "custom",
+        callbackURL: "/dashboard",
+        newUserCallbackURL: "/welcome"
+      })
+      state = Rack::Utils.parse_query(URI.parse(sign_in[:url]).query).fetch("state")
+
+      status, headers, = auth.api.oauth2_callback(
+        params: {providerId: "custom"},
+        query: {code: "oauth-code", state: state},
+        as_response: true
+      )
+
+      assert_equal 302, status
+      assert_equal "/welcome", headers.fetch("location")
+      user = auth.context.internal_adapter.find_user_by_email(email).fetch(:user)
+      account = auth.context.internal_adapter.find_accounts(user.fetch("id")).fetch(0)
+      assert_equal entry.fetch(:expected), account.fetch("accountId")
+    end
+  end
+
   def test_social_provider_get_user_info_applies_map_profile_to_user_callable
     auth = build_auth(
       user_info: {id: "social-provider-sub", email: "social-provider@example.com", name: "Social Provider", emailVerified: true},
@@ -419,6 +461,25 @@ class BetterAuthPluginsGenericOAuthTest < Minitest::Test
     assert_equal "social-provider@example.com", result.fetch(:user).fetch(:email)
     assert_equal "mapped-data", result.fetch(:user).fetch(:custom_field)
     assert_equal "social-provider-sub", result.fetch(:data).fetch(:id)
+  end
+
+  def test_social_provider_get_user_info_falls_back_to_subject_id
+    auth = build_auth(
+      user_info: {id: "", sub: "wrapped-sub", email: "wrapped@example.com", name: "Wrapped", emailVerified: true},
+      provider_overrides: {map_profile_to_user: ->(_profile) { {id: ""} }}
+    )
+    provider = auth.context.social_providers.fetch(:custom)
+
+    result = provider.fetch(:get_user_info).call(accessToken: "access-token")
+
+    assert_equal "wrapped-sub", result.fetch(:user).fetch(:id)
+  end
+
+  def test_social_provider_get_user_info_returns_nil_without_an_account_id
+    auth = build_auth(user_info: {email: "missing-id@example.com", name: "Missing ID", emailVerified: true})
+    provider = auth.context.social_providers.fetch(:custom)
+
+    assert_nil provider.fetch(:get_user_info).call(accessToken: "access-token")
   end
 
   def test_oidc_discovery_provider_helpers_do_not_install_custom_user_info_callbacks
@@ -578,6 +639,22 @@ class BetterAuthPluginsGenericOAuthTest < Minitest::Test
     state_cookie = callback_headers.fetch("set-cookie").lines.find { |line| line.start_with?("better-auth.oauth_state=") }
     assert state_cookie
     assert_includes state_cookie, "Max-Age=0"
+  end
+
+  def test_secondary_storage_defaults_oauth_state_to_verification_storage
+    storage = RecordingSecondaryStorage.new
+    auth = build_auth(database: nil, secondary_storage: storage)
+
+    status, headers, body = auth.api.sign_in_with_oauth2(
+      body: {providerId: "custom", callbackURL: "/dashboard"},
+      as_response: true
+    )
+    state = Rack::Utils.parse_query(URI.parse(JSON.parse(body.join).fetch("url")).query).fetch("state")
+
+    assert_equal 200, status
+    assert_includes headers.fetch("set-cookie"), "better-auth.state="
+    refute_includes headers.fetch("set-cookie"), "better-auth.oauth_state="
+    assert_includes storage.keys, "verification:#{state}"
   end
 
   def test_internal_popup_authorization_start_uses_database_state_and_supplied_verifier
@@ -1009,10 +1086,10 @@ class BetterAuthPluginsGenericOAuthTest < Minitest::Test
     assert auth.context.internal_adapter.find_account_by_provider_id("new-generic", "custom")
   end
 
-  def test_callback_rejects_blank_remote_id_for_implicit_and_explicit_flows
-    [false, true].each do |explicit|
-      email = explicit ? "blank-explicit@example.com" : "blank-implicit@example.com"
-      auth = build_auth(user_info: {id: "  ", email: email, name: "Blank", emailVerified: true})
+  def test_callback_reports_id_is_missing_when_no_account_id_resolves
+    [{}, {id: ""}, {id: nil, sub: nil}, {id: "  "}].product([false, true]).each_with_index do |(ids, explicit), index|
+      email = "missing-id-#{index}@example.com"
+      auth = build_auth(user_info: ids.merge(email: email, name: "Missing ID", emailVerified: true))
       cookie = explicit ? sign_up_cookie(auth, email: email) : nil
       start = if explicit
         auth.api.oauth2_link_account(headers: {"cookie" => cookie}, body: {providerId: "custom", callbackURL: "/settings", errorCallbackURL: "/error"})
@@ -1025,7 +1102,7 @@ class BetterAuthPluginsGenericOAuthTest < Minitest::Test
       status, headers, = auth.api.oauth2_callback(params: {providerId: "custom"}, query: {code: "oauth-code", state: state}, as_response: true)
 
       assert_equal 302, status
-      assert_equal "/error?error=user_info_is_missing", headers.fetch("location")
+      assert_equal "/error?error=id_is_missing", headers.fetch("location")
       assert_empty auth.context.internal_adapter.adapter.find_many(model: "account").select { |account| account["accountId"].to_s.strip.empty? }
       assert_equal existing_sessions, auth.context.internal_adapter.adapter.find_many(model: "session").length
     end
@@ -1917,6 +1994,28 @@ class BetterAuthPluginsGenericOAuthTest < Minitest::Test
   StubHTTPResponse = Struct.new(:body) do
     def is_a?(klass)
       klass == Net::HTTPSuccess || super
+    end
+  end
+
+  class RecordingSecondaryStorage
+    attr_reader :keys
+
+    def initialize
+      @data = {}
+      @keys = []
+    end
+
+    def get(key)
+      @data[key]
+    end
+
+    def set(key, value, _ttl = nil)
+      @keys << key
+      @data[key] = value
+    end
+
+    def delete(key)
+      @data.delete(key)
     end
   end
 

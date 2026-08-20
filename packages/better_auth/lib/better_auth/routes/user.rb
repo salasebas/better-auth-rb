@@ -90,7 +90,7 @@ module BetterAuth
         token = nil
         if body["revokeOtherSessions"] || body["revoke_other_sessions"]
           ctx.context.internal_adapter.delete_user_sessions(session[:user]["id"])
-          new_session = ctx.context.internal_adapter.create_session(session[:user]["id"])
+          new_session = ctx.context.internal_adapter.create_session(session[:user]["id"], false, nil, false, ctx)
           Cookies.set_session_cookie(ctx, {session: new_session, user: session[:user]})
           token = new_session["token"]
         end
@@ -190,7 +190,7 @@ module BetterAuth
           delete_user_by_token!(ctx, session, body["token"])
         elsif sender
           token = SecureRandom.hex(16)
-          expires_in = ctx.context.options.user.dig(:delete_user, :delete_token_expires_in) || 3600
+          expires_in = ctx.context.options.user.dig(:delete_user, :delete_token_expires_in) || 60 * 60 * 24
           callback_url = body["callbackURL"] || body["callbackUrl"] || body["callback_url"] || "/"
           url = "#{token_link_base_url}/delete-user/callback?token=#{URI.encode_www_form_component(token)}&callbackURL=#{URI.encode_www_form_component(callback_url)}"
           ctx.context.internal_adapter.create_verification_value(
@@ -308,8 +308,8 @@ module BetterAuth
         sender = ctx.context.options.email_verification[:send_verification_email]
         confirmation_sender = ctx.context.options.user.dig(:change_email, :send_change_email_confirmation)
         can_update_without_verification = !session[:user]["emailVerified"] && ctx.context.options.user.dig(:change_email, :update_email_without_verification)
-        can_send_confirmation = session[:user]["emailVerified"] && confirmation_sender.respond_to?(:call)
         can_send_verification = sender.respond_to?(:call)
+        can_send_confirmation = can_send_verification && session[:user]["emailVerified"] && confirmation_sender.respond_to?(:call)
         unless can_update_without_verification || can_send_confirmation || can_send_verification
           raise APIError.new("BAD_REQUEST", message: BASE_ERROR_CODES["VERIFICATION_EMAIL_NOT_ENABLED"])
         end

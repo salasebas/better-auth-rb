@@ -340,8 +340,8 @@ module BetterAuth
         name = fetch_value(mapped_user, "name").to_s
         account_id = fetch_value(mapped_user, "id").to_s
         redirect_error.call("email_is_missing") if email.empty?
+        redirect_error.call("id_is_missing") if account_id.empty?
         redirect_error.call("name_is_missing") if name.empty?
-        redirect_error.call("user_info_is_missing") if Routes.blank_remote_id?(account_id)
 
         link = state_data["link"]
         callback_url = state_data["callbackURL"] || "/"
@@ -531,9 +531,29 @@ module BetterAuth
     end
 
     def generic_oauth_map_user(provider, user_info)
+      raw_user = normalize_hash(user_info)
       mapper = provider[:map_profile_to_user]
-      mapped = mapper.respond_to?(:call) ? mapper.call(user_info) : user_info
-      normalize_hash(user_info).merge(normalize_hash(mapped || {}))
+      mapped_user = if mapper.respond_to?(:call)
+        normalize_hash(mapper.call(user_info) || {})
+      else
+        raw_user
+      end
+      account_id = generic_oauth_resolve_account_id(mapped_user, raw_user)
+      user = raw_user.merge(mapped_user)
+      if account_id
+        user[:id] = account_id
+      else
+        user.delete(:id)
+      end
+      user
+    end
+
+    def generic_oauth_resolve_account_id(mapped_user, raw_user)
+      [
+        fetch_value(mapped_user, "id"),
+        fetch_value(raw_user, "id"),
+        fetch_value(raw_user, "sub")
+      ].find { |id| !Routes.blank_remote_id?(id) }&.to_s
     end
 
     def generic_oauth_link_account(ctx, provider, tokens, user_info, link, redirect_error)
@@ -781,8 +801,11 @@ module BetterAuth
       user_info = generic_oauth_user_info(provider, tokens)
       return nil unless user_info
 
+      mapped_user = generic_oauth_map_user(provider, user_info)
+      return nil if fetch_value(mapped_user, "id").nil?
+
       {
-        user: generic_oauth_map_user(provider, user_info),
+        user: mapped_user,
         data: user_info
       }
     end

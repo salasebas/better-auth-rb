@@ -8,18 +8,31 @@ module BetterAuth
       def handle_event(ctx, event)
         event = BetterAuth::Plugins.normalize_hash(event)
         type = event[:type].to_s
-        case type
-        when "checkout.session.completed"
-          on_checkout_completed(ctx, event)
-        when "customer.subscription.created"
-          on_subscription_created(ctx, event)
-        when "customer.subscription.updated"
-          on_subscription_updated(ctx, event)
-        when "customer.subscription.deleted"
-          on_subscription_deleted(ctx, event)
+        begin
+          case type
+          when "checkout.session.completed"
+            on_checkout_completed(ctx, event)
+          when "customer.subscription.created"
+            on_subscription_created(ctx, event)
+          when "customer.subscription.updated"
+            on_subscription_updated(ctx, event)
+          when "customer.subscription.deleted"
+            on_subscription_deleted(ctx, event)
+          end
+        rescue => error
+          log_webhook_error(ctx, error)
         end
         config = stripe_config(ctx)
         config[:on_event]&.call(event)
+      end
+
+      def log_webhook_error(ctx, error)
+        logger = ctx.context.logger
+        if logger.respond_to?(:error)
+          logger.error("Stripe webhook failed. Error: #{error.message}")
+        elsif logger.respond_to?(:call)
+          logger.call(:error, "Stripe webhook failed. Error: #{error.message}")
+        end
       end
 
       def on_checkout_completed(ctx, event)

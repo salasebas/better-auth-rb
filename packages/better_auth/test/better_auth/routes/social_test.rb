@@ -2,6 +2,8 @@
 
 require "json"
 require "uri"
+require "base64"
+require "digest"
 require_relative "../../test_helper"
 
 class BetterAuthRoutesSocialTest < Minitest::Test
@@ -191,37 +193,48 @@ class BetterAuthRoutesSocialTest < Minitest::Test
   def test_sign_in_social_returns_authorization_url_and_callback_completes_session
     issued_code_verifier = nil
     callback_code_verifier = nil
-    auth = build_auth(
-      social_providers: {
-        github: {
-          id: "github",
-          create_authorization_url: lambda do |data|
-            issued_code_verifier = data[:codeVerifier]
-            "https://github.example/oauth?state=#{URI.encode_www_form_component(data[:state])}&redirect_uri=#{URI.encode_www_form_component(data[:redirectURI])}"
-          end,
-          validate_authorization_code: lambda do |data|
-            callback_code_verifier = data[:codeVerifier]
-            {accessToken: "oauth-access", refreshToken: "oauth-refresh", scopes: ["user"]}
-          end,
-          get_user_info: ->(_tokens) {
-            {
-              user: {
-                id: "gh-2",
-                email: "callback@example.com",
-                name: "Callback User",
-                emailVerified: true
-              }
-            }
+    google = BetterAuth::SocialProviders.google(
+      client_id: "google-client-id",
+      client_secret: "google-client-secret",
+      get_user_info: ->(_tokens) {
+        {
+          user: {
+            id: "google-2",
+            email: "callback@example.com",
+            name: "Callback User",
+            emailVerified: true
           }
         }
       }
     )
+    create_authorization_url = google.fetch(:create_authorization_url)
+    google = google.merge(
+      create_authorization_url: lambda do |data|
+        issued_code_verifier = data[:codeVerifier]
+        create_authorization_url.call(data)
+      end,
+      validate_authorization_code: lambda do |data|
+        callback_code_verifier = data[:codeVerifier]
+        {accessToken: "oauth-access", refreshToken: "oauth-refresh", scopes: ["user"]}
+      end
+    )
+    auth = build_auth(
+      social_providers: {
+        google: google
+      }
+    )
 
-    response = auth.api.sign_in_social(body: {provider: "github", callbackURL: "/app", disableRedirect: true})
-    state = URI.decode_www_form(URI.parse(response[:url]).query).assoc("state").last
+    response = auth.api.sign_in_social(body: {provider: "google", callbackURL: "/app", disableRedirect: true})
+    authorization_params = URI.decode_www_form(URI.parse(response[:url]).query).to_h
+    state = authorization_params.fetch("state")
+    expected_challenge = Base64.urlsafe_encode64(Digest::SHA256.digest(issued_code_verifier), padding: false)
+
+    assert_match(/\A[A-Za-z0-9_-]{128}\z/, issued_code_verifier)
+    assert_equal "S256", authorization_params.fetch("code_challenge_method")
+    assert_equal expected_challenge, authorization_params.fetch("code_challenge")
 
     status, headers, _body = auth.api.callback_oauth(
-      params: {providerId: "github"},
+      params: {providerId: "google"},
       query: {code: "code", state: state},
       as_response: true
     )
@@ -230,10 +243,9 @@ class BetterAuthRoutesSocialTest < Minitest::Test
     assert_equal "/app", headers["location"]
     assert_includes headers.fetch("set-cookie"), "better-auth.session_token="
     user = auth.context.internal_adapter.find_user_by_email("callback@example.com")[:user]
-    account = auth.context.internal_adapter.find_accounts(user["id"]).find { |entry| entry["providerId"] == "github" }
+    account = auth.context.internal_adapter.find_accounts(user["id"]).find { |entry| entry["providerId"] == "google" }
     assert_equal "oauth-refresh", account["refreshToken"]
     assert_equal "user", account["scope"]
-    assert_match(/\A[0-9a-f]{32}\z/, issued_code_verifier)
     assert_equal issued_code_verifier, callback_code_verifier
   end
 
@@ -566,6 +578,53 @@ class BetterAuthRoutesSocialTest < Minitest::Test
     assert_equal 302, status
     assert_includes headers.fetch("location"), "error=state_mismatch"
     refute called
+  end
+
+  def test_callback_accepts_already_issued_32_character_code_verifier
+    legacy_code_verifier = "0123456789abcdef0123456789abcdef"
+    callback_code_verifier = nil
+    auth = build_auth(
+      social_providers: {
+        github: {
+          id: "github",
+          validate_authorization_code: lambda do |data|
+            callback_code_verifier = data[:codeVerifier]
+            {accessToken: "legacy-oauth-access"}
+          end,
+          get_user_info: ->(_tokens) {
+            {
+              user: {
+                id: "gh-legacy-verifier",
+                email: "legacy-verifier@example.com",
+                name: "Legacy Verifier",
+                emailVerified: true
+              }
+            }
+          }
+        }
+      }
+    )
+    state = BetterAuth::Crypto.sign_jwt(
+      {"callbackURL" => "/app", "codeVerifier" => legacy_code_verifier},
+      SECRET,
+      expires_in: 600
+    )
+    state_cookie = auth.context.create_auth_cookie("state", max_age: 600)
+    cookie_signature = BetterAuth::Crypto.hmac_signature(state, SECRET, encoding: :base64url)
+    cookie = "#{state_cookie.name}=#{state}.#{cookie_signature}"
+
+    status, headers, _body = auth.call(
+      rack_env(
+        "GET",
+        "/api/auth/callback/github?code=code&state=#{URI.encode_www_form_component(state)}",
+        cookie: cookie
+      )
+    )
+
+    assert_equal 302, status
+    assert_equal "/app", headers.fetch("location")
+    assert_includes headers.fetch("set-cookie"), "better-auth.session_token="
+    assert_equal legacy_code_verifier, callback_code_verifier
   end
 
   def test_rack_callback_rejects_valid_state_without_initiating_state_cookie
@@ -1031,7 +1090,7 @@ class BetterAuthRoutesSocialTest < Minitest::Test
     account = auth.context.internal_adapter.find_accounts(user_id).find { |entry| entry["providerId"] == "github" }
     assert_equal "gh-redirect-linked", account["accountId"]
     assert_equal "linked-refresh", account["refreshToken"]
-    assert_match(/\A[0-9a-f]{32}\z/, issued_code_verifier)
+    assert_match(/\A[A-Za-z0-9_-]{128}\z/, issued_code_verifier)
     assert_equal issued_code_verifier, callback_code_verifier
   end
 

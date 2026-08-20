@@ -4,7 +4,7 @@ module BetterAuth
   module SocialProviders
     module_function
 
-    def paybin(client_id:, client_secret:, scopes: ["openid", "email", "profile"], **options)
+    def paybin(client_id:, client_secret: nil, scopes: ["openid", "email", "profile"], **options)
       normalized = Base.normalize_options(options)
       issuer = (options[:issuer] || "https://idp.paybin.io").to_s.sub(%r{/+\z}, "")
       provider = Base.oauth_provider(
@@ -17,6 +17,7 @@ module BetterAuth
         scopes: scopes,
         pkce: true,
         require_code_verifier: true,
+        authorization_requires_client_secret: true,
         profile_map: ->(profile) {
           {
             id: profile["sub"],

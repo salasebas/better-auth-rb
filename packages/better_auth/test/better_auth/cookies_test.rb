@@ -166,6 +166,7 @@ class BetterAuthCookiesTest < Minitest::Test
 
     parsed = BetterAuth::Cookies.get_cookie_cache(cookie, secret: SECRET, strategy: "compact", version: "2")
     assert_equal "session-1", parsed["session"]["id"]
+    refute parsed.key?("expiresAt")
     assert_nil BetterAuth::Cookies.get_cookie_cache(cookie, secret: SECRET, strategy: "compact", version: "3")
   end
 

@@ -84,6 +84,85 @@ class BetterAuthPluginsPhoneNumberTest < Minitest::Test
     assert_equal BetterAuth::Plugins::PHONE_NUMBER_ERROR_CODES["PHONE_NUMBER_CANNOT_BE_UPDATED"], error.message
   end
 
+  def test_authenticated_user_can_disassociate_and_another_user_can_reclaim_phone_number
+    sent = []
+    verified = []
+    auth = build_auth(
+      plugins: [
+        BetterAuth::Plugins.phone_number(
+          send_otp: ->(data, _ctx = nil) { sent << data },
+          callback_on_verification: ->(data, _ctx = nil) { verified << data },
+          sign_up_on_verification: {
+            get_temp_email: ->(phone_number) { "temp-#{phone_number}@example.test" }
+          }
+        )
+      ]
+    )
+    phone_number = "+15551234568"
+
+    auth.api.send_phone_number_otp(body: {phoneNumber: phone_number})
+    _status, original_headers, _body = auth.api.verify_phone_number(
+      body: {phoneNumber: phone_number, code: sent.last[:code]},
+      as_response: true
+    )
+    original_cookie = cookie_header(original_headers.fetch("set-cookie"))
+    original_user_id = auth.api.get_session(headers: {"cookie" => original_cookie})[:user]["id"]
+    assert_equal 1, verified.length
+
+    unauthorized = Rack::MockRequest.new(auth).post(
+      "/api/auth/update-user",
+      "CONTENT_TYPE" => "application/json",
+      "HTTP_ORIGIN" => "http://localhost:3000",
+      :input => JSON.generate(phoneNumber: nil)
+    )
+    assert_equal 401, unauthorized.status
+    assert_equal phone_number, auth.context.internal_adapter.find_user_by_id(original_user_id)["phoneNumber"]
+
+    verified.clear
+    disassociated = Rack::MockRequest.new(auth).post(
+      "/api/auth/update-user",
+      "CONTENT_TYPE" => "application/json",
+      "HTTP_COOKIE" => original_cookie,
+      "HTTP_ORIGIN" => "http://localhost:3000",
+      :input => JSON.generate(phoneNumber: nil)
+    )
+    assert_equal 200, disassociated.status
+    assert_equal({"status" => true}, JSON.parse(disassociated.body))
+    assert_empty verified
+
+    original_user = auth.context.internal_adapter.find_user_by_id(original_user_id)
+    assert original_user.key?("phoneNumber")
+    assert_nil original_user["phoneNumber"]
+    assert_equal false, original_user["phoneNumberVerified"]
+    original_session = auth.api.get_session(headers: {"cookie" => original_cookie})[:user]
+    assert_nil original_session["phoneNumber"]
+    assert_equal false, original_session["phoneNumberVerified"]
+
+    _status, reclaimer_headers, _body = auth.api.sign_up_email(
+      body: {email: "phone-reclaimer@example.test", password: "password123", name: "Phone Reclaimer"},
+      as_response: true
+    )
+    reclaimer_cookie = cookie_header(reclaimer_headers.fetch("set-cookie"))
+    auth.api.send_phone_number_otp(body: {phoneNumber: phone_number})
+    reclaimed = auth.api.verify_phone_number(
+      headers: {"cookie" => reclaimer_cookie},
+      body: {phoneNumber: phone_number, code: sent.last[:code], updatePhoneNumber: true}
+    )
+    assert_equal phone_number, reclaimed[:user]["phoneNumber"]
+    assert_equal true, reclaimed[:user]["phoneNumberVerified"]
+
+    auth.api.send_phone_number_otp(body: {phoneNumber: phone_number})
+    duplicate = assert_raises(BetterAuth::APIError) do
+      auth.api.verify_phone_number(
+        headers: {"cookie" => original_cookie},
+        body: {phoneNumber: phone_number, code: sent.last[:code], updatePhoneNumber: true}
+      )
+    end
+    assert_equal 400, duplicate.status_code
+    assert_equal BetterAuth::Plugins::PHONE_NUMBER_ERROR_CODES["PHONE_NUMBER_EXIST"], duplicate.message
+    assert_nil auth.context.internal_adapter.find_user_by_id(original_user_id)["phoneNumber"]
+  end
+
   def test_update_user_rejects_phone_number_through_rack_request
     auth = build_auth(plugins: [BetterAuth::Plugins.phone_number(send_otp: ->(_data, _ctx = nil) {})])
     _status, headers, _body = auth.api.sign_up_email(

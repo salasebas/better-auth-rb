@@ -25,7 +25,7 @@ module BetterAuth
           entry = @entries[key]
           return nil unless entry
 
-          if clock.call > entry[:expires_at]
+          if clock.call >= entry[:expires_at]
             @entries.delete(key)
             return nil
           end
@@ -47,7 +47,7 @@ module BetterAuth
           now = clock.call
           prune!(now, sweep: true)
           entry = @entries[key]
-          data = entry[:data] if entry && now <= entry[:expires_at]
+          data = entry[:data] if entry && now < entry[:expires_at]
           decision = RateLimiter.decide_consume(data, window: window, max: max, now: now)
           if decision[:allowed]
             @entries.delete(key)
@@ -67,7 +67,7 @@ module BetterAuth
       attr_reader :clock
 
       def prune!(now = clock.call, sweep: false)
-        @entries.delete_if { |_key, entry| now > entry[:expires_at] } if sweep
+        @entries.delete_if { |_key, entry| now >= entry[:expires_at] } if sweep
         overflow = @entries.size - @max_entries
         overflow.times { @entries.delete(@entries.first.first) } if overflow.positive?
       end
@@ -180,7 +180,7 @@ module BetterAuth
           model: "rateLimit",
           where: [
             {field: "key", value: key},
-            {field: "lastRequest", operator: "gte", value: ((now - window) * 1000).to_i},
+            {field: "lastRequest", operator: "gt", value: ((now - window) * 1000).to_i},
             {field: "count", operator: "lt", value: max}
           ],
           increment: {count: 1},

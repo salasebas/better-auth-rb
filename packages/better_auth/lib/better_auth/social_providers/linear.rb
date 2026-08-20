@@ -4,7 +4,7 @@ module BetterAuth
   module SocialProviders
     module_function
 
-    def linear(client_id:, client_secret:, scopes: ["read"], **options)
+    def linear(client_id:, client_secret: nil, scopes: ["read"], **options)
       provider = Base.oauth_provider(
         id: "linear",
         name: "Linear",

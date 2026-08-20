@@ -98,6 +98,43 @@ class BetterAuthRoutesSignOutTest < Minitest::Test
     assert_includes set_cookie, "Max-Age=0"
   end
 
+  def test_sign_out_succeeds_and_clears_cookies_when_session_deletion_fails
+    deletion_error = RuntimeError.new("database unavailable")
+    log_entries = []
+    failing_adapter = Class.new(BetterAuth::Adapters::Memory) do
+      define_method(:delete) do |model:, where:|
+        raise deletion_error if model.to_s == "session"
+
+        super(model: model, where: where)
+      end
+    end
+    auth = BetterAuth.auth(
+      base_url: "http://localhost:3000",
+      secret: SECRET,
+      email_and_password: {enabled: true},
+      database: ->(options) { failing_adapter.new(options) },
+      account: {store_account_cookie: true},
+      session: {cookie_cache: {enabled: true, strategy: "jwe", max_age: 300}},
+      logger: ->(level, message, *details) { log_entries << [level, message, *details] }
+    )
+    _status, sign_up_headers, _body = auth.api.sign_up_email(
+      body: {email: "sign-out-failure@example.com", password: "password123", name: "Sign Out Failure"},
+      as_response: true
+    )
+    cookie = [cookie_header(sign_up_headers.fetch("set-cookie")), "better-auth.account_data=stale"].join("; ")
+
+    2.times do
+      status, headers, body = auth.api.sign_out(headers: {"cookie" => cookie}, as_response: true)
+
+      assert_equal 200, status
+      assert_equal({"success" => true}, JSON.parse(body.join))
+      %w[better-auth.session_token better-auth.session_data better-auth.account_data].each do |name|
+        assert headers.fetch("set-cookie").lines.any? { |line| line.start_with?("#{name}=") && line.include?("Max-Age=0") }
+      end
+    end
+    assert_equal Array.new(2) { [:error, "Failed to delete session from database", deletion_error] }, log_entries
+  end
+
   private
 
   def cookie_header(set_cookie)
