@@ -373,6 +373,69 @@ class BetterAuthInternalAdapterTest < Minitest::Test
     assert_equal user["id"], found[:user]["id"]
   end
 
+  def test_dual_write_session_does_not_publish_secondary_storage_when_database_insert_fails
+    storage = MemoryStorage.new
+    internal = custom_internal_adapter(
+      FailingSessionMemoryAdapter,
+      secondary_storage: storage,
+      session: {store_session_in_database: true}
+    )
+    user = internal.create_user(name: "Ada", email: "session-write-failure@example.com")
+    token = "session-write-failure-token"
+
+    error = assert_raises(RuntimeError) do
+      internal.create_session(user["id"], false, {token: token}, true)
+    end
+
+    assert_equal "database write failed", error.message
+    assert_nil storage.get(token)
+    assert_nil storage.get("active-sessions-#{user["id"]}")
+  end
+
+  def test_dual_write_session_returns_and_caches_the_adapter_created_record
+    storage = MemoryStorage.new
+    internal = custom_internal_adapter(
+      NormalizingSessionMemoryAdapter,
+      secondary_storage: storage,
+      session: {store_session_in_database: true}
+    )
+    user = internal.create_user(name: "Ada", email: "session-normalization@example.com")
+    token = "session-normalization-token"
+
+    session = internal.create_session(user["id"], false, {token: token}, true)
+    cached = JSON.parse(storage.get(token))
+
+    assert_equal "database-normalized", session["userAgent"]
+    assert_equal "database-normalized", cached.dig("session", "userAgent")
+  end
+
+  def test_dual_write_session_ignores_override_id_and_uses_adapter_generated_id
+    storage = MemoryStorage.new
+    hook_ids = []
+    internal = internal_adapter(
+      advanced: {database: {generate_id: "serial"}},
+      secondary_storage: storage,
+      session: {store_session_in_database: true},
+      database_hooks: {
+        session: {create: {after: ->(session, _context) { hook_ids << session["id"] }}}
+      }
+    )
+    user = internal.create_user(name: "Ada", email: "session-serial-id@example.com")
+    token = "session-serial-id-token"
+
+    session = internal.create_session(user["id"], false, {id: "caller-supplied-id", token: token}, true)
+    persisted = internal.adapter.find_one(model: "session", where: [{field: "token", value: token}])
+    cached = JSON.parse(storage.get(token))
+    active_sessions = JSON.parse(storage.get("active-sessions-#{user["id"]}"))
+
+    assert_equal 1, session["id"]
+    refute_equal "caller-supplied-id", session["id"]
+    assert_equal session["id"], persisted["id"]
+    assert_equal session["id"], cached.dig("session", "id")
+    assert_equal [session["id"]], hook_ids
+    assert_equal [token], active_sessions.map { |entry| entry["token"] }
+  end
+
   def test_update_session_with_secondary_storage_updates_database_copy_when_enabled
     storage = MemoryStorage.new
     internal = internal_adapter(secondary_storage: storage, session: {store_session_in_database: true})
@@ -758,6 +821,29 @@ class BetterAuthInternalAdapterTest < Minitest::Test
     config = BetterAuth::Configuration.new({secret: SECRET, database: :memory}.merge(options))
     adapter = BetterAuth::Adapters::Memory.new(config)
     BetterAuth::Adapters::InternalAdapter.new(adapter, config)
+  end
+
+  def custom_internal_adapter(adapter_class, options = {})
+    config = BetterAuth::Configuration.new({secret: SECRET, database: :memory}.merge(options))
+    adapter = adapter_class.new(config)
+    BetterAuth::Adapters::InternalAdapter.new(adapter, config)
+  end
+
+  class FailingSessionMemoryAdapter < BetterAuth::Adapters::Memory
+    def create(model:, data:, force_allow_id: false)
+      raise "database write failed" if model.to_s == "session"
+
+      super
+    end
+  end
+
+  class NormalizingSessionMemoryAdapter < BetterAuth::Adapters::Memory
+    def create(model:, data:, force_allow_id: false)
+      created = super
+      return created unless model.to_s == "session"
+
+      created.merge("userAgent" => "database-normalized")
+    end
   end
 
   class RecordingMemoryAdapter < BetterAuth::Adapters::Memory
