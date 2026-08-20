@@ -6,7 +6,14 @@ module BetterAuth
 
     def oauth_introspect_endpoint(config)
       Endpoint.new(path: "/oauth2/introspect", method: "POST", metadata: oauth_openapi_for(:introspect).merge(allowed_media_types: ["application/x-www-form-urlencoded", "application/json"])) do |ctx|
-        client = OAuthProtocol.authenticate_client!(ctx, "oauthClient", store_client_secret: config[:store_client_secret], prefix: config[:prefix], require_confidential: true)
+        client = OAuthProtocol.authenticate_client!(
+          ctx,
+          "oauthClient",
+          store_client_secret: config[:store_client_secret],
+          prefix: config[:prefix],
+          require_confidential: true,
+          migrate_legacy_hashed: config[:migrate_legacy_hashed_client_secrets]
+        )
         client_id = OAuthProtocol.stringify_keys(client)["clientId"]
         body = OAuthProtocol.stringify_keys(ctx.body)
         token_value = body["token"].to_s.sub(/\ABearer\s+/i, "")

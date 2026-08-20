@@ -208,6 +208,7 @@ Common options accepted by `BetterAuth::Plugins.oauth_provider`:
 * `prefix`: token and client secret prefixes.
 * `schema`: physical table and column mappings for the existing OAuth Provider models and fields.
 * `disable_jwt_plugin`: skips the default JWT plugin requirement for legacy HS256 deployments.
+* `store_client_secret`: defaults to `"hashed"` with the JWT plugin and `"encrypted"` when `disable_jwt_plugin: true`. Custom encrypted storage must provide both `encrypt` and `decrypt` callbacks. Ruby also retains explicit `"plain"` storage only as a migration adaptation.
 * `pairwise_secret`: enables pairwise subject identifiers and must be at least 32 characters.
 
 ```ruby title="config/auth.rb"
@@ -1204,4 +1205,12 @@ WHERE token IS NULL OR scopes IS NULL;
 DELETE FROM better_auth_oauth_consents WHERE consent_given = false;
 ```
 
-After enabling the hashed defaults, newly created OAuth client secrets and opaque tokens are stored hashed. Existing plaintext rows continue to require either a migration that re-registers or rotates secrets and tokens, or a temporary explicit `store_client_secret: "plain"` setting for old clients during rollout.
+With the JWT plugin enabled, newly created OAuth client secrets are stored hashed. With `disable_jwt_plugin: true`, newly created and rotated secrets use Better Auth's authenticated-encryption path so confidential-client ID tokens can use HS256 with the original client credential; `secrets` configurations produce a versioned `SecretConfig` envelope. Public clients receive no ID token in this mode.
+
+Earlier Ruby releases incorrectly used an implicit hashed default with the JWT plugin disabled. On the first successful client authentication after upgrading, an exact legacy SHA-256 base64url row is replaced with encrypted storage. Wrong credentials and explicit encrypted configurations do not use this fallback. Rotate inactive client secrets to migrate rows that do not authenticate. The end-session endpoint retains a verify-only fallback for ID tokens issued with the old server-derived key, but all newly issued ID tokens use the client credential. Plaintext rows cannot be detected automatically; rotate them or temporarily select explicit `store_client_secret: "plain"` during migration.
+
+<Callout type="warn">
+  Use a coordinated cutover for JWT-disabled deployments. Drain old application processes before the new version authenticates or creates clients. Old implicit-default processes cannot read ciphertext written by the new version, so sharing traffic and the client table across both versions is unsafe. Rolling back after encrypted writes is unsafe unless affected credentials are restored or rotated, or the old release uses an explicit encrypted mode compatible with every required OAuth flow.
+</Callout>
+
+After every legacy hash has migrated or been rotated, wait at least the longest pre-upgrade ID-token lifetime (`id_token_expires_in`, 10 hours by default). Then set `store_client_secret: "encrypted"` explicitly. The explicit mode keeps encrypted storage but disables legacy hash migration and the old derived-key logout fallback.
