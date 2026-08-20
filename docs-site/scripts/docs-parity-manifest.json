@@ -1333,7 +1333,7 @@
       "require_path": "better_auth/api_key",
       "local_exists": true,
       "upstream_exists": true,
-      "current_local_lines": 270,
+      "current_local_lines": 272,
       "upstream_lines": 469,
       "status": "thin"
     },
@@ -2127,7 +2127,7 @@
       "supported": true,
       "local_exists": true,
       "upstream_exists": true,
-      "current_local_lines": 340,
+      "current_local_lines": 338,
       "upstream_lines": 134,
       "status": "needs_manual_review"
     },

@@ -9,8 +9,8 @@ module BetterAuth
         module_function
 
         def endpoint(config)
-          BetterAuth::Endpoint.new(path: "/api-key/delete-all-expired-api-keys", method: "POST", metadata: Routes.openapi_for(:delete_all_expired_api_keys)) do |ctx|
-            BetterAuth::APIKey::Routes.delete_expired(ctx.context, config, bypass_last_check: true, raise_on_error: true)
+          BetterAuth::Endpoint.new(method: "POST", metadata: Routes.openapi_for(:delete_all_expired_api_keys).merge(server_only: true)) do |ctx|
+            BetterAuth::APIKey::Routes.delete_expired(ctx.context, config, bypass_last_check: true)
             ctx.json({success: true, error: nil})
           rescue => error
             ctx.context.logger.error("[API KEY PLUGIN] Failed to delete expired API keys: #{error.message}") if ctx.context.logger.respond_to?(:error)

@@ -414,7 +414,7 @@ BetterAuth::Plugins.api_key(
 
 Every API key can have its own rate limit settings. The built-in rate-limiting applies whenever an API key is validated, which includes:
 
-* When verifying an API key via the `/api-key/verify` endpoint
+* When verifying an API key with `auth.api.verify_api_key`
 * When using API keys for session creation (if `enableSessionForAPIKeys` is enabled), rate limiting applies to all endpoints that use the API key
 
 For other endpoints/methods that don't use API keys, you should utilize Better Auth's [built-in rate-limiting](/docs/concepts/rate-limit).

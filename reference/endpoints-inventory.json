@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-08-20T06:02:48Z",
-  "route_count": 222,
+  "generated_at": "2026-08-20T18:30:48Z",
+  "route_count": 220,
   "routes": [
     {
       "path": "/.well-known/oauth-authorization-server",
@@ -845,26 +845,6 @@
       "upstream_client_call": "authClient.apiKey.delete"
     },
     {
-      "path": "/api-key/delete-all-expired-api-keys",
-      "methods": [
-        "POST"
-      ],
-      "plugin_id": "api-key",
-      "endpoint_key": "delete_all_expired_api_keys",
-      "body_fields": [],
-      "query_params": [],
-      "path_params": [],
-      "header_params": [],
-      "disable_body": false,
-      "server_only": false,
-      "hidden": false,
-      "operation_id": "postApiKeyDeleteAllExpiredApiKeys",
-      "source": "runtime",
-      "method": "POST",
-      "ruby_api_method": "delete_all_expired_api_keys",
-      "ruby_api_call": "auth.api.delete_all_expired_api_keys"
-    },
-    {
       "path": "/api-key/get",
       "methods": [
         "GET"
@@ -1045,42 +1025,6 @@
       "upstream_registry_key": "updateApiKey",
       "upstream_api_call": "auth.api.updateApiKey",
       "upstream_client_call": "authClient.apiKey.update"
-    },
-    {
-      "path": "/api-key/verify",
-      "methods": [
-        "POST"
-      ],
-      "plugin_id": "api-key",
-      "endpoint_key": "verify_api_key",
-      "body_fields": [
-        {
-          "name": "configId",
-          "required": false,
-          "type": "string"
-        },
-        {
-          "name": "key",
-          "required": true,
-          "type": "string"
-        },
-        {
-          "name": "permissions",
-          "required": false,
-          "type": "object"
-        }
-      ],
-      "query_params": [],
-      "path_params": [],
-      "header_params": [],
-      "disable_body": false,
-      "server_only": false,
-      "hidden": false,
-      "operation_id": "postApiKeyVerify",
-      "source": "runtime",
-      "method": "POST",
-      "ruby_api_method": "verify_api_key",
-      "ruby_api_call": "auth.api.verify_api_key"
     },
     {
       "path": "/callback/:id",

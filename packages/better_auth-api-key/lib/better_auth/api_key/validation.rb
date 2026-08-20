@@ -92,7 +92,6 @@ module BetterAuth
         if !expected_config_id.nil? && !BetterAuth::APIKey::Routes.config_id_matches?(BetterAuth::APIKey::Types.record_config_id(record), expected_config_id)
           raise invalid_api_key_error
         end
-
         validation_config = if configurations
           BetterAuth::APIKey::Routes.resolve_config(
             ctx.context,

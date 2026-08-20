@@ -37,7 +37,7 @@ module BetterAuth
               records = records.first(limit) if limit
             end
             cleanup_config = query[:config_id] ? configs.first : config
-            BetterAuth::Plugins.api_key_delete_expired(ctx.context, cleanup_config)
+            BetterAuth::Plugins.api_key_schedule_unawaited_cleanup(ctx, cleanup_config)
             migration_records = records.select { |record| BetterAuth::APIKey::Adapter.legacy_metadata_migration_needed?(record) }
             if migration_records.any?
               BetterAuth::APIKey::Utils.run_background_task(

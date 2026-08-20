@@ -118,7 +118,7 @@ class BetterAuthAPIKeyUpdateRouteTest < Minitest::Test
     assert_equal BetterAuth::APIKey::ERROR_CODES.fetch("UNAUTHORIZED_SESSION"), body.fetch("message")
   end
 
-  def test_update_route_rejects_when_update_cannot_persist
+  def test_update_route_returns_unchanged_record_when_adapter_returns_nil
     auth = build_api_key_auth(default_key_length: 12)
     cookie = sign_up_cookie(auth, email: "update-route-failed-persist-key@example.com")
     user_id = auth.api.get_session(headers: {"cookie" => cookie})[:user]["id"]
@@ -130,14 +130,56 @@ class BetterAuthAPIKeyUpdateRouteTest < Minitest::Test
       original_update.call(**kwargs)
     end
 
+    result = auth.api.update_api_key(body: {userId: user_id, keyId: created[:id], name: "after"})
+    stored = auth.context.adapter.find_one(model: "apikey", where: [{field: "id", value: created[:id]}])
+
+    assert_equal "before", result.fetch(:name)
+    assert_equal "before", stored.fetch("name")
+  end
+
+  def test_update_route_does_not_refresh_fallback_cache_when_adapter_returns_nil
+    storage = MemoryStorage.new
+    auth = build_api_key_auth(
+      storage: "secondary-storage",
+      fallback_to_database: true,
+      secondary_storage: storage,
+      default_key_length: 12
+    )
+    cookie = sign_up_cookie(auth, email: "update-route-fallback-nil-key@example.com")
+    user_id = auth.api.get_session(headers: {"cookie" => cookie})[:user]["id"]
+    created = auth.api.create_api_key(body: {userId: user_id, name: "before"})
+    original_update = auth.context.adapter.method(:update)
+    auth.context.adapter.define_singleton_method(:update) do |**kwargs|
+      next nil if kwargs[:model].to_s == "apikey"
+
+      original_update.call(**kwargs)
+    end
+
+    result = auth.api.update_api_key(body: {userId: user_id, keyId: created[:id], name: "after"})
+    cached = JSON.parse(storage.get("api-key:by-id:#{created[:id]}"))
+
+    assert_equal "before", result.fetch(:name)
+    assert_equal "before", cached.fetch("name")
+  end
+
+  def test_update_route_wraps_adapter_errors_as_internal_server_errors
+    auth = build_api_key_auth(default_key_length: 12)
+    cookie = sign_up_cookie(auth, email: "update-route-adapter-error-key@example.com")
+    user_id = auth.api.get_session(headers: {"cookie" => cookie})[:user]["id"]
+    created = auth.api.create_api_key(body: {userId: user_id, name: "before"})
+    original_update = auth.context.adapter.method(:update)
+    auth.context.adapter.define_singleton_method(:update) do |**kwargs|
+      raise StandardError, "simulated update failure" if kwargs[:model].to_s == "apikey"
+
+      original_update.call(**kwargs)
+    end
+
     error = assert_raises(BetterAuth::APIError) do
       auth.api.update_api_key(body: {userId: user_id, keyId: created[:id], name: "after"})
     end
-    stored = auth.context.adapter.find_one(model: "apikey", where: [{field: "id", value: created[:id]}])
 
     assert_equal "INTERNAL_SERVER_ERROR", error.status
-    assert_equal "FAILED_TO_UPDATE_API_KEY", error.code
-    assert_equal "before", stored.fetch("name")
+    assert_equal "simulated update failure", error.message
   end
 
   def test_update_route_rejects_refill_pairs_and_expiration_bounds

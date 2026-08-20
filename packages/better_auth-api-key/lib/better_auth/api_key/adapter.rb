@@ -116,12 +116,8 @@ module BetterAuth
       end
 
       def delete_record(ctx, record, config)
-        if config[:storage] == "secondary-storage"
-          delete(ctx, record, config)
-          ctx.context.adapter.delete(model: BetterAuth::Plugins::API_KEY_TABLE_NAME, where: [{field: "id", value: record["id"]}]) if config[:fallback_to_database]
-        else
-          ctx.context.adapter.delete(model: BetterAuth::Plugins::API_KEY_TABLE_NAME, where: [{field: "id", value: record["id"]}])
-        end
+        delete(ctx, record, config) if config[:storage] == "secondary-storage"
+        ctx.context.adapter.delete(model: BetterAuth::Plugins::API_KEY_TABLE_NAME, where: [{field: "id", value: record["id"]}]) if config[:storage] == "database" || config[:fallback_to_database]
       end
 
       def schedule_record_delete(ctx, record, config)

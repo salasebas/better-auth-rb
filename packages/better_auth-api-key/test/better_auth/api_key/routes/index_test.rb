@@ -81,6 +81,53 @@ class BetterAuthAPIKeyRoutesIndexTest < Minitest::Test
     assert_nil auth.context.adapter.find_one(model: "apikey", where: [{field: "id", value: second.fetch("id")}])
   end
 
+  def test_bypass_cleanup_updates_throttle_and_attempts_database_delete_in_pure_secondary_mode
+    calls = []
+    adapter = Object.new
+    adapter.define_singleton_method(:delete_many) { |**kwargs| calls << kwargs }
+    context = Struct.new(:adapter, :logger).new(adapter, nil)
+    config = BetterAuth::APIKey::Configuration.normalize(
+      storage: "secondary-storage",
+      fallback_to_database: false
+    )
+
+    BetterAuth::APIKey::Routes.delete_expired(context, config, bypass_last_check: true)
+    BetterAuth::APIKey::Routes.delete_expired(context, config)
+
+    assert_equal 1, calls.length
+    assert_equal BetterAuth::Plugins::API_KEY_TABLE_NAME, calls.first.fetch(:model)
+  end
+
+  def test_crud_routes_dispatch_cleanup_through_the_background_handler
+    background = []
+    auth = build_api_key_auth(
+      default_key_length: 12,
+      advanced: {background_tasks: {handler: ->(task) { background << task }}}
+    )
+    cookie = sign_up_cookie(auth, email: "crud-route-cleanup@example.com")
+    user_id = auth.api.get_session(headers: {"cookie" => cookie})[:user]["id"]
+    background.clear
+
+    created = auth.api.create_api_key(body: {userId: user_id, name: "before"})
+    assert_equal 1, background.length, "create should dispatch cleanup without running it inline"
+    background.clear
+
+    auth.api.get_api_key(headers: {"cookie" => cookie}, query: {id: created[:id]})
+    assert_equal 1, background.length, "get should dispatch cleanup without running it inline"
+    background.clear
+
+    auth.api.list_api_keys(headers: {"cookie" => cookie})
+    assert_equal 1, background.length, "list should dispatch cleanup without running it inline"
+    background.clear
+
+    auth.api.update_api_key(body: {userId: user_id, keyId: created[:id], name: "after"})
+    assert_equal 1, background.length, "update should dispatch cleanup without running it inline"
+    background.clear
+
+    auth.api.delete_api_key(headers: {"cookie" => cookie}, body: {keyId: created[:id]})
+    assert_equal 1, background.length, "delete should dispatch cleanup without running it inline"
+  end
+
   def test_delete_expired_uses_adapter_delete_many_semantics
     auth = build_api_key_auth(default_key_length: 12)
     config = BetterAuth::APIKey::Configuration.normalize({})
@@ -135,7 +182,7 @@ class BetterAuthAPIKeyRoutesIndexTest < Minitest::Test
       advanced: {background_tasks: {handler: ->(task) { deferred << task }}}
     )
     logger = Object.new
-    logger.define_singleton_method(:error) { |message, *| errors << message }
+    logger.define_singleton_method(:error) { |*arguments| errors << arguments }
     auth.context.define_singleton_method(:logger) { logger }
     auth.context.adapter.define_singleton_method(:delete_many) do |**|
       raise StandardError, "simulated cleanup failure"
@@ -147,14 +194,15 @@ class BetterAuthAPIKeyRoutesIndexTest < Minitest::Test
     deferred.each(&:call)
 
     assert_equal 1, errors.length
-    assert_match(/simulated cleanup failure/, errors.first)
+    assert_equal "Failed to delete expired API keys:", errors.first.first
+    assert_equal "simulated cleanup failure", errors.first.last.message
   end
 
   def test_regular_delete_expired_logs_adapter_failure_without_raising
     errors = []
     auth = build_api_key_auth(default_key_length: 12)
     logger = Object.new
-    logger.define_singleton_method(:error) { |message, *| errors << message }
+    logger.define_singleton_method(:error) { |*arguments| errors << arguments }
     auth.context.define_singleton_method(:logger) { logger }
     auth.context.adapter.define_singleton_method(:delete_many) do |**|
       raise StandardError, "simulated cleanup failure"
@@ -164,7 +212,8 @@ class BetterAuthAPIKeyRoutesIndexTest < Minitest::Test
     BetterAuth::APIKey::Routes.delete_expired(auth.context, config, bypass_last_check: true)
 
     assert_equal 1, errors.length
-    assert_match(/simulated cleanup failure/, errors.first)
+    assert_equal "Failed to delete expired API keys:", errors.first.first
+    assert_equal "simulated cleanup failure", errors.first.last.message
   end
 
   private

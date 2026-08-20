@@ -15,37 +15,26 @@ class BetterAuthAPIKeyVerifyRouteTest < Minitest::Test
     assert_nil result[:key]
   end
 
+  def test_verify_route_is_not_http_routable
+    auth = build_api_key_auth(default_key_length: 12)
+
+    status, body = rack_json_response(auth, "POST", "/api-key/verify", body: {})
+
+    assert_equal 404, status
+    assert_equal "Not Found", body.fetch("error")
+  end
+
   def test_verify_route_rejects_missing_or_non_string_key_during_request_validation
     auth = build_api_key_auth(default_key_length: 12)
 
     [{}, {key: nil}, {key: 123}].each do |request_body|
-      status, body = rack_json_response(auth, "POST", "/api-key/verify", body: request_body)
+      error = assert_raises(BetterAuth::APIError) do
+        auth.api.verify_api_key(body: request_body)
+      end
 
-      assert_equal 400, status
-      assert_equal "BAD_REQUEST", body.fetch("code")
-      assert_equal BetterAuth::BASE_ERROR_CODES["VALIDATION_ERROR"], body.fetch("message")
+      assert_equal 400, error.status_code
+      assert_equal BetterAuth::BASE_ERROR_CODES["VALIDATION_ERROR"], error.message
     end
-  end
-
-  def test_verify_route_returns_http_401_for_invalid_key
-    auth = build_api_key_auth(default_key_length: 12)
-
-    status, body = rack_json_response(auth, "POST", "/api-key/verify", body: {key: "missing-key"})
-
-    assert_equal 401, status
-    assert_equal "INVALID_API_KEY", body.fetch("error").fetch("code")
-  end
-
-  def test_verify_route_returns_http_401_for_custom_validator_failure
-    auth = build_api_key_auth(default_key_length: 12, custom_api_key_validator: ->(*) { false })
-    cookie = sign_up_cookie(auth, email: "verify-route-validator-status@example.com")
-    user_id = auth.api.get_session(headers: {"cookie" => cookie})[:user]["id"]
-    created = auth.api.create_api_key(body: {userId: user_id})
-
-    status, body = rack_json_response(auth, "POST", "/api-key/verify", body: {key: created[:key]})
-
-    assert_equal 401, status
-    assert_equal "KEY_NOT_FOUND", body.fetch("error").fetch("code")
   end
 
   def test_verify_route_requires_key_in_body_and_ignores_headers
@@ -72,19 +61,6 @@ class BetterAuthAPIKeyVerifyRouteTest < Minitest::Test
     assert_equal false, result[:valid]
     assert_equal "RATE_LIMITED", result[:error][:code]
     assert_operator result[:error][:details][:tryAgainIn], :>, 0
-  end
-
-  def test_verify_route_returns_http_429_for_rate_limit_rejection
-    auth = build_api_key_auth(default_key_length: 12, rate_limit: {enabled: true, time_window: 60_000, max_requests: 1})
-    cookie = sign_up_cookie(auth, email: "verify-route-rate-limit-status@example.com")
-    created = auth.api.create_api_key(headers: {"cookie" => cookie}, body: {})
-
-    rack_json_response(auth, "POST", "/api-key/verify", body: {key: created[:key]})
-    status, body = rack_json_response(auth, "POST", "/api-key/verify", body: {key: created[:key]})
-
-    assert_equal 429, status
-    assert_equal "RATE_LIMITED", body.fetch("error").fetch("code")
-    assert_operator body.fetch("error").fetch("details").fetch("tryAgainIn"), :>, 0
   end
 
   def test_verify_openapi_documents_verification_envelope_for_error_statuses
