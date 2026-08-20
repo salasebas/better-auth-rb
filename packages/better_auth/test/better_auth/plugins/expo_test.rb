@@ -33,9 +33,9 @@ class BetterAuthPluginsExpoTest < Minitest::Test
     invalid_targets = {
       "same origin with oauth state" => ["https://app.example/api/auth/callback/google?state=x", "attacker-state"],
       "same normalized origin" => ["https://user:password@APP.EXAMPLE:443/api/auth/callback/google?state=x", nil],
+      "escaped hostname" => ["https://%61pp.example/api/auth/callback/google?state=x", "attacker-state"],
       "external http" => ["http://accounts.google.com/o/oauth2/v2/auth?state=x", nil],
       "non-url" => ["not-a-url", nil],
-      "malformed" => ["https://accounts.google.com/%?state=x", nil],
       "relative" => ["/oauth2/authorize?state=x", nil],
       "protocol relative" => ["//accounts.google.com/o/oauth2/v2/auth?state=x", nil],
       "fragment" => ["https://accounts.google.com/o/oauth2/v2/auth?state=x#fragment", nil],
@@ -54,10 +54,38 @@ class BetterAuthPluginsExpoTest < Minitest::Test
     end
   end
 
+  def test_authorization_proxy_rejects_browser_equivalent_ip_origins
+    targets = {
+      "short IPv4" => ["https://127.0.0.1", "https://127.1/api/auth/callback/google?state=x"],
+      "octal IPv4" => ["https://127.0.0.1", "https://0177.0.0.1/api/auth/callback/google?state=x"],
+      "hex IPv4" => ["https://127.0.0.1", "https://0x7f000001/api/auth/callback/google?state=x"],
+      "expanded IPv6" => ["https://[::1]", "https://[0:0:0:0:0:0:0:1]/api/auth/callback/google?state=x"]
+    }
+
+    targets.each do |label, (base_url, authorization_url)|
+      auth = build_auth(base_url: base_url)
+      response = Rack::MockRequest.new(auth.handler).get(
+        "/api/auth/expo-authorization-proxy",
+        params: {"authorizationURL" => authorization_url, "oauthState" => "attacker-state"}
+      )
+
+      assert_equal 400, response.status, label
+      assert_equal "Invalid authorizationURL", JSON.parse(response.body).fetch("message"), label
+      assert_nil response["location"], label
+      assert_nil response["set-cookie"], label
+    end
+  end
+
   def test_authorization_proxy_redirects_external_https_targets_unchanged
     auth = build_auth(base_url: "https://app.example")
     authorization_urls = [
       "https://accounts.google.com/o/oauth2/v2/auth?client_id=x&state=abc",
+      "https:accounts.google.com/o/oauth2/v2/auth?client_id=x&state=scheme-path",
+      "https:///accounts.google.com/o/oauth2/v2/auth?client_id=x&state=extra-slash",
+      "https://accounts.google.com/%?client_id=x&state=bare-percent",
+      "https://%65xample.com/oauth2/authorize?state=escaped-external-host",
+      "https://127.1/oauth2/authorize?state=external-short-ipv4",
+      "https://[0:0:0:0:0:0:0:1]/oauth2/authorize?state=external-expanded-ipv6",
       "https://app.example:444/oauth2/authorize?state=non-default-port"
     ]
 
