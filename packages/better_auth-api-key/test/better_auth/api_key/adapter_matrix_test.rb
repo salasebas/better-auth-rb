@@ -162,7 +162,7 @@ class BetterAuthAPIKeyAdapterMatrixTest < Minitest::Test
     skip "better_auth-mongodb or mongo gem is not installed"
   end
 
-  def test_rack_mounting_exposes_api_key_endpoints
+  def test_rack_mounting_exposes_public_api_key_endpoints
     with_memory_auth do |auth|
       cookie = sign_up_cookie(auth, email: "rack-api-key-matrix@example.com")
       status, created = rack_json_response(auth, "POST", "/api-key/create", cookie: cookie, body: {name: "rack key"})
@@ -170,9 +170,8 @@ class BetterAuthAPIKeyAdapterMatrixTest < Minitest::Test
       assert_equal 200, status
       assert created.fetch("key")
 
-      status, verified = rack_json_response(auth, "POST", "/api-key/verify", body: {key: created.fetch("key")})
-      assert_equal 200, status
-      assert_equal true, verified.fetch("valid")
+      verified = auth.api.verify_api_key(body: {key: created.fetch("key")})
+      assert_equal true, verified.fetch(:valid)
 
       status, listed = rack_json_response(auth, "GET", "/api-key/list", cookie: cookie)
       assert_equal 200, status

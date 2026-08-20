@@ -112,7 +112,8 @@ result[:referenceId]
 
 ### Verify an API key
 
-`POST /api-key/verify`
+This is a server-only operation and is not mounted over HTTP or included in
+OpenAPI.
 
 ```ruby
 result = auth.api.verify_api_key(
@@ -245,7 +246,8 @@ For organization-owned keys, pass `organizationId` in the query.
 
 ### Delete expired API keys
 
-`POST /api-key/delete-all-expired-api-keys`
+This is a server-only operation and is not mounted over HTTP or included in
+OpenAPI.
 
 ```ruby
 auth.api.delete_all_expired_api_keys
