@@ -603,6 +603,37 @@ class BetterAuthSchemaSQLTest < Minitest::Test
     end
   end
 
+  def test_literal_enum_id_and_foreign_key_fields_keep_id_type_precedence
+    plugin = BetterAuth::Plugin.new(
+      id: "literal-enum-ids",
+      schema: {
+        auditLog: {
+          model_name: "audit_logs",
+          fields: {
+            id: {type: ["audit-1", "audit-2"], required: true},
+            userId: {
+              type: ["user-1", "user-2"],
+              required: true,
+              references: {model: "user", field: "id"}
+            }
+          }
+        }
+      }
+    )
+    config = BetterAuth::Configuration.new(secret: SECRET, database: :memory, plugins: [plugin])
+
+    {
+      postgres: ['"id" text PRIMARY KEY', '"user_id" text NOT NULL'],
+      mysql: ["`id` varchar(191) PRIMARY KEY", "`user_id` varchar(191) NOT NULL"],
+      sqlite: ['"id" text PRIMARY KEY', '"user_id" text NOT NULL'],
+      mssql: ["[id] varchar(255) PRIMARY KEY", "[user_id] varchar(255) NOT NULL"]
+    }.each do |dialect, columns|
+      sql = BetterAuth::Schema::SQL.create_statements(config, dialect: dialect).join("\n")
+
+      columns.each { |column| assert_includes sql, column, dialect.to_s }
+    end
+  end
+
   def test_empty_and_duplicate_literal_enum_definitions_are_supported
     plugin = BetterAuth::Plugin.new(
       id: "literal-enum-shapes",
@@ -625,9 +656,9 @@ class BetterAuthSchemaSQLTest < Minitest::Test
     refute_includes sql, "active"
   end
 
-  def test_literal_enum_field_type_rejects_non_string_members
+  def test_array_field_type_members_do_not_change_sql_mapping
     plugin = BetterAuth::Plugin.new(
-      id: "invalid-literal-enum",
+      id: "array-member-shapes",
       schema: {
         auditLog: {
           model_name: "audit_logs",
@@ -639,13 +670,10 @@ class BetterAuthSchemaSQLTest < Minitest::Test
     )
     config = BetterAuth::Configuration.new(secret: SECRET, database: :memory, plugins: [plugin])
 
-    error = assert_raises(BetterAuth::Error) do
-      BetterAuth::Schema::SQL.create_statements(config, dialect: :postgres)
-    end
+    sql = BetterAuth::Schema::SQL.create_statements(config, dialect: :postgres).join("\n")
 
-    assert_includes error.message, "Invalid literal-enum field type"
-    assert_includes error.message, "index 1"
-    assert_includes error.message, "expected String, got Integer"
+    assert_includes sql, '"status" text'
+    refute_includes sql, "active"
   end
 
   def test_string_defaults_are_sql_escaped

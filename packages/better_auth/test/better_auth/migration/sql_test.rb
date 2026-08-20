@@ -176,6 +176,41 @@ class BetterAuthMigrationSQLTest < Minitest::Test
     end
   end
 
+  def test_pending_literal_enum_foreign_keys_keep_id_type_precedence
+    field = {
+      type: ["user-1", "user-2"],
+      required: true,
+      field_name: "user_id",
+      references: {model: "users", field: "id", on_delete: "cascade"}
+    }
+    table = {model_name: "audit_logs", fields: {"userId" => field}}
+    change = BetterAuth::MigrationPlan::FieldChange.new(
+      logical_name: "auditLog",
+      table_name: "audit_logs",
+      fields: {"userId" => field},
+      table: table,
+      order: 1
+    )
+
+    {
+      postgres: 'ALTER TABLE "audit_logs" ADD COLUMN "user_id" text NOT NULL;',
+      mysql: "ALTER TABLE `audit_logs` ADD COLUMN `user_id` varchar(191) NOT NULL;",
+      sqlite: 'ALTER TABLE "audit_logs" ADD COLUMN "user_id" text NOT NULL;',
+      mssql: "ALTER TABLE [audit_logs] ADD [user_id] varchar(255) NOT NULL;"
+    }.each do |dialect, expected|
+      plan = BetterAuth::MigrationPlan::Plan.new(
+        to_create: [],
+        to_add: [change],
+        to_index: [],
+        warnings: [],
+        dialect: dialect,
+        tables: {"auditLog" => table}
+      )
+
+      assert_includes BetterAuth::Schema::SQL.pending_statements(plan), expected, dialect.to_s
+    end
+  end
+
   def test_plans_plugin_table_after_initial_core_schema
     connection = SQLite3::Database.new(":memory:")
     connection.results_as_hash = true
@@ -384,10 +419,10 @@ class BetterAuthMigrationSQLTest < Minitest::Test
       user: {additional_fields: {status: {type: ["active", "inactive"], required: false}}}
     )
     compatible_types = {
-      postgres: ["text", "character varying(255)"],
-      mysql: ["text", "varchar(191)"],
-      sqlite: ["text", "varchar(255)"],
-      mssql: ["text", "varchar(8000)", "nvarchar(255)"]
+      postgres: ["text", "character varying(255)", "varchar(255)", "uuid"],
+      mysql: ["text", "varchar(191)", "uuid"],
+      sqlite: ["TEXT"],
+      mssql: ["varchar(8000)", "nvarchar(255)", "uniqueidentifier"]
     }
 
     compatible_types.each do |dialect, types|
@@ -404,6 +439,34 @@ class BetterAuthMigrationSQLTest < Minitest::Test
 
         refute plan.warnings.any? { |warning| warning.include?("users.status") }, "#{dialect}: #{actual_type}"
       end
+    end
+  end
+
+  def test_literal_enum_migration_type_matching_uses_dialect_specific_string_families
+    config = BetterAuth::Configuration.new(
+      secret: SECRET,
+      database: :memory,
+      user: {additional_fields: {status: {type: ["active", "inactive"], required: false}}}
+    )
+    incompatible_types = {
+      postgres: "nvarchar(255)",
+      mysql: "character varying(255)",
+      sqlite: "varchar(255)",
+      mssql: "text"
+    }
+
+    incompatible_types.each do |dialect, actual_type|
+      existing = {
+        "users" => {
+          name: "users",
+          columns: {"status" => actual_type},
+          indexes: BetterAuth::SQLMigration.empty_index_metadata
+        }
+      }
+
+      plan = BetterAuth::SQLMigration.plan_from_existing(config, existing: existing, dialect: dialect)
+
+      assert plan.warnings.any? { |warning| warning.include?("users.status") && warning.include?(actual_type.downcase) }, "#{dialect}: #{actual_type}"
     end
   end
 
@@ -429,7 +492,7 @@ class BetterAuthMigrationSQLTest < Minitest::Test
     end
   end
 
-  def test_literal_enum_migration_type_matching_rejects_non_string_members
+  def test_literal_enum_migration_type_matching_does_not_interpret_array_members
     config = BetterAuth::Configuration.new(
       secret: SECRET,
       database: :memory,
@@ -443,12 +506,9 @@ class BetterAuthMigrationSQLTest < Minitest::Test
       }
     }
 
-    error = assert_raises(BetterAuth::Error) do
-      BetterAuth::SQLMigration.plan_from_existing(config, existing: existing, dialect: :postgres)
-    end
+    plan = BetterAuth::SQLMigration.plan_from_existing(config, existing: existing, dialect: :postgres)
 
-    assert_includes error.message, "Invalid literal-enum field type"
-    assert_includes error.message, "expected String, got NilClass"
+    refute plan.warnings.any? { |warning| warning.include?("users.status") }
   end
 
   def test_does_not_record_sql_file_migration_when_statement_fails
