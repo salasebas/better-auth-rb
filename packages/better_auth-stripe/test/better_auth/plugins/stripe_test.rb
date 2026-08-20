@@ -118,6 +118,7 @@ class BetterAuthPluginsStripeTest < Minitest::Test
     assert_equal created, payloads.fetch(0).fetch(:stripe_customer)
     assert_equal created.fetch("id"), payloads.fetch(0).fetch(:user).fetch("stripeCustomerId")
     assert_equal user.fetch("id"), users_observed_from_callback.fetch(0).fetch("id")
+    assert_equal created.fetch("id"), users_observed_from_callback.fetch(0).fetch("stripeCustomerId")
     assert_equal created.fetch("id"), user.fetch("stripeCustomerId")
   end
 
@@ -136,6 +137,29 @@ class BetterAuthPluginsStripeTest < Minitest::Test
     assert_match(/\Acus_/, user.fetch("stripeCustomerId"))
     assert_equal 1, stripe.customers.created.length
     assert_equal({email: "fallback@example.com", limit: 100}, stripe.customers.list_calls.fetch(0))
+  end
+
+  def test_customer_callback_failure_preserves_persisted_stripe_customer_link
+    stripe = FakeStripeClient.new
+    callback_calls = 0
+    auth = build_auth(
+      stripe_client: stripe,
+      create_customer_on_sign_up: true,
+      on_customer_create: lambda do |_payload, _ctx|
+        callback_calls += 1
+        raise "callback failed"
+      end
+    )
+
+    status, = auth.api.sign_up_email(
+      body: {email: "failing-callback@example.com", password: "password123", name: "Failing Callback"},
+      as_response: true
+    )
+
+    user = auth.context.internal_adapter.find_user_by_email("failing-callback@example.com")[:user]
+    assert_equal 200, status
+    assert_equal 1, callback_calls
+    assert_equal stripe.customers.created.fetch(0).fetch("id"), user.fetch("stripeCustomerId")
   end
 
   def test_create_customer_on_sign_up_does_not_block_sign_up_when_stripe_fails
