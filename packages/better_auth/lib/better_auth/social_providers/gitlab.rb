@@ -4,7 +4,7 @@ module BetterAuth
   module SocialProviders
     module_function
 
-    def gitlab(client_id:, client_secret:, issuer: "https://gitlab.com", scopes: ["read_user"], **options)
+    def gitlab(client_id:, client_secret: nil, issuer: "https://gitlab.com", scopes: ["read_user"], **options)
       base = issuer.to_s.sub(%r{/+\z}, "")
       normalized = Base.normalize_options(options)
       {

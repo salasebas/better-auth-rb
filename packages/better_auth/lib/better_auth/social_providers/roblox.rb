@@ -4,7 +4,7 @@ module BetterAuth
   module SocialProviders
     module_function
 
-    def roblox(client_id:, client_secret:, scopes: ["openid", "profile"], **options)
+    def roblox(client_id:, client_secret: nil, scopes: ["openid", "profile"], **options)
       Base.oauth_provider(
         id: "roblox",
         name: "Roblox",

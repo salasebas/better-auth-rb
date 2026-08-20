@@ -29,6 +29,10 @@ class BetterAuthSSOOIDCEndpointPolicyTest < Minitest::Test
       "https://[::1]/token",
       "https://[fe80::1]/token",
       "https://[::ffff:127.0.0.1]/token",
+      "https://[2001:2::1]/token",
+      "https://[64:ff9b:1::1]/token",
+      "https://[3fff::1]/token",
+      "https://[5f00::1]/token",
       "https://metadata.google.internal/computeMetadata/v1"
     ]
 

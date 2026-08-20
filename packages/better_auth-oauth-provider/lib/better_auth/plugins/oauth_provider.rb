@@ -41,7 +41,7 @@ module BetterAuth
       config = {
         login_page: "/login",
         consent_page: "/oauth2/consent",
-        scopes: [],
+        scopes: %w[openid profile email offline_access],
         grant_types: [OAuthProtocol::AUTH_CODE_GRANT, OAuthProtocol::CLIENT_CREDENTIALS_GRANT, OAuthProtocol::REFRESH_GRANT],
         allow_dynamic_client_registration: false,
         allow_unauthenticated_client_registration: false,
@@ -63,6 +63,7 @@ module BetterAuth
         scope_expirations: {},
         store: OAuthProtocol.stores
       }.merge(raw_options)
+      config[:claims] = oauth_provider_default_claims(config[:scopes]) unless raw_options.key?(:claims)
       config[:migrate_legacy_hashed_client_secrets] = disable_jwt_plugin && !raw_options.key?(:store_client_secret)
 
       oauth_provider_validate_config!(config, raw_options)
@@ -91,13 +92,21 @@ module BetterAuth
         init: oauth_provider_init(config),
         hooks: oauth_provider_hooks(config),
         endpoints: endpoints,
-        schema: oauth_provider_schema,
+        schema: oauth_provider_schema(config[:schema]),
         rate_limit: oauth_provider_rate_limits(config),
         options: config
       )
     end
 
     OAUTH_PROVIDER_PLUGIN_IMPLEMENTATION = true
+
+    def oauth_provider_default_claims(scopes)
+      scopes = OAuthProtocol.parse_scopes(scopes)
+      claims = %w[sub iss aud exp iat sid scope azp]
+      claims.concat(%w[email email_verified]) if scopes.include?("email")
+      claims.concat(%w[name picture family_name given_name]) if scopes.include?("profile")
+      claims
+    end
 
     def oauth_provider_validate_config!(config, raw_options = {})
       provider_scopes = OAuthProtocol.parse_scopes(config[:scopes])

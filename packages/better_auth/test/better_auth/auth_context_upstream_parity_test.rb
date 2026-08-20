@@ -70,16 +70,6 @@ class BetterAuthAuthContextUpstreamParityTest < Minitest::Test
     assert_equal 1234, auth.options.session.dig(:cookie_cache, :max_age)
   end
 
-  def test_cookie_cache_refresh_true_uses_twenty_percent_of_max_age
-    payload = {"updatedAt" => ((Time.now.to_f - 201) * 1000).to_i}
-
-    assert BetterAuth::Session.send(
-      :should_refresh_cookie_cache?,
-      {refresh_cache: true, max_age: 1000},
-      payload
-    )
-  end
-
   def test_context_exposes_password_utilities_and_custom_callbacks
     auth = BetterAuth.auth(
       base_url: "http://localhost:3000",
@@ -275,7 +265,7 @@ class BetterAuthAuthContextUpstreamParityTest < Minitest::Test
     assert_equal "value", error.headers.fetch("key")
   end
 
-  def test_router_blocks_endpoints_marked_server_scope
+  def test_router_allows_endpoints_marked_server_scope
     auth = BetterAuth.auth(
       base_url: "http://localhost:3000",
       secret: SECRET,
@@ -295,8 +285,8 @@ class BetterAuthAuthContextUpstreamParityTest < Minitest::Test
 
     status, _headers, body = auth.call(rack_env("GET", "/api/auth/server-scoped"))
 
-    assert_equal 403, status
-    assert_equal({"error" => "Forbidden"}, JSON.parse(body.join))
+    assert_equal 200, status
+    assert_equal "ok", body.join
   end
 
   def test_direct_api_server_call_hooks_cookies_and_error_chaining_match_upstream

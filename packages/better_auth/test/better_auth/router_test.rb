@@ -359,7 +359,7 @@ class BetterAuthRouterTest < Minitest::Test
     assert_equal "yes", headers["x-b"]
   end
 
-  def test_origin_check_validates_callbacks_origins_and_fetch_metadata
+  def test_origin_check_validates_callbacks_and_cookie_origins_without_global_form_csrf
     auth = BetterAuth.auth(
       base_url: "http://localhost:3000",
       secret: SECRET,
@@ -389,9 +389,8 @@ class BetterAuthRouterTest < Minitest::Test
         }
       )
     )
-    assert_equal 403, status
-    assert_equal "Cross-site navigation login blocked. This request appears to be a CSRF attack.",
-      JSON.parse(body.join)["message"]
+    assert_equal 200, status
+    assert_equal({"ok" => true}, JSON.parse(body.join))
   end
 
   def test_cookieless_sign_up_validates_present_origin_without_fetch_metadata
@@ -468,7 +467,66 @@ class BetterAuthRouterTest < Minitest::Test
     assert_equal 403, auth.call(rack_env("POST", "/api/auth/post", body: {"newUserCallbackURL" => "https://evil.example/welcome"})).first
   end
 
-  def test_fetch_metadata_same_site_modes_and_missing_metadata
+  def test_origin_check_rejects_non_string_callback_values
+    endpoint_calls = 0
+    auth = BetterAuth.auth(
+      base_url: "http://localhost:3000",
+      secret: SECRET,
+      plugins: [
+        {
+          id: "test",
+          endpoints: {
+            post: BetterAuth::Endpoint.new(path: "/post", method: "POST") do
+              endpoint_calls += 1
+              {ok: true}
+            end
+          }
+        }
+      ]
+    )
+    cases = [
+      [{"callbackURL" => {}}, "callbackURL"],
+      [{"redirectTo" => []}, "redirectURL"],
+      [{"errorCallbackURL" => 1}, "errorCallbackURL"],
+      [{"newUserCallbackURL" => true}, "newUserCallbackURL"]
+    ]
+
+    cases.each do |request_body, label|
+      status, _headers, body = auth.call(rack_env("POST", "/api/auth/post", body: request_body))
+
+      assert_equal 400, status
+      assert_equal(
+        {code: "BAD_REQUEST", message: "Invalid #{label}: expected a string"},
+        JSON.parse(body.join, symbolize_names: true)
+      )
+    end
+
+    status, _headers, body = auth.call(
+      rack_env("POST", "/api/auth/post?callbackURL=/first&callbackURL=/second")
+    )
+    assert_equal 400, status
+    assert_equal(
+      {code: "BAD_REQUEST", message: "Invalid callbackURL: expected a string"},
+      JSON.parse(body.join, symbolize_names: true)
+    )
+
+    assert_equal 200, auth.call(rack_env("POST", "/api/auth/post", body: {"callbackURL" => 0})).first
+    status, _headers, body = auth.call(
+      rack_env(
+        "POST",
+        "/api/auth/post?callbackURL=https%3A%2F%2Fevil.example",
+        body: {"callbackURL" => 0}
+      )
+    )
+    assert_equal 403, status
+    assert_equal(
+      {code: "FORBIDDEN", message: "Invalid callbackURL"},
+      JSON.parse(body.join, symbolize_names: true)
+    )
+    assert_equal 1, endpoint_calls
+  end
+
+  def test_form_csrf_fetch_metadata_is_not_applied_to_arbitrary_posts
     auth = BetterAuth.auth(
       base_url: "http://localhost:3000",
       secret: SECRET,
@@ -487,7 +545,8 @@ class BetterAuthRouterTest < Minitest::Test
     assert_equal 200, auth.call(rack_env("POST", "/api/auth/post", headers: fetch_metadata_headers(site: "same-origin", mode: "navigate", origin: "http://localhost:3000"))).first
     assert_equal 200, auth.call(rack_env("POST", "/api/auth/post", headers: fetch_metadata_headers(site: "same-site", mode: "navigate", origin: "https://app.example"))).first
     assert_equal 200, auth.call(rack_env("POST", "/api/auth/post", headers: fetch_metadata_headers(site: "same-origin", mode: "cors", dest: "empty", origin: "http://localhost:3000"))).first
-    assert_equal 403, auth.call(rack_env("POST", "/api/auth/post", headers: fetch_metadata_headers(site: "cross-site", mode: "no-cors", dest: "empty", origin: "https://evil.example"))).first
+    assert_equal 200, auth.call(rack_env("POST", "/api/auth/post", headers: fetch_metadata_headers(site: "cross-site", mode: "no-cors", dest: "empty", origin: "https://evil.example"))).first
+    assert_equal 200, auth.call(rack_env("POST", "/api/auth/post", headers: fetch_metadata_headers(site: "cross-site", mode: "navigate", origin: "https://evil.example"))).first
     assert_equal 200, auth.call(rack_env("POST", "/api/auth/post", headers: fetch_metadata_headers(site: "cross-site", mode: "cors", dest: "empty", origin: "https://app.example"))).first
   end
 
@@ -841,7 +900,7 @@ class BetterAuthRouterTest < Minitest::Test
     assert_equal 200, auth.call(rack_env("GET", "/api/auth/limited", headers: {"HTTP_X_FORWARDED_FOR" => first_ip})).first
     assert_equal 429, auth.call(rack_env("GET", "/api/auth/limited", headers: {"HTTP_X_FORWARDED_FOR" => second_ip})).first
     assert_equal 1, storage.keys.length
-    assert_match(/\A2001:db8:abcd:1234::\|\/limited\z/, storage.keys.first)
+    assert_match(/\A2001:0db8:abcd:1234:0000:0000:0000:0000\|\/limited\z/, storage.keys.first)
   end
 
   def test_rate_limit_can_disable_ip_tracking

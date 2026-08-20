@@ -206,7 +206,7 @@ class EndpointToolingTest < Minitest::Test
     assert_equal %w[GET POST], rows.map { |row| row.fetch(:method) }.sort
   end
 
-  def test_route_matcher_handles_wildcards_and_passkey_overrides_both_directions
+  def test_route_matcher_handles_wildcards_and_requires_exact_passkey_methods
     upstream = [upstream_row("/session", "*", "getSession")]
     ruby = [ruby_row("/session", "GET", "get_session")]
     report = EndpointApiComparison.build_report(upstream, ruby)
@@ -216,11 +216,19 @@ class EndpointToolingTest < Minitest::Test
     assert_equal 0, report.fetch(:missing_upstream_count)
 
     passkey = upstream_row("/passkey/generate-register-options", "GET", "generatePasskeyRegistrationOptions", plugin_id: "passkey")
-    ruby_passkey = ruby_row("/passkey/generate-register-options", "POST", "generate_passkey_registration_options")
-    override_report = EndpointApiComparison.build_report([passkey], [ruby_passkey])
+    ruby_passkey = ruby_row("/passkey/generate-register-options", "GET", "generate_passkey_registration_options")
+    exact_report = EndpointApiComparison.build_report([passkey], [ruby_passkey])
 
-    assert_equal 1, override_report.fetch(:aligned_count)
-    assert_equal 0, override_report.fetch(:missing_upstream_count)
+    assert_equal 1, exact_report.fetch(:aligned_count)
+    assert_equal 0, exact_report.fetch(:missing_ruby_count)
+    assert_equal 0, exact_report.fetch(:missing_upstream_count)
+
+    stale_post = ruby_row("/passkey/generate-register-options", "POST", "generate_passkey_registration_options")
+    mismatch_report = EndpointApiComparison.build_report([passkey], [stale_post])
+
+    assert_equal 0, mismatch_report.fetch(:aligned_count)
+    assert_equal 1, mismatch_report.fetch(:missing_ruby_count)
+    assert_equal 1, mismatch_report.fetch(:missing_upstream_count)
   end
 
   def test_normalizes_totp_as_one_acronym

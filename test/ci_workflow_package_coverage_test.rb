@@ -11,6 +11,11 @@ class CIWorkflowPackageCoverageTest < Minitest::Test
     "better_auth-mongodb",
     "better_auth-mongo-adapter"
   ].freeze
+  FREETDS_PACKAGES = %w[
+    better_auth
+    better_auth-api-key
+    better_auth-passkey
+  ].freeze
 
   def setup
     @workflow = YAML.safe_load_file(WORKFLOW_PATH, aliases: true)
@@ -69,6 +74,23 @@ class CIWorkflowPackageCoverageTest < Minitest::Test
       strict = env["RUBYOPT"].to_s.include?("strict_minitest") ||
         env["SPEC_OPTS"].to_s.include?("strict_rspec")
       assert strict, "#{step["name"] || step["run"]} must load a strict test helper"
+    end
+  end
+
+  def test_packages_that_compile_tiny_tds_install_freetds_before_ruby_setup
+    FREETDS_PACKAGES.each do |package|
+      job_ids = package_test_job_ids_for(package)
+
+      refute_empty job_ids, "Expected a CI test job for #{package}"
+      job_ids.each do |job_id|
+        steps = @jobs.fetch(job_id).fetch("steps")
+        freetds_index = steps.index { |step| step["run"].to_s.include?("freetds-dev") }
+        ruby_index = steps.index { |step| step["uses"].to_s.start_with?("ruby/setup-ruby@") }
+
+        refute_nil freetds_index, "#{job_id} must install freetds-dev"
+        refute_nil ruby_index, "#{job_id} must set up Ruby"
+        assert_operator freetds_index, :<, ruby_index, "#{job_id} must install FreeTDS before Bundler runs"
+      end
     end
   end
 
