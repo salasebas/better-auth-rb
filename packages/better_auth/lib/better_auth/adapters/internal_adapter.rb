@@ -84,10 +84,16 @@ module BetterAuth
         data = override_all ? base.merge(override) : override.merge(base)
 
         custom = secondary_storage && lambda do |session_data|
-          actual_session = apply_schema_create("session", session_data)
-          store_session(actual_session)
-          adapter.create(model: "session", data: actual_session, force_allow_id: true) if options.session[:store_session_in_database]
-          actual_session
+          if options.session[:store_session_in_database]
+            created = adapter.create(model: "session", data: session_data, force_allow_id: true)
+            session = created || session_data
+            store_session(session, cache_data: data)
+            session
+          else
+            actual_session = apply_schema_create("session", session_data)
+            store_session(actual_session)
+            actual_session
+          end
         end
         hooks.create(data, "session", custom: custom, context: context)
       end
@@ -583,17 +589,17 @@ module BetterAuth
         value
       end
 
-      def store_session(session)
-        user = adapter.find_one(model: "user", where: [{field: "id", value: session["userId"]}])
+      def store_session(session, cache_data: session)
+        user = adapter.find_one(model: "user", where: [{field: "id", value: cache_data["userId"]}])
         now_ms = current_millis
-        expires_ms = millis(session["expiresAt"])
-        entries = active_session_entries(session["userId"])
-          .reject { |entry| entry["expiresAt"].to_i <= now_ms || entry["token"] == session["token"] }
-          .push({"token" => session["token"], "expiresAt" => expires_ms})
+        expires_ms = millis(cache_data["expiresAt"])
+        entries = active_session_entries(cache_data["userId"])
+          .reject { |entry| entry["expiresAt"].to_i <= now_ms || entry["token"] == cache_data["token"] }
+          .push({"token" => cache_data["token"], "expiresAt" => expires_ms})
           .sort_by { |entry| entry["expiresAt"] }
-        write_active_sessions(session["userId"], entries)
+        write_active_sessions(cache_data["userId"], entries)
         ttl_seconds = ttl(expires_ms)
-        secondary_storage.set(session["token"], JSON.generate({session: session, user: user}), ttl_seconds) if ttl_seconds.positive?
+        secondary_storage.set(cache_data["token"], JSON.generate({session: session, user: user}), ttl_seconds) if ttl_seconds.positive?
       end
 
       def update_stored_session(token, data)
