@@ -199,7 +199,7 @@ On success, `data` contains the user object. On failure, `error` is populated by
 begin
   user = auth.api.get_user(
     headers: {"cookie" => admin_cookie},
-    query: {email: "ada@example.com"}
+    query: {id: "user-id"}
   )
 rescue BetterAuth::APIError => error
   error.code

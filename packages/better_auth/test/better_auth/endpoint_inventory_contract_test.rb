@@ -37,4 +37,16 @@ class BetterAuthEndpointInventoryContractTest < Minitest::Test
     )
     assert popup.fetch("query_params").all? { |parameter| parameter.fetch("type") == "string" }
   end
+
+  def test_admin_get_user_inventory_records_only_the_canonical_id_selector
+    skip "Run `ruby scripts/generate-endpoint-inventory.rb` to generate #{INVENTORY_PATH}" unless File.exist?(INVENTORY_PATH)
+
+    routes = JSON.parse(File.read(INVENTORY_PATH)).fetch("routes")
+    get_user = routes.find { |route| route["method"] == "GET" && route["path"] == "/admin/get-user" }
+
+    assert_equal(
+      [{"name" => "id", "required" => false, "type" => "string"}],
+      get_user.fetch("query_params")
+    )
+  end
 end
