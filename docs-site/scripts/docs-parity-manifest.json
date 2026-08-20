@@ -656,7 +656,7 @@
       "ruby_source": "packages/better_auth/test/better_auth/plugin_test.rb",
       "local_exists": true,
       "upstream_exists": true,
-      "current_local_lines": 503,
+      "current_local_lines": 504,
       "upstream_lines": 674,
       "status": "thin"
     },

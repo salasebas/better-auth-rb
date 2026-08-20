@@ -296,10 +296,13 @@ module BetterAuth
 
     def run_plugin_middlewares(endpoint_context)
       plugin_middlewares.each do |middleware|
-        next unless PathMatcher.middleware_pattern_matches?(middleware[:path], endpoint_context.path)
+        params = PathMatcher.middleware_pattern_match(middleware[:path], endpoint_context.path)
+        next unless params
 
-        result = middleware[:middleware].call(endpoint_context)
-        return Endpoint::Result.from_value(result, endpoint_context).to_rack_response if result
+        middleware_context = endpoint_context.dup
+        middleware_context.params = params
+        result = middleware[:middleware].call(middleware_context)
+        return Endpoint::Result.from_value(result, middleware_context).to_rack_response if result
       end
       nil
     end

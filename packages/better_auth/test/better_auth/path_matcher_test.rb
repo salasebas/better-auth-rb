@@ -48,6 +48,17 @@ class BetterAuthPathMatcherTest < Minitest::Test
     ["/foo/**", "/foo/**/child", true]
   ].freeze
 
+  MIDDLEWARE_PARAM_CASES = [
+    ["/tenant/:tenant_id/callback", "/tenant/acme/callback", {tenant_id: "acme"}],
+    ["/files/**:rest", "/files", {rest: ""}],
+    ["/files/**:rest", "/files/a/b", {rest: "a/b"}],
+    ["/assets/:name.:extension", "/assets/avatar.png", {name: "avatar", extension: "png"}],
+    ["/foo/*/bar", "/foo/child/bar", {_0: "child"}],
+    ["/foo/*", "/foo", {}],
+    ["/foo/**/ignored", "/foo/child/grandchild", {_: "child/grandchild"}],
+    ["/tenant/:tenant_id/callback", "/tenant/acme/other", nil]
+  ].freeze
+
   def test_middleware_patterns_match_path_segments
     MIDDLEWARE_PATTERN_CASES.each do |pattern, path, expected|
       assert_equal expected,
@@ -61,6 +72,14 @@ class BetterAuthPathMatcherTest < Minitest::Test
       assert_equal expected,
         BetterAuth::PathMatcher.literal_subtree_matches?(prefix, path),
         "expected #{prefix.inspect} #{expected ? "to cover" : "not to cover"} #{path.inspect}"
+    end
+  end
+
+  def test_middleware_patterns_return_better_call_route_params
+    MIDDLEWARE_PARAM_CASES.each do |pattern, path, expected|
+      actual = BetterAuth::PathMatcher.middleware_pattern_match(pattern, path)
+      message = "expected #{pattern.inspect} to capture #{expected.inspect} from #{path.inspect}"
+      expected.nil? ? assert_nil(actual, message) : assert_equal(expected, actual, message)
     end
   end
 end

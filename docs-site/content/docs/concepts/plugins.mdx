@@ -322,11 +322,12 @@ end
 
 You can add middleware to the server by passing a `middlewares` array. This array should contain middleware objects, each with a `path` and a `middleware` property. Unlike hooks, middleware only runs on `api` requests from a client. If the endpoint is invoked directly, the middleware will not run.
 
-Middleware paths match complete path segments. A literal pattern matches only
-that exact path, a terminal `*` matches zero or one segment, and a terminal `**`
-matches zero or more descendant segments. Trailing slashes are ignored, and
-patterns never match a path that only shares a string prefix: for example,
-`/foo/**` matches `/foo` and `/foo/bar`, but not `/foobar`.
+Middleware paths use Better Call's segment matcher. Literal segments match
+exactly, `:name` captures one segment, `*` matches one segment (and is optional
+when terminal), and `**` or `**:name` captures the remaining path. Captures are
+available in `ctx.params`. Trailing slashes are ignored, and patterns never
+match a path that only shares a string prefix: for example, `/foo/**` matches
+`/foo` and `/foo/bar`, but not `/foobar`.
 
 If you raise a `BetterAuth::APIError` from the middleware or return a Rack response tuple, the request will be stopped, and the response will be sent to the client.
 

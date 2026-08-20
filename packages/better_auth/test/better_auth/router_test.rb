@@ -578,6 +578,43 @@ class BetterAuthRouterTest < Minitest::Test
     assert_equal 200, auth.call(rack_env("GET", "/api/auth/foo-bar")).first
   end
 
+  def test_plugin_middleware_receives_named_segment_and_catch_all_params
+    captures = []
+    auth = BetterAuth.auth(
+      base_url: "http://localhost:3000",
+      secret: SECRET,
+      plugins: [
+        {
+          id: "test",
+          middlewares: [
+            {
+              path: "/tenants/:tenant_id/callback",
+              middleware: ->(ctx) { captures << [ctx.path, ctx.params.dup] }
+            },
+            {
+              path: "/files/**:rest",
+              middleware: ->(ctx) { captures << [ctx.path, ctx.params.dup] }
+            }
+          ],
+          endpoints: {
+            tenant_callback: BetterAuth::Endpoint.new(path: "/tenants/:endpoint_id/callback", method: "GET") { {ok: true} },
+            files_root: BetterAuth::Endpoint.new(path: "/files", method: "GET") { {ok: true} },
+            files_nested: BetterAuth::Endpoint.new(path: "/files/a/b", method: "GET") { {ok: true} }
+          }
+        }
+      ]
+    )
+
+    assert_equal 200, auth.call(rack_env("GET", "/api/auth/tenants/acme/callback")).first
+    assert_equal 200, auth.call(rack_env("GET", "/api/auth/files")).first
+    assert_equal 200, auth.call(rack_env("GET", "/api/auth/files/a/b")).first
+    assert_equal [
+      ["/tenants/acme/callback", {tenant_id: "acme"}],
+      ["/files", {rest: ""}],
+      ["/files/a/b", {rest: "a/b"}]
+    ], captures
+  end
+
   def test_rate_limit_runs_after_middleware_and_before_plugin_on_request
     order = []
     auth = BetterAuth.auth(
