@@ -126,7 +126,9 @@ class BetterAuthPluginsScimUsersTest < Minitest::Test
     admin_token = auth.api.generate_scim_token(headers: {"cookie" => admin_cookie}, body: {providerId: "admin-active"}).fetch(:scimToken)
     created = auth.api.create_scim_user(headers: bearer(admin_token), body: {userName: "managed@example.com", active: false})
     assert_equal false, created.fetch(:active)
-    assert_equal true, auth.context.internal_adapter.find_user_by_id(created.fetch(:id)).fetch("banned")
+    created_user = auth.context.internal_adapter.find_user_by_id(created.fetch(:id))
+    assert_equal true, created_user.fetch("banned")
+    assert_equal "Deactivated via SCIM", created_user.fetch("banReason")
 
     auth.api.patch_scim_user(
       headers: bearer(admin_token),
@@ -134,6 +136,15 @@ class BetterAuthPluginsScimUsersTest < Minitest::Test
       body: {schemas: [PATCH_SCHEMA], Operations: [{op: "replace", path: "active", value: true}]}
     )
     assert_equal true, auth.api.get_scim_user(headers: bearer(admin_token), params: {userId: created.fetch(:id)}).fetch(:active)
+
+    auth.api.patch_scim_user(
+      headers: bearer(admin_token),
+      params: {userId: created.fetch(:id)},
+      body: {schemas: [PATCH_SCHEMA], Operations: [{op: "replace", path: "active", value: false}]}
+    )
+    patched_user = auth.context.internal_adapter.find_user_by_id(created.fetch(:id))
+    assert_equal true, patched_user.fetch("banned")
+    assert_equal "Deactivated via SCIM", patched_user.fetch("banReason")
   end
 
   def test_scim_put_active_revokes_secondary_sessions_and_can_reactivate
@@ -156,6 +167,7 @@ class BetterAuthPluginsScimUsersTest < Minitest::Test
 
     deactivated = auth.api.update_scim_user(headers: bearer(token), params: {userId: created.fetch(:id)}, body: {userName: "secondary-active@example.com", active: false})
     assert_equal false, deactivated.fetch(:active)
+    assert_equal "Deactivated via SCIM", auth.context.internal_adapter.find_user_by_id(created.fetch(:id)).fetch("banReason")
     assert_nil storage.get(session.fetch("token"))
     assert_nil storage.get(active_key)
 

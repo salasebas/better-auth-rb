@@ -10,6 +10,133 @@ class BetterAuthMySQLAdapterTest < Minitest::Test
 
   SECRET = "test-secret-that-is-long-enough-for-validation"
 
+  def test_mysql_url_preserves_documented_driver_options_without_connecting
+    url = "mysql2://user+name:p%2Bass@db.example:3307/app%2Ftenant?" \
+      "socket=%2Ftmp%2Fmysql%2Bsock&encoding=utf8mb4&flags=FOUND_ROWS+-COMPRESS&" \
+      "sslkey=%2Fcerts%2Fclient-key.pem&sslcert=%2Fcerts%2Fclient-cert.pem&" \
+      "sslca=%2Fcerts%2Fca.pem&sslcapath=%2Fcerts&sslcipher=TLS_AES_256_GCM_SHA384&" \
+      "default_file=%2Fetc%2Fmy.cnf&default_group=client&default_auth=caching_sha2_password&" \
+      "init_command=SET%20sql_mode%3D%27STRICT_ALL_TABLES%27&" \
+      "connect_timeout=7&read_timeout=8&write_timeout=9&" \
+      "reconnect=true&local_infile=false&secure_auth=true&" \
+      "get_server_public_key=false&sslverify=true&ssl_mode=verify_identity"
+
+    options = mysql_client_options(url: url)
+
+    assert_equal(
+      {
+        host: "db.example",
+        port: 3307,
+        username: "user+name",
+        password: "p+ass",
+        database: "app/tenant",
+        socket: "/tmp/mysql+sock",
+        encoding: "utf8mb4",
+        flags: "FOUND_ROWS -COMPRESS",
+        sslkey: "/certs/client-key.pem",
+        sslcert: "/certs/client-cert.pem",
+        sslca: "/certs/ca.pem",
+        sslcapath: "/certs",
+        sslcipher: "TLS_AES_256_GCM_SHA384",
+        default_file: "/etc/my.cnf",
+        default_group: "client",
+        default_auth: "caching_sha2_password",
+        init_command: "SET sql_mode='STRICT_ALL_TABLES'",
+        connect_timeout: 7,
+        read_timeout: 8,
+        write_timeout: 9,
+        reconnect: true,
+        local_infile: false,
+        secure_auth: true,
+        get_server_public_key: false,
+        sslverify: true,
+        ssl_mode: :verify_identity,
+        symbolize_keys: false
+      },
+      options
+    )
+  end
+
+  def test_mysql_url_uses_last_repeated_value_and_warns_for_unsupported_keys_without_values
+    url = "mysql2://user:password@db.example/app?" \
+      "read_timeout=3&read_timeout=11&host=attacker.example&pool=9&unknown=secret-value"
+
+    _out, err = capture_io do
+      @captured_mysql_options = mysql_client_options(url: url)
+    end
+
+    assert_equal 11, @captured_mysql_options[:read_timeout]
+    assert_equal "db.example", @captured_mysql_options[:host]
+    assert_includes err, 'Ignoring unsupported MySQL URL option: "host"'
+    assert_includes err, 'Ignoring unsupported MySQL URL option: "pool"'
+    assert_includes err, 'Ignoring unsupported MySQL URL option: "unknown"'
+    refute_includes err, "attacker.example"
+    refute_includes err, "secret-value"
+  ensure
+    @captured_mysql_options = nil
+  end
+
+  def test_explicit_mysql_connection_options_override_url_and_keep_string_row_keys
+    connection_options = {
+      host: "override.example",
+      port: 4406,
+      read_timeout: 12,
+      ssl_mode: "VERIFY_IDENTITY",
+      sslca: "/explicit-ca.pem",
+      symbolize_keys: true
+    }
+    connection_options["host"] = connection_options.delete(:host)
+    options = mysql_client_options(
+      url: "mysql2://user:password@db.example:3306/app?read_timeout=3&ssl_mode=required&sslca=%2Furl-ca.pem",
+      connection_options: connection_options
+    )
+
+    assert_equal "override.example", options[:host]
+    assert_equal 4406, options[:port]
+    assert_equal 12, options[:read_timeout]
+    assert_equal :verify_identity, options[:ssl_mode]
+    assert_equal "/explicit-ca.pem", options[:sslca]
+    assert_equal false, options[:symbolize_keys]
+  end
+
+  def test_explicit_mysql_connection_bypasses_url_and_connection_options
+    connection = Object.new
+
+    adapter = BetterAuth::Adapters::MySQL.new(
+      url: "not a valid URL %",
+      connection: connection,
+      connection_options: {unsupported: "ignored with an explicit connection"}
+    )
+
+    assert_same connection, adapter.connection
+  end
+
+  def test_mysql_url_rejects_invalid_typed_and_tls_options_before_connecting
+    {
+      "connect_timeout=0" => "MySQL option connect_timeout must be a positive integer",
+      "read_timeout=not-a-number" => "MySQL option read_timeout must be a positive integer",
+      "sslverify=1" => "MySQL option sslverify must be true or false",
+      "ssl_mode=verify_peer" => "MySQL option ssl_mode must be one of: disabled, preferred, required, verify_ca, verify_identity"
+    }.each do |query, message|
+      error = assert_raises(ArgumentError) do
+        mysql_client_options(url: "mysql2://user:password@db.example/app?#{query}")
+      end
+
+      assert_equal message, error.message
+    end
+  end
+
+  def test_mysql_connection_options_reject_unknown_driver_keys
+    error = assert_raises(ArgumentError) do
+      mysql_client_options(
+        url: "mysql2://user:password@db.example/app",
+        connection_options: {unknown: true}
+      )
+    end
+
+    assert_equal "Unsupported MySQL connection option: unknown", error.message
+  end
+
   def test_mysql_adapter_can_be_instantiated_without_rails
     port = ENV.fetch("BETTER_AUTH_MYSQL_PORT", "3306")
     adapter = BetterAuth::Adapters::MySQL.new(url: "mysql2://user:password@127.0.0.1:#{port}/better_auth")
@@ -153,6 +280,26 @@ class BetterAuthMySQLAdapterTest < Minitest::Test
   end
 
   private
+
+  def mysql_client_options(url:, connection_options: nil)
+    require "mysql2"
+
+    captured = nil
+    connection = Object.new
+    keywords = {url: url}
+    keywords[:connection_options] = connection_options unless connection_options.nil?
+    client_constructor = lambda do |options|
+      captured = options
+      connection
+    end
+    Mysql2::Client.stub(:new, client_constructor) do
+      adapter = BetterAuth::Adapters::MySQL.new(**keywords)
+      assert_same connection, adapter.connection
+    end
+    captured
+  rescue LoadError
+    skip "mysql2 gem is not installed"
+  end
 
   def with_contract_adapter(config)
     require "mysql2"

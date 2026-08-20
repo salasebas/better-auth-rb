@@ -4,7 +4,7 @@ module BetterAuth
   module SocialProviders
     module_function
 
-    def paypal(client_id:, client_secret:, scopes: [], **options)
+    def paypal(client_id:, client_secret: nil, scopes: [], **options)
       normalized = Base.normalize_options(options)
       sandbox = (options[:environment] || "sandbox").to_s == "sandbox"
       auth_host = sandbox ? "https://www.sandbox.paypal.com" : "https://www.paypal.com"
@@ -22,6 +22,7 @@ module BetterAuth
         user_info_endpoint: "#{api_host}/v1/identity/oauth2/userinfo?schema=paypalv1.1",
         scopes: scopes,
         pkce: true,
+        authorization_requires_client_secret: true,
         token_authentication: :basic,
         profile_map: ->(profile) {
           {

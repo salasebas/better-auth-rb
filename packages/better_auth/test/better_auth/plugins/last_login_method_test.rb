@@ -56,6 +56,57 @@ class BetterAuthPluginsLastLoginMethodTest < Minitest::Test
     assert_equal "email", session[:user]["lastLoginMethod"]
   end
 
+  def test_last_login_method_stores_initial_method_without_creating_a_session
+    auth = build_auth(
+      email_and_password: {auto_sign_in: false},
+      plugins: [BetterAuth::Plugins.last_login_method(store_in_database: true)]
+    )
+
+    result = auth.api.sign_up_email(body: {
+      email: "last-sessionless@example.com",
+      password: "password123",
+      name: "Last Sessionless"
+    })
+    stored = auth.context.internal_adapter.find_user_by_id(result[:user]["id"])
+
+    assert_nil result[:token]
+    assert_equal "email", result[:user]["lastLoginMethod"]
+    assert_equal "email", stored["lastLoginMethod"]
+    assert_empty auth.context.internal_adapter.list_sessions(stored["id"])
+  end
+
+  def test_last_login_method_tracking_failure_does_not_fail_authentication
+    logged = []
+    tracking_error = RuntimeError.new("tracking update failed")
+    auth = build_auth(
+      email_and_password: {auto_sign_in: false},
+      logger: ->(level, message, error) { logged << [level, message, error] },
+      database_hooks: {
+        user: {
+          update: {
+            before: lambda do |data, _ctx|
+              raise tracking_error if data.key?("lastLoginMethod")
+            end
+          }
+        }
+      },
+      plugins: [BetterAuth::Plugins.last_login_method(store_in_database: true)]
+    )
+    auth.api.sign_up_email(body: {email: "last-tracking-failure@example.com", password: "password123", name: "Tracking Failure"})
+
+    status, headers, _body = auth.api.sign_in_email(
+      body: {email: "last-tracking-failure@example.com", password: "password123"},
+      as_response: true
+    )
+    cookie = cookie_header(headers.fetch("set-cookie"))
+    session = auth.api.get_session(headers: {"cookie" => cookie}, query: {disableCookieCache: true})
+
+    assert_equal 200, status
+    assert_includes headers.fetch("set-cookie"), auth.context.auth_cookies[:session_token].name
+    assert_equal "last-tracking-failure@example.com", session[:user]["email"]
+    assert_equal [[:error, "Failed to update lastLoginMethod", tracking_error]], logged
+  end
+
   def test_last_login_method_sets_magic_link_cookie_and_database_value
     sent = []
     auth = build_auth(
@@ -64,6 +115,10 @@ class BetterAuthPluginsLastLoginMethodTest < Minitest::Test
         BetterAuth::Plugins.magic_link(send_magic_link: ->(data, _ctx = nil) { sent << data })
       ]
     )
+
+    auth.api.sign_up_email(body: {email: "magic-last@example.com", password: "password123", name: "Magic Last"})
+    initial = auth.context.internal_adapter.find_user_by_email("magic-last@example.com").fetch(:user)
+    assert_equal "email", initial["lastLoginMethod"]
 
     auth.api.sign_in_magic_link(body: {email: "magic-last@example.com", callbackURL: "/dashboard"})
     _status, headers, _body = auth.api.magic_link_verify(
@@ -108,6 +163,50 @@ class BetterAuthPluginsLastLoginMethodTest < Minitest::Test
 
     assert_nil BetterAuth::Plugins.resolve_login_method(ctx, plugin.options)
     assert_equal [""], calls
+  end
+
+  def test_last_login_method_custom_resolver_persists_for_username_sign_in
+    auth = build_auth(
+      plugins: [
+        BetterAuth::Plugins.username,
+        BetterAuth::Plugins.last_login_method(
+          store_in_database: true,
+          custom_resolve_method: ->(ctx) { "username" if ctx.path == "/sign-in/username" }
+        )
+      ]
+    )
+    created = auth.api.sign_up_email(
+      body: {email: "last-username@example.com", username: "last_username", password: "password123", name: "Last Username"}
+    )
+
+    status, headers, _body = auth.api.sign_in_username(
+      body: {username: "last_username", password: "password123"},
+      as_response: true
+    )
+    stored = auth.context.internal_adapter.find_user_by_id(created[:user]["id"])
+
+    assert_equal 200, status
+    assert_includes headers.fetch("set-cookie"), "better-auth.last_used_login_method=username"
+    assert_equal "username", stored["lastLoginMethod"]
+  end
+
+  def test_last_login_method_does_not_store_an_empty_custom_method_on_sessionless_sign_up
+    auth = build_auth(
+      email_and_password: {auto_sign_in: false},
+      plugins: [
+        BetterAuth::Plugins.last_login_method(
+          store_in_database: true,
+          custom_resolve_method: ->(_ctx) { "" }
+        )
+      ]
+    )
+
+    result = auth.api.sign_up_email(
+      body: {email: "last-empty@example.com", password: "password123", name: "Last Empty"}
+    )
+    stored = auth.context.internal_adapter.find_user_by_id(result[:user]["id"])
+
+    assert_nil stored["lastLoginMethod"]
   end
 
   def test_last_login_method_sets_cookie_and_database_value_for_siwe

@@ -185,7 +185,7 @@ module BetterAuth
       if active
         {banned: false, banReason: nil, banExpires: nil}
       else
-        {banned: true, banReason: "Deactivated by SCIM", banExpires: nil}
+        {banned: true, banReason: "Deactivated via SCIM", banExpires: nil}
       end
     end
 

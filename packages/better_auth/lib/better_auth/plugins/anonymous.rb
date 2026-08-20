@@ -81,7 +81,7 @@ module BetterAuth
         )
         raise APIError.new("INTERNAL_SERVER_ERROR", message: ANONYMOUS_ERROR_CODES["FAILED_TO_CREATE_USER"]) unless user
 
-        session = ctx.context.internal_adapter.create_session(user["id"])
+        session = ctx.context.internal_adapter.create_session(user["id"], false, nil, false, ctx)
         raise APIError.new("BAD_REQUEST", message: ANONYMOUS_ERROR_CODES["COULD_NOT_CREATE_SESSION"]) unless session
 
         Cookies.set_session_cookie(ctx, {session: session, user: user})
@@ -214,7 +214,8 @@ module BetterAuth
         "/email-otp/verify-email",
         "/one-tap/callback",
         "/passkey/verify-authentication",
-        "/phone-number/verify"
+        "/phone-number/verify",
+        "/verify-email"
       )
     end
 

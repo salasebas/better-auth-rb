@@ -302,13 +302,14 @@ class BetterAuthRoutesPasswordTest < Minitest::Test
     assert_equal BetterAuth::BASE_ERROR_CODES["INVALID_PASSWORD"], error.message
   end
 
-  def test_verify_password_is_server_only_for_rack_requests
+  def test_verify_password_is_routable_for_rack_requests
     auth = build_auth
     cookie = sign_up_cookie(auth, email: "verify-password-rack@example.com", password: "password123")
 
-    status, _headers, _body = auth.call(rack_env("POST", "/api/auth/verify-password", body: {password: "password123"}, cookie: cookie))
+    status, _headers, body = auth.call(rack_env("POST", "/api/auth/verify-password", body: {password: "password123"}, cookie: cookie))
 
-    assert_equal 403, status
+    assert_equal 200, status
+    assert_equal({"status" => true}, JSON.parse(body.join))
   end
 
   def test_verify_password_requires_session

@@ -48,9 +48,11 @@ class RedisStorageTest < Minitest::Test
     storage = BetterAuth::RedisStorage.new(client: @client, atomic_clear: true)
 
     storage.set("session-token", "payload")
+    generation = @client.data.fetch("better-auth:__generation__")
 
     assert_equal "payload", storage.get("session-token")
-    assert_equal "payload", @client.data.fetch("better-auth:v1:session-token")
+    assert_match(/\A[0-9a-f]{64}\z/, generation)
+    assert_equal "payload", @client.data.fetch("better-auth:v#{generation}:session-token")
   end
 
   def test_set_with_positive_ttl_uses_setex
@@ -253,28 +255,224 @@ class RedisStorageTest < Minitest::Test
   def test_atomic_clear_hides_existing_keys_without_deleting_new_generation
     storage = BetterAuth::RedisStorage.new(client: @client, atomic_clear: true)
     storage.set("a", "one")
+    previous_generation = @client.data.fetch("better-auth:__generation__")
 
     result = storage.clear
+    current_generation = @client.data.fetch("better-auth:__generation__")
     storage.set("a", "two")
 
     assert_nil result
+    refute_equal previous_generation, current_generation
     assert_equal "two", storage.get("a")
     assert_equal ["a"], storage.list_keys
-    assert_nil @client.data["better-auth:v1:a"]
-    assert_equal "two", @client.data.fetch("better-auth:v2:a")
-    assert_equal [["better-auth:v1:a"]], @client.del_calls
+    assert_nil @client.data["better-auth:v#{previous_generation}:a"]
+    assert_equal "two", @client.data.fetch("better-auth:v#{current_generation}:a")
+    assert_equal [["better-auth:v#{previous_generation}:a"]], @client.del_calls
   end
 
   def test_atomic_clear_makes_late_old_generation_writes_logically_invisible
     storage = BetterAuth::RedisStorage.new(client: @client, atomic_clear: true)
     storage.set("before", "old")
+    previous_generation = @client.data.fetch("better-auth:__generation__")
 
     storage.clear
-    @client.set("better-auth:v1:late", "stale")
+    @client.set("better-auth:v#{previous_generation}:late", "stale")
 
     assert_nil storage.get("late")
     assert_empty storage.list_keys
-    assert_equal "stale", @client.data.fetch("better-auth:v1:late")
+    assert_equal "stale", @client.data.fetch("better-auth:v#{previous_generation}:late")
+  end
+
+  def test_atomic_clear_repairs_missing_marker_without_reusing_revoked_generation
+    storage = BetterAuth::RedisStorage.new(client: @client, atomic_clear: true)
+    storage.set("session-token", "live-session")
+    revoked_generation = @client.data.fetch("better-auth:__generation__")
+    storage.clear
+    cleared_generation = @client.data.fetch("better-auth:__generation__")
+
+    @client.set("better-auth:v#{revoked_generation}:session-token", "late-session")
+    @client.set("better-auth:v#{revoked_generation}:verification:code", "late-verification")
+    @client.del("better-auth:__generation__")
+
+    assert_nil storage.get("session-token")
+    assert_nil storage.get("verification:code")
+    repaired_generation = @client.data.fetch("better-auth:__generation__")
+    assert_match(/\A[0-9a-f]{64}\z/, repaired_generation)
+    refute_includes [revoked_generation, cleared_generation], repaired_generation
+  end
+
+  def test_atomic_clear_repairs_corrupt_markers_without_selecting_legacy_v1
+    ["corrupt", "0", "-1", "01", "1abc"].each do |corrupt_marker|
+      client = FakeRedisClient.new
+      storage = BetterAuth::RedisStorage.new(client: client, atomic_clear: true)
+      storage.set("session-token", "live-session")
+      revoked_generation = client.data.fetch("better-auth:__generation__")
+      storage.clear
+
+      client.set("better-auth:v#{revoked_generation}:session-token", "late-session")
+      client.set("better-auth:v#{revoked_generation}:verification:code", "late-verification")
+      client.set("better-auth:v1:session-token", "legacy-stale-session")
+      client.set("better-auth:v1:verification:code", "legacy-stale-verification")
+      client.set("better-auth:__generation__", corrupt_marker)
+
+      assert_nil storage.get("session-token"), "corrupt marker: #{corrupt_marker.inspect}"
+      assert_nil storage.get("verification:code"), "corrupt marker: #{corrupt_marker.inspect}"
+      assert_match(/\A[0-9a-f]{64}\z/, client.data.fetch("better-auth:__generation__"))
+      refute_equal revoked_generation, client.data.fetch("better-auth:__generation__")
+    end
+  end
+
+  def test_atomic_clear_preserves_legacy_numeric_generation_until_clear
+    storage = BetterAuth::RedisStorage.new(client: @client, atomic_clear: true)
+    @client.set("better-auth:__generation__", "7")
+    @client.set("better-auth:v7:session-token", "legacy-session")
+
+    assert_equal "legacy-session", storage.get("session-token")
+
+    storage.clear
+
+    generation = @client.data.fetch("better-auth:__generation__")
+    assert_match(/\A[0-9a-f]{64}\z/, generation)
+    refute_equal "7", generation
+    assert_nil storage.get("session-token")
+  end
+
+  def test_atomic_clear_rotates_maximum_redis_integer_generation_without_incrementing
+    storage = BetterAuth::RedisStorage.new(client: @client, atomic_clear: true)
+    maximum = "9223372036854775807"
+    @client.set("better-auth:__generation__", maximum)
+    @client.set("better-auth:v#{maximum}:verification:code", "legacy-verification")
+
+    assert_equal "legacy-verification", storage.get("verification:code")
+    storage.clear
+
+    assert_match(/\A[0-9a-f]{64}\z/, @client.data.fetch("better-auth:__generation__"))
+    assert_nil storage.get("verification:code")
+    assert_empty @client.incr_calls
+  end
+
+  def test_atomic_clear_concurrent_missing_marker_resolution_installs_one_generation
+    first = BetterAuth::RedisStorage.new(client: @client, atomic_clear: true)
+    second = BetterAuth::RedisStorage.new(client: @client, atomic_clear: true)
+    ready = Queue.new
+    start = Queue.new
+    threads = [first, second].map do |storage|
+      Thread.new do
+        ready << true
+        start.pop
+        storage.get("session-token")
+      end
+    end
+    2.times { ready.pop }
+    2.times { start << true }
+
+    assert_equal [nil, nil], threads.map(&:value)
+    generation = @client.data.fetch("better-auth:__generation__")
+    assert_match(/\A[0-9a-f]{64}\z/, generation)
+    assert_equal 1, @client.generation_writes.count { |event| event.first == :repair }
+  end
+
+  def test_atomic_clear_concurrent_clears_serialize_and_hide_delayed_writers
+    first = BetterAuth::RedisStorage.new(client: @client, atomic_clear: true)
+    second = BetterAuth::RedisStorage.new(client: @client, atomic_clear: true)
+    first.set("session-token", "live-session")
+    initial_generation = @client.data.fetch("better-auth:__generation__")
+    ready = Queue.new
+    start = Queue.new
+    threads = [first, second].map do |storage|
+      Thread.new do
+        ready << true
+        start.pop
+        storage.clear
+      end
+    end
+    2.times { ready.pop }
+    2.times { start << true }
+    threads.each(&:value)
+
+    rotations = @client.generation_writes.select { |event| event.first == :rotate }
+    assert_equal 2, rotations.length
+    assert_equal initial_generation, rotations[0][1]
+    assert_equal rotations[0][2], rotations[1][1]
+    assert_equal 3, [initial_generation, rotations[0][2], rotations[1][2]].uniq.length
+
+    delayed_writer = Thread.new do
+      @client.set("better-auth:v#{initial_generation}:session-token", "late-session")
+      @client.set("better-auth:v#{rotations[0][2]}:verification:code", "late-verification")
+    end
+    delayed_writer.value
+
+    assert_nil first.get("session-token")
+    assert_nil first.get("verification:code")
+  end
+
+  def test_atomic_clear_rejects_generation_candidate_collision_without_mutating_marker
+    storage = BetterAuth::RedisStorage.new(client: @client, atomic_clear: true)
+    generation = "a" * 64
+    storage.define_singleton_method(:new_generation) { generation }
+    storage.set("session-token", "live-session")
+
+    error = assert_raises(RuntimeError) { storage.clear }
+
+    assert_match(/must differ/, error.message)
+    assert_equal generation, @client.data.fetch("better-auth:__generation__")
+    assert_equal "live-session", storage.get("session-token")
+    assert_empty @client.generation_writes.select { |event| event.first == :rotate }
+  end
+
+  def test_atomic_clear_rotation_error_before_write_preserves_current_generation
+    client = GenerationFailureFakeRedisClient.new
+    storage = BetterAuth::RedisStorage.new(client: client, atomic_clear: true)
+    storage.set("session-token", "live-session")
+    storage.set("verification:code", "live-verification")
+    generation = client.data.fetch("better-auth:__generation__")
+    client.fail_before_next_rotation!
+
+    assert_raises(ExpectedRedisError) { storage.clear }
+
+    assert_equal generation, client.data.fetch("better-auth:__generation__")
+    assert_equal "live-session", storage.get("session-token")
+    assert_equal "live-verification", storage.get("verification:code")
+  end
+
+  def test_atomic_clear_lost_rotation_reply_keeps_old_values_logically_hidden
+    client = GenerationFailureFakeRedisClient.new
+    storage = BetterAuth::RedisStorage.new(client: client, atomic_clear: true)
+    storage.set("session-token", "live-session")
+    storage.set("verification:code", "live-verification")
+    previous_generation = client.data.fetch("better-auth:__generation__")
+    client.fail_after_next_rotation!
+
+    assert_raises(ExpectedRedisError) { storage.clear }
+
+    refute_equal previous_generation, client.data.fetch("better-auth:__generation__")
+    assert_nil storage.get("session-token")
+    assert_nil storage.get("verification:code")
+    assert_equal "live-session", client.data.fetch("better-auth:v#{previous_generation}:session-token")
+    assert_equal "live-verification", client.data.fetch("better-auth:v#{previous_generation}:verification:code")
+  end
+
+  def test_atomic_clear_cleanup_errors_keep_old_values_logically_hidden
+    [:scan, :delete].each do |failure|
+      client = CleanupFailureFakeRedisClient.new
+      storage = BetterAuth::RedisStorage.new(client: client, atomic_clear: true)
+      storage.set("session-token", "live-session")
+      storage.set("verification:code", "live-verification")
+      previous_generation = client.data.fetch("better-auth:__generation__")
+      if failure == :scan
+        client.fail_next_scan!
+      else
+        client.fail_next_delete!
+      end
+
+      assert_raises(ExpectedRedisError) { storage.clear }
+
+      refute_equal previous_generation, client.data.fetch("better-auth:__generation__")
+      assert_nil storage.get("session-token")
+      assert_nil storage.get("verification:code")
+      assert_equal "live-session", client.data.fetch("better-auth:v#{previous_generation}:session-token")
+      assert_equal "live-verification", client.data.fetch("better-auth:v#{previous_generation}:verification:code")
+    end
   end
 
   def test_clear_deletes_in_chunks_when_many_keys
@@ -351,12 +549,13 @@ class RedisStorageTest < Minitest::Test
     storage = BetterAuth::RedisStorage.new(client: scan_client, scan_count: 50, atomic_clear: true)
     storage.set("a", "one")
     storage.set("b", "two")
+    previous_generation = scan_client.data.fetch("better-auth:__generation__")
 
     storage.clear
 
     assert_empty scan_client.keys_calls
-    assert_equal ["better-auth:v1:*"], scan_client.scan_calls.map { |(_cursor, options)| options.fetch(:match) }.uniq
-    assert_empty scan_client.data.keys.grep(/\Abetter-auth:v1:/)
+    assert_equal ["better-auth:v#{previous_generation}:*"], scan_client.scan_calls.map { |(_cursor, options)| options.fetch(:match) }.uniq
+    assert_empty scan_client.data.keys.grep(/\Abetter-auth:v#{previous_generation}:/)
   end
 
   def test_scan_count_must_be_nil_or_positive_integer
@@ -409,6 +608,19 @@ class RedisStorageTest < Minitest::Test
 
     assert_equal ["inside"], storage.list_keys
     assert_equal 'auth\*\?\[x\]\\\\:*', client.scan_calls.last.fetch(1).fetch(:match)
+  end
+
+  def test_atomic_clear_opaque_generation_preserves_literal_glob_namespace_matching
+    client = FakeRedisClient.new
+    storage = BetterAuth::RedisStorage.new(client: client, key_prefix: 'auth*?[x]\:', atomic_clear: true)
+    storage.set("inside", "one")
+    generation = client.data.fetch('auth*?[x]\:__generation__')
+    client.set("authABCx\\:v#{generation}:outside", "two")
+
+    assert_equal ["inside"], storage.list_keys
+    assert_equal "one", storage.get("inside")
+    assert_equal "two", client.get("authABCx\\:v#{generation}:outside")
+    assert_equal "auth\\*\\?\\[x\\]\\\\:v#{generation}:*", client.scan_calls.last.fetch(1).fetch(:match)
   end
 
   def test_key_prefix_glob_metacharacters_are_escaped_for_legacy_keys
@@ -575,7 +787,7 @@ class RedisStorageTest < Minitest::Test
     assert_raises(ExpectedRedisError) { BetterAuth::RedisStorage.new(client: RaisingRedisClient.new(:del)).delete("key") }
     assert_raises(ExpectedRedisError) { BetterAuth::RedisStorage.new(client: RaisingRedisClient.new(:keys), scan_count: nil).list_keys }
     assert_raises(ExpectedRedisError) { BetterAuth::RedisStorage.new(client: RaisingRedisClient.new(:scan)).list_keys }
-    assert_raises(ExpectedRedisError) { BetterAuth::RedisStorage.new(client: RaisingRedisClient.new(:incr), atomic_clear: true).clear }
+    assert_raises(ExpectedRedisError) { BetterAuth::RedisStorage.new(client: RaisingRedisClient.new(:eval), atomic_clear: true).clear }
   end
 
   private
@@ -597,7 +809,7 @@ class RedisStorageTest < Minitest::Test
   class ExpectedRedisError < StandardError; end
 
   class FakeRedisClient
-    attr_reader :data, :set_calls, :setex_calls, :del_calls, :keys_calls, :incr_calls, :scan_calls, :call_calls, :eval_calls, :expirations
+    attr_reader :data, :set_calls, :setex_calls, :del_calls, :keys_calls, :incr_calls, :scan_calls, :call_calls, :eval_calls, :expirations, :generation_writes
 
     def initialize
       @data = {}
@@ -610,6 +822,7 @@ class RedisStorageTest < Minitest::Test
       @call_calls = []
       @eval_calls = []
       @expirations = {}
+      @generation_writes = []
       @script_mutex = Mutex.new
     end
 
@@ -638,7 +851,7 @@ class RedisStorageTest < Minitest::Test
 
     def incr(key)
       incr_calls << key
-      data[key] = data.fetch(key, 0).to_i + 1
+      increment_value(key)
     end
 
     def call(command, key)
@@ -652,9 +865,31 @@ class RedisStorageTest < Minitest::Test
       @script_mutex.synchronize do
         eval_calls << [script, keys, argv]
         key = keys.fetch(0)
-        if script.include?('redis.call("INCR"')
-          value = data.fetch(key, 0).to_i + 1
-          data[key] = value
+        if script.include?("better-auth:resolve-generation")
+          current = data[key]
+          if valid_generation?(current)
+            current.to_s
+          else
+            candidate = argv.fetch(0).to_s
+            raise "ERR invalid generation candidate" unless opaque_generation?(candidate)
+
+            data[key] = candidate
+            generation_writes << [:repair, current, candidate]
+            candidate
+          end
+        elsif script.include?("better-auth:rotate-generation")
+          current = data[key]
+          raise "ERR invalid current generation" unless valid_generation?(current)
+
+          candidate = argv.fetch(0).to_s
+          raise "ERR invalid generation candidate" unless opaque_generation?(candidate)
+          raise "ERR generation candidate must differ from current generation" if candidate == current.to_s
+
+          data[key] = candidate
+          generation_writes << [:rotate, current.to_s, candidate]
+          current.to_s
+        elsif script.include?('redis.call("INCR"')
+          value = increment_value(key)
           expirations[key] = argv.fetch(0).to_i if value == 1
           value
         elsif script.include?("cjson.decode")
@@ -698,6 +933,27 @@ class RedisStorageTest < Minitest::Test
     end
 
     private
+
+    def increment_value(key)
+      raw = data.fetch(key, "0").to_s
+      value = Integer(raw, 10)
+      raise RangeError if value >= 9_223_372_036_854_775_807
+
+      data[key] = value + 1
+    rescue ArgumentError, RangeError
+      raise "ERR value is not an integer or out of range"
+    end
+
+    def valid_generation?(value)
+      return false if value.nil?
+
+      string = value.to_s
+      string.match?(/\A[1-9][0-9]*\z/) || opaque_generation?(string)
+    end
+
+    def opaque_generation?(value)
+      value.match?(/\A[0-9a-f]{64}\z/)
+    end
 
     def redis_glob_match?(pattern, key)
       regex = +"\\A"
@@ -784,6 +1040,57 @@ class RedisStorageTest < Minitest::Test
     end
   end
 
+  class GenerationFailureFakeRedisClient < FakeRedisClient
+    def fail_before_next_rotation!
+      @rotation_failure = :before
+    end
+
+    def fail_after_next_rotation!
+      @rotation_failure = :after
+    end
+
+    def eval(script, **options)
+      if script.include?("better-auth:rotate-generation") && @rotation_failure
+        failure = @rotation_failure
+        @rotation_failure = nil
+        raise ExpectedRedisError if failure == :before
+
+        super
+        raise ExpectedRedisError
+      end
+
+      super
+    end
+  end
+
+  class CleanupFailureFakeRedisClient < FakeRedisClient
+    def fail_next_scan!
+      @fail_scan = true
+    end
+
+    def fail_next_delete!
+      @fail_delete = true
+    end
+
+    def scan(cursor, match:, count:)
+      if @fail_scan
+        @fail_scan = false
+        raise ExpectedRedisError
+      end
+
+      super
+    end
+
+    def del(*keys)
+      if @fail_delete
+        @fail_delete = false
+        raise ExpectedRedisError
+      end
+
+      super
+    end
+  end
+
   class RaisingRedisClient
     def initialize(failing_command)
       @failing_command = failing_command
@@ -823,6 +1130,12 @@ class RedisStorageTest < Minitest::Test
       raise ExpectedRedisError if @failing_command == :incr
 
       1
+    end
+
+    def eval(_script, keys:, argv:)
+      raise ExpectedRedisError if @failing_command == :eval
+
+      nil
     end
   end
 end

@@ -3,7 +3,6 @@
 require "uri"
 require "json"
 require "net/http"
-require "securerandom"
 
 module BetterAuth
   module Routes
@@ -81,7 +80,7 @@ module BetterAuth
           })
         end
 
-        code_verifier = SecureRandom.hex(16)
+        code_verifier = Crypto.random_string(128)
         state = Crypto.sign_jwt(
           {
             "callbackURL" => body["callbackURL"] || body["callbackUrl"] || body["callback_url"] || "/",
@@ -284,7 +283,7 @@ module BetterAuth
           next ctx.json({url: "", status: true, redirect: false})
         end
 
-        code_verifier = SecureRandom.hex(16)
+        code_verifier = Crypto.random_string(128)
         state_data = {
           "callbackURL" => body["callbackURL"] || body["callbackUrl"] || body["callback_url"] || ctx.context.base_url,
           "errorCallbackURL" => body["errorCallbackURL"] || body["errorCallbackUrl"] || body["error_callback_url"],

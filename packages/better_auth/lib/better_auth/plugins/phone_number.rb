@@ -32,6 +32,7 @@ module BetterAuth
 
       Plugin.new(
         id: "phone-number",
+        init: ->(_context) { {options: {database_hooks: phone_number_database_hooks}} },
         hooks: {
           before: [
             {
@@ -39,7 +40,10 @@ module BetterAuth
               handler: ->(ctx) { validate_unique_phone_number!(ctx, normalize_hash(ctx.body)[:phone_number]) }
             },
             {
-              matcher: ->(ctx) { ctx.path == "/update-user" && normalize_hash(ctx.body).key?(:phone_number) },
+              matcher: lambda do |ctx|
+                body = normalize_hash(ctx.body)
+                ctx.path == "/update-user" && body.key?(:phone_number) && !body[:phone_number].nil?
+              end,
               handler: ->(_ctx) { raise APIError.new("BAD_REQUEST", message: PHONE_NUMBER_ERROR_CODES["PHONE_NUMBER_CANNOT_BE_UPDATED"]) }
             }
           ]
@@ -123,7 +127,7 @@ module BetterAuth
         end
 
         dont_remember_me = body.key?(:remember_me) && (body[:remember_me] == false || body[:remember_me].to_s == "false")
-        session = ctx.context.internal_adapter.create_session(found["id"], dont_remember_me)
+        session = ctx.context.internal_adapter.create_session(found["id"], dont_remember_me, nil, false, ctx)
         raise APIError.new("UNAUTHORIZED", message: BASE_ERROR_CODES["FAILED_TO_CREATE_SESSION"]) unless session
 
         Cookies.set_session_cookie(ctx, {session: session, user: found}, dont_remember_me)
@@ -251,7 +255,7 @@ module BetterAuth
           next ctx.json({status: true, token: nil, user: Schema.parse_output(ctx.context.options, "user", user)})
         end
 
-        session = ctx.context.internal_adapter.create_session(user["id"])
+        session = ctx.context.internal_adapter.create_session(user["id"], false, nil, false, ctx)
         raise APIError.new("INTERNAL_SERVER_ERROR", message: BASE_ERROR_CODES["FAILED_TO_CREATE_SESSION"]) unless session
 
         Cookies.set_session_cookie(ctx, {session: session, user: user})
@@ -345,6 +349,20 @@ module BetterAuth
         }
       }
       deep_merge_hashes(base, normalize_hash(custom_schema || {}))
+    end
+
+    def phone_number_database_hooks
+      {
+        user: {
+          update: {
+            before: lambda do |user, _ctx|
+              next unless user.key?("phoneNumber") && user["phoneNumber"].nil?
+
+              {data: user.merge("phoneNumberVerified" => false)}
+            end
+          }
+        }
+      }
     end
 
     def phone_number_create_user(ctx, config, body, phone_number)
