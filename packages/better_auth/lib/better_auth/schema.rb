@@ -210,7 +210,11 @@ module BetterAuth
 
     private_class_method def self.physical_field_attributes(logical_field, attributes, tables)
       column = attributes[:field_name] || physical_name(logical_field)
-      physical_attributes = attributes.merge(field_name: column, logical_name: logical_field.to_s)
+      physical_attributes = attributes.merge(
+        required: attributes[:required] != false,
+        field_name: column,
+        logical_name: logical_field.to_s
+      )
       reference = attributes[:references]
       return physical_attributes unless reference
 
@@ -315,7 +319,6 @@ module BetterAuth
 
     private_class_method def self.normalize_field(value, key)
       data = symbolize_hash(value || {})
-      data[:required] = true unless data.key?(:required)
       data[:field_name] ||= physical_name(key)
       data[:references] = normalize_reference(data[:references]) if data[:references]
       data

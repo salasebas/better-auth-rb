@@ -481,10 +481,12 @@ class BetterAuthSchemaSQLTest < Minitest::Test
       }
     )
     config = BetterAuth::Configuration.new(secret: SECRET, database: :memory, plugins: [plugin])
-    field = BetterAuth::Schema.auth_tables(config).fetch("auditLog").fetch(:fields).fetch("action")
+    auth_field = BetterAuth::Schema.auth_tables(config).fetch("auditLog").fetch(:fields).fetch("action")
+    migration_field = BetterAuth::Schema.migration_tables(config).fetch("audit_logs").fetch(:fields).fetch("action")
     sql = BetterAuth::Schema::SQL.create_statements(config, dialect: :postgres).join("\n")
 
-    assert_equal true, field[:required]
+    refute auth_field.key?(:required)
+    assert_equal true, migration_field[:required]
     assert_includes sql, '"action" text NOT NULL'
   end
 
@@ -501,7 +503,7 @@ class BetterAuthSchemaSQLTest < Minitest::Test
       }
     )
     config = BetterAuth::Configuration.new(secret: SECRET, database: :memory, plugins: [plugin])
-    field = BetterAuth::Schema.auth_tables(config).fetch("auditLog").fetch(:fields).fetch("action")
+    field = BetterAuth::Schema.migration_tables(config).fetch("audit_logs").fetch(:fields).fetch("action")
     sql = BetterAuth::Schema::SQL.create_statements(config, dialect: :postgres).join("\n")
 
     assert_equal true, field[:required]
@@ -521,7 +523,7 @@ class BetterAuthSchemaSQLTest < Minitest::Test
       }
     )
     config = BetterAuth::Configuration.new(secret: SECRET, database: :memory, plugins: [plugin])
-    field = BetterAuth::Schema.auth_tables(config).fetch("auditLog").fetch(:fields).fetch("action")
+    field = BetterAuth::Schema.migration_tables(config).fetch("audit_logs").fetch(:fields).fetch("action")
     sql = BetterAuth::Schema::SQL.create_statements(config, dialect: :postgres).join("\n")
 
     assert_equal false, field[:required]
