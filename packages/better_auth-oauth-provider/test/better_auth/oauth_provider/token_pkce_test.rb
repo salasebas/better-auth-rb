@@ -82,7 +82,7 @@ class OAuthProviderTokenPkceTest < Minitest::Test
     )
     expected_scopes = "openid profile email offline_access"
 
-    assert_equal expected_scopes, client[:scope]
+    refute client.key?(:scope)
 
     status, headers, = auth.api.oauth2_authorize(
       headers: {"cookie" => cookie},
@@ -113,6 +113,51 @@ class OAuthProviderTokenPkceTest < Minitest::Test
     assert_equal expected_scopes, tokens[:scope]
     assert tokens[:id_token]
     assert tokens[:refresh_token]
+  end
+
+  def test_explicit_empty_authorization_scope_does_not_use_provider_defaults
+    auth = build_auth_without_scope_configuration
+    cookie = sign_up_cookie(auth)
+    client = auth.api.admin_create_oauth_client(
+      body: {
+        redirect_uris: ["https://resource.example/callback"],
+        token_endpoint_auth_method: "client_secret_post",
+        grant_types: ["authorization_code", "refresh_token"],
+        response_types: ["code"],
+        skip_consent: true
+      }
+    )
+
+    status, headers, = auth.api.oauth2_authorize(
+      headers: {"cookie" => cookie},
+      query: {
+        response_type: "code",
+        client_id: client[:client_id],
+        redirect_uri: "https://resource.example/callback",
+        scope: "",
+        state: "empty-scope-state",
+        code_challenge: pkce_challenge,
+        code_challenge_method: "S256"
+      },
+      as_response: true
+    )
+
+    assert_equal 302, status
+    code = extract_redirect_params(headers).fetch("code")
+    tokens = auth.api.oauth2_token(
+      body: {
+        grant_type: "authorization_code",
+        code: code,
+        redirect_uri: "https://resource.example/callback",
+        client_id: client[:client_id],
+        client_secret: client[:client_secret],
+        code_verifier: pkce_verifier
+      }
+    )
+
+    assert_equal "", tokens[:scope]
+    refute tokens.key?(:id_token)
+    refute tokens.key?(:refresh_token)
   end
 
   def test_authorization_code_exchange_allows_omitted_state
