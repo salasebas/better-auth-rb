@@ -254,11 +254,15 @@ class BetterAuthSQLiteAdapterTest < Minitest::Test
     skip "sqlite3 gem is not installed"
   end
 
-  def test_find_one_honors_collection_join_limit
+  def test_find_one_keeps_collection_limit_independent_from_default_find_many_limit
     require "sqlite3"
 
     Tempfile.create(["better-auth-join-limit", ".sqlite3"]) do |file|
-      config = BetterAuth::Configuration.new(secret: SECRET, database: :memory)
+      config = BetterAuth::Configuration.new(
+        secret: SECRET,
+        database: :memory,
+        advanced: {database: {default_find_many_limit: 2}}
+      )
       connection = SQLite3::Database.new(file.path)
       connection.results_as_hash = true
       connection.execute("PRAGMA foreign_keys = ON")
@@ -277,11 +281,57 @@ class BetterAuthSQLiteAdapterTest < Minitest::Test
       found = adapter.find_one(
         model: "user",
         where: [{field: "id", value: user["id"]}],
-        join: {session: {limit: 2}}
+        join: {session: {limit: 5}}
       )
 
-      assert_equal 2, found.fetch("session").length
-      assert_equal ["token-0", "token-1"], found.fetch("session").map { |session| session.fetch("token") }
+      assert_equal 5, found.fetch("session").length
+      assert_equal ["token-0", "token-1", "token-2", "token-3", "token-4"], found.fetch("session").map { |session| session.fetch("token") }
+    ensure
+      connection&.close
+    end
+  rescue LoadError
+    skip "sqlite3 gem is not installed"
+  end
+
+  def test_find_many_applies_default_limit_to_base_rows_before_collection_join
+    require "sqlite3"
+
+    Tempfile.create(["better-auth-join-base-limit", ".sqlite3"]) do |file|
+      config = BetterAuth::Configuration.new(
+        secret: SECRET,
+        database: :memory,
+        advanced: {database: {default_find_many_limit: 2}}
+      )
+      connection = SQLite3::Database.new(file.path)
+      connection.results_as_hash = true
+      connection.execute("PRAGMA foreign_keys = ON")
+      create_schema(connection, config)
+      adapter = BetterAuth::Adapters::SQLite.new(config, connection: connection)
+
+      3.times do |index|
+        adapter.create(
+          model: "user",
+          data: {id: "user-#{index}", name: "User #{index}", email: "#{index}@example.com"},
+          force_allow_id: true
+        )
+      end
+      3.times do |index|
+        adapter.create(
+          model: "session",
+          data: {id: "session-#{index}", userId: "user-0", token: "token-#{index}", expiresAt: Time.now + 60},
+          force_allow_id: true
+        )
+      end
+
+      users = adapter.find_many(
+        model: "user",
+        sort_by: {field: "email", direction: "asc"},
+        join: {session: {limit: 10}}
+      )
+
+      assert_equal ["user-0", "user-1"], users.map { |user| user.fetch("id") }
+      assert_equal ["token-0", "token-1", "token-2"], users.first.fetch("session").map { |session| session.fetch("token") }
+      assert_empty users.last.fetch("session")
     ensure
       connection&.close
     end

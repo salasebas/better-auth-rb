@@ -63,8 +63,7 @@ module BetterAuth
         value = config[:limit]
         return default_find_many_limit if value.nil?
 
-        parsed = Integer(value)
-        parsed.positive? ? parsed : default_find_many_limit
+        Integer(value)
       rescue ArgumentError, TypeError
         default_find_many_limit
       end

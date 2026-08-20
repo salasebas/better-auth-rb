@@ -457,6 +457,15 @@ module BetterAuthAdapterContract
       ).first
 
       assert_equal ["joined-token-0", "joined-token-1", "joined-token-2"], found.fetch("session").map { |session| session.fetch("token") }
+
+      without_sessions = adapter.find_many(
+        model: "user",
+        where: [{field: "id", value: user.fetch("id")}],
+        limit: 10,
+        join: {session: {limit: 0}}
+      ).first
+
+      assert_empty without_sessions.fetch("session")
     end
   end
 

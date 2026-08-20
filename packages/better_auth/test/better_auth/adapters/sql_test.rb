@@ -154,8 +154,7 @@ class BetterAuthSQLAdapterTest < Minitest::Test
 
     assert_equal "ada@example.com", found["email"]
     assert_equal ["github", "credential"], found["account"].map { |account| account["providerId"] }
-    assert_includes connection.sql.first, 'LEFT JOIN "accounts" AS "account" ON "account"."user_id" = "users"."id"'
-    assert_includes connection.sql.first, "LIMIT 100"
+    assert_includes connection.sql.first, 'FROM (SELECT * FROM "users" WHERE "users"."id" = $1 LIMIT 100) AS "users" LEFT JOIN "accounts" AS "account" ON "account"."user_id" = "users"."id"'
   end
 
   def test_sql_adapter_infers_user_session_collection_join
@@ -201,8 +200,23 @@ class BetterAuthSQLAdapterTest < Minitest::Test
     found = adapter.find_one(model: "user", where: [{field: "id", value: "user-1"}], join: {session: true})
 
     assert_equal ["token-1", "token-2"], found.fetch("session").map { |session| session.fetch("token") }
-    assert_includes connection.sql.first, 'LEFT JOIN "sessions" AS "session" ON "session"."user_id" = "users"."id"'
-    assert_includes connection.sql.first, "LIMIT 100"
+    assert_includes connection.sql.first, 'FROM (SELECT * FROM "users" WHERE "users"."id" = $1 LIMIT 100) AS "users" LEFT JOIN "sessions" AS "session" ON "session"."user_id" = "users"."id"'
+  end
+
+  def test_sql_adapter_paginates_mssql_collection_join_base_rows_before_joining
+    config = BetterAuth::Configuration.new(secret: SECRET, database: :memory)
+    connection = RecordingConnection.new([])
+    adapter = BetterAuth::Adapters::SQL.new(config, connection: connection, dialect: :mssql)
+
+    adapter.find_many(
+      model: "user",
+      sort_by: {field: "email", direction: "asc"},
+      offset: 2,
+      join: {session: true}
+    )
+
+    assert_includes connection.sql.first, "FROM (SELECT * FROM [users] ORDER BY [users].[email] ASC OFFSET 2 ROWS FETCH NEXT 100 ROWS ONLY) AS [users] LEFT JOIN [sessions] AS [session]"
+    assert connection.sql.first.end_with?("ORDER BY [users].[email] ASC")
   end
 
   def test_sql_adapter_infers_schema_reference_one_to_one_join
