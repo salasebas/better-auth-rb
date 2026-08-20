@@ -503,14 +503,28 @@ class BetterAuthRouterTest < Minitest::Test
     end
 
     status, _headers, body = auth.call(
-      rack_env("POST", "/api/auth/post?callbackURL%5B%5D=first&callbackURL%5B%5D=second")
+      rack_env("POST", "/api/auth/post?callbackURL=/first&callbackURL=/second")
     )
     assert_equal 400, status
     assert_equal(
       {code: "BAD_REQUEST", message: "Invalid callbackURL: expected a string"},
       JSON.parse(body.join, symbolize_names: true)
     )
-    assert_equal 0, endpoint_calls
+
+    assert_equal 200, auth.call(rack_env("POST", "/api/auth/post", body: {"callbackURL" => 0})).first
+    status, _headers, body = auth.call(
+      rack_env(
+        "POST",
+        "/api/auth/post?callbackURL=https%3A%2F%2Fevil.example",
+        body: {"callbackURL" => 0}
+      )
+    )
+    assert_equal 403, status
+    assert_equal(
+      {code: "FORBIDDEN", message: "Invalid callbackURL"},
+      JSON.parse(body.join, symbolize_names: true)
+    )
+    assert_equal 1, endpoint_calls
   end
 
   def test_fetch_metadata_same_site_modes_and_missing_metadata
