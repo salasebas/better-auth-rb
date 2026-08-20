@@ -16,12 +16,17 @@ module BetterAuth
             # cookie-cache snapshot may outlive a revoked session, so force an
             # authoritative session read whenever stateful storage is active.
             session = BetterAuth::Routes.current_session(ctx, allow_nil: true, sensitive: true)
+            client_request = BetterAuth::Plugins.api_key_auth_required?(ctx)
+            BetterAuth::Plugins.api_key_validate_server_only!(body, create: true, client: client_request)
             if !session && BetterAuth::Plugins.api_key_auth_required?(ctx)
+              raise BetterAuth::APIError.new("UNAUTHORIZED", message: BetterAuth::Plugins::API_KEY_ERROR_CODES["UNAUTHORIZED_SESSION"])
+            end
+            if ctx.request && body.key?(:user_id)
               raise BetterAuth::APIError.new("UNAUTHORIZED", message: BetterAuth::Plugins::API_KEY_ERROR_CODES["UNAUTHORIZED_SESSION"])
             end
             reference_id = BetterAuth::Plugins.api_key_create_reference_id!(ctx, body, session, resolved_config)
 
-            BetterAuth::Plugins.api_key_validate_create_update!(body, resolved_config, create: true, client: !ctx.headers.empty?)
+            BetterAuth::Plugins.api_key_validate_create_update!(body, resolved_config, create: true, client: client_request)
             BetterAuth::Plugins.api_key_delete_expired(ctx.context, resolved_config)
             key_prefix = body.key?(:prefix) ? body[:prefix] : resolved_config[:default_prefix]
             key = BetterAuth::Plugins.api_key_generate_key(resolved_config, key_prefix)
@@ -47,10 +52,14 @@ module BetterAuth
               createdAt: now,
               updatedAt: now,
               permissions: BetterAuth::Plugins.api_key_encode_json(body[:permissions] || BetterAuth::Plugins.api_key_default_permissions(resolved_config, reference_id, ctx)),
-              metadata: body.key?(:metadata) ? BetterAuth::Plugins.api_key_encode_json(body[:metadata]) : nil
+              metadata: BetterAuth::APIKey::Utils.javascript_truthy?(body[:metadata]) ? BetterAuth::Plugins.api_key_encode_json(body[:metadata]) : nil
             }
             record = BetterAuth::Plugins.api_key_store(ctx, data, resolved_config)
-            BetterAuth::Plugins.api_key_public(record, reveal_key: key, include_key_field: true)
+            public_record = BetterAuth::Plugins.api_key_public(record, reveal_key: key, include_key_field: true)
+            unless BetterAuth::APIKey::Utils.javascript_truthy?(body[:metadata])
+              public_record[:metadata] = body.key?(:metadata) ? body[:metadata] : nil
+            end
+            public_record
           end
         end
       end
