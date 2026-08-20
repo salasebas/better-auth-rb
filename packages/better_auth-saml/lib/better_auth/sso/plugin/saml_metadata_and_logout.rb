@@ -195,10 +195,10 @@ module BetterAuth
       return if name_id.to_s.empty? || session_index.to_s.empty?
 
       record = {
-        providerId: provider.fetch("providerId"),
+        sessionId: session.fetch("id"),
         sessionToken: session.fetch("token"),
-        userId: session.fetch("userId"),
-        nameId: name_id.to_s,
+        providerId: provider.fetch("providerId"),
+        nameID: name_id.to_s,
         sessionIndex: session_index.to_s
       }
       expires_at = session["expiresAt"] || Time.now + (SSO_DEFAULT_ASSERTION_TTL_MS / 1000.0)
@@ -210,7 +210,7 @@ module BetterAuth
         expiresAt: expires_at
       )
       ctx.context.internal_adapter.create_verification_value(
-        identifier: "#{SSO_SAML_SESSION_BY_ID_KEY_PREFIX}#{session.fetch("token")}",
+        identifier: "#{SSO_SAML_SESSION_BY_ID_KEY_PREFIX}#{session.fetch("id")}",
         value: session_identifier,
         expiresAt: expires_at
       )
@@ -226,10 +226,11 @@ module BetterAuth
 
       record = JSON.parse(verification.fetch("value"))
       session_token = record["sessionToken"]
+      session_id = record["sessionId"]
       session_index_matches = data[:session_index].to_s.empty? || record["sessionIndex"].to_s.empty? || data[:session_index].to_s == record["sessionIndex"].to_s
       ctx.context.internal_adapter.delete_session(session_token) if session_token && session_index_matches
       ctx.context.internal_adapter.delete_verification_by_identifier(session_identifier)
-      ctx.context.internal_adapter.delete_verification_by_identifier("#{SSO_SAML_SESSION_BY_ID_KEY_PREFIX}#{session_token}") if session_token
+      ctx.context.internal_adapter.delete_verification_by_identifier("#{SSO_SAML_SESSION_BY_ID_KEY_PREFIX}#{session_id}") if session_id && session_index_matches
       data
     rescue
       {}
