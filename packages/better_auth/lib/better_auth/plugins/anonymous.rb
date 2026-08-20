@@ -214,7 +214,8 @@ module BetterAuth
         "/email-otp/verify-email",
         "/one-tap/callback",
         "/passkey/verify-authentication",
-        "/phone-number/verify"
+        "/phone-number/verify",
+        "/verify-email"
       )
     end
 
