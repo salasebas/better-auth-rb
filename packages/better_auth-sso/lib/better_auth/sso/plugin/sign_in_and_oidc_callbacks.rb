@@ -122,7 +122,7 @@ module BetterAuth
       if config[:provision_user].respond_to?(:call) && (result.fetch(:created) || config[:provision_user_on_every_login])
         config[:provision_user].call(user: result.fetch(:user), userInfo: user_info, token: tokens, provider: provider)
       end
-      session = ctx.context.internal_adapter.create_session(result.fetch(:user).fetch("id"))
+      session = ctx.context.internal_adapter.create_session(result.fetch(:user).fetch("id"), false, nil, false, ctx)
       Cookies.set_session_cookie(ctx, {session: session, user: result.fetch(:user)})
       redirect_to = (result.fetch(:created) && state["newUserURL"].to_s != "") ? sso_safe_oidc_redirect_url(ctx, state["newUserURL"]) : callback_url
       sso_redirect(ctx, redirect_to || "/")

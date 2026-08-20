@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Prevent `atomic_clear` from reusing revoked generations after a missing or
+  corrupt marker by atomically repairing and rotating opaque generation tokens.
 - Added a checked upstream test inventory for the Redis storage reference
   surface, including explicit Ruby-specific classifications.
 

@@ -4,7 +4,7 @@ module BetterAuth
   module SocialProviders
     module_function
 
-    def linkedin(client_id:, client_secret:, scopes: ["profile", "email", "openid"], **options)
+    def linkedin(client_id:, client_secret: nil, scopes: ["profile", "email", "openid"], **options)
       Base.oauth_provider(
         id: "linkedin",
         name: "Linkedin",

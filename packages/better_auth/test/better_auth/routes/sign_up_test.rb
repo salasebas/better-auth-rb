@@ -76,6 +76,24 @@ class BetterAuthRoutesSignUpTest < Minitest::Test
     assert_equal true, result[:user]["isAdmin"]
   end
 
+  def test_sign_up_email_keeps_omitted_required_additional_fields_optional_at_runtime
+    auth = build_auth(
+      user: {
+        additional_fields: {
+          plan: {type: "string"}
+        }
+      }
+    )
+
+    result = auth.api.sign_up_email(body: {
+      email: "omitted-required@example.com",
+      password: "password123",
+      name: "Omitted Required"
+    })
+
+    refute result[:user].key?("plan")
+  end
+
   def test_sign_up_email_rejects_input_false_additional_user_fields
     auth = build_auth(
       user: {
@@ -223,6 +241,26 @@ class BetterAuthRoutesSignUpTest < Minitest::Test
 
     assert_equal 403, status
     assert_equal BetterAuth::BASE_ERROR_CODES["CROSS_SITE_NAVIGATION_LOGIN_BLOCKED"], data.fetch("message")
+  end
+
+  def test_sign_up_email_uses_origin_validation_when_cookies_exist
+    auth = build_auth(trusted_origins: ["http://localhost:3000"])
+
+    status, _headers, _body = auth.call(
+      rack_env(
+        "POST",
+        "/api/auth/sign-up/email",
+        body: JSON.generate(email: "cookie-origin-sign-up@example.com", password: "password123", name: "CSRF"),
+        extra_headers: {
+          "HTTP_COOKIE" => "some_cookie=value",
+          "HTTP_SEC_FETCH_SITE" => "cross-site",
+          "HTTP_SEC_FETCH_MODE" => "navigate",
+          "HTTP_ORIGIN" => "http://localhost:3000"
+        }
+      )
+    )
+
+    assert_equal 200, status
   end
 
   def test_sign_up_email_rejects_invalid_email_and_short_password

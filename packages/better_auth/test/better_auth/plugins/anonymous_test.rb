@@ -171,6 +171,108 @@ class BetterAuthPluginsAnonymousTest < Minitest::Test
     assert_equal "linked@example.com", auth.api.get_session(headers: {"cookie" => real_cookie})[:user]["email"]
   end
 
+  def test_verify_email_auto_sign_in_links_and_cleans_previous_anonymous_user
+    sent = []
+    link_calls = []
+    auth = build_email_verification_link_auth(auto_sign_in: true, sent: sent, link_calls: link_calls)
+    _status, anonymous_headers, _body = auth.api.sign_in_anonymous(as_response: true)
+    anonymous_cookie = cookie_header(anonymous_headers.fetch("set-cookie"))
+    anonymous_session = auth.api.get_session(headers: {"cookie" => anonymous_cookie})
+    anonymous_user_id = anonymous_session[:user]["id"]
+    anonymous_session_id = anonymous_session[:session]["id"]
+    anonymous_session_token = anonymous_session[:session]["token"]
+
+    sign_up_status, _sign_up_headers, sign_up_body = auth.api.sign_up_email(
+      headers: {"cookie" => anonymous_cookie},
+      body: {email: "verify-linked@example.com", password: "password123", name: "Verify Linked"},
+      as_response: true
+    )
+    sign_up = JSON.parse(sign_up_body.join)
+    target_user_id = sign_up.fetch("user").fetch("id")
+    credential_account = auth.context.internal_adapter.find_account_by_provider_id(target_user_id, "credential")
+    retained_anonymous_session = auth.api.get_session(headers: {"cookie" => anonymous_cookie})
+
+    assert_equal 200, sign_up_status
+    assert_nil sign_up.fetch("token")
+    assert_equal anonymous_user_id, retained_anonymous_session[:user]["id"]
+    assert_equal anonymous_session_token, retained_anonymous_session[:session]["token"]
+    assert_equal target_user_id, credential_account["userId"]
+    assert_equal 1, sent.length
+
+    verification_status, verification_headers, verification_body = auth.api.verify_email(
+      headers: {"cookie" => anonymous_cookie},
+      query: {token: sent.fetch(0).fetch(:token)},
+      as_response: true
+    )
+    replacement_cookie = cookie_header(verification_headers.fetch("set-cookie"))
+    replacement_session = auth.api.get_session(headers: {"cookie" => replacement_cookie})
+    target_user = auth.context.internal_adapter.find_user_by_id(target_user_id)
+
+    assert_equal 200, verification_status
+    assert_equal({"status" => true, "user" => nil}, JSON.parse(verification_body.join))
+    assert_equal target_user_id, replacement_session[:user]["id"]
+    assert_equal true, replacement_session[:user]["emailVerified"]
+    assert_equal false, replacement_session[:user]["isAnonymous"]
+    refute_equal anonymous_session_id, replacement_session[:session]["id"]
+    refute_equal anonymous_session_token, replacement_session[:session]["token"]
+    assert_equal true, target_user["emailVerified"]
+    assert_equal target_user_id, auth.context.internal_adapter.find_account_by_provider_id(target_user_id, "credential")["userId"]
+
+    assert_equal 1, link_calls.length
+    link_call = link_calls.fetch(0)
+    assert_equal anonymous_user_id, link_call.dig(:anonymous_user, :user, "id")
+    assert_equal anonymous_session_id, link_call.dig(:anonymous_user, :session, "id")
+    assert_equal target_user_id, link_call.dig(:new_user, :user, "id")
+    assert_equal replacement_session[:session]["id"], link_call.dig(:new_user, :session, "id")
+    assert_nil auth.context.internal_adapter.find_user_by_id(anonymous_user_id)
+    assert_nil auth.context.internal_adapter.find_session(anonymous_session_token)
+    assert_nil auth.api.get_session(headers: {"cookie" => anonymous_cookie})
+  end
+
+  def test_verify_email_without_auto_sign_in_keeps_previous_anonymous_user_and_session
+    sent = []
+    link_calls = []
+    auth = build_email_verification_link_auth(auto_sign_in: false, sent: sent, link_calls: link_calls)
+    _status, anonymous_headers, _body = auth.api.sign_in_anonymous(as_response: true)
+    anonymous_cookie = cookie_header(anonymous_headers.fetch("set-cookie"))
+    anonymous_session = auth.api.get_session(headers: {"cookie" => anonymous_cookie})
+    anonymous_user_id = anonymous_session[:user]["id"]
+    anonymous_session_token = anonymous_session[:session]["token"]
+
+    sign_up_status, _sign_up_headers, sign_up_body = auth.api.sign_up_email(
+      headers: {"cookie" => anonymous_cookie},
+      body: {email: "verify-without-sign-in@example.com", password: "password123", name: "Verify Without Sign In"},
+      as_response: true
+    )
+    sign_up = JSON.parse(sign_up_body.join)
+    target_user_id = sign_up.fetch("user").fetch("id")
+
+    assert_equal 200, sign_up_status
+    assert_nil sign_up.fetch("token")
+    assert_equal anonymous_session_token, auth.api.get_session(headers: {"cookie" => anonymous_cookie})[:session]["token"]
+
+    verification_status, verification_headers, verification_body = auth.api.verify_email(
+      headers: {"cookie" => anonymous_cookie},
+      query: {token: sent.fetch(0).fetch(:token)},
+      as_response: true
+    )
+    target_user = auth.context.internal_adapter.find_user_by_id(target_user_id)
+    retained_anonymous_session = auth.api.get_session(headers: {"cookie" => anonymous_cookie})
+
+    assert_equal 200, verification_status
+    assert_equal({"status" => true, "user" => nil}, JSON.parse(verification_body.join))
+    refute verification_headers.key?("set-cookie")
+    assert_equal true, target_user["emailVerified"]
+    assert_equal false, target_user["isAnonymous"]
+    assert_equal target_user_id, auth.context.internal_adapter.find_account_by_provider_id(target_user_id, "credential")["userId"]
+    assert_empty auth.context.internal_adapter.list_sessions(target_user_id)
+    assert_empty link_calls
+    assert_equal true, auth.context.internal_adapter.find_user_by_id(anonymous_user_id)["isAnonymous"]
+    assert_equal anonymous_user_id, auth.context.internal_adapter.find_session(anonymous_session_token)[:user]["id"]
+    assert_equal anonymous_user_id, retained_anonymous_session[:user]["id"]
+    assert_equal anonymous_session_token, retained_anonymous_session[:session]["token"]
+  end
+
   def test_linking_keeps_anonymous_user_when_deletion_is_disabled
     auth = build_auth(plugins: [BetterAuth::Plugins.anonymous(disable_delete_anonymous_user: true)])
     anon_cookie, anon_user_id = sign_in_anonymous_cookie_and_user_id(auth)
@@ -332,6 +434,21 @@ class BetterAuthPluginsAnonymousTest < Minitest::Test
   def build_auth(options = {})
     email_and_password = {enabled: true}.merge(options.fetch(:email_and_password, {}))
     BetterAuth.auth({base_url: "http://localhost:3000", secret: SECRET, database: :memory}.merge(options).merge(email_and_password: email_and_password))
+  end
+
+  def build_email_verification_link_auth(auto_sign_in:, sent:, link_calls:)
+    build_auth(
+      email_and_password: {require_email_verification: true},
+      email_verification: {
+        auto_sign_in_after_verification: auto_sign_in,
+        send_verification_email: ->(data, _request = nil) { sent << data }
+      },
+      plugins: [
+        BetterAuth::Plugins.anonymous(
+          on_link_account: ->(data) { link_calls << data }
+        )
+      ]
+    )
   end
 
   def sign_up_cookie(auth, email:)

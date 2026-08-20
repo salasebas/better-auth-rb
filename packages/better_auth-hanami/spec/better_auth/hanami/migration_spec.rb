@@ -39,7 +39,7 @@ RSpec.describe BetterAuth::Hanami::Migration do
     migration = described_class.render(plugin_config)
 
     expect(migration).to include("create_table :audit_logs do")
-    expect(migration).to include("foreign_key :user_id, :users, type: String, on_delete: :cascade")
+    expect(migration).to include("foreign_key :user_id, :users, type: String, null: false, on_delete: :cascade")
     expect(migration).to include("column :action, String, null: false")
     expect(migration).to include("column :attempts, Integer, null: false, default: 0")
     expect(migration).to include("column :created_at, DateTime, null: false")

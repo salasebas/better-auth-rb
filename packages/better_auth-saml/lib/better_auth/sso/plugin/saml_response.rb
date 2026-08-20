@@ -54,7 +54,7 @@ module BetterAuth
       if config[:provision_user].respond_to?(:call) && (result.fetch(:created) || config[:provision_user_on_every_login])
         config[:provision_user].call(user: user, userInfo: assertion, provider: provider)
       end
-      session = ctx.context.internal_adapter.create_session(user.fetch("id"))
+      session = ctx.context.internal_adapter.create_session(user.fetch("id"), false, nil, false, ctx)
       sso_store_saml_session(ctx, provider, assertion, session) if config.dig(:saml, :enable_single_logout)
       Cookies.set_session_cookie(ctx, {session: session, user: user})
       sso_redirect(ctx, callback_url)

@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-08-20T05:46:44Z",
+  "generated_at": "2026-08-20T06:02:48Z",
   "route_count": 222,
   "routes": [
     {
@@ -96,7 +96,7 @@
         "POST"
       ],
       "file": "packages/better_auth/lib/better_auth/plugins/admin.rb",
-      "line": 396,
+      "line": 405,
       "endpoint_key": "ban_user",
       "plugin_hint": "admin",
       "body_fields": [
@@ -138,7 +138,7 @@
         "POST"
       ],
       "file": "packages/better_auth/lib/better_auth/plugins/admin.rb",
-      "line": 219,
+      "line": 224,
       "endpoint_key": "create_user",
       "plugin_hint": "admin",
       "body_fields": [
@@ -190,7 +190,7 @@
         "GET"
       ],
       "file": "packages/better_auth/lib/better_auth/plugins/admin.rb",
-      "line": 171,
+      "line": 176,
       "endpoint_key": "get_user",
       "plugin_hint": "admin",
       "body_fields": [],
@@ -222,7 +222,7 @@
         "POST"
       ],
       "file": "packages/better_auth/lib/better_auth/plugins/admin.rb",
-      "line": 666,
+      "line": 675,
       "endpoint_key": "user_has_permission",
       "plugin_hint": "admin",
       "body_fields": [
@@ -264,7 +264,7 @@
         "POST"
       ],
       "file": "packages/better_auth/lib/better_auth/plugins/admin.rb",
-      "line": 447,
+      "line": 456,
       "endpoint_key": "impersonate_user",
       "plugin_hint": "admin",
       "body_fields": [
@@ -296,7 +296,7 @@
         "POST"
       ],
       "file": "packages/better_auth/lib/better_auth/plugins/admin.rb",
-      "line": 380,
+      "line": 389,
       "endpoint_key": "list_user_sessions",
       "plugin_hint": "admin",
       "body_fields": [
@@ -328,7 +328,7 @@
         "GET"
       ],
       "file": "packages/better_auth/lib/better_auth/plugins/admin.rb",
-      "line": 337,
+      "line": 342,
       "endpoint_key": "list_users",
       "plugin_hint": "admin",
       "body_fields": [],
@@ -405,7 +405,7 @@
         "POST"
       ],
       "file": "packages/better_auth-oauth-provider/lib/better_auth/plugins/oauth_provider/oauth_client/endpoints.rb",
-      "line": 127,
+      "line": 126,
       "endpoint_key": "admin_create_oauth_client",
       "plugin_hint": "better_auth/plugins/oauth_provider",
       "body_fields": [],
@@ -431,7 +431,7 @@
         "PATCH"
       ],
       "file": "packages/better_auth-oauth-provider/lib/better_auth/plugins/oauth_provider/oauth_client/endpoints.rb",
-      "line": 157,
+      "line": 155,
       "endpoint_key": "admin_update_oauth_client",
       "plugin_hint": "better_auth/plugins/oauth_provider",
       "body_fields": [],
@@ -457,7 +457,7 @@
         "POST"
       ],
       "file": "packages/better_auth/lib/better_auth/plugins/admin.rb",
-      "line": 590,
+      "line": 599,
       "endpoint_key": "remove_user",
       "plugin_hint": "admin",
       "body_fields": [
@@ -489,7 +489,7 @@
         "POST"
       ],
       "file": "packages/better_auth/lib/better_auth/plugins/admin.rb",
-      "line": 534,
+      "line": 543,
       "endpoint_key": "revoke_user_session",
       "plugin_hint": "admin",
       "body_fields": [
@@ -521,7 +521,7 @@
         "POST"
       ],
       "file": "packages/better_auth/lib/better_auth/plugins/admin.rb",
-      "line": 562,
+      "line": 571,
       "endpoint_key": "revoke_user_sessions",
       "plugin_hint": "admin",
       "body_fields": [
@@ -553,7 +553,7 @@
         "POST"
       ],
       "file": "packages/better_auth/lib/better_auth/plugins/admin.rb",
-      "line": 144,
+      "line": 149,
       "endpoint_key": "set_role",
       "plugin_hint": "admin",
       "body_fields": [
@@ -590,7 +590,7 @@
         "POST"
       ],
       "file": "packages/better_auth/lib/better_auth/plugins/admin.rb",
-      "line": 621,
+      "line": 630,
       "endpoint_key": "set_user_password",
       "plugin_hint": "admin",
       "body_fields": [
@@ -627,7 +627,7 @@
         "POST"
       ],
       "file": "packages/better_auth/lib/better_auth/plugins/admin.rb",
-      "line": 493,
+      "line": 502,
       "endpoint_key": "stop_impersonating",
       "plugin_hint": "admin",
       "body_fields": [],
@@ -653,7 +653,7 @@
         "POST"
       ],
       "file": "packages/better_auth/lib/better_auth/plugins/admin.rb",
-      "line": 424,
+      "line": 433,
       "endpoint_key": "unban_user",
       "plugin_hint": "admin",
       "body_fields": [
@@ -685,7 +685,7 @@
         "POST"
       ],
       "file": "packages/better_auth/lib/better_auth/plugins/admin.rb",
-      "line": 275,
+      "line": 280,
       "endpoint_key": "admin_update_user",
       "plugin_hint": "admin",
       "body_fields": [
@@ -1088,7 +1088,7 @@
         "GET"
       ],
       "file": "packages/better_auth/lib/better_auth/routes/social.rb",
-      "line": 112,
+      "line": 111,
       "endpoint_key": "callback_oauth",
       "plugin_hint": "core",
       "body_fields": [],
@@ -1116,7 +1116,7 @@
         "POST"
       ],
       "file": "packages/better_auth/lib/better_auth/routes/social.rb",
-      "line": 112,
+      "line": 111,
       "endpoint_key": "callback_oauth",
       "plugin_hint": "core",
       "body_fields": [],
@@ -1823,7 +1823,7 @@
         "GET"
       ],
       "file": "packages/better_auth/lib/better_auth/plugins/expo.rb",
-      "line": 32,
+      "line": 33,
       "endpoint_key": "expo_authorization_proxy",
       "plugin_hint": "expo",
       "body_fields": [],
@@ -1954,7 +1954,7 @@
         "POST"
       ],
       "file": "packages/better_auth/lib/better_auth/plugins/username.rb",
-      "line": 151,
+      "line": 152,
       "endpoint_key": "is_username_available",
       "plugin_hint": "username",
       "body_fields": [
@@ -2009,7 +2009,7 @@
         "POST"
       ],
       "file": "packages/better_auth/lib/better_auth/routes/social.rb",
-      "line": 214,
+      "line": 213,
       "endpoint_key": "link_social",
       "plugin_hint": "core",
       "body_fields": [
@@ -2181,7 +2181,7 @@
         "POST"
       ],
       "file": "packages/better_auth/lib/better_auth/plugins/multi_session.rb",
-      "line": 107,
+      "line": 108,
       "endpoint_key": "revoke_device_session",
       "plugin_hint": "multi_session",
       "body_fields": [
@@ -2408,7 +2408,7 @@
         "POST"
       ],
       "file": "packages/better_auth-oauth-provider/lib/better_auth/plugins/oauth_provider/oauth_client/endpoints.rb",
-      "line": 171,
+      "line": 169,
       "endpoint_key": "rotate_oauth_client_secret",
       "plugin_hint": "better_auth/plugins/oauth_provider",
       "body_fields": [
@@ -2755,7 +2755,7 @@
         "POST"
       ],
       "file": "packages/better_auth-oauth-provider/lib/better_auth/plugins/oauth_provider/oauth_client/endpoints.rb",
-      "line": 95,
+      "line": 94,
       "endpoint_key": "delete_oauth_client",
       "plugin_hint": "better_auth/plugins/oauth_provider",
       "body_fields": [
@@ -2957,7 +2957,7 @@
         "GET"
       ],
       "file": "packages/better_auth-oauth-provider/lib/better_auth/plugins/oauth_provider/oauth_client/endpoints.rb",
-      "line": 33,
+      "line": 32,
       "endpoint_key": "get_oauth_client",
       "plugin_hint": "better_auth/plugins/oauth_provider",
       "body_fields": [],
@@ -2983,7 +2983,7 @@
         "GET"
       ],
       "file": "packages/better_auth-oauth-provider/lib/better_auth/plugins/oauth_provider/oauth_client/endpoints.rb",
-      "line": 81,
+      "line": 80,
       "endpoint_key": "get_oauth_clients",
       "plugin_hint": "better_auth/plugins/oauth_provider",
       "body_fields": [],
@@ -3165,7 +3165,7 @@
         "GET"
       ],
       "file": "packages/better_auth-oauth-provider/lib/better_auth/plugins/oauth_provider/oauth_client/endpoints.rb",
-      "line": 46,
+      "line": 45,
       "endpoint_key": "get_oauth_client_public",
       "plugin_hint": "better_auth/plugins/oauth_provider",
       "body_fields": [],
@@ -3191,7 +3191,7 @@
         "POST"
       ],
       "file": "packages/better_auth-oauth-provider/lib/better_auth/plugins/oauth_provider/oauth_client/endpoints.rb",
-      "line": 58,
+      "line": 57,
       "endpoint_key": "get_oauth_client_public_prelogin",
       "plugin_hint": "better_auth/plugins/oauth_provider",
       "body_fields": [
@@ -3474,7 +3474,7 @@
         "POST"
       ],
       "file": "packages/better_auth-oauth-provider/lib/better_auth/plugins/oauth_provider/oauth_client/endpoints.rb",
-      "line": 109,
+      "line": 108,
       "endpoint_key": "update_oauth_client",
       "plugin_hint": "better_auth/plugins/oauth_provider",
       "body_fields": [
@@ -3754,7 +3754,7 @@
         "POST"
       ],
       "file": "packages/better_auth/lib/better_auth/plugins/organization.rb",
-      "line": 386,
+      "line": 417,
       "endpoint_key": "accept_invitation",
       "plugin_hint": "organization",
       "body_fields": [
@@ -3791,7 +3791,7 @@
         "POST"
       ],
       "file": "packages/better_auth/lib/better_auth/plugins/organization.rb",
-      "line": 498,
+      "line": 529,
       "endpoint_key": "add_member",
       "plugin_hint": "organization",
       "body_fields": [
@@ -3830,7 +3830,7 @@
         "POST"
       ],
       "file": "packages/better_auth/lib/better_auth/plugins/organization.rb",
-      "line": 819,
+      "line": 850,
       "endpoint_key": "add_team_member",
       "plugin_hint": "organization",
       "body_fields": [
@@ -3867,7 +3867,7 @@
         "POST"
       ],
       "file": "packages/better_auth/lib/better_auth/plugins/organization.rb",
-      "line": 445,
+      "line": 476,
       "endpoint_key": "cancel_invitation",
       "plugin_hint": "organization",
       "body_fields": [
@@ -3988,7 +3988,7 @@
         "POST"
       ],
       "file": "packages/better_auth/lib/better_auth/plugins/organization.rb",
-      "line": 862,
+      "line": 893,
       "endpoint_key": "create_org_role",
       "plugin_hint": "organization",
       "body_fields": [
@@ -4040,7 +4040,7 @@
         "POST"
       ],
       "file": "packages/better_auth/lib/better_auth/plugins/organization.rb",
-      "line": 696,
+      "line": 727,
       "endpoint_key": "create_team",
       "plugin_hint": "organization",
       "body_fields": [
@@ -4114,7 +4114,7 @@
         "POST"
       ],
       "file": "packages/better_auth/lib/better_auth/plugins/organization.rb",
-      "line": 929,
+      "line": 960,
       "endpoint_key": "delete_org_role",
       "plugin_hint": "organization",
       "body_fields": [
@@ -4161,7 +4161,7 @@
         "GET"
       ],
       "file": "packages/better_auth/lib/better_auth/plugins/organization.rb",
-      "line": 631,
+      "line": 662,
       "endpoint_key": "get_active_member",
       "plugin_hint": "organization",
       "body_fields": [],
@@ -4187,7 +4187,7 @@
         "GET"
       ],
       "file": "packages/better_auth/lib/better_auth/plugins/organization.rb",
-      "line": 641,
+      "line": 672,
       "endpoint_key": "get_active_member_role",
       "plugin_hint": "organization",
       "body_fields": [],
@@ -4239,7 +4239,7 @@
         "GET"
       ],
       "file": "packages/better_auth/lib/better_auth/plugins/organization.rb",
-      "line": 460,
+      "line": 491,
       "endpoint_key": "get_invitation",
       "plugin_hint": "organization",
       "body_fields": [],
@@ -4265,7 +4265,7 @@
         "GET"
       ],
       "file": "packages/better_auth/lib/better_auth/plugins/organization.rb",
-      "line": 892,
+      "line": 923,
       "endpoint_key": "get_org_role",
       "plugin_hint": "organization",
       "body_fields": [],
@@ -4291,7 +4291,7 @@
         "POST"
       ],
       "file": "packages/better_auth/lib/better_auth/plugins/organization.rb",
-      "line": 684,
+      "line": 715,
       "endpoint_key": "has_permission",
       "plugin_hint": "organization",
       "body_fields": [
@@ -4390,7 +4390,7 @@
         "POST"
       ],
       "file": "packages/better_auth/lib/better_auth/plugins/organization.rb",
-      "line": 653,
+      "line": 684,
       "endpoint_key": "leave_organization",
       "plugin_hint": "organization",
       "body_fields": [
@@ -4448,7 +4448,7 @@
         "GET"
       ],
       "file": "packages/better_auth/lib/better_auth/plugins/organization.rb",
-      "line": 476,
+      "line": 507,
       "endpoint_key": "list_invitations",
       "plugin_hint": "organization",
       "body_fields": [],
@@ -4474,7 +4474,7 @@
         "GET"
       ],
       "file": "packages/better_auth/lib/better_auth/plugins/organization.rb",
-      "line": 673,
+      "line": 704,
       "endpoint_key": "list_members",
       "plugin_hint": "organization",
       "body_fields": [],
@@ -4500,7 +4500,7 @@
         "GET"
       ],
       "file": "packages/better_auth/lib/better_auth/plugins/organization.rb",
-      "line": 881,
+      "line": 912,
       "endpoint_key": "list_org_roles",
       "plugin_hint": "organization",
       "body_fields": [],
@@ -4526,7 +4526,7 @@
         "GET"
       ],
       "file": "packages/better_auth/lib/better_auth/plugins/organization.rb",
-      "line": 807,
+      "line": 838,
       "endpoint_key": "list_team_members",
       "plugin_hint": "organization",
       "body_fields": [],
@@ -4552,7 +4552,7 @@
         "GET"
       ],
       "file": "packages/better_auth/lib/better_auth/plugins/organization.rb",
-      "line": 720,
+      "line": 751,
       "endpoint_key": "list_organization_teams",
       "plugin_hint": "organization",
       "body_fields": [],
@@ -4578,7 +4578,7 @@
         "GET"
       ],
       "file": "packages/better_auth/lib/better_auth/plugins/organization.rb",
-      "line": 487,
+      "line": 518,
       "endpoint_key": "list_user_invitations",
       "plugin_hint": "organization",
       "body_fields": [],
@@ -4604,7 +4604,7 @@
         "GET"
       ],
       "file": "packages/better_auth/lib/better_auth/plugins/organization.rb",
-      "line": 799,
+      "line": 830,
       "endpoint_key": "list_user_teams",
       "plugin_hint": "organization",
       "body_fields": [],
@@ -4630,7 +4630,7 @@
         "POST"
       ],
       "file": "packages/better_auth/lib/better_auth/plugins/organization.rb",
-      "line": 429,
+      "line": 460,
       "endpoint_key": "reject_invitation",
       "plugin_hint": "organization",
       "body_fields": [
@@ -4662,7 +4662,7 @@
         "POST"
       ],
       "file": "packages/better_auth/lib/better_auth/plugins/organization.rb",
-      "line": 548,
+      "line": 579,
       "endpoint_key": "remove_member",
       "plugin_hint": "organization",
       "body_fields": [
@@ -4704,7 +4704,7 @@
         "POST"
       ],
       "file": "packages/better_auth/lib/better_auth/plugins/organization.rb",
-      "line": 746,
+      "line": 777,
       "endpoint_key": "remove_team",
       "plugin_hint": "organization",
       "body_fields": [
@@ -4736,7 +4736,7 @@
         "POST"
       ],
       "file": "packages/better_auth/lib/better_auth/plugins/organization.rb",
-      "line": 844,
+      "line": 875,
       "endpoint_key": "remove_team_member",
       "plugin_hint": "organization",
       "body_fields": [
@@ -4810,7 +4810,7 @@
         "POST"
       ],
       "file": "packages/better_auth/lib/better_auth/plugins/organization.rb",
-      "line": 776,
+      "line": 807,
       "endpoint_key": "set_active_team",
       "plugin_hint": "organization",
       "body_fields": [
@@ -4904,7 +4904,7 @@
         "POST"
       ],
       "file": "packages/better_auth/lib/better_auth/plugins/organization.rb",
-      "line": 572,
+      "line": 603,
       "endpoint_key": "update_member_role",
       "plugin_hint": "organization",
       "body_fields": [
@@ -4951,7 +4951,7 @@
         "POST"
       ],
       "file": "packages/better_auth/lib/better_auth/plugins/organization.rb",
-      "line": 904,
+      "line": 935,
       "endpoint_key": "update_org_role",
       "plugin_hint": "organization",
       "body_fields": [
@@ -5013,7 +5013,7 @@
         "POST"
       ],
       "file": "packages/better_auth/lib/better_auth/plugins/organization.rb",
-      "line": 730,
+      "line": 761,
       "endpoint_key": "update_team",
       "plugin_hint": "organization",
       "body_fields": [
@@ -5079,7 +5079,7 @@
     {
       "path": "/passkey/generate-authenticate-options",
       "methods": [
-        "POST"
+        "GET"
       ],
       "file": "packages/better_auth-passkey/lib/better_auth/passkey/routes/authentication.rb",
       "line": 13,
@@ -5093,29 +5093,28 @@
       "server_only": false,
       "hidden": false,
       "source": "static+runtime",
-      "method": "POST",
+      "method": "GET",
       "ruby_api_method": "generate_passkey_authentication_options",
       "ruby_api_call": "auth.api.generate_passkey_authentication_options",
+      "upstream_registry_key": "generatePasskeyAuthenticationOptions",
+      "upstream_api_call": "auth.api.generatePasskeyAuthenticationOptions",
+      "upstream_client_call": null,
       "plugin_id": "passkey",
       "operation_id": "passkeyGenerateAuthenticateOptions"
     },
     {
       "path": "/passkey/generate-register-options",
       "methods": [
-        "POST"
+        "GET"
       ],
       "file": "packages/better_auth-passkey/lib/better_auth/passkey/routes/registration.rb",
       "line": 13,
       "endpoint_key": "generate_passkey_registration_options",
       "plugin_hint": "better_auth/passkey/routes",
-      "body_fields": [
+      "body_fields": [],
+      "query_params": [
         {
           "name": "authenticatorAttachment",
-          "required": false,
-          "type": "string"
-        },
-        {
-          "name": "context",
           "required": false,
           "type": "string"
         },
@@ -5123,18 +5122,25 @@
           "name": "name",
           "required": false,
           "type": "string"
+        },
+        {
+          "name": "context",
+          "required": false,
+          "type": "string"
         }
       ],
-      "query_params": [],
       "path_params": [],
       "header_params": [],
       "disable_body": false,
       "server_only": false,
       "hidden": false,
       "source": "static+runtime",
-      "method": "POST",
+      "method": "GET",
       "ruby_api_method": "generate_passkey_registration_options",
       "ruby_api_call": "auth.api.generate_passkey_registration_options",
+      "upstream_registry_key": "generatePasskeyRegistrationOptions",
+      "upstream_api_call": "auth.api.generatePasskeyRegistrationOptions",
+      "upstream_client_call": null,
       "plugin_id": "passkey",
       "operation_id": "generatePasskeyRegistrationOptions"
     },
@@ -5276,7 +5282,7 @@
         "POST"
       ],
       "file": "packages/better_auth/lib/better_auth/plugins/phone_number.rb",
-      "line": 258,
+      "line": 262,
       "endpoint_key": "request_password_reset_phone_number",
       "plugin_hint": "phone_number",
       "body_fields": [
@@ -5308,7 +5314,7 @@
         "POST"
       ],
       "file": "packages/better_auth/lib/better_auth/plugins/phone_number.rb",
-      "line": 294,
+      "line": 298,
       "endpoint_key": "reset_password_phone_number",
       "plugin_hint": "phone_number",
       "body_fields": [
@@ -5350,7 +5356,7 @@
         "POST"
       ],
       "file": "packages/better_auth/lib/better_auth/plugins/phone_number.rb",
-      "line": 135,
+      "line": 139,
       "endpoint_key": "send_phone_number_otp",
       "plugin_hint": "phone_number",
       "body_fields": [
@@ -5382,7 +5388,7 @@
         "POST"
       ],
       "file": "packages/better_auth/lib/better_auth/plugins/phone_number.rb",
-      "line": 180,
+      "line": 184,
       "endpoint_key": "verify_phone_number",
       "plugin_hint": "phone_number",
       "body_fields": [
@@ -6402,7 +6408,7 @@
         "POST"
       ],
       "file": "packages/better_auth/lib/better_auth/plugins/phone_number.rb",
-      "line": 68,
+      "line": 72,
       "endpoint_key": "sign_in_phone_number",
       "plugin_hint": "phone_number",
       "body_fields": [
@@ -6444,7 +6450,7 @@
         "POST"
       ],
       "file": "packages/better_auth/lib/better_auth/routes/social.rb",
-      "line": 11,
+      "line": 10,
       "endpoint_key": "sign_in_social",
       "plugin_hint": "core",
       "body_fields": [
