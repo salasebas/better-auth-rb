@@ -44,6 +44,31 @@ class BetterAuthAPIKeyPluginTest < Minitest::Test
     assert_empty missing
   end
 
+  def test_verification_and_cleanup_are_server_only
+    auth = build_api_key_auth(default_key_length: 12)
+    plugin = auth.options.plugins.find { |entry| entry.id == "api-key" }
+
+    %i[verify_api_key delete_all_expired_api_keys].each do |name|
+      endpoint = plugin.endpoints.fetch(name)
+      assert_nil endpoint.path
+      assert_equal true, endpoint.metadata[:server_only]
+      assert_respond_to auth.api, name
+    end
+  end
+
+  def test_open_api_excludes_server_only_api_key_helpers
+    auth = BetterAuth.auth(
+      secret: APIKeyTestSupport::SECRET,
+      base_url: "http://localhost:3000",
+      plugins: [BetterAuth::Plugins.api_key(default_key_length: 12), BetterAuth::Plugins.open_api]
+    )
+
+    paths = auth.api.generate_openapi_schema[:paths].keys
+
+    refute_includes paths, "/api-key/verify"
+    refute_includes paths, "/api-key/delete-all-expired-api-keys"
+  end
+
   def test_api_key_open_api_request_fields_match_upstream_contract
     endpoints = BetterAuth::Plugins.api_key.endpoints
 
