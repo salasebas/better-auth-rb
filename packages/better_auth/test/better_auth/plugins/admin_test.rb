@@ -148,6 +148,37 @@ class BetterAuthPluginsAdminTest < Minitest::Test
     )
   end
 
+  def test_configured_role_assignment_matches_case_sensitively
+    ac = BetterAuth::Plugins.create_access_control(user: ["set-role"])
+    auth = build_auth(
+      plugins: [
+        BetterAuth::Plugins.admin(
+          ac: ac,
+          roles: {
+            "Admin" => ac.new_role(user: ["set-role"]),
+            "user" => ac.new_role(user: [])
+          },
+          admin_roles: ["Admin"]
+        )
+      ]
+    )
+    admin_cookie = sign_up_cookie(auth, email: "case-assignment-admin@example.com")
+    target_cookie = sign_up_cookie(auth, email: "case-assignment-target@example.com")
+    admin = auth.api.get_session(headers: {"cookie" => admin_cookie}).fetch(:user)
+    target = auth.api.get_session(headers: {"cookie" => target_cookie}).fetch(:user)
+    auth.context.internal_adapter.update_user(admin.fetch("id"), role: "Admin")
+
+    error = assert_raises(BetterAuth::APIError) do
+      auth.api.set_role(headers: {"cookie" => admin_cookie}, body: {userId: target.fetch("id"), role: "admin"})
+    end
+    assert_equal 400, error.status_code
+    assert_equal "YOU_ARE_NOT_ALLOWED_TO_SET_NON_EXISTENT_VALUE", error.code
+    assert_equal "user", auth.context.internal_adapter.find_user_by_id(target.fetch("id")).fetch("role")
+
+    result = auth.api.set_role(headers: {"cookie" => admin_cookie}, body: {userId: target.fetch("id"), role: "Admin"})
+    assert_equal "Admin", result.fetch(:user).fetch("role")
+  end
+
   def test_admin_permission_rechecks_demoted_user_despite_cookie_cache
     auth = build_auth(session: {cookie_cache: {enabled: true, strategy: "jwe", max_age: 300}})
     original_cookie = sign_up_cookie(auth, email: "cached-admin@example.com")

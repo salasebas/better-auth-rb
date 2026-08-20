@@ -812,17 +812,13 @@ module BetterAuth
       parsed = admin_parse_roles(roles)
       if config[:roles_configured]
         defined_roles = (config[:roles] || {}).transform_keys(&:to_s)
-        invalid = parsed.split(",", -1).reject { |role| admin_role_for(defined_roles, role) }
+        invalid = parsed.split(",", -1).reject { |role| defined_roles[role] }
         if invalid.any?
           raise APIError.new("BAD_REQUEST", code: "YOU_ARE_NOT_ALLOWED_TO_SET_NON_EXISTENT_VALUE", message: ADMIN_ERROR_CODES.fetch("YOU_ARE_NOT_ALLOWED_TO_SET_NON_EXISTENT_VALUE"))
         end
       end
 
       parsed
-    end
-
-    def admin_role_for(roles, role)
-      roles[role.to_s] || roles.find { |key, _value| key.to_s.downcase == role.to_s.downcase }&.last
     end
 
     def admin_user_where(query)
