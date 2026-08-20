@@ -69,6 +69,35 @@ class BetterAuthAPIKeyCreateRouteTest < Minitest::Test
     assert_nil auth.context.adapter.find_one(model: "apikey", where: [{field: "referenceId", value: "someone-else"}])
   end
 
+  def test_create_route_rejects_request_mode_user_id_matching_session
+    auth = build_api_key_auth(default_key_length: 12)
+    cookie = sign_up_cookie(auth, email: "create-route-user-id-match-key@example.com")
+    user_id = auth.api.get_session(headers: {"cookie" => cookie})[:user]["id"]
+
+    status, body = rack_json_response(auth, "POST", "/api-key/create", body: {userId: user_id}, cookie: cookie)
+
+    assert_equal 401, status
+    assert_equal BetterAuth::APIKey::ERROR_CODES.fetch("UNAUTHORIZED_SESSION"), body.fetch("message")
+    assert_nil auth.context.adapter.find_one(model: "apikey", where: [{field: "referenceId", value: user_id}])
+  end
+
+  def test_create_route_rejects_server_only_fields_before_request_user_id
+    auth = build_api_key_auth(default_key_length: 12)
+    cookie = sign_up_cookie(auth, email: "create-route-user-id-server-only-key@example.com")
+    user_id = auth.api.get_session(headers: {"cookie" => cookie})[:user]["id"]
+
+    status, body = rack_json_response(
+      auth,
+      "POST",
+      "/api-key/create",
+      body: {userId: user_id, refillAmount: 10},
+      cookie: cookie
+    )
+
+    assert_equal 400, status
+    assert_equal BetterAuth::APIKey::ERROR_CODES.fetch("SERVER_ONLY_PROPERTY"), body.fetch("message")
+  end
+
   def test_create_route_respects_nil_expiration_and_refill_without_remaining
     auth = build_api_key_auth(default_key_length: 12)
     cookie = sign_up_cookie(auth, email: "create-route-nil-expiration-key@example.com")
@@ -81,6 +110,100 @@ class BetterAuthAPIKeyCreateRouteTest < Minitest::Test
     assert_nil refill[:remaining]
     assert_equal 10, refill[:refillAmount]
     assert_equal 1000, refill[:refillInterval]
+  end
+
+  def test_create_route_applies_default_expiration_to_explicit_nil
+    auth = build_api_key_auth(
+      default_key_length: 12,
+      key_expiration: {
+        default_expires_in: 120,
+        disable_custom_expires_time: true
+      }
+    )
+
+    before = Time.now
+    created = auth.api.create_api_key(body: {userId: "server-user", expiresIn: nil})
+
+    assert_operator created[:expiresAt], :>=, before + 119
+    assert_operator created[:expiresAt], :<, before + 122
+  end
+
+  def test_create_route_accepts_empty_optional_name
+    auth = build_api_key_auth(default_key_length: 12)
+
+    created = auth.api.create_api_key(body: {userId: "server-user", name: ""})
+
+    assert_equal "", created[:name]
+  end
+
+  def test_create_route_accepts_array_metadata_when_enabled
+    auth = build_api_key_auth(default_key_length: 12, enable_metadata: true)
+
+    created = auth.api.create_api_key(body: {userId: "server-user", metadata: ["first", false]})
+    stored = auth.context.adapter.find_one(model: "apikey", where: [{field: "id", value: created[:id]}])
+
+    assert_equal ["first", false], created[:metadata]
+    assert_equal ["first", false], JSON.parse(stored.fetch("metadata"))
+  end
+
+  def test_create_route_returns_false_metadata_but_persists_null
+    auth = build_api_key_auth(default_key_length: 12, enable_metadata: false)
+
+    created = auth.api.create_api_key(body: {userId: "server-user", metadata: false})
+    stored = auth.context.adapter.find_one(model: "apikey", where: [{field: "id", value: created[:id]}])
+
+    assert_equal false, created[:metadata]
+    assert_nil stored.fetch("metadata")
+  end
+
+  def test_create_route_treats_zero_refill_interval_like_upstream
+    auth = build_api_key_auth(default_key_length: 12)
+
+    created = auth.api.create_api_key(body: {userId: "server-user", refillInterval: 0})
+
+    assert_equal 0, created[:refillInterval]
+    assert_nil created[:refillAmount]
+
+    error = assert_raises(BetterAuth::APIError) do
+      auth.api.create_api_key(body: {userId: "server-user", refillAmount: 10, refillInterval: 0})
+    end
+    assert_equal BetterAuth::APIKey::ERROR_CODES.fetch("REFILL_AMOUNT_AND_INTERVAL_REQUIRED"), error.message
+  end
+
+  def test_create_route_uses_configured_id_generator_for_pure_secondary_storage
+    storage = MemoryStorage.new
+    calls = []
+    generator = lambda do |options|
+      calls << options
+      "configured-api-key-id"
+    end
+    auth = build_api_key_auth(
+      storage: "secondary-storage",
+      secondary_storage: storage,
+      default_key_length: 12,
+      advanced: {database: {generate_id: generator}}
+    )
+
+    created = auth.api.create_api_key(body: {userId: "server-user"})
+
+    assert_equal "configured-api-key-id", created[:id]
+    assert_equal [{model: "apikey"}], calls
+    assert storage.get("api-key:by-id:configured-api-key-id")
+  end
+
+  def test_create_route_falls_back_when_configured_id_is_javascript_falsy
+    storage = MemoryStorage.new
+    auth = build_api_key_auth(
+      storage: "secondary-storage",
+      secondary_storage: storage,
+      default_key_length: 12,
+      advanced: {database: {generate_id: ->(_options) { "" }}}
+    )
+
+    created = auth.api.create_api_key(body: {userId: "server-user"})
+
+    assert_match(/\A[A-Za-z0-9]{32}\z/, created[:id])
+    assert storage.get("api-key:by-id:#{created[:id]}")
   end
 
   def test_create_route_rejects_non_positive_refill_amount

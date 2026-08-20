@@ -33,9 +33,9 @@ module BetterAuth
       end
 
       def expires_at(body, config)
-        if body.key?(:expires_in)
-          Time.now + body[:expires_in].to_i unless body[:expires_in].nil?
-        elsif config[:key_expiration][:default_expires_in]
+        if BetterAuth::APIKey::Utils.javascript_truthy?(body[:expires_in])
+          Time.now + body[:expires_in].to_i
+        elsif BetterAuth::APIKey::Utils.javascript_truthy?(config[:key_expiration][:default_expires_in])
           Time.now + config[:key_expiration][:default_expires_in].to_i
         end
       end

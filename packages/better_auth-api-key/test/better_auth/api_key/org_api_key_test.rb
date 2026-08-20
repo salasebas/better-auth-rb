@@ -35,6 +35,43 @@ class BetterAuthAPIKeyOrgAPIKeyTest < Minitest::Test
     assert_equal({success: true}, deleted)
   end
 
+  def test_org_create_request_rejects_supplied_user_id
+    auth = build_user_and_org_key_auth
+    owner_cookie = sign_up_cookie(auth, email: "org-route-user-id-key@example.com")
+    organization = auth.api.create_organization(headers: {"cookie" => owner_cookie}, body: {name: "User ID API Org", slug: unique_slug("user-id-api-org")})
+
+    status, body = rack_json_response(
+      auth,
+      "POST",
+      "/api-key/create",
+      cookie: owner_cookie,
+      body: {configId: "org-keys", organizationId: organization.fetch("id"), userId: "ignored-user-id"}
+    )
+
+    assert_equal 401, status
+    assert_equal BetterAuth::APIKey::ERROR_CODES.fetch("UNAUTHORIZED_SESSION"), body.fetch("message")
+    assert_nil auth.context.adapter.find_one(model: "apikey", where: [{field: "referenceId", value: organization.fetch("id")}])
+  end
+
+  def test_comma_separated_creator_role_has_full_api_key_access
+    auth = build_user_and_org_key_auth
+    owner_cookie = sign_up_cookie(auth, email: "org-route-comma-owner-key@example.com")
+    owner_id = auth.api.get_session(headers: {"cookie" => owner_cookie})[:user]["id"]
+    organization = auth.api.create_organization(headers: {"cookie" => owner_cookie}, body: {name: "Comma Owner API Org", slug: unique_slug("comma-owner-api-org")})
+    auth.context.adapter.update(
+      model: "member",
+      where: [{field: "userId", value: owner_id}, {field: "organizationId", value: organization.fetch("id")}],
+      update: {role: "owner,member"}
+    )
+
+    created = auth.api.create_api_key(
+      headers: {"cookie" => owner_cookie},
+      body: {configId: "org-keys", organizationId: organization.fetch("id")}
+    )
+
+    assert_equal organization.fetch("id"), created[:referenceId]
+  end
+
   def test_user_and_org_keys_are_listed_separately
     auth = build_user_and_org_key_auth
     cookie = sign_up_cookie(auth, email: "org-route-separate-key@example.com")
