@@ -84,6 +84,139 @@ class BetterAuthPluginsPhoneNumberTest < Minitest::Test
     assert_equal BetterAuth::Plugins::PHONE_NUMBER_ERROR_CODES["PHONE_NUMBER_CANNOT_BE_UPDATED"], error.message
   end
 
+  def test_authenticated_phone_number_update_runs_verification_callback_after_persistence_and_before_response
+    sent = []
+    callbacks = []
+    events = []
+    auth = nil
+    cookie = nil
+    auth = build_auth(
+      plugins: [
+        BetterAuth::Plugins.phone_number(
+          send_otp: ->(data, _ctx = nil) { sent << data },
+          callback_on_verification: lambda { |data, ctx|
+            callbacks << {
+              data: data,
+              context: ctx,
+              persisted_user: auth.api.get_session(headers: {"cookie" => cookie})[:user]
+            }
+            events << :callback
+          }
+        )
+      ]
+    )
+    _status, headers, _body = auth.api.sign_up_email(
+      body: {email: "phone-callback@example.com", password: "password123", name: "Phone Callback"},
+      as_response: true
+    )
+    cookie = cookie_header(headers.fetch("set-cookie"))
+    original_session = auth.api.get_session(headers: {"cookie" => cookie})
+
+    auth.api.send_phone_number_otp(body: {phoneNumber: "+15551234568"})
+    result = auth.api.verify_phone_number(
+      headers: {"cookie" => cookie},
+      body: {phoneNumber: "+15551234568", code: sent.last[:code], updatePhoneNumber: true}
+    )
+    events << :response
+
+    assert_equal [:callback, :response], events
+    assert_equal 1, callbacks.length
+    callback = callbacks.fetch(0)
+    assert_equal [:phone_number, :user], callback[:data].keys
+    assert_equal "+15551234568", callback[:data][:phone_number]
+    assert_equal result[:user], callback[:data][:user]
+    assert_equal "+15551234568", callback[:data][:user]["phoneNumber"]
+    assert_equal true, callback[:data][:user]["phoneNumberVerified"]
+    assert_equal callback[:data][:user], callback[:persisted_user]
+    assert_instance_of BetterAuth::Endpoint::Context, callback[:context]
+    assert_equal "/phone-number/verify", callback[:context].path
+    assert_equal "POST", callback[:context].method
+    assert_equal [:status, :token, :user], result.keys
+    assert_equal true, result[:status]
+    assert_equal original_session[:session]["token"], result[:token]
+  end
+
+  def test_authenticated_phone_number_update_propagates_callback_error_after_persistence
+    sent = []
+    callbacks = []
+    auth = nil
+    cookie = nil
+    auth = build_auth(
+      plugins: [
+        BetterAuth::Plugins.phone_number(
+          send_otp: ->(data, _ctx = nil) { sent << data },
+          callback_on_verification: lambda { |data, ctx|
+            callbacks << {
+              data: data,
+              context: ctx,
+              persisted_user: auth.api.get_session(headers: {"cookie" => cookie})[:user]
+            }
+            raise "verification callback failed"
+          }
+        )
+      ]
+    )
+    _status, headers, _body = auth.api.sign_up_email(
+      body: {email: "phone-callback-error@example.com", password: "password123", name: "Phone Callback Error"},
+      as_response: true
+    )
+    cookie = cookie_header(headers.fetch("set-cookie"))
+
+    auth.api.send_phone_number_otp(body: {phoneNumber: "+15551234569"})
+    result = :not_returned
+    error = assert_raises(RuntimeError) do
+      result = auth.api.verify_phone_number(
+        headers: {"cookie" => cookie},
+        body: {phoneNumber: "+15551234569", code: sent.last[:code], updatePhoneNumber: true}
+      )
+    end
+
+    assert_equal "verification callback failed", error.message
+    assert_equal :not_returned, result
+    assert_equal 1, callbacks.length
+    callback = callbacks.fetch(0)
+    assert_equal [:phone_number, :user], callback[:data].keys
+    assert_equal "+15551234569", callback[:data][:phone_number]
+    assert_equal "+15551234569", callback[:data][:user]["phoneNumber"]
+    assert_equal true, callback[:data][:user]["phoneNumberVerified"]
+    assert_equal callback[:data][:user], callback[:persisted_user]
+    assert_equal "/phone-number/verify", callback[:context].path
+    persisted_user = auth.api.get_session(headers: {"cookie" => cookie})[:user]
+    assert_equal callback[:data][:user], persisted_user
+  end
+
+  def test_authenticated_phone_number_update_skips_callback_when_persistence_fails
+    sent = []
+    callbacks = []
+    auth = build_auth(
+      plugins: [
+        BetterAuth::Plugins.phone_number(
+          send_otp: ->(data, _ctx = nil) { sent << data },
+          callback_on_verification: ->(data, ctx) { callbacks << [data, ctx] }
+        )
+      ]
+    )
+    _status, headers, _body = auth.api.sign_up_email(
+      body: {email: "phone-persistence-error@example.com", password: "password123", name: "Phone Persistence Error"},
+      as_response: true
+    )
+    cookie = cookie_header(headers.fetch("set-cookie"))
+    auth.api.send_phone_number_otp(body: {phoneNumber: "+15551234570"})
+
+    error = auth.context.internal_adapter.stub(:update_user, nil) do
+      assert_raises(BetterAuth::APIError) do
+        auth.api.verify_phone_number(
+          headers: {"cookie" => cookie},
+          body: {phoneNumber: "+15551234570", code: sent.last[:code], updatePhoneNumber: true}
+        )
+      end
+    end
+
+    assert_equal 500, error.status_code
+    assert_equal BetterAuth::BASE_ERROR_CODES["FAILED_TO_UPDATE_USER"], error.message
+    assert_empty callbacks
+  end
+
   def test_authenticated_user_can_disassociate_and_another_user_can_reclaim_phone_number
     sent = []
     verified = []
