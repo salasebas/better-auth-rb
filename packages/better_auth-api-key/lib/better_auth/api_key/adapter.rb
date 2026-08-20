@@ -53,7 +53,7 @@ module BetterAuth
 
       def find_by_hash(ctx, hashed, config)
         if config[:storage] == "secondary-storage"
-          record = get(ctx, storage_key_by_hash(hashed), config) || get(ctx, "api-key:key:#{hashed}", config)
+          record = get(ctx, storage_key_by_hash(hashed), config)
           return record if record
           return nil unless config[:fallback_to_database]
         end
@@ -64,7 +64,7 @@ module BetterAuth
 
       def find_by_id(ctx, id, config)
         if config[:storage] == "secondary-storage"
-          record = get(ctx, storage_key_by_id(id), config) || get(ctx, "api-key:id:#{id}", config)
+          record = get(ctx, storage_key_by_id(id), config)
           return record if record
           return nil unless config[:fallback_to_database]
         end
@@ -77,7 +77,7 @@ module BetterAuth
         if config[:storage] == "secondary-storage"
           begin
             storage_instance = storage(config, ctx.context)
-            raw_ids = storage_instance&.get(storage_key_by_reference(reference_id)) || storage_instance&.get("api-key:user:#{reference_id}")
+            raw_ids = storage_instance&.get(storage_key_by_reference(reference_id))
             ids = parse_id_list!(raw_ids)
             records = ids.filter_map { |id| find_by_id(ctx, id, config) }
             return records unless records.empty? && config[:fallback_to_database]
@@ -155,7 +155,12 @@ module BetterAuth
 
       def get(ctx, key, config)
         raw = storage(config, ctx.context)&.get(key)
-        raw && deserialize_record(JSON.parse(raw))
+        return nil unless raw.is_a?(String)
+
+        parsed = JSON.parse(raw)
+        return nil if parsed.nil?
+
+        deserialize_record(parsed)
       rescue JSON::ParserError
         nil
       end
@@ -167,8 +172,7 @@ module BetterAuth
         end
 
         serialized = JSON.generate(storage_record(record))
-        expires_at = BetterAuth::APIKey::Utils.normalize_time(record["expiresAt"])
-        ttl = expires_at ? [(expires_at - Time.now).to_i, 0].max : nil
+        ttl = calculate_ttl(record)
         reference_id = BetterAuth::Plugins.api_key_record_reference_id(record)
         reference_key = storage_key_by_reference(reference_id)
 
@@ -196,10 +200,7 @@ module BetterAuth
         batch(storage_instance) do
           operations = [
             -> { storage_instance.delete(storage_key_by_hash(record["key"])) },
-            -> { storage_instance.delete(storage_key_by_id(record["id"])) },
-            # Ruby-only legacy storage layout cleanup; upstream never wrote here.
-            -> { storage_instance.delete("api-key:key:#{record["key"]}") },
-            -> { storage_instance.delete("api-key:id:#{record["id"]}") }
+            -> { storage_instance.delete(storage_key_by_id(record["id"])) }
           ]
           operations << if config[:fallback_to_database]
             -> { storage_instance.delete(reference_key) }
@@ -235,9 +236,9 @@ module BetterAuth
         end
       end
 
-      # Custom secondary-storage implementations expose only get/set/delete,
-      # so serialize reference-list read/modify/write operations within this
-      # Ruby process. This lock is deliberately not treated as distributed
+      # The API-key adapter performs reference-list mutations through
+      # get/set/delete, so serialize their read/modify/write operations within
+      # this Ruby process. This lock is deliberately not treated as distributed
       # safety; RedisStorage uses its atomic JSON-list scripts above.
       def with_reference_lock(reference_key)
         lock = REFERENCE_LOCKS_GUARD.synchronize do
@@ -280,8 +281,7 @@ module BetterAuth
           ids = []
           records.each do |record|
             serialized = JSON.generate(storage_record(record))
-            expires_at = BetterAuth::APIKey::Utils.normalize_time(record["expiresAt"])
-            ttl = expires_at ? [(expires_at - Time.now).to_i, 0].max : nil
+            ttl = calculate_ttl(record)
             storage_instance.set(storage_key_by_hash(record["key"]), serialized, ttl)
             storage_instance.set(storage_key_by_id(record["id"]), serialized, ttl)
             ids << record["id"]
@@ -298,12 +298,33 @@ module BetterAuth
       end
 
       def storage_record(record)
-        record.transform_values { |value| value.is_a?(Time) ? value.iso8601 : value }
+        record.transform_values { |value| value.is_a?(Time) ? value.getutc.iso8601(3) : value }
+      end
+
+      def calculate_ttl(record)
+        expires_at = BetterAuth::APIKey::Utils.normalize_time(record["expiresAt"])
+        return nil unless expires_at
+
+        ttl = (expires_at - Time.now).floor
+        ttl.positive? ? ttl : nil
       end
 
       def deserialize_record(record)
+        source = record
+        record = case source
+        when Hash
+          source.dup
+        when Array
+          source.each_with_index.to_h { |value, index| [index.to_s, value] }
+        when String
+          source.each_char.with_index.to_h { |value, index| [index.to_s, value] }
+        else
+          {}
+        end
+
         %w[createdAt updatedAt expiresAt lastRefillAt lastRequest].each do |field|
-          record[field] = BetterAuth::APIKey::Utils.normalize_time(record[field]) if record[field]
+          value = source.is_a?(Hash) ? source[field] : nil
+          record[field] = BetterAuth::APIKey::Utils.normalize_time(value)
         end
         record
       end
