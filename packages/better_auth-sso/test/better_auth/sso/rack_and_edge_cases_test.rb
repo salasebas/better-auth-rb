@@ -24,15 +24,213 @@ class BetterAuthSSORackAndEdgeCasesTest < Minitest::Test
     auth = build_sso_auth
     cookie = sign_up_cookie(auth)
     register_oidc_provider(auth, cookie: cookie, provider_id: "rack-callback-oidc", domain: "rack-callback.example.com", oidcConfig: serializable_oidc_config)
-    state = Rack::Utils.parse_query(URI.parse(auth.api.sign_in_sso(body: {providerId: "rack-callback-oidc", callbackURL: "/dashboard"}).fetch(:url)).query).fetch("state")
+    _sign_in_status, sign_in_headers, sign_in_body = rack_json_request(
+      auth,
+      "POST",
+      "/api/auth/sign-in/sso",
+      body: {providerId: "rack-callback-oidc", callbackURL: "/dashboard"}
+    )
+    state = Rack::Utils.parse_query(URI.parse(response_json(sign_in_body).fetch("url")).query).fetch("state")
+    state_cookie = cookie_header(sign_in_headers.fetch("set-cookie"))
 
     with_oidc_network_stubs do
-      status, headers, _body = rack_json_request(auth, "GET", "/api/auth/sso/callback/rack-callback-oidc?state=#{URI.encode_www_form_component(state)}&code=good")
+      status, headers, _body = rack_json_request(
+        auth,
+        "GET",
+        "/api/auth/sso/callback/rack-callback-oidc?state=#{URI.encode_www_form_component(state)}&code=good",
+        cookie: state_cookie
+      )
 
       assert_equal 302, status
       assert_equal "/dashboard", headers.fetch("location")
       assert headers.fetch("set-cookie").include?("better-auth.session_token=")
     end
+  end
+
+  def test_rack_oidc_non_pkce_requires_issued_state_cookie_and_consumes_shared_state
+    token_requests = []
+    auth = build_sso_auth
+    cookie = sign_up_cookie(auth)
+    register_oidc_provider(
+      auth,
+      cookie: cookie,
+      provider_id: "shared-state-non-pkce",
+      domain: "shared-state-non-pkce.example.com",
+      oidcConfig: rack_oidc_config(pkce: false, token_requests: token_requests)
+    )
+
+    sign_in_status, sign_in_headers, sign_in_body = rack_json_request(
+      auth,
+      "POST",
+      "/api/auth/sign-in/sso",
+      body: {providerId: "shared-state-non-pkce", callbackURL: "/dashboard"}
+    )
+    state = Rack::Utils.parse_query(URI.parse(response_json(sign_in_body).fetch("url")).query).fetch("state")
+    state_cookie = cookie_header(sign_in_headers.fetch("set-cookie"))
+    stored_state = auth.context.internal_adapter.find_verification_value(state)
+
+    assert_equal 200, sign_in_status
+    assert_equal 32, state.length
+    refute BetterAuth::Crypto.verify_jwt(state, SECRET)
+    assert_includes state_cookie, "better-auth.state="
+    assert_equal(
+      {
+        "callbackURL" => "/dashboard",
+        "codeVerifier" => stored_state_data(stored_state).fetch("codeVerifier"),
+        "oauthState" => state
+      },
+      stored_state_data(stored_state).slice("callbackURL", "codeVerifier", "oauthState")
+    )
+    assert_equal 128, stored_state_data(stored_state).fetch("codeVerifier").length
+    assert_nil auth.context.internal_adapter.find_verification_value("oidc-pkce-verifier:#{state}")
+
+    missing_cookie_status, missing_cookie_headers, = rack_json_request(
+      auth,
+      "GET",
+      "/api/auth/sso/callback/shared-state-non-pkce?state=#{URI.encode_www_form_component(state)}&code=good"
+    )
+
+    assert_equal 302, missing_cookie_status
+    assert_equal "http://localhost:3000/api/auth/error?error=state_mismatch", missing_cookie_headers.fetch("location")
+    assert auth.context.internal_adapter.find_verification_value(state)
+
+    callback_status, callback_headers, = rack_json_request(
+      auth,
+      "GET",
+      "/api/auth/sso/callback/shared-state-non-pkce?state=#{URI.encode_www_form_component(state)}&code=good",
+      cookie: state_cookie
+    )
+
+    assert_equal 302, callback_status
+    assert_equal "/dashboard", callback_headers.fetch("location")
+    assert_equal [nil], token_requests.map { |request| request[:codeVerifier] }
+    assert_nil auth.context.internal_adapter.find_verification_value(state)
+
+    replay_status, replay_headers, = rack_json_request(
+      auth,
+      "GET",
+      "/api/auth/sso/callback/shared-state-non-pkce?state=#{URI.encode_www_form_component(state)}&code=replay",
+      cookie: state_cookie
+    )
+
+    assert_equal 302, replay_status
+    assert_equal "http://localhost:3000/api/auth/error?error=state_mismatch", replay_headers.fetch("location")
+  end
+
+  def test_rack_oidc_pkce_reads_verifier_from_shared_state
+    token_requests = []
+    auth = build_sso_auth
+    cookie = sign_up_cookie(auth)
+    register_oidc_provider(
+      auth,
+      cookie: cookie,
+      provider_id: "shared-state-pkce",
+      domain: "shared-state-pkce.example.com",
+      oidcConfig: rack_oidc_config(pkce: true, token_requests: token_requests)
+    )
+
+    _sign_in_status, sign_in_headers, sign_in_body = rack_json_request(
+      auth,
+      "POST",
+      "/api/auth/sign-in/sso",
+      body: {providerId: "shared-state-pkce", callbackURL: "/dashboard"}
+    )
+    authorization_params = Rack::Utils.parse_query(URI.parse(response_json(sign_in_body).fetch("url")).query)
+    state = authorization_params.fetch("state")
+    state_cookie = cookie_header(sign_in_headers.fetch("set-cookie"))
+    stored_state = auth.context.internal_adapter.find_verification_value(state)
+    verifier = stored_state_data(stored_state).fetch("codeVerifier")
+
+    assert_equal 32, state.length
+    assert_equal "S256", authorization_params.fetch("code_challenge_method")
+    assert authorization_params.fetch("code_challenge")
+    assert_equal 128, verifier.length
+    assert_nil auth.context.internal_adapter.find_verification_value("oidc-pkce-verifier:#{state}")
+
+    callback_status, callback_headers, = rack_json_request(
+      auth,
+      "GET",
+      "/api/auth/sso/callback/shared-state-pkce?state=#{URI.encode_www_form_component(state)}&code=good",
+      cookie: state_cookie
+    )
+
+    assert_equal 302, callback_status
+    assert_equal "/dashboard", callback_headers.fetch("location")
+    assert_equal [verifier], token_requests.map { |request| request[:codeVerifier] }
+    assert_nil auth.context.internal_adapter.find_verification_value(state)
+  end
+
+  def test_rack_oidc_rejects_legacy_jwt_state_without_shared_verification
+    token_requests = []
+    auth = build_sso_auth
+    cookie = sign_up_cookie(auth)
+    register_oidc_provider(
+      auth,
+      cookie: cookie,
+      provider_id: "legacy-jwt-oidc",
+      domain: "legacy-jwt-oidc.example.com",
+      oidcConfig: rack_oidc_config(pkce: false, token_requests: token_requests)
+    )
+    state = BetterAuth::Crypto.sign_jwt(
+      {providerId: "legacy-jwt-oidc", callbackURL: "/dashboard"},
+      SECRET,
+      expires_in: 600
+    )
+    state_cookie = signed_state_cookie(auth, state)
+
+    status, headers, = rack_json_request(
+      auth,
+      "GET",
+      "/api/auth/sso/callback/legacy-jwt-oidc?state=#{URI.encode_www_form_component(state)}&code=good",
+      cookie: state_cookie
+    )
+
+    assert_equal 302, status
+    assert_equal "http://localhost:3000/api/auth/error?error=state_mismatch", headers.fetch("location")
+    assert_empty token_requests
+  end
+
+  def test_rack_oidc_secondary_storage_keeps_shared_state_and_verifier_together
+    token_requests = []
+    storage = SecondaryStorage.new
+    auth = build_sso_auth(secondary_storage: storage)
+    cookie = sign_up_cookie(auth)
+    register_oidc_provider(
+      auth,
+      cookie: cookie,
+      provider_id: "secondary-shared-state",
+      domain: "secondary-shared-state.example.com",
+      oidcConfig: rack_oidc_config(pkce: true, token_requests: token_requests)
+    )
+
+    _sign_in_status, sign_in_headers, sign_in_body = rack_json_request(
+      auth,
+      "POST",
+      "/api/auth/sign-in/sso",
+      body: {providerId: "secondary-shared-state", callbackURL: "/dashboard"}
+    )
+    state = Rack::Utils.parse_query(URI.parse(response_json(sign_in_body).fetch("url")).query).fetch("state")
+    state_cookie = cookie_header(sign_in_headers.fetch("set-cookie"))
+    state_key = "verification:#{state}"
+    stored_state = JSON.parse(storage.get(state_key))
+
+    assert_equal state, stored_state.fetch("identifier")
+    assert_equal state, JSON.parse(stored_state.fetch("value")).fetch("oauthState")
+    assert_equal 128, JSON.parse(stored_state.fetch("value")).fetch("codeVerifier").length
+    assert_in_delta 600, storage.ttls.fetch(state_key), 2
+    assert_nil storage.get("verification:oidc-pkce-verifier:#{state}")
+
+    callback_status, callback_headers, = rack_json_request(
+      auth,
+      "GET",
+      "/api/auth/sso/callback/secondary-shared-state?state=#{URI.encode_www_form_component(state)}&code=good",
+      cookie: state_cookie
+    )
+
+    assert_equal 302, callback_status
+    assert_equal "/dashboard", callback_headers.fetch("location")
+    assert_equal 1, token_requests.length
+    assert_nil storage.get(state_key)
   end
 
   def test_rack_mounted_saml_acs_allows_external_idp_origin_but_other_posts_still_require_trusted_origin
@@ -107,7 +305,7 @@ class BetterAuthSSORackAndEdgeCasesTest < Minitest::Test
       status, headers, = auth.api.callback_sso(params: {providerId: "local-gate-oidc"}, query: {state: state, code: "good"}, as_response: true)
 
       assert_equal 302, status
-      assert_equal "/dashboard?error=account_not_linked", headers.fetch("location")
+      assert_equal "http://localhost:3000/api/auth/error?error=account_not_linked", headers.fetch("location")
     end
     assert_nil auth.context.internal_adapter.find_account_by_provider_id("local-gate-oidc-sub", "sso:local-gate-oidc")
     assert_equal session_count, auth.context.adapter.find_many(model: "session").length
@@ -236,7 +434,7 @@ class BetterAuthSSORackAndEdgeCasesTest < Minitest::Test
 
     with_oidc_network_stubs(email: local.fetch("email"), sub: "disabled-implicit-existing") do
       _status, headers, = auth.api.callback_sso(params: {providerId: "disabled-implicit-oidc"}, query: {state: state, code: "good"}, as_response: true)
-      assert_equal "/dashboard?error=account_not_linked", headers.fetch("location")
+      assert_equal "http://localhost:3000/api/auth/error?error=account_not_linked", headers.fetch("location")
     end
 
     new_state = Rack::Utils.parse_query(URI.parse(auth.api.sign_in_sso(body: {providerId: "disabled-implicit-oidc", callbackURL: "/dashboard"}).fetch(:url)).query).fetch("state")
@@ -256,7 +454,7 @@ class BetterAuthSSORackAndEdgeCasesTest < Minitest::Test
 
     with_oidc_network_stubs(email: "blank-oidc@example.com", sub: " \t ") do
       _status, headers, = auth.api.callback_sso(params: {providerId: "blank-oidc"}, query: {state: state, code: "good"}, as_response: true)
-      assert_equal "/dashboard?error=invalid_provider", headers.fetch("location")
+      assert_equal "http://localhost:3000/api/auth/error?error=invalid_provider", headers.fetch("location")
     end
     assert_nil auth.context.internal_adapter.find_user_by_email("blank-oidc@example.com")
     assert_empty auth.context.adapter.find_many(model: "account").select { |account| account["accountId"].to_s.strip.empty? }
@@ -296,6 +494,72 @@ class BetterAuthSSORackAndEdgeCasesTest < Minitest::Test
     assert_equal "http://localhost:3000/api/auth?error=access_denied&error_description=Nope", headers.fetch("location")
   end
 
+  def test_rack_oidc_idp_error_uses_global_error_url_without_per_flow_error_url
+    auth = build_sso_auth(on_api_error: {error_url: "http://localhost:3000/global-error"})
+    cookie = sign_up_cookie(auth)
+    register_oidc_provider(
+      auth,
+      cookie: cookie,
+      provider_id: "global-oidc-error",
+      domain: "global-oidc-error.example.com",
+      oidcConfig: rack_oidc_config(pkce: false, token_requests: [])
+    )
+
+    _sign_in_status, sign_in_headers, sign_in_body = rack_json_request(
+      auth,
+      "POST",
+      "/api/auth/sign-in/sso",
+      body: {providerId: "global-oidc-error", callbackURL: "/dashboard"}
+    )
+    state = Rack::Utils.parse_query(URI.parse(response_json(sign_in_body).fetch("url")).query).fetch("state")
+    state_cookie = cookie_header(sign_in_headers.fetch("set-cookie"))
+
+    status, headers, = rack_json_request(
+      auth,
+      "GET",
+      "/api/auth/sso/callback/global-oidc-error?state=#{URI.encode_www_form_component(state)}&error=access_denied&error_description=cancelled",
+      cookie: state_cookie
+    )
+
+    assert_equal 302, status
+    assert_equal "http://localhost:3000/global-error?error=access_denied&error_description=cancelled", headers.fetch("location")
+  end
+
+  def test_rack_oidc_idp_error_preserves_per_flow_error_url_over_global_error_url
+    auth = build_sso_auth(on_api_error: {error_url: "http://localhost:3000/global-error"})
+    cookie = sign_up_cookie(auth)
+    register_oidc_provider(
+      auth,
+      cookie: cookie,
+      provider_id: "per-flow-oidc-error",
+      domain: "per-flow-oidc-error.example.com",
+      oidcConfig: rack_oidc_config(pkce: false, token_requests: [])
+    )
+
+    _sign_in_status, sign_in_headers, sign_in_body = rack_json_request(
+      auth,
+      "POST",
+      "/api/auth/sign-in/sso",
+      body: {
+        providerId: "per-flow-oidc-error",
+        callbackURL: "/dashboard",
+        errorCallbackURL: "/per-flow-error"
+      }
+    )
+    state = Rack::Utils.parse_query(URI.parse(response_json(sign_in_body).fetch("url")).query).fetch("state")
+    state_cookie = cookie_header(sign_in_headers.fetch("set-cookie"))
+
+    status, headers, = rack_json_request(
+      auth,
+      "GET",
+      "/api/auth/sso/callback/per-flow-oidc-error?state=#{URI.encode_www_form_component(state)}&error=access_denied&error_description=cancelled",
+      cookie: state_cookie
+    )
+
+    assert_equal 302, status
+    assert_equal "/per-flow-error?error=access_denied&error_description=cancelled", headers.fetch("location")
+  end
+
   def test_duplicate_domain_selection_uses_first_registered_provider
     auth = build_sso_auth
     cookie = sign_up_cookie(auth)
@@ -304,13 +568,39 @@ class BetterAuthSSORackAndEdgeCasesTest < Minitest::Test
 
     sign_in = auth.api.sign_in_sso(body: {email: "ada@duplicate.example.com", callbackURL: "/dashboard"})
     params = Rack::Utils.parse_query(URI.parse(sign_in.fetch(:url)).query)
-    state = BetterAuth::Crypto.verify_jwt(params.fetch("state"), SECRET)
 
-    assert_equal "first-domain", state.fetch("providerId")
+    assert_equal 32, params.fetch("state").length
+    refute BetterAuth::Crypto.verify_jwt(params.fetch("state"), SECRET)
     assert_equal "client-id", params.fetch("client_id")
   end
 
   private
+
+  def rack_oidc_config(pkce:, token_requests:)
+    {
+      clientId: "client-id",
+      clientSecret: "client-secret",
+      skipDiscovery: true,
+      pkce: pkce,
+      authorizationEndpoint: "https://idp.example.com/authorize",
+      tokenEndpoint: "https://idp.example.com/token",
+      getToken: ->(**data) {
+        token_requests << data
+        {accessToken: "access-token"}
+      },
+      getUserInfo: ->(_tokens) { {id: "shared-state-sub", email: "shared-state@example.com", name: "Shared State"} }
+    }
+  end
+
+  def stored_state_data(verification)
+    JSON.parse(verification.fetch("value"))
+  end
+
+  def signed_state_cookie(auth, state)
+    cookie = auth.context.create_auth_cookie("state")
+    signature = BetterAuth::Crypto.hmac_signature(state, SECRET, encoding: :base64url)
+    BetterAuth::Cookies.set_request_cookie("", cookie.name, "#{state}.#{signature}")
+  end
 
   def serializable_oidc_config
     {

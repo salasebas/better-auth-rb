@@ -147,10 +147,10 @@ class BetterAuthPluginsSSOOIDCTest < Minitest::Test
     assert_equal "https://idp.example.com", "#{uri.scheme}://#{uri.host}"
     assert_equal "/authorize", uri.path
     assert_equal "client-id", params.fetch("client_id")
-    assert params.fetch("nonce")
+    refute params.key?("nonce")
   end
 
-  def test_oidc_callback_rejects_provider_id_mismatch_between_route_and_state
+  def test_oidc_callback_uses_the_provider_id_from_the_route
     auth = build_auth
     cookie = sign_up_cookie(auth)
     auth.api.register_sso_provider(
@@ -179,7 +179,7 @@ class BetterAuthPluginsSSOOIDCTest < Minitest::Test
     )
 
     assert_equal 302, status
-    assert_equal "/dashboard?error=invalid_state&error_description=provider+mismatch", headers.fetch("location")
+    assert_equal "http://localhost:3000/api/auth/error?error=invalid_provider&error_description=provider+not+found", headers.fetch("location")
   end
 
   def test_oidc_callback_creates_user_session_and_rejects_invalid_state
@@ -228,7 +228,7 @@ class BetterAuthPluginsSSOOIDCTest < Minitest::Test
       as_response: true
     )
     assert_equal 302, invalid.first
-    assert_includes invalid[1].fetch("location"), "error=invalid_state"
+    assert_includes invalid[1].fetch("location"), "error=state_mismatch"
   end
 
   def test_oidc_callback_redirects_existing_users_to_callback_url
@@ -344,7 +344,7 @@ class BetterAuthPluginsSSOOIDCTest < Minitest::Test
     )
 
     assert_equal 302, status
-    assert_equal "/dashboard?error=invalid_provider&error_description=missing_user_info", headers.fetch("location")
+    assert_equal "http://localhost:3000/api/auth/error?error=invalid_provider&error_description=missing_user_info", headers.fetch("location")
     assert_nil auth.context.internal_adapter.find_user_by_email("oidc@example.com")
   end
 
@@ -378,7 +378,7 @@ class BetterAuthPluginsSSOOIDCTest < Minitest::Test
     )
 
     state = Rack::Utils.parse_query(URI.parse(auth.api.sign_in_sso(body: {providerId: "oidc", callbackURL: "/dashboard"})[:url]).query).fetch("state")
-    token = oidc_id_token(key, kid: "rsa-1", email: "verified@example.com", nonce: oidc_state_nonce(state))
+    token = oidc_id_token(key, kid: "rsa-1", email: "verified@example.com")
     status, headers, _body = auth.api.callback_sso(
       params: {providerId: "oidc"},
       query: {code: "good-code", state: state},
@@ -389,42 +389,6 @@ class BetterAuthPluginsSSOOIDCTest < Minitest::Test
     assert_equal "/dashboard", headers.fetch("location")
     assert_equal ["https://idp.example.com/jwks"], jwks_calls
     assert auth.context.internal_adapter.find_user_by_email("verified@example.com")[:user]
-  end
-
-  def test_oidc_callback_rejects_id_token_with_wrong_nonce
-    key = OpenSSL::PKey::RSA.generate(2048)
-    auth = build_auth(
-      oidc_jwks_fetch: ->(_url) { {keys: [JWT::JWK.new(key.public_key, "rsa-1").export]} }
-    )
-    cookie = sign_up_cookie(auth)
-    auth.api.register_sso_provider(
-      headers: {"cookie" => cookie},
-      body: {
-        providerId: "oidc",
-        issuer: "https://idp.example.com",
-        domain: "example.com",
-        oidcConfig: {
-          clientId: "client-id",
-          clientSecret: "client-secret",
-          skipDiscovery: true,
-          authorizationEndpoint: "https://idp.example.com/authorize",
-          tokenEndpoint: "https://idp.example.com/token",
-          jwksEndpoint: "https://idp.example.com/jwks",
-          getToken: ->(**_data) { {idToken: oidc_id_token(key, kid: "rsa-1", email: "wrong-nonce@example.com", nonce: "wrong-nonce")} }
-        }
-      }
-    )
-
-    state = Rack::Utils.parse_query(URI.parse(auth.api.sign_in_sso(body: {providerId: "oidc", callbackURL: "/dashboard"})[:url]).query).fetch("state")
-    status, headers, _body = auth.api.callback_sso(
-      params: {providerId: "oidc"},
-      query: {code: "good-code", state: state},
-      as_response: true
-    )
-
-    assert_equal 302, status
-    assert_equal "/dashboard?error=invalid_provider&error_description=token_not_verified", headers.fetch("location")
-    assert_nil auth.context.internal_adapter.find_user_by_email("wrong-nonce@example.com")
   end
 
   def test_oidc_callback_rejects_tampered_id_token
@@ -453,7 +417,7 @@ class BetterAuthPluginsSSOOIDCTest < Minitest::Test
     )
 
     state = Rack::Utils.parse_query(URI.parse(auth.api.sign_in_sso(body: {providerId: "oidc", callbackURL: "/dashboard"})[:url]).query).fetch("state")
-    token = oidc_id_token(key, kid: "rsa-1", email: "tampered@example.com", nonce: oidc_state_nonce(state))
+    token = oidc_id_token(key, kid: "rsa-1", email: "tampered@example.com")
     tampered = token.sub(/\A[^.]+/) { |header| header.reverse }
     status, headers, _body = auth.api.callback_sso(
       params: {providerId: "oidc"},
@@ -462,7 +426,7 @@ class BetterAuthPluginsSSOOIDCTest < Minitest::Test
     )
 
     assert_equal 302, status
-    assert_equal "/dashboard?error=invalid_provider&error_description=token_not_verified", headers.fetch("location")
+    assert_equal "http://localhost:3000/api/auth/error?error=invalid_provider&error_description=token_not_verified", headers.fetch("location")
     assert_nil auth.context.internal_adapter.find_user_by_email("tampered@example.com")
   end
 
@@ -472,7 +436,7 @@ class BetterAuthPluginsSSOOIDCTest < Minitest::Test
       oidc_callback_with_id_token_result(issuer: "https://evil.example.com", email: "wrong-issuer@example.com"),
       oidc_callback_with_id_token_result(expires_at: Time.now.to_i - 60, email: "expired@example.com")
     ].each do |auth, location, email|
-      assert_equal "/dashboard?error=invalid_provider&error_description=token_not_verified", location
+      assert_equal "http://localhost:3000/api/auth/error?error=invalid_provider&error_description=token_not_verified", location
       assert_nil auth.context.internal_adapter.find_user_by_email(email)
     end
   end
@@ -506,7 +470,7 @@ class BetterAuthPluginsSSOOIDCTest < Minitest::Test
     )
 
     assert_equal 302, status
-    assert_equal "/dashboard?error=invalid_provider&error_description=jwks_endpoint_not_found", headers.fetch("location")
+    assert_equal "http://localhost:3000/api/auth/error?error=invalid_provider&error_description=jwks_endpoint_not_found", headers.fetch("location")
   end
 
   def test_oidc_callback_hydrates_missing_jwks_endpoint_with_runtime_discovery
@@ -557,7 +521,7 @@ class BetterAuthPluginsSSOOIDCTest < Minitest::Test
     )
 
     state = Rack::Utils.parse_query(URI.parse(auth.api.sign_in_sso(body: {providerId: "oidc", callbackURL: "/dashboard"})[:url]).query).fetch("state")
-    token = oidc_id_token(key, kid: "rsa-1", email: "discovered-jwks@example.com", nonce: oidc_state_nonce(state))
+    token = oidc_id_token(key, kid: "rsa-1", email: "discovered-jwks@example.com")
     status, headers, _body = auth.api.callback_sso(
       params: {providerId: "oidc"},
       query: {code: "good-code", state: state},
@@ -625,7 +589,7 @@ class BetterAuthPluginsSSOOIDCTest < Minitest::Test
     blocked = auth.api.callback_sso(params: {providerId: "oidc"}, query: {code: "blocked", state: blocked_state}, as_response: true)
 
     assert_equal 302, blocked.first
-    assert_equal "/dashboard?error=signup+disabled", blocked[1].fetch("location")
+    assert_equal "http://localhost:3000/api/auth/error?error=signup+disabled", blocked[1].fetch("location")
     assert_nil auth.context.internal_adapter.find_user_by_email("blocked@example.com")
 
     allowed_state = Rack::Utils.parse_query(URI.parse(auth.api.sign_in_sso(body: {providerId: "oidc", callbackURL: "/dashboard", requestSignUp: true})[:url]).query).fetch("state")
@@ -796,7 +760,7 @@ class BetterAuthPluginsSSOOIDCTest < Minitest::Test
     headers.fetch("set-cookie").lines.map { |line| line.split(";").first }.join("; ")
   end
 
-  def oidc_id_token(key, kid:, email: "verified@example.com", issuer: "https://idp.example.com", audience: "client-id", expires_at: Time.now.to_i + 300, nonce: nil)
+  def oidc_id_token(key, kid:, email: "verified@example.com", issuer: "https://idp.example.com", audience: "client-id", expires_at: Time.now.to_i + 300)
     JWT.encode(
       {
         sub: "oidc-sub",
@@ -804,17 +768,12 @@ class BetterAuthPluginsSSOOIDCTest < Minitest::Test
         name: "OIDC User",
         iss: issuer,
         aud: audience,
-        exp: expires_at,
-        nonce: nonce
-      }.compact,
+        exp: expires_at
+      },
       key,
       "RS256",
       {kid: kid}
     )
-  end
-
-  def oidc_state_nonce(state)
-    BetterAuth::Crypto.verify_jwt(state, SECRET).fetch("nonce")
   end
 
   def oidc_callback_with_id_token_result(email:, issuer: "https://idp.example.com", audience: "client-id", expires_at: Time.now.to_i + 300)
@@ -841,7 +800,7 @@ class BetterAuthPluginsSSOOIDCTest < Minitest::Test
       }
     )
     state = Rack::Utils.parse_query(URI.parse(auth.api.sign_in_sso(body: {providerId: "oidc", callbackURL: "/dashboard"})[:url]).query).fetch("state")
-    @oidc_result_token = oidc_id_token(key, kid: "rsa-1", email: email, issuer: issuer, audience: audience, expires_at: expires_at, nonce: oidc_state_nonce(state))
+    @oidc_result_token = oidc_id_token(key, kid: "rsa-1", email: email, issuer: issuer, audience: audience, expires_at: expires_at)
     _status, headers, _body = auth.api.callback_sso(
       params: {providerId: "oidc"},
       query: {code: "bad-code", state: state},
