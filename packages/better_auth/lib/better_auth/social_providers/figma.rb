@@ -16,6 +16,7 @@ module BetterAuth
         scopes: scopes,
         pkce: true,
         require_code_verifier: true,
+        authorization_requires_client_secret: true,
         token_authentication: :basic,
         profile_map: ->(profile) {
           {

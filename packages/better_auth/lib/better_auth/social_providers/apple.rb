@@ -13,6 +13,8 @@ module BetterAuth
         client_id: client_id,
         client_secret: client_secret,
         create_authorization_url: lambda do |data|
+          raise Error, "CLIENT_ID_AND_SECRET_REQUIRED" if client_secret.to_s.empty?
+
           Base.authorization_url(options[:authorization_endpoint] || "https://appleid.apple.com/auth/authorize", {
             client_id: primary_client_id,
             redirect_uri: data[:redirect_uri] || data[:redirectURI],

@@ -16,6 +16,7 @@ module BetterAuth
         scopes: scopes,
         pkce: true,
         require_code_verifier: true,
+        authorization_requires_client_secret: true,
         auth_params: {audience: "api.atlassian.com"},
         profile_map: ->(profile) {
           {

@@ -22,6 +22,8 @@ module BetterAuth
         client_secret: client_secret,
         options: normalized,
         create_authorization_url: lambda do |data|
+          raise Error, "CLIENT_ID_AND_SECRET_REQUIRED" if client_secret.to_s.empty?
+
           verifier = data[:code_verifier] || data[:codeVerifier]
           raise Error, "codeVerifier is required for Google" if verifier.to_s.empty?
 

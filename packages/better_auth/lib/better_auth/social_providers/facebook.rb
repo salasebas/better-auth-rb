@@ -16,6 +16,7 @@ module BetterAuth
         token_endpoint: "https://graph.facebook.com/v24.0/oauth/access_token",
         user_info_endpoint: "https://graph.facebook.com/me?fields=#{URI.encode_www_form_component(fields)}",
         scopes: scopes,
+        authorization_requires_client_secret: true,
         auth_params: ->(_data, opts) { {config_id: opts[:config_id] || opts[:configId]} },
         profile_map: ->(profile) {
           picture = profile.dig("picture", "data", "url") || profile["picture"]

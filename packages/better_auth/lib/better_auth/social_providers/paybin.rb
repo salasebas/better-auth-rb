@@ -17,6 +17,7 @@ module BetterAuth
         scopes: scopes,
         pkce: true,
         require_code_verifier: true,
+        authorization_requires_client_secret: true,
         profile_map: ->(profile) {
           {
             id: profile["sub"],

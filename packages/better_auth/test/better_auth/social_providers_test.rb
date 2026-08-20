@@ -544,15 +544,23 @@ class BetterAuthSocialProvidersTest < Minitest::Test
   end
 
   def test_cognito_requires_client_secret_when_requested
-    assert_raises(BetterAuth::Error) do
-      BetterAuth::SocialProviders.cognito(
-        client_id: "cognito-id",
-        domain: "tenant.auth.us-east-1.amazoncognito.com",
-        region: "us-east-1",
-        user_pool_id: "pool-1",
-        requireClientSecret: true
+    provider = BetterAuth::SocialProviders.cognito(
+      client_id: "cognito-id",
+      domain: "tenant.auth.us-east-1.amazoncognito.com",
+      region: "us-east-1",
+      user_pool_id: "pool-1",
+      requireClientSecret: true
+    )
+
+    error = assert_raises(BetterAuth::Error) do
+      provider.fetch(:create_authorization_url).call(
+        state: "state-1",
+        code_verifier: "verifier-1",
+        redirect_uri: "http://localhost:3000/api/auth/callback/cognito"
       )
     end
+
+    assert_equal "CLIENT_SECRET_REQUIRED", error.message
   end
 
   def test_cognito_get_user_info_prefers_id_token_and_falls_back_to_userinfo
@@ -971,6 +979,7 @@ class BetterAuthSocialProvidersTest < Minitest::Test
       linear: {id: "linear"},
       linkedin: {id: "linkedin"},
       microsoft: {id: "microsoft"},
+      microsoft_entra_id: {id: "microsoft-entra-id"},
       naver: {id: "naver"},
       notion: {id: "notion"},
       paybin: {id: "paybin"},
@@ -993,9 +1002,9 @@ class BetterAuthSocialProvidersTest < Minitest::Test
       wechat: {id: "wechat"}
     }
 
-    assert_equal 33, optional.size
+    assert_equal 34, optional.size
     assert_equal 2, required.size
-    assert_equal 35, (optional.keys + required.keys).uniq.size
+    assert_equal 36, (optional.keys + required.keys).uniq.size
 
     optional.each do |factory, contract|
       options = {client_id: "#{factory}-id"}.merge(contract.fetch(:options, {}))
@@ -1025,6 +1034,22 @@ class BetterAuthSocialProvidersTest < Minitest::Test
 
       assert_equal contract.fetch(:id), provider.fetch(:id), "#{factory} should expose its upstream provider id"
       assert_equal secret, provider.fetch(:client_secret), "#{factory} should retain a provided client secret"
+    end
+  end
+
+  def test_optional_client_secrets_preserve_upstream_authorization_guards
+    %i[apple atlassian facebook figma google paybin paypal salesforce].each do |factory|
+      provider = BetterAuth::SocialProviders.public_send(factory, client_id: "#{factory}-id")
+
+      error = assert_raises(BetterAuth::Error) do
+        provider.fetch(:create_authorization_url).call(
+          state: "state-1",
+          code_verifier: "verifier-1",
+          redirect_uri: "http://localhost:3000/api/auth/callback/#{factory}"
+        )
+      end
+
+      assert_equal "CLIENT_ID_AND_SECRET_REQUIRED", error.message
     end
   end
 

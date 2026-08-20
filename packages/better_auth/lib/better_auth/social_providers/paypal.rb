@@ -22,6 +22,7 @@ module BetterAuth
         user_info_endpoint: "#{api_host}/v1/identity/oauth2/userinfo?schema=paypalv1.1",
         scopes: scopes,
         pkce: true,
+        authorization_requires_client_secret: true,
         token_authentication: :basic,
         profile_map: ->(profile) {
           {
