@@ -9,6 +9,57 @@ require_relative "../../test_helper"
 class BetterAuthRoutesSocialTest < Minitest::Test
   SECRET = "phase-five-secret-with-enough-entropy-123"
 
+  class RecordingSocialSecondaryStorage
+    attr_reader :keys, :writes, :deleted_keys
+
+    def initialize
+      @data = {}
+      @keys = []
+      @writes = []
+      @deleted_keys = []
+    end
+
+    def get(key)
+      @data[key]
+    end
+
+    def set(key, value, ttl = nil)
+      @keys << key
+      @writes << {key: key, value: value, ttl: ttl}
+      @data[key] = value
+    end
+
+    def delete(key)
+      @deleted_keys << key
+      @data.delete(key)
+    end
+
+    def get_and_delete(key)
+      @deleted_keys << key
+      @data.delete(key)
+    end
+  end
+
+  class FailingVerificationStorage
+    def initialize
+      @data = {}
+    end
+
+    def get(key)
+      @data[key]
+    end
+
+    def set(key, value, _ttl = nil)
+      raise "verification storage unavailable" if key.start_with?("verification:")
+
+      @data[key] = value
+    end
+
+    def delete(key)
+      @data.delete(key)
+    end
+  end
+
   def test_callback_oauth_endpoint_uses_upstream_id_param
     auth = build_auth
 
@@ -452,8 +503,11 @@ class BetterAuthRoutesSocialTest < Minitest::Test
     assert_equal false, result[:redirect]
   end
 
-  def test_sign_in_social_preserves_safe_additional_state_and_reserved_fields
+  def test_rack_sign_in_social_database_state_stores_internal_payload_in_secondary_storage
+    storage = RecordingSocialSecondaryStorage.new
     auth = build_auth(
+      database: nil,
+      secondary_storage: storage,
       social_providers: {
         github: {
           id: "github",
@@ -462,29 +516,236 @@ class BetterAuthRoutesSocialTest < Minitest::Test
       }
     )
 
-    response = auth.api.sign_in_social(
-      body: {
-        provider: "github",
-        callbackURL: "/app",
-        additionalData: {
-          invitedBy: "user-123",
-          callbackURL: "/evil",
-          errorURL: "/evil-error",
-          newUserURL: "/evil-new-user",
-          codeVerifier: "evil-verifier",
-          requestSignUp: true
+    status, headers, body = auth.call(
+      rack_env(
+        "POST",
+        "/api/auth/sign-in/social",
+        body: {
+          provider: "github",
+          callbackURL: "/app",
+          errorCallbackURL: "/error",
+          newUserCallbackURL: "/welcome",
+          requestSignUp: true,
+          disableRedirect: true,
+          additionalData: {
+            invitedBy: "user-123",
+            callbackURL: "/evil",
+            errorURL: "/evil-error",
+            newUserURL: "/evil-new-user",
+            codeVerifier: "evil-verifier",
+            oauthState: "evil-state",
+            requestSignUp: false,
+            expiresAt: 1
+          }
+        }
+      )
+    )
+    state = URI.decode_www_form(URI.parse(JSON.parse(body.join).fetch("url")).query).assoc("state").last
+    verification = JSON.parse(storage.get("verification:#{state}"))
+    state_data = JSON.parse(verification.fetch("value"))
+    state_write = storage.writes.find { |write| write[:key] == "verification:#{state}" }
+
+    assert_equal 200, status
+    assert_match(/\A[A-Za-z0-9_-]{32}\z/, state)
+    assert_includes headers.fetch("set-cookie"), "better-auth.state="
+    refute_includes headers.fetch("set-cookie"), "better-auth.oauth_state="
+    assert_equal "/app", state_data.fetch("callbackURL")
+    assert_equal "/error", state_data.fetch("errorURL")
+    assert_equal "/welcome", state_data.fetch("newUserURL")
+    assert_equal true, state_data.fetch("requestSignUp")
+    assert_equal state, state_data.fetch("oauthState")
+    assert_match(/\A[A-Za-z0-9_-]{128}\z/, state_data.fetch("codeVerifier"))
+    assert_equal "user-123", state_data.fetch("invitedBy")
+    assert_in_delta Time.now.to_i + 600, state_data.fetch("expiresAt"), 2
+    assert_operator state_write.fetch(:ttl), :>=, 598
+    assert_operator state_write.fetch(:ttl), :<=, 600
+  end
+
+  def test_rack_sign_in_social_cookie_state_is_opaque_and_does_not_create_verification
+    storage = RecordingSocialSecondaryStorage.new
+    auth = build_auth(
+      database: nil,
+      secondary_storage: storage,
+      account: {store_state_strategy: "cookie"},
+      social_providers: {
+        github: {
+          id: "github",
+          create_authorization_url: ->(data) { "https://github.example/oauth?state=#{URI.encode_www_form_component(data[:state])}" }
         }
       }
     )
-    state = URI.decode_www_form(URI.parse(response[:url]).query).assoc("state").last
-    data = BetterAuth::Crypto.verify_jwt(state, SECRET)
 
-    assert_equal "/app", data.fetch("callbackURL")
-    assert_equal "user-123", data.fetch("invitedBy")
-    refute_equal "evil-verifier", data.fetch("codeVerifier")
-    refute data.key?("errorURL")
-    refute data.key?("newUserURL")
-    refute data["requestSignUp"]
+    status, headers, body = auth.call(
+      rack_env(
+        "POST",
+        "/api/auth/sign-in/social",
+        body: {provider: "github", callbackURL: "/app", disableRedirect: true}
+      )
+    )
+    state = URI.decode_www_form(URI.parse(JSON.parse(body.join).fetch("url")).query).assoc("state").last
+    cookie_names = headers.fetch("set-cookie").lines.map { |line| line.split("=", 2).first }
+
+    assert_equal 200, status
+    assert_match(/\A[A-Za-z0-9_-]{32}\z/, state)
+    assert_includes cookie_names, "better-auth.oauth_state"
+    refute_includes cookie_names, "better-auth.state"
+    refute_includes storage.keys, "verification:#{state}"
+  end
+
+  def test_rack_social_callback_uses_the_stored_verifier_and_consumes_database_state
+    storage = RecordingSocialSecondaryStorage.new
+    validation_count = 0
+    callback_code_verifier = nil
+    auth = build_auth(
+      database: nil,
+      secondary_storage: storage,
+      social_providers: {
+        github: {
+          id: "github",
+          create_authorization_url: ->(data) { "https://github.example/oauth?state=#{URI.encode_www_form_component(data[:state])}" },
+          validate_authorization_code: lambda do |data|
+            validation_count += 1
+            callback_code_verifier = data.fetch(:codeVerifier)
+            {accessToken: "oauth-access"}
+          end,
+          get_user_info: ->(_tokens) {
+            {user: {id: "github-callback", email: "callback@example.com", name: "Callback", emailVerified: true}}
+          }
+        }
+      }
+    )
+
+    _status, initiation_headers, initiation_body = auth.call(
+      rack_env(
+        "POST",
+        "/api/auth/sign-in/social",
+        body: {provider: "github", callbackURL: "/app", disableRedirect: true}
+      )
+    )
+    state = URI.decode_www_form(URI.parse(JSON.parse(initiation_body.join).fetch("url")).query).assoc("state").last
+    state_data = JSON.parse(JSON.parse(storage.get("verification:#{state}")).fetch("value"))
+    state_cookie = cookie_header(initiation_headers.fetch("set-cookie"))
+
+    status, headers, = auth.call(
+      rack_env(
+        "GET",
+        "/api/auth/callback/github?code=oauth-code&state=#{URI.encode_www_form_component(state)}",
+        cookie: state_cookie
+      )
+    )
+
+    assert_equal 302, status
+    assert_equal "/app", headers.fetch("location")
+    assert_equal state_data.fetch("codeVerifier"), callback_code_verifier
+    assert_nil storage.get("verification:#{state}")
+    assert_includes storage.deleted_keys, "verification:#{state}"
+
+    replay_status, replay_headers, = auth.call(
+      rack_env(
+        "GET",
+        "/api/auth/callback/github?code=oauth-code&state=#{URI.encode_www_form_component(state)}",
+        cookie: state_cookie
+      )
+    )
+
+    assert_equal 302, replay_status
+    assert_includes replay_headers.fetch("location"), "error=state_mismatch"
+    assert_equal 1, validation_count
+  end
+
+  def test_rack_link_social_stores_link_data_and_consumes_state_on_callback
+    storage = RecordingSocialSecondaryStorage.new
+    callback_code_verifier = nil
+    auth = build_auth(
+      secondary_storage: storage,
+      account: {account_linking: {trusted_providers: ["github"]}},
+      social_providers: {
+        github: {
+          id: "github",
+          create_authorization_url: ->(data) { "https://github.example/oauth?state=#{URI.encode_www_form_component(data[:state])}" },
+          validate_authorization_code: lambda do |data|
+            callback_code_verifier = data.fetch(:codeVerifier)
+            {accessToken: "linked-access"}
+          end,
+          get_user_info: ->(_tokens) {
+            {user: {id: "github-linked", email: "link-state@example.com", name: "Linked", emailVerified: true}}
+          }
+        }
+      }
+    )
+    session_cookie = sign_up_cookie(auth, email: "link-state@example.com")
+
+    status, headers, body = auth.call(
+      rack_env(
+        "POST",
+        "/api/auth/link-social",
+        cookie: session_cookie,
+        body: {
+          provider: "github",
+          callbackURL: "/linked",
+          errorCallbackURL: "/link-error",
+          requestSignUp: true,
+          disableRedirect: true,
+          additionalData: {
+            workspace: "acme",
+            link: {userId: "attacker", email: "attacker@example.com"},
+            codeVerifier: "attacker-verifier"
+          }
+        }
+      )
+    )
+    state = URI.decode_www_form(URI.parse(JSON.parse(body.join).fetch("url")).query).assoc("state").last
+    state_data = JSON.parse(JSON.parse(storage.get("verification:#{state}")).fetch("value"))
+    callback_cookie = [session_cookie, cookie_header(headers.fetch("set-cookie"))].reject(&:empty?).join("; ")
+
+    assert_equal 200, status
+    assert_match(/\A[A-Za-z0-9_-]{32}\z/, state)
+    assert_equal "/linked", state_data.fetch("callbackURL")
+    assert_equal "/link-error", state_data.fetch("errorURL")
+    assert_equal true, state_data.fetch("requestSignUp")
+    assert_equal "acme", state_data.fetch("workspace")
+    assert_equal "link-state@example.com", state_data.fetch("link").fetch("email")
+    refute_equal "attacker", state_data.fetch("link").fetch("userId")
+    assert_match(/\A[A-Za-z0-9_-]{128}\z/, state_data.fetch("codeVerifier"))
+
+    callback_status, callback_headers, = auth.call(
+      rack_env(
+        "GET",
+        "/api/auth/callback/github?code=oauth-code&state=#{URI.encode_www_form_component(state)}",
+        cookie: callback_cookie
+      )
+    )
+
+    assert_equal 302, callback_status
+    assert_equal "/linked", callback_headers.fetch("location")
+    assert_equal state_data.fetch("codeVerifier"), callback_code_verifier
+    assert_nil storage.get("verification:#{state}")
+  end
+
+  def test_rack_social_state_generation_failure_returns_controlled_api_error
+    storage = FailingVerificationStorage.new
+    auth = build_auth(
+      secondary_storage: storage,
+      social_providers: {
+        github: {
+          id: "github",
+          create_authorization_url: ->(_data) { "https://github.example/oauth" }
+        }
+      }
+    )
+    session_cookie = sign_up_cookie(auth, email: "state-failure@example.com")
+
+    assert_social_state_generation_failure(
+      auth,
+      "/api/auth/sign-in/social",
+      {provider: "github", callbackURL: "/app", disableRedirect: true}
+    )
+    assert_social_state_generation_failure(
+      auth,
+      "/api/auth/link-social",
+      {provider: "github", callbackURL: "/app", disableRedirect: true},
+      cookie: session_cookie
+    )
   end
 
   def test_sign_in_social_rejects_implicit_signup_when_provider_disables_it
@@ -660,7 +921,6 @@ class BetterAuthRoutesSocialTest < Minitest::Test
     assert_includes headers.fetch("location"), "error=state_mismatch"
     refute headers.fetch("set-cookie", "").include?("better-auth.session_token=")
     refute called
-    assert_includes headers.fetch("set-cookie"), "better-auth.state="
   end
 
   def test_callback_redirects_new_social_user_to_new_user_callback_url
@@ -1964,6 +2224,20 @@ class BetterAuthRoutesSocialTest < Minitest::Test
     encoded_header = Base64.urlsafe_encode64(JSON.generate({"alg" => "none"}), padding: false)
     encoded_payload = Base64.urlsafe_encode64(JSON.generate(payload), padding: false)
     "#{encoded_header}.#{encoded_payload}."
+  end
+
+  def cookie_header(set_cookie)
+    set_cookie.to_s.lines.map { |line| line.split(";").first }.join("; ")
+  end
+
+  def assert_social_state_generation_failure(auth, path, body, cookie: nil)
+    status, _headers, response_body = auth.call(rack_env("POST", path, body: body, cookie: cookie))
+
+    assert_equal 500, status
+    assert_equal(
+      {"code" => "INTERNAL_SERVER_ERROR", "message" => "Unable to create verification"},
+      JSON.parse(response_body.join)
+    )
   end
 
   def rack_env(method, path, body: nil, cookie: nil)
