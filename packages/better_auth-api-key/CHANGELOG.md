@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Aligned API-key-backed sessions with Better Auth v1.7.1: empty extracted
+  values now fall through, `/get-session` returns the synthesized session
+  directly, and `session["token"]` contains the presented API key. This removes
+  the earlier Ruby-only `tokenFingerprint` hardening for exact compatibility.
 - Hardened API-key verification and counter updates where authoritative adapter
   operations are available, with regression coverage for stale-write cases.
 - Added a checked upstream test inventory for this plugin's pinned reference

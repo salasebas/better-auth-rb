@@ -117,8 +117,8 @@ class BetterAuthPluginsAPIKeyTest < Minitest::Test
 
     assert_equal "storage-key@example.com", session[:user]["email"]
     assert_equal created[:id], session[:session]["id"]
-    refute session[:session].key?("token")
-    assert_equal BetterAuth::Plugins.default_api_key_hasher(created[:key]), session[:session]["tokenFingerprint"]
+    assert_equal created[:key], session[:session]["token"]
+    refute session[:session].key?("tokenFingerprint")
 
     assert_equal({success: true}, auth.api.delete_api_key(headers: {"cookie" => cookie}, body: {keyId: created[:id]}))
     assert_nil storage.get("api-key:by-ref:#{user_id}")
