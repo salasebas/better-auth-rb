@@ -77,6 +77,38 @@ class BetterAuthAPIKeyValidationTest < Minitest::Test
     assert_equal({"repo" => ["read"]}, JSON.parse(update.fetch(:permissions)))
   end
 
+  def test_expiration_is_strictly_before_now_like_upstream
+    now = Time.now
+    storage = MemoryStorage.new
+    config = BetterAuth::APIKey::Configuration.normalize(
+      storage: "secondary-storage",
+      custom_storage: storage,
+      fallback_to_database: false,
+      rate_limit: {enabled: false}
+    )
+    record = {
+      "id" => "boundary-key",
+      "key" => "hashed-boundary-key",
+      "configId" => "default",
+      "referenceId" => "boundary-user",
+      "enabled" => true,
+      "expiresAt" => now,
+      "remaining" => 0,
+      "refillAmount" => nil
+    }
+    ctx = Struct.new(:context).new(nil)
+
+    error = BetterAuth::APIKey::Adapter.stub(:find_by_hash, record) do
+      Time.stub(:now, now) do
+        assert_raises(BetterAuth::APIError) do
+          BetterAuth::APIKey::Validation.validate_api_key!(ctx, "boundary-key", config)
+        end
+      end
+    end
+
+    assert_equal BetterAuth::APIKey::ERROR_CODES.fetch("USAGE_EXCEEDED"), error.message
+  end
+
   def test_usage_update_refills_remaining_after_interval_then_decrements
     config = BetterAuth::APIKey::Configuration.normalize(rate_limit: {enabled: false})
     record = {

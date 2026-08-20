@@ -77,6 +77,7 @@ class BetterAuthAPIKeyListRouteTest < Minitest::Test
     created = auth.api.create_api_key(headers: {"cookie" => cookie}, body: {name: "legacy", metadata: {plan: "free"}})
     legacy = JSON.generate(JSON.generate({plan: "legacy"}))
     auth.context.adapter.update(model: "apikey", where: [{field: "id", value: created[:id]}], update: {metadata: legacy})
+    deferred.clear
 
     listed = auth.api.list_api_keys(headers: {"cookie" => cookie})
     entry = listed.fetch(:apiKeys).find { |key| key.fetch(:id) == created[:id] }
@@ -84,7 +85,7 @@ class BetterAuthAPIKeyListRouteTest < Minitest::Test
 
     assert_equal({"plan" => "legacy"}, entry.fetch(:metadata))
     assert_equal legacy, stored_before_task.fetch("metadata")
-    assert_equal 1, deferred.length
+    assert_equal 2, deferred.length
 
     deferred.each(&:call)
     stored_after_task = auth.context.adapter.find_one(model: "apikey", where: [{field: "id", value: created[:id]}])

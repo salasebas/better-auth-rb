@@ -233,6 +233,10 @@ module BetterAuth
       BetterAuth::APIKey::Routes.schedule_cleanup(ctx, config)
     end
 
+    def api_key_schedule_unawaited_cleanup(ctx, config)
+      BetterAuth::APIKey::Routes.schedule_unawaited_cleanup(ctx, config)
+    end
+
     def api_key_delete_expired(context, config, bypass_last_check: false)
       BetterAuth::APIKey::Routes.delete_expired(context, config, bypass_last_check: bypass_last_check)
     end

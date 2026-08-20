@@ -1198,6 +1198,7 @@ class BetterAuthPluginsAPIKeyTest < Minitest::Test
       where: [{field: "id", value: expired[:id]}],
       update: {expiresAt: Time.now - 60}
     )
+    background.clear
 
     auth.api.verify_api_key(body: {key: expired[:key]})
 
@@ -1220,6 +1221,7 @@ class BetterAuthPluginsAPIKeyTest < Minitest::Test
     cookie = sign_up_cookie(auth, email: "defer-key@example.com")
     user_id = auth.api.get_session(headers: {"cookie" => cookie})[:user]["id"]
     created = auth.api.create_api_key(body: {userId: user_id, remaining: 2})
+    deferred.clear
 
     result = auth.api.verify_api_key(body: {key: created[:key]})
 
