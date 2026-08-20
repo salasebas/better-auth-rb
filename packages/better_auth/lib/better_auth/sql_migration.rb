@@ -13,6 +13,12 @@ module BetterAuth
       /undefined table/i,
       /invalid object name/i
     ].freeze
+    LITERAL_ENUM_SQL_TYPES = {
+      postgres: ["character varying", "varchar", "text", "uuid"].freeze,
+      mysql: ["varchar", "text", "uuid"].freeze,
+      sqlite: ["text"].freeze,
+      mssql: ["varchar", "nvarchar", "uniqueidentifier"].freeze
+    }.freeze
 
     class UnsupportedAdapterError < StandardError; end
 
@@ -485,10 +491,12 @@ module BetterAuth
 
     def matching_type?(actual_type, expected_type, dialect)
       normalized = actual_type.to_s.downcase.split("(").first.strip
+      return LITERAL_ENUM_SQL_TYPES.fetch(dialect).include?(normalized) if expected_type.is_a?(Array)
+
       type = expected_type.to_s
       expected = case type
       when "string"
-        %w[text varchar character varying char uuid nvarchar uniqueidentifier]
+        ["text", "varchar", "character varying", "char", "uuid", "nvarchar", "uniqueidentifier"]
       when "number"
         %w[integer int int4 bigint smallint numeric real decimal float double]
       when "boolean"

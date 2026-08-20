@@ -154,6 +154,13 @@ module BetterAuth
 
       def sql_type(logical_field, attributes, dialect)
         type = attributes[:type] || "string"
+        if type.is_a?(Array)
+          references_id = attributes.dig(:references, :field).to_s == "id"
+          return indexed_string_sql_type(logical_field, attributes, dialect) if logical_field == "id" || references_id
+
+          return "text"
+        end
+
         case type
         when "boolean"
           case dialect

@@ -130,7 +130,8 @@ class BetterAuthSQLiteAdapterTest < Minitest::Test
               id: {type: "string", required: true},
               metadata: {type: "json", required: false},
               tags: {type: "string[]", required: false},
-              scores: {type: "number[]", required: false}
+              scores: {type: "number[]", required: false},
+              status: {type: ["draft", "published"], required: false}
             }
           }
         }
@@ -147,7 +148,8 @@ class BetterAuthSQLiteAdapterTest < Minitest::Test
           id: "typed-1",
           metadata: {"nested" => {"enabled" => true}},
           tags: ["alpha", "beta"],
-          scores: [1, 2, 3]
+          scores: [1, 2, 3],
+          status: "published"
         },
         force_allow_id: true
       )
@@ -156,6 +158,8 @@ class BetterAuthSQLiteAdapterTest < Minitest::Test
       assert_equal({"nested" => {"enabled" => true}}, record.fetch("metadata"))
       assert_equal ["alpha", "beta"], record.fetch("tags")
       assert_equal [1, 2, 3], record.fetch("scores")
+      assert_equal "published", record.fetch("status")
+      assert_equal "published", direct_sqlite_value(connection, %(SELECT status FROM "typed_records" WHERE id = ?), "typed-1")
     ensure
       connection&.close
     end

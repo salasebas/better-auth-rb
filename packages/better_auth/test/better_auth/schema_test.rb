@@ -68,6 +68,27 @@ class BetterAuthSchemaTest < Minitest::Test
     assert_equal "user_id", schema["session"][:fields]["userId"][:field_name]
   end
 
+  def test_literal_enum_field_types_preserve_array_metadata
+    statuses = ["active", "", "active"]
+    config = BetterAuth::Configuration.new(
+      secret: SECRET,
+      database: :memory,
+      user: {
+        additional_fields: {
+          status: {type: statuses, required: false},
+          category: {type: [], required: false}
+        }
+      }
+    )
+
+    fields = BetterAuth::Schema.auth_tables(config).fetch("user").fetch(:fields)
+
+    assert_equal statuses, fields.fetch("status").fetch(:type)
+    assert_equal [], fields.fetch("category").fetch(:type)
+    assert_instance_of Array, fields.fetch("status").fetch(:type)
+    assert_instance_of Array, fields.fetch("category").fetch(:type)
+  end
+
   def test_provider_profile_user_input_filters_to_allowed_additional_fields_on_create
     config = provider_profile_config
     profile = {
