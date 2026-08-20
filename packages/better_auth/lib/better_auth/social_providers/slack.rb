@@ -4,7 +4,7 @@ module BetterAuth
   module SocialProviders
     module_function
 
-    def slack(client_id:, client_secret:, scopes: ["openid", "profile", "email"], **options)
+    def slack(client_id:, client_secret: nil, scopes: ["openid", "profile", "email"], **options)
       Base.oauth_provider(
         id: "slack",
         name: "Slack",

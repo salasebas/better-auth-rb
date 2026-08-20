@@ -12,7 +12,7 @@ module BetterAuth
       token_hosted_domain == configured_hosted_domain
     end
 
-    def google(client_id:, client_secret:, scopes: ["openid", "email", "profile"], **options)
+    def google(client_id:, client_secret: nil, scopes: ["openid", "email", "profile"], **options)
       normalized = Base.normalize_options(options)
       primary_client_id = Base.primary_client_id(client_id)
       {
@@ -22,6 +22,8 @@ module BetterAuth
         client_secret: client_secret,
         options: normalized,
         create_authorization_url: lambda do |data|
+          raise Error, "CLIENT_ID_AND_SECRET_REQUIRED" if client_secret.to_s.empty?
+
           verifier = data[:code_verifier] || data[:codeVerifier]
           raise Error, "codeVerifier is required for Google" if verifier.to_s.empty?
 
