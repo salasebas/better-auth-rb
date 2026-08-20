@@ -6,6 +6,13 @@
 - Documented and tested the Ruby OIDC integration boundary for the hardened SSO
   lifecycle work.
 
+## [0.11.1](https://github.com/salasebas/better-auth-rb/compare/better_auth-oidc/v0.11.0...better_auth-oidc/v0.11.1) (2026-08-20)
+
+
+### Bug Fixes
+
+* **core:** classify special-use IPv6 hosts ([#62](https://github.com/salasebas/better-auth-rb/issues/62)) ([2951648](https://github.com/salasebas/better-auth-rb/commit/295164826c9b61d90fadb835c4034cb3f2ec3416))
+
 ## [0.11.0](https://github.com/salasebas/better-auth-rb/compare/better_auth-oidc-v0.10.0...better_auth-oidc/v0.11.0) (2026-07-23)
 
 

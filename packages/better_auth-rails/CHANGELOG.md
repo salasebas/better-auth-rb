@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.11.1](https://github.com/salasebas/better-auth-rb/compare/better_auth-rails/v0.11.0...better_auth-rails/v0.11.1) (2026-08-20)
+
+
+### Bug Fixes
+
+* **core:** route server-scoped endpoints over HTTP ([#63](https://github.com/salasebas/better-auth-rb/issues/63)) ([f0fc50c](https://github.com/salasebas/better-auth-rb/commit/f0fc50c03a7b3d2813daf1bb669ee73e8a9592f8))
+
 ## [0.11.0](https://github.com/salasebas/better-auth-rb/compare/better_auth-rails-v0.10.0...better_auth-rails/v0.11.0) (2026-07-23)
 
 

@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.11.1](https://github.com/salasebas/better-auth-rb/compare/better_auth-stripe/v0.11.0...better_auth-stripe/v0.11.1) (2026-08-20)
+
+
+### Bug Fixes
+
+* **stripe:** return webhook errors from on_event ([#92](https://github.com/salasebas/better-auth-rb/issues/92)) ([20b5009](https://github.com/salasebas/better-auth-rb/commit/20b50099cea0f1ed3a79c4289a434ffb3ba415d1))
+* **stripe:** run customer hooks after user creation ([#71](https://github.com/salasebas/better-auth-rb/issues/71)) ([f7c38b5](https://github.com/salasebas/better-auth-rb/commit/f7c38b5d55b0be6b40d67c08ae0f8ede901c095b))
+
 ## [0.11.0](https://github.com/salasebas/better-auth-rb/compare/better_auth-stripe-v0.10.0...better_auth-stripe/v0.11.0) (2026-07-23)
 
 

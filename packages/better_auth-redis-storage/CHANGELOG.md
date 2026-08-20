@@ -7,6 +7,13 @@
 - Added a checked upstream test inventory for the Redis storage reference
   surface, including explicit Ruby-specific classifications.
 
+## [0.11.1](https://github.com/salasebas/better-auth-rb/compare/better_auth-redis-storage/v0.11.0...better_auth-redis-storage/v0.11.1) (2026-08-20)
+
+
+### Bug Fixes
+
+* **redis-storage:** prevent generation reuse after marker loss ([#87](https://github.com/salasebas/better-auth-rb/issues/87)) ([ec07b4d](https://github.com/salasebas/better-auth-rb/commit/ec07b4d7d87f47e451b000fd34e31cfda1b3e212))
+
 ## [0.11.0](https://github.com/salasebas/better-auth-rb/compare/better_auth-redis-storage-v0.10.0...better_auth-redis-storage/v0.11.0) (2026-07-23)
 
 

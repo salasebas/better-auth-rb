@@ -5,6 +5,55 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.11.1](https://github.com/salasebas/better-auth-rb/compare/better_auth/v0.11.0...better_auth/v0.11.1) (2026-08-20)
+
+
+### Bug Fixes
+
+* **admin:** enforce exact role case authorization ([#72](https://github.com/salasebas/better-auth-rb/issues/72)) ([ca19ff8](https://github.com/salasebas/better-auth-rb/commit/ca19ff8d7af0e8f173923277f3291e7928df2999))
+* **admin:** handle list-users adapter failures ([#93](https://github.com/salasebas/better-auth-rb/issues/93)) ([43705ac](https://github.com/salasebas/better-auth-rb/commit/43705ac7eb716f9d8588bf872b6b8ad4c5376e21))
+* **admin:** require canonical get-user id ([#103](https://github.com/salasebas/better-auth-rb/issues/103)) ([712d331](https://github.com/salasebas/better-auth-rb/commit/712d331716bfc0bebf032d32fe96347f29ca82a5))
+* **anonymous:** link users after email verification ([#77](https://github.com/salasebas/better-auth-rb/issues/77)) ([da1d7d0](https://github.com/salasebas/better-auth-rb/commit/da1d7d0ad092f6220f6f58654261abd2a3c20237))
+* **auth:** align delete-user token expiry ([#90](https://github.com/salasebas/better-auth-rb/issues/90)) ([028e9d0](https://github.com/salasebas/better-auth-rb/commit/028e9d06a0219ffd1b8b62e9d39757bdd1d960ef))
+* **auth:** allow optional social provider client secrets ([#67](https://github.com/salasebas/better-auth-rb/issues/67)) ([e72021f](https://github.com/salasebas/better-auth-rb/commit/e72021f037ef26a2df96b904f310374fbe16fcb2))
+* **auth:** canonicalize email verification errors ([#94](https://github.com/salasebas/better-auth-rb/issues/94)) ([3630dad](https://github.com/salasebas/better-auth-rb/commit/3630dadeb7d370cee6477b744f5a2e0a6ee11f16))
+* **auth:** default OAuth state to verification storage ([#79](https://github.com/salasebas/better-auth-rb/issues/79)) ([6a2b24c](https://github.com/salasebas/better-auth-rb/commit/6a2b24c2d3fd9b28d37abbab20d1f3588c3c9ccf))
+* **auth:** reject incomplete change-email confirmation flow ([#84](https://github.com/salasebas/better-auth-rb/issues/84)) ([e21d7e6](https://github.com/salasebas/better-auth-rb/commit/e21d7e61bf024bd58cc4b34b25312ac812acfadf))
+* **auth:** reject revoked sessions on provider token routes ([#76](https://github.com/salasebas/better-auth-rb/issues/76)) ([af375b1](https://github.com/salasebas/better-auth-rb/commit/af375b123dc1d8d2d02fab49810774e978eee1a3))
+* **auth:** require authoritative delete verification ([#100](https://github.com/salasebas/better-auth-rb/issues/100)) ([36feb61](https://github.com/salasebas/better-auth-rb/commit/36feb61e7864ff9716aecb0f79b6c63a42f52204))
+* **auth:** sync Generic OAuth profile on explicit link ([#101](https://github.com/salasebas/better-auth-rb/issues/101)) ([cae2b45](https://github.com/salasebas/better-auth-rb/commit/cae2b4503b58b72bb7c3a5f51d1dd86907a3cd9b))
+* **core:** align HIBP protected paths ([#65](https://github.com/salasebas/better-auth-rb/issues/65)) ([6e8c24c](https://github.com/salasebas/better-auth-rb/commit/6e8c24cf67f147561860aedc9a836237d6b283a8))
+* **core:** align literal-enum SQL parity ([49ca890](https://github.com/salasebas/better-auth-rb/commit/49ca890a78f2fc44b34ea03e70b1fa62d8a87905))
+* **core:** align organization invitation creation ([#82](https://github.com/salasebas/better-auth-rb/issues/82)) ([165eac5](https://github.com/salasebas/better-auth-rb/commit/165eac54f38b1152cd4ffaee1a1f6affa1a67b42))
+* **core:** align session-only refresh behavior ([2dac697](https://github.com/salasebas/better-auth-rb/commit/2dac69712db0785e2a3526f50ff50110455e6e24))
+* **core:** allow phone number disassociation ([#75](https://github.com/salasebas/better-auth-rb/issues/75)) ([da9e102](https://github.com/salasebas/better-auth-rb/commit/da9e102b8fe2bdb865a461970f02ad5ff803e43b))
+* **core:** await phone verification callback ([#96](https://github.com/salasebas/better-auth-rb/issues/96)) ([ee5bc48](https://github.com/salasebas/better-auth-rb/commit/ee5bc4866e3f05d68059197c113c1a96df105cf8))
+* **core:** bind multi-session actions to verified token ([#69](https://github.com/salasebas/better-auth-rb/issues/69)) ([8070d35](https://github.com/salasebas/better-auth-rb/commit/8070d35a83f5e7de92b9b02f02c8203f2d1049ef))
+* **core:** canonicalize request IP normalization ([8d7f345](https://github.com/salasebas/better-auth-rb/commit/8d7f3456cda19ec14ed28322adefd9d8831d85f0))
+* **core:** classify special-use IPv6 hosts ([#62](https://github.com/salasebas/better-auth-rb/issues/62)) ([2951648](https://github.com/salasebas/better-auth-rb/commit/295164826c9b61d90fadb835c4034cb3f2ec3416))
+* **core:** default omitted schema fields to required ([#89](https://github.com/salasebas/better-auth-rb/issues/89)) ([f570148](https://github.com/salasebas/better-auth-rb/commit/f570148f20b6910a34d122b58884143e2f6155e8))
+* **core:** enforce path segment matcher boundaries ([#98](https://github.com/salasebas/better-auth-rb/issues/98)) ([ba26891](https://github.com/salasebas/better-auth-rb/commit/ba268919a58bd7d8abe67f2ad187b04baf77db42))
+* **core:** honor default find_many limits ([#102](https://github.com/salasebas/better-auth-rb/issues/102)) ([d23ee5a](https://github.com/salasebas/better-auth-rb/commit/d23ee5aeac2cf904c204c0b12634693e8d8169c7))
+* **core:** make sign-out resilient to delete failures ([#66](https://github.com/salasebas/better-auth-rb/issues/66)) ([8667d9d](https://github.com/salasebas/better-auth-rb/commit/8667d9d11980e9c33a2ae9182739d5379b2ad907))
+* **core:** preserve exact rate-limit expiry boundaries ([#85](https://github.com/salasebas/better-auth-rb/issues/85)) ([c465f5c](https://github.com/salasebas/better-auth-rb/commit/c465f5c474e7a3b29486a3a8b504d2491b6bace6))
+* **core:** preserve MySQL connection URL options ([#83](https://github.com/salasebas/better-auth-rb/issues/83)) ([06f657d](https://github.com/salasebas/better-auth-rb/commit/06f657d9b4310f9e83cbfad12bb1e60714291345))
+* **core:** preserve session-only cookie lifetime ([7e11eba](https://github.com/salasebas/better-auth-rb/commit/7e11eba6df5651827f4e89041229cf64d6b44a1e))
+* **core:** preserve session-only cookie lifetime ([fa0ebbd](https://github.com/salasebas/better-auth-rb/commit/fa0ebbd70d5c0226f89b6aaec787f521c6d03d15))
+* **core:** refresh cookie cache by remaining ttl ([#91](https://github.com/salasebas/better-auth-rb/issues/91)) ([4b5edb6](https://github.com/salasebas/better-auth-rb/commit/4b5edb6e7d954eac2c0253991192ef8ff6210000))
+* **core:** reject non-string callback redirects ([#73](https://github.com/salasebas/better-auth-rb/issues/73)) ([1f176e1](https://github.com/salasebas/better-auth-rb/commit/1f176e1ad5a7ef50051dc2bde3f7a4360099e672))
+* **core:** route server-scoped endpoints over HTTP ([#63](https://github.com/salasebas/better-auth-rb/issues/63)) ([f0fc50c](https://github.com/salasebas/better-auth-rb/commit/f0fc50c03a7b3d2813daf1bb669ee73e8a9592f8))
+* **core:** scope form csrf to email auth routes ([#88](https://github.com/salasebas/better-auth-rb/issues/88)) ([8bb2137](https://github.com/salasebas/better-auth-rb/commit/8bb213772aecabc290d24c2b9561ccc7c60c8216))
+* **core:** support literal-enum SQL field types ([542c534](https://github.com/salasebas/better-auth-rb/commit/542c534e60892e908c8bbc2037f1adcf0f4d5ebe))
+* **core:** support literal-enum SQL field types ([5aaea0d](https://github.com/salasebas/better-auth-rb/commit/5aaea0d97a3a193403a9afe3d4733ab88ce50987))
+* **expo:** validate authorization proxy targets ([#64](https://github.com/salasebas/better-auth-rb/issues/64)) ([bde0448](https://github.com/salasebas/better-auth-rb/commit/bde04483aec9d16f7426219923980a9fd71d4845))
+* generate RFC-compliant social PKCE verifiers ([#86](https://github.com/salasebas/better-auth-rb/issues/86)) ([1f78bc9](https://github.com/salasebas/better-auth-rb/commit/1f78bc9c5ea2d2e44637f6c9a90528583a4da86d))
+* **generic-oauth:** resolve account id fallbacks ([#78](https://github.com/salasebas/better-auth-rb/issues/78)) ([725f23d](https://github.com/salasebas/better-auth-rb/commit/725f23d63a59c1ce6c0120fafee71d9765bb83ad))
+* **last-login-method:** persist tracking through database hooks ([#74](https://github.com/salasebas/better-auth-rb/issues/74)) ([663600d](https://github.com/salasebas/better-auth-rb/commit/663600dc3a05856bf0e1697bb04f9f0a9d264476))
+* **memory:** fail closed on empty singular delete ([#80](https://github.com/salasebas/better-auth-rb/issues/80)) ([1b62bde](https://github.com/salasebas/better-auth-rb/commit/1b62bdede115461cb3ce46117c7d0489cb591f02))
+* **oauth-provider:** align default scopes ([6b075a4](https://github.com/salasebas/better-auth-rb/commit/6b075a46298a17b86c046a1a059b94e25f4e1d66))
+* **oauth-provider:** complete default scope parity ([5afcf2c](https://github.com/salasebas/better-auth-rb/commit/5afcf2cff2deb2adda2a960f32422a6cd031904f))
+* **oauth-provider:** encrypt JWT-disabled client secrets ([#104](https://github.com/salasebas/better-auth-rb/issues/104)) ([aa04489](https://github.com/salasebas/better-auth-rb/commit/aa04489aa71161b09be2d615d2361161f3371b9b))
+
 ## [0.11.0](https://github.com/salasebas/better-auth-rb/compare/better_auth-v0.10.0...better_auth/v0.11.0) (2026-07-23)
 
 
