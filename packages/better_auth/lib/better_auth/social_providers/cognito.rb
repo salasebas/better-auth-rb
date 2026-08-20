@@ -11,10 +11,6 @@ module BetterAuth
       user_pool_id = normalized[:user_pool_id]
       raise Error, "DOMAIN_AND_REGION_REQUIRED" if domain.to_s.empty? || region.to_s.empty? || user_pool_id.to_s.empty?
 
-      if normalized[:require_client_secret] && client_secret.to_s.empty?
-        raise Error, "CLIENT_SECRET_REQUIRED"
-      end
-
       clean_domain = domain.to_s.sub(%r{\Ahttps?://}, "").sub(%r{/+\z}, "")
       provider = Base.oauth_provider(
         id: "cognito",
@@ -39,6 +35,10 @@ module BetterAuth
       )
       create_authorization_url = provider.fetch(:create_authorization_url)
       provider[:create_authorization_url] = lambda do |data|
+        if normalized[:require_client_secret] && client_secret.to_s.empty?
+          raise Error, "CLIENT_SECRET_REQUIRED"
+        end
+
         create_authorization_url.call(data).sub(/scope=([^&]+)/) { "scope=#{$1.gsub("+", "%20")}" }
       end
       provider[:verify_id_token] ||= lambda do |token, nonce = nil|

@@ -87,7 +87,7 @@ class TestPartitioningTest < Minitest::Test
     assert_includes workflow, "workflow_call:"
     assert_includes workflow, "type: boolean"
     assert_includes workflow, "merge_group:"
-    assert_includes workflow, "dorny/paths-filter@7b450fff21473bca461d4b92ce414b9d0420d706"
+    assert_includes workflow, "dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d"
     assert_includes workflow, "mongo:8.0"
     assert_includes workflow, "BETTER_AUTH_MONGODB_URL: mongodb://127.0.0.1:27017/better-auth-ruby-test?replicaSet=rs0"
     assert_includes workflow, "BETTER_AUTH_MONGODB_REPLICA_SET_URL"

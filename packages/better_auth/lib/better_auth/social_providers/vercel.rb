@@ -4,7 +4,7 @@ module BetterAuth
   module SocialProviders
     module_function
 
-    def vercel(client_id:, client_secret:, scopes: [], **options)
+    def vercel(client_id:, client_secret: nil, scopes: [], **options)
       provider = Base.oauth_provider(
         id: "vercel",
         name: "Vercel",

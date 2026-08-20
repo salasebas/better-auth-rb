@@ -132,7 +132,8 @@ module BetterAuth
           user["id"],
           dont_remember_me,
           Routes.session_overrides(ctx),
-          true
+          true,
+          ctx
         )
         raise APIError.new("INTERNAL_SERVER_ERROR", message: BASE_ERROR_CODES["FAILED_TO_CREATE_SESSION"]) unless session
 

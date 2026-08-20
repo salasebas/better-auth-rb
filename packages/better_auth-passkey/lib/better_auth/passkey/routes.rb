@@ -22,16 +22,29 @@ module BetterAuth
           openapi: {
             operationId: "generatePasskeyRegistrationOptions",
             description: "Generate registration options for a new passkey",
-            requestBody: BetterAuth::OpenAPI.json_request_body(
-              BetterAuth::OpenAPI.object_schema(
-                {
-                  authenticatorAttachment: {type: "string", enum: ["platform", "cross-platform"], description: "Type of authenticator to use for registration"},
-                  name: {type: "string", description: "Optional custom name for the passkey"},
-                  context: {type: "string", description: "Optional context for passkey-first registration flows"}
-                }
-              ),
-              required: false
-            ),
+            parameters: [
+              {
+                name: "authenticatorAttachment",
+                in: "query",
+                required: false,
+                description: "Type of authenticator to use for registration",
+                schema: {type: "string"}
+              },
+              {
+                name: "name",
+                in: "query",
+                required: false,
+                description: "Optional custom name for the passkey",
+                schema: {type: "string"}
+              },
+              {
+                name: "context",
+                in: "query",
+                required: false,
+                description: "Optional context for passkey-first registration flows",
+                schema: {type: "string"}
+              }
+            ],
             responses: {
               "200" => BetterAuth::OpenAPI.json_response("Success", passkey_options_schema)
             }
@@ -66,7 +79,6 @@ module BetterAuth
           openapi: {
             operationId: "passkeyGenerateAuthenticateOptions",
             description: "Generate authentication options for a passkey",
-            requestBody: BetterAuth::OpenAPI.empty_request_body,
             responses: {
               "200" => BetterAuth::OpenAPI.json_response("Success", passkey_options_schema)
             }

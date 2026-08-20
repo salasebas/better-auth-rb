@@ -26,7 +26,7 @@ module BetterAuth
         uri.to_s
       end
 
-      def oauth_provider(id:, name:, client_id:, authorization_endpoint:, token_endpoint:, profile_map:, client_secret: nil, user_info_endpoint: nil, scopes: [], scope_separator: " ", pkce: false, require_code_verifier: false, auth_params: {}, token_params: {}, token_authentication: :post, user_info_method: :get, user_info_headers: {}, user_info_body: nil, **options)
+      def oauth_provider(id:, name:, client_id:, authorization_endpoint:, token_endpoint:, profile_map:, client_secret: nil, user_info_endpoint: nil, scopes: [], scope_separator: " ", pkce: false, require_code_verifier: false, authorization_requires_client_secret: false, auth_params: {}, token_params: {}, token_authentication: :post, user_info_method: :get, user_info_headers: {}, user_info_body: nil, **options)
         opts = normalize_options(options.merge(client_id: client_id, client_secret: client_secret))
         primary_id = primary_client_id(client_id)
         {
@@ -36,6 +36,10 @@ module BetterAuth
           client_secret: client_secret,
           options: opts,
           create_authorization_url: lambda do |data|
+            if authorization_requires_client_secret && client_secret.to_s.empty?
+              raise Error, "CLIENT_ID_AND_SECRET_REQUIRED"
+            end
+
             verifier = value(data, :code_verifier, :codeVerifier)
             raise Error, "codeVerifier is required for #{name}" if require_code_verifier && verifier.to_s.empty?
 

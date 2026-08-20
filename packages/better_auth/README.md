@@ -125,6 +125,13 @@ Custom Better Auth-style password callbacks are still supported through `email_a
 
 The core gem ships framework-agnostic adapters for memory, PostgreSQL, MySQL, SQLite, and MSSQL. Driver gems are loaded only when their adapter is instantiated. MongoDB support lives in the external `better_auth-mongodb` package so apps that do not use MongoDB do not install the Mongo driver.
 
+The direct MySQL adapter preserves documented Ruby `mysql2` URL query options,
+including TLS, timeout, socket, flags, and encoding settings. Query keys use
+the gem's snake_case names; explicit `connection_options:` override URL values,
+while an existing `connection:` bypasses URL parsing. See the
+[MySQL adapter guide](../../docs-site/content/docs/adapters/mysql.mdx) for the
+allowlist, value types, precedence, and TLS verification guidance.
+
 ```ruby
 auth = BetterAuth.auth(
   secret: ENV.fetch("BETTER_AUTH_SECRET"),

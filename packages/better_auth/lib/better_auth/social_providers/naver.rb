@@ -4,7 +4,7 @@ module BetterAuth
   module SocialProviders
     module_function
 
-    def naver(client_id:, client_secret:, scopes: ["profile", "email"], **options)
+    def naver(client_id:, client_secret: nil, scopes: ["profile", "email"], **options)
       normalized = Base.normalize_options(options)
       provider = Base.oauth_provider(
         id: "naver",

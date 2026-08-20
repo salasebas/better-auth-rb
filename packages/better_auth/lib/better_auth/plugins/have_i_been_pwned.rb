@@ -13,14 +13,22 @@ module BetterAuth
     HAVE_I_BEEN_PWNED_DEFAULT_PATHS = [
       "/sign-up/email",
       "/change-password",
-      "/reset-password"
+      "/reset-password",
+      "/email-otp/reset-password",
+      "/phone-number/reset-password",
+      "/admin/create-user",
+      "/admin/set-user-password"
     ].freeze
 
     module_function
 
     def have_i_been_pwned(options = {})
       config = normalize_hash(options)
-      config[:paths] = Array(config[:paths]).empty? ? HAVE_I_BEEN_PWNED_DEFAULT_PATHS : Array(config[:paths])
+      config[:paths] = if config.key?(:paths) && !config[:paths].nil?
+        Array(config[:paths])
+      else
+        HAVE_I_BEEN_PWNED_DEFAULT_PATHS
+      end
 
       Plugin.new(
         id: "have-i-been-pwned",

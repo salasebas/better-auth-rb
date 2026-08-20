@@ -1,7 +1,5 @@
 # frozen_string_literal: true
 
-require "securerandom"
-
 module BetterAuth
   module Stripe
     module PluginFactory
@@ -21,17 +19,13 @@ module BetterAuth
       end
 
       def database_hooks(config)
-        return {} unless config[:create_customer_on_sign_up]
-
         {
           user: {
             create: {
-              before: lambda do |data, hook_ctx|
-                next unless data["email"] && !data["stripeCustomerId"]
+              after: lambda do |user, hook_ctx|
+                next unless hook_ctx && config[:create_customer_on_sign_up] && user["email"] && !user["stripeCustomerId"]
 
-                data["id"] ||= SecureRandom.hex(16)
-                customer = BetterAuth::Plugins.stripe_find_or_create_user_customer(config, data, nil, hook_ctx)
-                {data: {id: data["id"], stripeCustomerId: BetterAuth::Stripe::Utils.id(customer)}}
+                BetterAuth::Plugins.stripe_create_customer(config, hook_ctx, user)
               rescue
                 nil
               end

@@ -165,7 +165,9 @@ The callback runs exactly once. A trimmed nonblank client `name` takes precedenc
 
 To add or register a passkey, first generate WebAuthn registration options. By default the user must have a fresh session.
 
-`POST /passkey/generate-register-options`
+`GET /passkey/generate-register-options`
+
+Pass `authenticatorAttachment`, `name`, and optional passkey-first `context` values as query parameters. This endpoint does not read a request body.
 
 ```ruby title="server.rb"
 registration = auth.api.generate_passkey_registration_options(
@@ -202,7 +204,9 @@ passkey = auth.api.verify_passkey_registration(
 
 To sign in with a passkey, generate authentication options, send them to the browser's WebAuthn API, then verify the assertion.
 
-`POST /passkey/generate-authenticate-options`
+`GET /passkey/generate-authenticate-options`
+
+This endpoint does not accept a request body.
 
 ```ruby title="server.rb"
 authentication = auth.api.generate_passkey_authentication_options(
