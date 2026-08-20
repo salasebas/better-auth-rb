@@ -115,7 +115,7 @@ class BetterAuthRoutesSignOutTest < Minitest::Test
       database: ->(options) { failing_adapter.new(options) },
       account: {store_account_cookie: true},
       session: {cookie_cache: {enabled: true, strategy: "jwe", max_age: 300}},
-      logger: ->(level, message) { log_entries << [level, message] }
+      logger: ->(level, message, *details) { log_entries << [level, message, *details] }
     )
     _status, sign_up_headers, _body = auth.api.sign_up_email(
       body: {email: "sign-out-failure@example.com", password: "password123", name: "Sign Out Failure"},
@@ -132,7 +132,7 @@ class BetterAuthRoutesSignOutTest < Minitest::Test
         assert headers.fetch("set-cookie").lines.any? { |line| line.start_with?("#{name}=") && line.include?("Max-Age=0") }
       end
     end
-    assert_equal Array.new(2) { [:error, "Failed to delete session from database: RuntimeError: database unavailable"] }, log_entries
+    assert_equal Array.new(2) { [:error, "Failed to delete session from database", deletion_error] }, log_entries
   end
 
   private

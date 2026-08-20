@@ -23,11 +23,11 @@ module BetterAuth
             ctx.context.internal_adapter.delete_session(token)
           rescue => error
             logger = ctx.context.logger
-            message = "Failed to delete session from database: #{error.class}: #{error.message}"
+            message = "Failed to delete session from database"
             if logger.respond_to?(:call)
-              logger.call(:error, message)
+              logger.call(:error, message, error)
             elsif logger.respond_to?(:error)
-              logger.error(message)
+              logger.error(message, error)
             end
           end
         end
