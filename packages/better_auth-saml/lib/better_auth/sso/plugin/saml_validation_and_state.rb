@@ -147,18 +147,29 @@ module BetterAuth
 
     def sso_generate_saml_relay_state(ctx, state_data)
       ttl_ms = 10 * 60 * 1000
+      cookie_ttl_seconds = ttl_ms / 1000
       relay_state = BetterAuth::Crypto.random_string(32)
       now_ms = (Time.now.to_f * 1000).to_i
-      stored = state_data.each_with_object({}) { |(key, value), result| result[key.to_s] = value }.merge(
+      stored = state_data.each_with_object({}) { |(key, value), result| result[key.to_s] = value }
+      %w[errorURL newUserURL link requestSignUp].each { |key| stored.delete(key) if stored[key].nil? }
+      stored.merge!(
         "codeVerifier" => BetterAuth::Crypto.random_string(128),
+        "oauthState" => relay_state,
         "expiresAt" => now_ms + ttl_ms
       )
-      ctx.context.internal_adapter.create_verification_value(
-        identifier: "#{SSO_SAML_RELAY_STATE_KEY_PREFIX}#{relay_state}",
-        value: JSON.generate(stored),
-        expiresAt: Time.at((now_ms + ttl_ms) / 1000.0)
-      )
-      ctx.set_signed_cookie("relay_state", relay_state, ctx.context.secret, path: "/", max_age: ttl_ms / 1000, http_only: true, same_site: "lax")
+      if sso_saml_cookie_state_strategy?(ctx)
+        cookie = sso_saml_relay_state_cookie(ctx, max_age: cookie_ttl_seconds)
+        encrypted = BetterAuth::Crypto.symmetric_encrypt(key: ctx.context.secret_config, data: JSON.generate(stored))
+        ctx.set_cookie(cookie.name, encrypted, cookie.attributes)
+      else
+        cookie = sso_saml_relay_state_cookie(ctx, max_age: cookie_ttl_seconds / 2)
+        ctx.context.internal_adapter.create_verification_value(
+          identifier: relay_state,
+          value: JSON.generate(stored),
+          expiresAt: Time.at((now_ms + ttl_ms) / 1000.0)
+        )
+        ctx.set_signed_cookie(cookie.name, relay_state, ctx.context.secret, cookie.attributes)
+      end
       relay_state
     end
 
@@ -166,16 +177,72 @@ module BetterAuth
       state = sso_verify_state(relay_state, ctx.context.secret)
       return state if state
 
-      verification = ctx.context.internal_adapter.find_verification_value("#{SSO_SAML_RELAY_STATE_KEY_PREFIX}#{relay_state}")
-      return nil unless verification
-      return nil unless sso_future_time?(verification.fetch("expiresAt"))
+      return nil if relay_state.to_s.empty?
 
-      parsed = JSON.parse(verification.fetch("value"))
+      return sso_parse_saml_relay_state_cookie(ctx, relay_state) if sso_saml_cookie_state_strategy?(ctx)
+
+      verification = ctx.context.internal_adapter.find_verification_value(relay_state)
+      return nil unless verification
+
+      parsed = sso_parse_saml_relay_state_data(verification.fetch("value"))
+      return nil unless parsed
+      return nil if parsed.key?("oauthState") && parsed["oauthState"] != relay_state
+
+      BetterAuth::Cookies.expire_cookie(ctx, sso_saml_relay_state_cookie(ctx))
+      consumed = ctx.context.internal_adapter.consume_verification_value(relay_state)
+      return nil unless consumed && consumed["value"] == verification["value"]
       return nil if parsed["expiresAt"].to_i <= (Time.now.to_f * 1000).to_i
 
       parsed
     rescue
       nil
+    end
+
+    def sso_parse_saml_relay_state_data(value)
+      parsed = JSON.parse(value)
+      return nil unless parsed.is_a?(Hash)
+      return nil unless parsed["callbackURL"].is_a?(String)
+      return nil unless parsed["codeVerifier"].is_a?(String)
+      return nil unless parsed["expiresAt"].is_a?(Numeric)
+      return nil if parsed.key?("errorURL") && !parsed["errorURL"].is_a?(String)
+      return nil if parsed.key?("newUserURL") && !parsed["newUserURL"].is_a?(String)
+      return nil if parsed.key?("oauthState") && !parsed["oauthState"].is_a?(String)
+      return nil if parsed.key?("requestSignUp") && ![true, false].include?(parsed["requestSignUp"])
+
+      return parsed unless parsed.key?("link")
+
+      link = parsed["link"]
+      return nil unless link.is_a?(Hash) && link["email"].is_a?(String) && link.key?("userId")
+      return nil if link["userId"].nil?
+
+      parsed["link"] = {"email" => link["email"], "userId" => String(link["userId"])}
+      parsed
+    rescue ArgumentError, TypeError
+      nil
+    end
+
+    def sso_parse_saml_relay_state_cookie(ctx, relay_state)
+      cookie = sso_saml_relay_state_cookie(ctx)
+      encrypted = ctx.get_cookie(cookie.name)
+      return nil if encrypted.to_s.empty?
+
+      decrypted = BetterAuth::Crypto.symmetric_decrypt(key: ctx.context.secret_config, data: encrypted)
+      parsed = sso_parse_saml_relay_state_data(decrypted)
+      return nil unless parsed && parsed["oauthState"] == relay_state
+
+      BetterAuth::Cookies.expire_cookie(ctx, cookie)
+      return nil if parsed["expiresAt"].to_i <= (Time.now.to_f * 1000).to_i
+
+      parsed
+    end
+
+    def sso_saml_relay_state_cookie(ctx, max_age: nil)
+      attributes = max_age ? {max_age: max_age} : {}
+      ctx.context.create_auth_cookie("relay_state", attributes)
+    end
+
+    def sso_saml_cookie_state_strategy?(ctx)
+      ctx.context.options.account[:store_state_strategy].to_s == "cookie"
     end
   end
 end
