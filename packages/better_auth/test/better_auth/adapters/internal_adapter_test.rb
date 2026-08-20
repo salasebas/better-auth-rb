@@ -500,6 +500,30 @@ class BetterAuthInternalAdapterTest < Minitest::Test
     assert_nil storage.get("verification:verify-secondary")
   end
 
+  def test_consume_verification_value_ignores_and_deletes_malformed_and_non_object_secondary_payloads
+    storage = MemoryStorage.new
+    internal = internal_adapter(secondary_storage: storage)
+
+    invalid_secondary_verification_payloads.each do |name, payload|
+      identifier = "invalid-consume-#{name}"
+      key = "verification:#{identifier}"
+      storage.set(key, payload)
+
+      assert_nil internal.consume_verification_value(identifier), "expected #{name} payload to be ignored"
+      assert_nil storage.get(key), "expected #{name} payload to be deleted when consumed"
+    end
+
+    identifier = "valid-consume"
+    key = "verification:#{identifier}"
+    storage.set(key, valid_secondary_verification_payload(identifier))
+
+    consumed = internal.consume_verification_value(identifier)
+
+    assert_equal identifier, consumed.fetch("identifier")
+    assert_equal "valid", consumed.fetch("value")
+    assert_nil storage.get(key)
+  end
+
   def test_delete_verification_by_identifier_skips_adapter_delete_when_record_is_missing
     config = BetterAuth::Configuration.new(secret: SECRET, database: :memory, verification: {store_in_database: true})
     adapter = RecordingMemoryAdapter.new(config)
@@ -758,6 +782,29 @@ class BetterAuthInternalAdapterTest < Minitest::Test
     config = BetterAuth::Configuration.new({secret: SECRET, database: :memory}.merge(options))
     adapter = BetterAuth::Adapters::Memory.new(config)
     BetterAuth::Adapters::InternalAdapter.new(adapter, config)
+  end
+
+  def invalid_secondary_verification_payloads
+    {
+      "array" => JSON.generate([]),
+      "string" => JSON.generate("verification"),
+      "number" => JSON.generate(42),
+      "boolean" => JSON.generate(true),
+      "null" => JSON.generate(nil),
+      "malformed" => "{not-json",
+      "invalid-date" => JSON.generate("expiresAt" => "not-a-time")
+    }
+  end
+
+  def valid_secondary_verification_payload(identifier)
+    JSON.generate(
+      "id" => "verification-#{identifier}",
+      "identifier" => identifier,
+      "value" => "valid",
+      "expiresAt" => (Time.now + 120).iso8601,
+      "createdAt" => Time.now.iso8601,
+      "updatedAt" => Time.now.iso8601
+    )
   end
 
   class RecordingMemoryAdapter < BetterAuth::Adapters::Memory
