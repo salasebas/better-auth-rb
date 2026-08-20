@@ -195,7 +195,7 @@ When `resource` is present and valid, access tokens are JWTs. Without `resource`
 Common options accepted by `BetterAuth::Plugins.oauth_provider`:
 
 * `login_page` and `consent_page`: application routes used to complete authorization prompts.
-* `scopes`: provider-supported scopes. Use `openid` to enable OIDC metadata, ID tokens, and UserInfo.
+* `scopes`: provider-supported scopes. When omitted, defaults to `openid`, `profile`, `email`, and `offline_access`; an explicit list, including `[]`, replaces the default. Use `openid` to enable OIDC metadata, ID tokens, and UserInfo.
 * `claims`: claims advertised and resolved for OIDC responses.
 * `allow_dynamic_client_registration`: enables `/oauth2/register`.
 * `allow_unauthenticated_client_registration`: permits unauthenticated registration and coerces those clients to public-client behavior.

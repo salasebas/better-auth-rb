@@ -99,7 +99,7 @@ Common options accepted by `BetterAuth::Plugins.oauth_provider`:
 
 - `login_page`
 - `consent_page`
-- `scopes`
+- `scopes` — provider-supported scopes. When omitted, defaults to `openid`, `profile`, `email`, and `offline_access`; an explicit list, including `[]`, replaces the default.
 - `claims`
 - `grant_types`
 - `allow_dynamic_client_registration`
