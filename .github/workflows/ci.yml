@@ -173,7 +173,9 @@ jobs:
           persist-credentials: false
 
       - name: Fetch upstream Better Auth sources
-        run: ./scripts/fetch-upstream-better-auth.sh
+        run: |
+          ./scripts/fetch-upstream-better-auth.sh
+          ./scripts/fetch-upstream-better-auth.sh 1.7.1
 
       - name: Install FreeTDS headers
         run: |
