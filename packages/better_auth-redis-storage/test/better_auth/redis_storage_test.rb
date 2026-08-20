@@ -138,6 +138,18 @@ class RedisStorageTest < Minitest::Test
     assert_equal [["GETDEL", "better-auth:verification"], ["GETDEL", "better-auth:verification"]], @client.call_calls
   end
 
+  def test_get_and_delete_preserves_redis_namespace_key_isolation_when_getdel_is_forwarded_raw
+    raw_client = GetdelFakeRedisClient.new
+    namespace_client = redis_namespace_client(raw_client, "tenant")
+    storage = BetterAuth::RedisStorage.new(client: namespace_client)
+    storage.set("verification", "namespaced")
+    raw_client.set("better-auth:verification", "unnamespaced")
+
+    assert_equal "namespaced", storage.get_and_delete("verification")
+    assert_nil raw_client.get("tenant:better-auth:verification")
+    assert_equal "unnamespaced", raw_client.get("better-auth:verification")
+  end
+
   def test_get_and_delete_falls_back_to_lua_when_getdel_is_unavailable
     client = UnknownGetdelFakeRedisClient.new
     storage = BetterAuth::RedisStorage.new(client: client)
@@ -792,6 +804,15 @@ class RedisStorageTest < Minitest::Test
 
   private
 
+  def redis_namespace_client(client, namespace)
+    unless defined?(::Redis::Namespace)
+      Object.const_set(:Redis, Module.new) unless defined?(::Redis)
+      ::Redis.const_set(:Namespace, RedisNamespaceGetdelDispatchFake)
+    end
+
+    ::Redis::Namespace.new(namespace, redis: client, warning: false)
+  end
+
   def rack_env(method, path)
     {
       "REQUEST_METHOD" => method,
@@ -989,6 +1010,69 @@ class RedisStorageTest < Minitest::Test
     def call(command, key)
       call_calls << [command, key]
       raise "ERR unknown command '#{command}'"
+    end
+  end
+
+  class GetdelFakeRedisClient < FakeRedisClient
+    def getdel(key)
+      data.delete(key)
+    end
+
+    # redis-rb 5 accepts both eval(script, keys: [], argv: []) and
+    # eval(script, [], []) forms. redis-namespace 1.11 forwards either form.
+    def eval(script, *args)
+      options = args.pop if args.last.is_a?(Hash)
+      options ||= {}
+      keys = args.shift || options[:keys] || []
+      argv = args.shift || options[:argv] || []
+
+      super(script, keys: keys, argv: argv)
+    end
+  end
+
+  # Models redis-namespace 1.11. Its declared commands namespace keys, but
+  # getdel is dispatched through method_missing and forwarded to Redis raw.
+  class RedisNamespaceGetdelDispatchFake
+    attr_reader :redis
+
+    def initialize(namespace, redis:, **)
+      @redis = redis
+      @namespace = namespace
+    end
+
+    def get(key)
+      redis.get(namespaced_key(key))
+    end
+
+    def set(key, value, **options)
+      redis.set(namespaced_key(key), value, **options)
+    end
+
+    def eval(*args)
+      args = args.dup
+      if args.last.is_a?(Hash)
+        options = args.last.dup
+        options[:keys] = Array(options[:keys]).map { |key| namespaced_key(key) }
+        args[-1] = options
+      else
+        args[1] = Array(args[1]).map { |key| namespaced_key(key) }
+      end
+
+      redis.public_send(:eval, *args)
+    end
+
+    def method_missing(command, *args, &block)
+      redis.public_send(command, *args, &block)
+    end
+
+    def respond_to_missing?(command, include_private = false)
+      redis.respond_to?(command, include_private) || super
+    end
+
+    private
+
+    def namespaced_key(key)
+      "#{@namespace}:#{key}"
     end
   end
 
