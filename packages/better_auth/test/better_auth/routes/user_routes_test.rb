@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require "json"
+require "rack/mock"
 require_relative "../../test_helper"
 
 class BetterAuthRoutesUserTest < Minitest::Test
@@ -482,6 +483,83 @@ class BetterAuthRoutesUserTest < Minitest::Test
     result = auth.api.delete_user(headers: {"cookie" => cookie}, body: {token: sent.first.fetch(:token)})
     assert_equal({success: true, message: "User deleted"}, result)
     assert_nil auth.context.internal_adapter.find_user_by_id(user_id)
+  end
+
+  def test_delete_user_callback_requires_an_authoritative_session_before_consuming_token
+    sent = []
+    calls = []
+    auth = build_auth(
+      session: {cookie_cache: {enabled: true, strategy: "jwe", max_age: 300}},
+      user: {
+        delete_user: {
+          enabled: true,
+          send_delete_account_verification: ->(data, _request = nil) { sent << data },
+          before_delete: ->(user, _request = nil) { calls << "before:#{user["email"]}" },
+          after_delete: ->(user, _request = nil) { calls << "after:#{user["email"]}" }
+        }
+      }
+    )
+    email = "revoked-delete-callback@example.com"
+    password = "password123"
+    cookie = sign_up_cookie(auth, email: email, password: password)
+    assert_includes cookie, "better-auth.session_data="
+
+    cached_session = auth.api.get_session(headers: {"cookie" => cookie})
+    user_id = cached_session[:user]["id"]
+    session_token = cached_session[:session]["token"]
+    account_ids = auth.context.internal_adapter.find_accounts(user_id).map { |account| account["id"] }
+
+    request = auth.api.delete_user(headers: {"cookie" => cookie}, body: {password: password})
+    assert_equal({success: true, message: "Verification email sent"}, request)
+    assert_equal 1, sent.length
+    token = sent.first.fetch(:token)
+    identifier = "delete-account-#{token}"
+
+    auth.context.internal_adapter.delete_session(session_token)
+    assert_nil auth.context.internal_adapter.find_session(session_token)
+    assert_equal user_id, auth.api.get_session(headers: {"cookie" => cookie})[:user]["id"]
+
+    error = assert_raises(BetterAuth::APIError) do
+      auth.api.delete_user_callback(
+        headers: {"cookie" => cookie},
+        query: {token: token, callbackURL: "/deleted"}
+      )
+    end
+
+    assert_equal 404, error.status_code
+    assert_equal "FAILED_TO_GET_USER_INFO", error.code
+    assert_equal BetterAuth::BASE_ERROR_CODES["FAILED_TO_GET_USER_INFO"], error.message
+
+    status, headers, body = auth.call(
+      Rack::MockRequest.env_for(
+        "/api/auth/delete-user/callback?#{URI.encode_www_form(token: token, callbackURL: "/deleted")}",
+        "REQUEST_METHOD" => "GET",
+        "HTTP_COOKIE" => cookie
+      )
+    )
+
+    assert_equal 404, status
+    assert_equal(
+      {
+        "code" => "FAILED_TO_GET_USER_INFO",
+        "message" => BetterAuth::BASE_ERROR_CODES["FAILED_TO_GET_USER_INFO"]
+      },
+      JSON.parse(body.join)
+    )
+    refute headers.key?("location")
+    assert auth.context.internal_adapter.find_verification_value(identifier)
+    assert auth.context.internal_adapter.find_user_by_id(user_id)
+    assert_equal account_ids, auth.context.internal_adapter.find_accounts(user_id).map { |account| account["id"] }
+    assert_empty calls
+
+    active_cookie = sign_in_cookie(auth, email: email, password: password)
+    result = auth.api.delete_user_callback(headers: {"cookie" => active_cookie}, query: {token: token})
+
+    assert_equal({success: true, message: "User deleted"}, result)
+    assert_nil auth.context.internal_adapter.find_verification_value(identifier)
+    assert_nil auth.context.internal_adapter.find_user_by_id(user_id)
+    assert_empty auth.context.internal_adapter.find_accounts(user_id)
+    assert_equal ["before:#{email}", "after:#{email}"], calls
   end
 
   def test_delete_user_database_hooks_can_abort_delete

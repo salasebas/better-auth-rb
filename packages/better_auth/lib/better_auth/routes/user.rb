@@ -248,7 +248,14 @@ module BetterAuth
       ) do |ctx|
         enabled = ctx.context.options.user.dig(:delete_user, :enabled)
         raise APIError.new("NOT_FOUND") unless enabled
-        session = current_session(ctx)
+        session = current_session(ctx, allow_nil: true, sensitive: true)
+        unless session
+          raise APIError.new(
+            "NOT_FOUND",
+            code: "FAILED_TO_GET_USER_INFO",
+            message: BASE_ERROR_CODES["FAILED_TO_GET_USER_INFO"]
+          )
+        end
         token = fetch_value(ctx.query, "token")
         callback_url = fetch_value(ctx.query, "callbackURL")
         validate_callback_url!(ctx.context, callback_url)
