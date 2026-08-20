@@ -128,6 +128,7 @@ Common options accepted by `BetterAuth::Plugins.oauth_provider`:
 - `post_login`
 - `client_privileges`
 - `rate_limit`
+- `schema`
 - `jwks_uri`
 - `disable_jwt_plugin`
 - `store`
@@ -158,6 +159,33 @@ rate_limit: {
 ```
 
 Use `false` to disable a route-specific rule.
+
+## Custom Schema Names
+
+Use `schema` to remap the physical table and column names for the existing `oauthClient`, `oauthRefreshToken`, `oauthAccessToken`, and `oauthConsent` models. Ruby snake_case and upstream camelCase option keys are both accepted; the values are physical names. This option does not add models, fields, or field metadata.
+
+```ruby
+BetterAuth::Plugins.oauth_provider(
+  schema: {
+    oauth_client: {
+      model_name: "application_oauth_clients",
+      fields: {client_id: "oauth_client_key"}
+    },
+    oauth_refresh_token: {
+      model_name: "application_oauth_refresh_tokens",
+      fields: {session_id: "auth_session_id"}
+    },
+    oauth_access_token: {
+      model_name: "application_oauth_access_tokens",
+      fields: {expires_at: "expires_on"}
+    },
+    oauth_consent: {
+      model_name: "application_oauth_consents",
+      fields: {client_id: "oauth_client_key"}
+    }
+  }
+)
+```
 
 ## Schema Migration
 
