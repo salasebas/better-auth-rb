@@ -67,6 +67,7 @@ class BetterAuthConfigurationTest < Minitest::Test
 
     assert_equal "database", config.account[:store_state_strategy]
     assert_equal true, config.account[:store_account_cookie]
+    assert_nil config.session[:cookie_cache]
   end
 
   def test_explicit_oauth_state_strategy_wins_with_secondary_storage

@@ -595,6 +595,84 @@ class BetterAuthRoutesAccountTest < Minitest::Test
     assert_equal "cookie-access-token", info[:data][:accessToken]
   end
 
+  def test_account_cookie_user_binding_requires_a_database
+    account = {"userId" => "other-user", "providerId" => "github", "accountId" => "account-1"}
+    secondary_auth = build_auth(database: nil, secondary_storage: Object.new, account: {store_account_cookie: true})
+    cookie_ctx = BetterAuth::Endpoint::Context.new(
+      path: "/get-access-token",
+      method: "POST",
+      query: {},
+      body: {},
+      params: {},
+      headers: {},
+      context: secondary_auth.context
+    )
+    BetterAuth::Cookies.set_account_cookie(cookie_ctx, account)
+    cookie = cookie_ctx.response_headers.fetch("set-cookie").split(";", 2).first
+    request_ctx = BetterAuth::Endpoint::Context.new(
+      path: "/get-access-token",
+      method: "POST",
+      query: {},
+      body: {},
+      params: {},
+      headers: {"cookie" => cookie},
+      context: secondary_auth.context
+    )
+
+    assert_equal "account-1", BetterAuth::Routes.account_cookie(request_ctx, "github", nil, "current-user").fetch("accountId")
+
+    database_auth = build_auth(account: {store_account_cookie: true})
+    database_ctx = BetterAuth::Endpoint::Context.new(
+      path: "/get-access-token",
+      method: "POST",
+      query: {},
+      body: {},
+      params: {},
+      headers: {"cookie" => cookie},
+      context: database_auth.context
+    )
+
+    assert_nil BetterAuth::Routes.account_cookie(database_ctx, "github", nil, "current-user")
+  end
+
+  def test_secondary_storage_account_info_uses_account_cookie_without_user_binding
+    provider = {
+      id: "github",
+      get_user_info: ->(tokens) {
+        {
+          user: {id: "provider-user", email: "provider@example.com"},
+          data: {accessToken: tokens[:accessToken]}
+        }
+      }
+    }
+    auth = build_auth(
+      database: nil,
+      secondary_storage: AccountCookieStorage.new,
+      account: {store_account_cookie: true},
+      social_providers: {github: provider}
+    )
+    session_cookie = sign_up_cookie(auth, email: "secondary-account-cookie@example.com")
+    cookie_ctx = BetterAuth::Endpoint::Context.new(
+      path: "/account-info",
+      method: "GET",
+      query: {},
+      body: {},
+      params: {},
+      headers: {},
+      context: auth.context
+    )
+    BetterAuth::Cookies.set_account_cookie(
+      cookie_ctx,
+      {"userId" => "different-user", "providerId" => "github", "accountId" => "account-1", "accessToken" => "account-token"}
+    )
+    account_cookie = cookie_ctx.response_headers.fetch("set-cookie").split(";", 2).first
+
+    info = auth.api.account_info(headers: {"cookie" => "#{session_cookie}; #{account_cookie}"})
+
+    assert_equal "provider@example.com", info[:user][:email]
+    assert_equal "account-token", info[:data][:accessToken]
+  end
+
   def test_account_info_refreshes_expired_access_token_through_get_access_token_path
     refreshed_at = Time.now + 3600
     provider = {
@@ -908,6 +986,24 @@ class BetterAuthRoutesAccountTest < Minitest::Test
 
   def fake_ctx(auth)
     Struct.new(:context).new(auth.context)
+  end
+
+  class AccountCookieStorage
+    def initialize
+      @data = {}
+    end
+
+    def set(key, value, _ttl = nil)
+      @data[key] = value
+    end
+
+    def get(key)
+      @data[key]
+    end
+
+    def delete(key)
+      @data.delete(key)
+    end
   end
 
   def rack_env(method, path, body: nil, query: nil)
