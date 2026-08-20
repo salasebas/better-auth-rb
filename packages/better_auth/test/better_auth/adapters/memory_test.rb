@@ -126,6 +126,46 @@ class BetterAuthMemoryAdapterTest < Minitest::Test
     assert_nil @adapter.find_one(model: "user", where: [{field: "id", value: user["id"]}])
   end
 
+  def test_singular_delete_with_empty_where_is_a_no_op
+    [nil, [], {}].each do |where|
+      adapter = BetterAuth::Adapters::Memory.new(@config)
+      first = adapter.create(model: "user", data: {name: "Ada", email: "ada@example.com"})
+      second = adapter.create(model: "user", data: {name: "Grace", email: "grace@example.com"})
+
+      assert_nil adapter.delete(model: "user", where: where)
+      assert_equal [first.fetch("id"), second.fetch("id")], adapter.find_many(model: "user").map { |user| user.fetch("id") }
+    end
+  end
+
+  def test_singular_delete_requires_where_and_returns_nil_after_a_match
+    first = @adapter.create(model: "user", data: {name: "Ada", email: "ada@example.com"})
+    second = @adapter.create(model: "user", data: {name: "Grace", email: "grace@example.com"})
+
+    assert_raises(ArgumentError) { @adapter.delete(model: "user") }
+    assert_nil @adapter.delete(model: "user", where: [{field: "id", value: first.fetch("id")}])
+    assert_equal [second.fetch("id")], @adapter.find_many(model: "user").map { |user| user.fetch("id") }
+  end
+
+  def test_delete_many_with_empty_where_retains_match_all_semantics
+    @adapter.create(model: "user", data: {name: "Ada", email: "ada@example.com"})
+    @adapter.create(model: "user", data: {name: "Grace", email: "grace@example.com"})
+
+    assert_equal 2, @adapter.delete_many(model: "user", where: [])
+    assert_empty @adapter.find_many(model: "user")
+  end
+
+  def test_singular_delete_with_empty_where_is_a_no_op_in_a_transaction
+    first = @adapter.create(model: "user", data: {name: "Ada", email: "ada@example.com"})
+    second = @adapter.create(model: "user", data: {name: "Grace", email: "grace@example.com"})
+
+    result = @adapter.transaction do |transaction_adapter|
+      transaction_adapter.delete(model: "user", where: [])
+    end
+
+    assert_nil result
+    assert_equal [first.fetch("id"), second.fetch("id")], @adapter.find_many(model: "user").map { |user| user.fetch("id") }
+  end
+
   def test_transaction_snapshots_nested_mutable_values_without_copying_callables
     callback = -> { "called" }
     callback_default = ->(_hash, _key) { callback }

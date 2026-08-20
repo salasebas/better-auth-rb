@@ -341,6 +341,57 @@ class BetterAuthRoutesUserTest < Minitest::Test
     assert sent.first.fetch(:token)
   end
 
+  def test_delete_user_verification_token_defaults_to_one_day
+    sent = []
+    fixed_now = Time.utc(2026, 7, 26, 12, 0, 0)
+
+    Time.stub(:now, fixed_now) do
+      auth = build_auth(
+        user: {
+          delete_user: {
+            enabled: true,
+            send_delete_account_verification: ->(data, _request = nil) { sent << data }
+          }
+        }
+      )
+      cookie = sign_up_cookie(auth, email: "delete-default-expiry@example.com", password: "password123")
+      user_id = auth.api.get_session(headers: {"cookie" => cookie})[:user]["id"]
+
+      auth.api.delete_user(headers: {"cookie" => cookie}, body: {})
+
+      token = sent.fetch(0).fetch(:token)
+      verification = auth.context.internal_adapter.find_verification_value("delete-account-#{token}")
+      assert_equal user_id, verification.fetch("value")
+      assert_equal fixed_now + 86_400, verification.fetch("expiresAt")
+    end
+  end
+
+  def test_delete_user_verification_token_respects_explicit_expiry
+    sent = []
+    fixed_now = Time.utc(2026, 7, 26, 12, 0, 0)
+
+    Time.stub(:now, fixed_now) do
+      auth = build_auth(
+        user: {
+          delete_user: {
+            enabled: true,
+            delete_token_expires_in: 7_200,
+            send_delete_account_verification: ->(data, _request = nil) { sent << data }
+          }
+        }
+      )
+      cookie = sign_up_cookie(auth, email: "delete-explicit-expiry@example.com", password: "password123")
+      user_id = auth.api.get_session(headers: {"cookie" => cookie})[:user]["id"]
+
+      auth.api.delete_user(headers: {"cookie" => cookie}, body: {})
+
+      token = sent.fetch(0).fetch(:token)
+      verification = auth.context.internal_adapter.find_verification_value("delete-account-#{token}")
+      assert_equal user_id, verification.fetch("value")
+      assert_equal fixed_now + 7_200, verification.fetch("expiresAt")
+    end
+  end
+
   def test_delete_user_callback_rejects_untrusted_callback_url
     auth = build_auth(user: {delete_user: {enabled: true}})
     cookie = sign_up_cookie(auth, email: "delete-callback@example.com", password: "password123")

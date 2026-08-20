@@ -8,6 +8,7 @@ require File.expand_path("../../../better_auth/test/support/password_test_helper
 
 module BetterAuthStripeTestHelpers
   def build_auth(options = {})
+    database = options.delete(:database) || :memory
     plugin_options = {
       subscription: subscription_options
     }.merge(options)
@@ -15,7 +16,7 @@ module BetterAuthStripeTestHelpers
     BetterAuth.auth(
       base_url: "http://localhost:3000",
       secret: stripe_test_secret,
-      database: :memory,
+      database: database,
       email_and_password: BetterAuthTestPasswordHelpers.fast_email_and_password_config,
       plugins: [
         BetterAuth::Plugins.stripe(plugin_options)
@@ -121,6 +122,14 @@ module BetterAuthStripeTestHelpers
       raise "invalid signature" unless signature == "valid" && secret == "whsec_test"
 
       @event
+    end
+  end
+
+  class UserCreateFailingMemoryAdapter < BetterAuth::Adapters::Memory
+    def create(model:, data:, force_allow_id: false)
+      raise "user insert failed" if model.to_s == "user"
+
+      super
     end
   end
 

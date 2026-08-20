@@ -131,6 +131,7 @@ module BetterAuth
         validate_redirect_scheme_for_client!(auth_method, body, redirects)
         validate_pairwise_client!(body, redirects, pairwise_secret)
 
+        scope_configured = body.key?("scope") || body.key?("scopes")
         scopes = parse_scopes(body["scope"] || body["scopes"])
         scopes = parse_scopes(default_scopes) if scopes.empty? && default_scopes
         allowed = parse_scopes(allowed_scopes)
@@ -179,7 +180,7 @@ module BetterAuth
           "tokenEndpointAuthMethod" => auth_method,
           "grantTypes" => grant_types,
           "responseTypes" => response_types,
-          "scopes" => scopes,
+          "scopes" => (scopes if scope_configured || default_scopes),
           "skipConsent" => unauthenticated ? false : !!(body["skip_consent"] || body["skipConsent"]),
           "enableEndSession" => !!(body["enable_end_session"] || body["enableEndSession"]),
           "requirePKCE" => require_pkce,
@@ -215,7 +216,7 @@ module BetterAuth
           token_endpoint_auth_method: data["tokenEndpointAuthMethod"] || "client_secret_basic",
           grant_types: data["grantTypes"] || [],
           response_types: data["responseTypes"] || [],
-          scope: scope_string(data["scopes"]),
+          scope: (scope_string(data["scopes"]) unless data["scopes"].nil?),
           public: !!data["public"],
           type: data["type"],
           user_id: data["userId"],

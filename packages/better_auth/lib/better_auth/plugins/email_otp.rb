@@ -267,7 +267,7 @@ module BetterAuth
         call_email_verification_option(ctx, :after_email_verification, updated)
 
         if ctx.context.options.email_verification[:auto_sign_in_after_verification]
-          session = ctx.context.internal_adapter.create_session(updated["id"])
+          session = ctx.context.internal_adapter.create_session(updated["id"], false, nil, false, ctx)
           Cookies.set_session_cookie(ctx, {session: session, user: updated})
           next ctx.json({status: true, token: session["token"], user: Schema.parse_output(ctx.context.options, "user", updated)})
         end
@@ -334,7 +334,7 @@ module BetterAuth
           end
         end
 
-        session = ctx.context.internal_adapter.create_session(user["id"])
+        session = ctx.context.internal_adapter.create_session(user["id"], false, nil, false, ctx)
         Cookies.set_session_cookie(ctx, {session: session, user: user})
         ctx.json({token: session["token"], user: Schema.parse_output(ctx.context.options, "user", user)})
       end

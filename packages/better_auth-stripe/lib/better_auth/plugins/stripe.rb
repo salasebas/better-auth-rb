@@ -89,6 +89,7 @@ module BetterAuth
       customer = stripe_find_or_create_user_customer(config, user, metadata, ctx)
       id = stripe_id(customer)
       ctx.context.internal_adapter.update_user(user.fetch("id"), stripeCustomerId: id)
+      stripe_notify_customer_created(config, customer, user, ctx)
       id
     end
 
@@ -104,7 +105,6 @@ module BetterAuth
         customer = nil if !user["emailVerified"] || owned_by_other
       end
       if customer
-        stripe_notify_customer_created(config, customer, user, ctx)
         return customer
       end
 
@@ -118,9 +118,7 @@ module BetterAuth
         metadata: stripe_customer_metadata_set({userId: user["id"], customerType: "user"}, metadata, extra_metadata)
       )
       params[:metadata] = stripe_customer_metadata_set({userId: user["id"], customerType: "user"}, metadata, extra_metadata)
-      customer = stripe_client(config).customers.create(params)
-      stripe_notify_customer_created(config, customer, user, ctx)
-      customer
+      stripe_client(config).customers.create(params)
     end
 
     def stripe_organization_customer(config, ctx, organization_id, metadata = nil)

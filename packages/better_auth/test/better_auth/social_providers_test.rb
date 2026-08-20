@@ -544,15 +544,23 @@ class BetterAuthSocialProvidersTest < Minitest::Test
   end
 
   def test_cognito_requires_client_secret_when_requested
-    assert_raises(BetterAuth::Error) do
-      BetterAuth::SocialProviders.cognito(
-        client_id: "cognito-id",
-        domain: "tenant.auth.us-east-1.amazoncognito.com",
-        region: "us-east-1",
-        user_pool_id: "pool-1",
-        requireClientSecret: true
+    provider = BetterAuth::SocialProviders.cognito(
+      client_id: "cognito-id",
+      domain: "tenant.auth.us-east-1.amazoncognito.com",
+      region: "us-east-1",
+      user_pool_id: "pool-1",
+      requireClientSecret: true
+    )
+
+    error = assert_raises(BetterAuth::Error) do
+      provider.fetch(:create_authorization_url).call(
+        state: "state-1",
+        code_verifier: "verifier-1",
+        redirect_uri: "http://localhost:3000/api/auth/callback/cognito"
       )
     end
+
+    assert_equal "CLIENT_SECRET_REQUIRED", error.message
   end
 
   def test_cognito_get_user_info_prefers_id_token_and_falls_back_to_userinfo
@@ -947,6 +955,102 @@ class BetterAuthSocialProvidersTest < Minitest::Test
     assert_equal "apple", BetterAuth::SocialProviders.apple(client_id: "id", client_secret: "secret").fetch(:id)
     assert_equal "microsoft-entra-id",
       BetterAuth::SocialProviders.microsoft_entra_id(client_id: "id", client_secret: "secret", tenant_id: "common").fetch(:id)
+  end
+
+  def test_client_secret_contract_matches_upstream_provider_factories
+    optional = {
+      apple: {id: "apple"},
+      atlassian: {id: "atlassian"},
+      cognito: {
+        id: "cognito",
+        options: {domain: "cognito.example", region: "us-east-1", user_pool_id: "pool-1"}
+      },
+      discord: {id: "discord"},
+      dropbox: {id: "dropbox"},
+      facebook: {id: "facebook"},
+      figma: {id: "figma"},
+      github: {id: "github"},
+      gitlab: {id: "gitlab"},
+      google: {id: "google"},
+      huggingface: {id: "huggingface"},
+      kakao: {id: "kakao"},
+      kick: {id: "kick"},
+      line: {id: "line"},
+      linear: {id: "linear"},
+      linkedin: {id: "linkedin"},
+      microsoft: {id: "microsoft"},
+      microsoft_entra_id: {id: "microsoft-entra-id"},
+      naver: {id: "naver"},
+      notion: {id: "notion"},
+      paybin: {id: "paybin"},
+      paypal: {id: "paypal"},
+      polar: {id: "polar"},
+      railway: {id: "railway"},
+      reddit: {id: "reddit"},
+      roblox: {id: "roblox"},
+      salesforce: {id: "salesforce"},
+      slack: {id: "slack"},
+      spotify: {id: "spotify"},
+      twitch: {id: "twitch"},
+      twitter: {id: "twitter"},
+      vercel: {id: "vercel"},
+      vk: {id: "vk"},
+      zoom: {id: "zoom"}
+    }
+    required = {
+      tiktok: {id: "tiktok"},
+      wechat: {id: "wechat"}
+    }
+
+    assert_equal 34, optional.size
+    assert_equal 2, required.size
+    assert_equal 36, (optional.keys + required.keys).uniq.size
+
+    optional.each do |factory, contract|
+      options = {client_id: "#{factory}-id"}.merge(contract.fetch(:options, {}))
+      provider = BetterAuth::SocialProviders.public_send(factory, **options)
+
+      assert_equal contract.fetch(:id), provider.fetch(:id), "#{factory} should expose its upstream provider id"
+      assert_nil provider.fetch(:client_secret), "#{factory} should retain an omitted client secret as nil"
+      %i[create_authorization_url validate_authorization_code get_user_info].each do |callable|
+        assert_respond_to provider.fetch(callable), :call, "#{factory} should expose #{callable}"
+      end
+    end
+
+    required.each_key do |factory|
+      error = assert_raises(ArgumentError) do
+        BetterAuth::SocialProviders.public_send(factory, client_id: "#{factory}-id")
+      end
+      assert_match(/client_secret/, error.message)
+    end
+
+    optional.merge(required).each do |factory, contract|
+      secret = "#{factory}-secret"
+      options = {
+        client_id: "#{factory}-id",
+        client_secret: secret
+      }.merge(contract.fetch(:options, {}))
+      provider = BetterAuth::SocialProviders.public_send(factory, **options)
+
+      assert_equal contract.fetch(:id), provider.fetch(:id), "#{factory} should expose its upstream provider id"
+      assert_equal secret, provider.fetch(:client_secret), "#{factory} should retain a provided client secret"
+    end
+  end
+
+  def test_optional_client_secrets_preserve_upstream_authorization_guards
+    %i[apple atlassian facebook figma google paybin paypal salesforce].each do |factory|
+      provider = BetterAuth::SocialProviders.public_send(factory, client_id: "#{factory}-id")
+
+      error = assert_raises(BetterAuth::Error) do
+        provider.fetch(:create_authorization_url).call(
+          state: "state-1",
+          code_verifier: "verifier-1",
+          redirect_uri: "http://localhost:3000/api/auth/callback/#{factory}"
+        )
+      end
+
+      assert_equal "CLIENT_ID_AND_SECRET_REQUIRED", error.message
+    end
   end
 
   def test_factories_exist_for_all_upstream_social_providers

@@ -37,12 +37,12 @@ module BetterAuth
             begin
               BetterAuth::Plugins.stripe_handle_event(ctx, event)
             rescue => error
-              logger = ctx.context.logger
-              if logger.respond_to?(:error)
-                logger.error("Stripe webhook failed. Error: #{error.message}")
-              elsif logger.respond_to?(:call)
-                logger.call(:error, "Stripe webhook failed. Error: #{error.message}")
-              end
+              BetterAuth::Stripe::Hooks.log_webhook_error(ctx, error)
+              raise BetterAuth::APIError.new(
+                "BAD_REQUEST",
+                code: "STRIPE_WEBHOOK_ERROR",
+                message: BetterAuth::Stripe::ERROR_CODES.fetch("STRIPE_WEBHOOK_ERROR")
+              )
             end
             ctx.json({success: true})
           end

@@ -54,7 +54,7 @@
       "ruby_source": "packages/better_auth/test/better_auth/adapters/mysql_test.rb",
       "local_exists": true,
       "upstream_exists": true,
-      "current_local_lines": 190,
+      "current_local_lines": 251,
       "upstream_lines": 110,
       "status": "needs_manual_review"
     },
@@ -700,7 +700,7 @@
       "ruby_source": "packages/better_auth/test/better_auth/routes/user_routes_test.rb",
       "local_exists": true,
       "upstream_exists": true,
-      "current_local_lines": 360,
+      "current_local_lines": 362,
       "upstream_lines": 594,
       "status": "thin"
     },
@@ -1619,7 +1619,7 @@
       "require_path": "better_auth/oauth_provider",
       "local_exists": true,
       "upstream_exists": true,
-      "current_local_lines": 1179,
+      "current_local_lines": 1207,
       "upstream_lines": 2152,
       "status": "thin"
     },
@@ -1709,7 +1709,7 @@
       "require_path": "better_auth/passkey",
       "local_exists": true,
       "upstream_exists": true,
-      "current_local_lines": 432,
+      "current_local_lines": 436,
       "upstream_lines": 533,
       "status": "thin"
     },

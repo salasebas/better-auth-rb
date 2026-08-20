@@ -168,7 +168,8 @@ module BetterAuth
       return address.native.to_s if address.respond_to?(:ipv4_mapped?) && address.ipv4_mapped?
       return address.to_s if address.ipv4?
 
-      address.mask((ipv6_subnet || 64).to_i).to_s
+      prefix = (ipv6_subnet || 64).to_i.clamp(0, 128)
+      address.mask(prefix).to_string
     end
 
     def test_or_development?

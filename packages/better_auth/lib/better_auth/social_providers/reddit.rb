@@ -4,7 +4,7 @@ module BetterAuth
   module SocialProviders
     module_function
 
-    def reddit(client_id:, client_secret:, scopes: ["identity"], **options)
+    def reddit(client_id:, client_secret: nil, scopes: ["identity"], **options)
       normalized = Base.normalize_options(options)
       token_endpoint = normalized[:token_endpoint] || "https://www.reddit.com/api/v1/access_token"
       provider = Base.oauth_provider(

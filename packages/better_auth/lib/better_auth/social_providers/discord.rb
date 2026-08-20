@@ -4,7 +4,7 @@ module BetterAuth
   module SocialProviders
     module_function
 
-    def discord(client_id:, client_secret:, scopes: ["identify", "email"], **options)
+    def discord(client_id:, client_secret: nil, scopes: ["identify", "email"], **options)
       normalized = Base.normalize_options(options)
       {
         id: "discord",
