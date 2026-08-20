@@ -1709,7 +1709,7 @@
       "require_path": "better_auth/passkey",
       "local_exists": true,
       "upstream_exists": true,
-      "current_local_lines": 432,
+      "current_local_lines": 436,
       "upstream_lines": 533,
       "status": "thin"
     },
