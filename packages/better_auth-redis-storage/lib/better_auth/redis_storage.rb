@@ -179,6 +179,8 @@ module BetterAuth
 
     def get_and_delete(key)
       prefixed_key = prefix_key(key)
+      return eval_script(GET_AND_DELETE_SCRIPT, keys: [prefixed_key]) if redis_namespace_client?
+
       if @supports_getdel
         begin
           return client.getdel(prefixed_key) if client.respond_to?(:getdel)
@@ -375,6 +377,10 @@ module BetterAuth
 
     def unknown_command_error?(error)
       error.message.to_s.downcase.include?("unknown command")
+    end
+
+    def redis_namespace_client?
+      defined?(::Redis::Namespace) && client.is_a?(::Redis::Namespace)
     end
   end
 
