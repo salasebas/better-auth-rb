@@ -123,7 +123,7 @@ module BetterAuth
         end
 
         dont_remember_me = body.key?(:remember_me) && (body[:remember_me] == false || body[:remember_me].to_s == "false")
-        session = ctx.context.internal_adapter.create_session(found["id"], dont_remember_me)
+        session = ctx.context.internal_adapter.create_session(found["id"], dont_remember_me, nil, false, ctx)
         raise APIError.new("UNAUTHORIZED", message: BASE_ERROR_CODES["FAILED_TO_CREATE_SESSION"]) unless session
 
         Cookies.set_session_cookie(ctx, {session: session, user: found}, dont_remember_me)
@@ -246,7 +246,7 @@ module BetterAuth
           next ctx.json({status: true, token: nil, user: Schema.parse_output(ctx.context.options, "user", user)})
         end
 
-        session = ctx.context.internal_adapter.create_session(user["id"])
+        session = ctx.context.internal_adapter.create_session(user["id"], false, nil, false, ctx)
         raise APIError.new("INTERNAL_SERVER_ERROR", message: BASE_ERROR_CODES["FAILED_TO_CREATE_SESSION"]) unless session
 
         Cookies.set_session_cookie(ctx, {session: session, user: user})

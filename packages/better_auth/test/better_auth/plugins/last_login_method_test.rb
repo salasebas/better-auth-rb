@@ -165,6 +165,50 @@ class BetterAuthPluginsLastLoginMethodTest < Minitest::Test
     assert_equal [""], calls
   end
 
+  def test_last_login_method_custom_resolver_persists_for_username_sign_in
+    auth = build_auth(
+      plugins: [
+        BetterAuth::Plugins.username,
+        BetterAuth::Plugins.last_login_method(
+          store_in_database: true,
+          custom_resolve_method: ->(ctx) { "username" if ctx.path == "/sign-in/username" }
+        )
+      ]
+    )
+    created = auth.api.sign_up_email(
+      body: {email: "last-username@example.com", username: "last_username", password: "password123", name: "Last Username"}
+    )
+
+    status, headers, _body = auth.api.sign_in_username(
+      body: {username: "last_username", password: "password123"},
+      as_response: true
+    )
+    stored = auth.context.internal_adapter.find_user_by_id(created[:user]["id"])
+
+    assert_equal 200, status
+    assert_includes headers.fetch("set-cookie"), "better-auth.last_used_login_method=username"
+    assert_equal "username", stored["lastLoginMethod"]
+  end
+
+  def test_last_login_method_does_not_store_an_empty_custom_method_on_sessionless_sign_up
+    auth = build_auth(
+      email_and_password: {auto_sign_in: false},
+      plugins: [
+        BetterAuth::Plugins.last_login_method(
+          store_in_database: true,
+          custom_resolve_method: ->(_ctx) { "" }
+        )
+      ]
+    )
+
+    result = auth.api.sign_up_email(
+      body: {email: "last-empty@example.com", password: "password123", name: "Last Empty"}
+    )
+    stored = auth.context.internal_adapter.find_user_by_id(result[:user]["id"])
+
+    assert_nil stored["lastLoginMethod"]
+  end
+
   def test_last_login_method_sets_cookie_and_database_value_for_siwe
     wallet = "0x000000000000000000000000000000000000dEaD"
     nonce = "A1b2C3d4E5f6G7h8J"

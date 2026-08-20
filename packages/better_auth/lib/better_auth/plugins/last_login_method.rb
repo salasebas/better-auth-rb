@@ -69,7 +69,7 @@ module BetterAuth
       return unless config[:store_in_database] && ctx
 
       method = resolve_login_method(ctx, config)
-      return unless method
+      return unless method && method != ""
 
       {data: user.merge("lastLoginMethod" => method)}
     end
@@ -79,7 +79,7 @@ module BetterAuth
 
       method = resolve_login_method(ctx, config)
       user_id = fetch_value(session, "userId")
-      return unless method && user_id
+      return unless method && method != "" && user_id
 
       begin
         ctx.context.internal_adapter.update_user(user_id, lastLoginMethod: method)

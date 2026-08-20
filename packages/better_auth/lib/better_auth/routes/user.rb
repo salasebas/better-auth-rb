@@ -90,7 +90,7 @@ module BetterAuth
         token = nil
         if body["revokeOtherSessions"] || body["revoke_other_sessions"]
           ctx.context.internal_adapter.delete_user_sessions(session[:user]["id"])
-          new_session = ctx.context.internal_adapter.create_session(session[:user]["id"])
+          new_session = ctx.context.internal_adapter.create_session(session[:user]["id"], false, nil, false, ctx)
           Cookies.set_session_cookie(ctx, {session: new_session, user: session[:user]})
           token = new_session["token"]
         end
