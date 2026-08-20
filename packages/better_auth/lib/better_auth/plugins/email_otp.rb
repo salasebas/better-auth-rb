@@ -213,7 +213,7 @@ module BetterAuth
         validate_email_otp_email!(email)
         raise APIError.new("BAD_REQUEST", message: BASE_ERROR_CODES["USER_NOT_FOUND"]) unless ctx.context.internal_adapter.find_user_by_email(email)
 
-        email_otp_verify!(ctx, config, email: email, type: type, otp: otp, consume: false)
+        email_otp_check!(ctx, config, email: email, type: type, otp: otp)
         ctx.json({success: true})
       end
     end
@@ -588,7 +588,32 @@ module BetterAuth
       plain
     end
 
-    def email_otp_verify!(ctx, config, email:, type:, otp:, consume: true)
+    def email_otp_check!(ctx, config, email:, type:, otp:)
+      identifier = email_otp_identifier(email, type)
+      verification = ctx.context.internal_adapter.find_verification_value(identifier)
+      raise APIError.new("BAD_REQUEST", message: EMAIL_OTP_ERROR_CODES["INVALID_OTP"]) unless verification
+
+      if Routes.expired_time?(verification["expiresAt"])
+        ctx.context.internal_adapter.delete_verification_by_identifier(identifier)
+        raise APIError.new("BAD_REQUEST", message: EMAIL_OTP_ERROR_CODES["OTP_EXPIRED"])
+      end
+
+      otp_value, attempts = email_otp_split(verification["value"])
+      attempts_count = attempts.to_i
+      if attempts_count >= config[:allowed_attempts].to_i
+        ctx.context.internal_adapter.delete_verification_by_identifier(identifier)
+        raise APIError.new("FORBIDDEN", message: EMAIL_OTP_ERROR_CODES["TOO_MANY_ATTEMPTS"])
+      end
+
+      unless email_otp_matches?(ctx, config, otp_value, otp)
+        ctx.context.internal_adapter.update_verification_value(verification["id"], value: "#{otp_value}:#{attempts_count + 1}")
+        raise APIError.new("BAD_REQUEST", message: EMAIL_OTP_ERROR_CODES["INVALID_OTP"])
+      end
+
+      true
+    end
+
+    def email_otp_verify!(ctx, config, email:, type:, otp:)
       identifier = email_otp_identifier(email, type)
       existing = ctx.context.internal_adapter.find_verification_value(identifier)
 
@@ -613,14 +638,6 @@ module BetterAuth
           expiresAt: verification["expiresAt"]
         )
         raise APIError.new("BAD_REQUEST", message: EMAIL_OTP_ERROR_CODES["INVALID_OTP"])
-      end
-
-      unless consume
-        ctx.context.internal_adapter.create_verification_value(
-          identifier: identifier,
-          value: verification["value"],
-          expiresAt: verification["expiresAt"]
-        )
       end
 
       true
