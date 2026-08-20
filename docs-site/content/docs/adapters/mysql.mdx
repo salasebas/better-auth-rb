@@ -96,7 +96,19 @@ BetterAuth::Adapters::MySQL.new(
   `ssl_mode=required` requires encryption but does not verify the certificate
   authority or hostname. Prefer `verify_identity` for production; use
   `verify_ca` only when hostname verification is intentionally unavailable.
+  These guarantees also depend on support in the native client library linked
+  by `mysql2`, which warns when a mode is unsupported. MariaDB client libraries
+  support `disabled`, `required`, and `verify_identity`, but not `preferred` or
+  `verify_ca`. Treat an unsupported-mode warning as a configuration failure.
   `sslverify` is the legacy driver switch for older MySQL client libraries.
+</Callout>
+
+<Callout type="warn">
+  Leave mysql2's default `FOUND_ROWS` client flag enabled. Removing it with a
+  value such as `flags=-FOUND_ROWS` changes MySQL updates from "rows matched"
+  to "rows changed" semantics. An idempotent update can then report zero
+  affected rows, causing `update`, `increment_one`, and `update_many` to treat
+  an existing matching row as a miss.
 </Callout>
 
 You may also pass an existing `Mysql2::Client` when your app owns connection
