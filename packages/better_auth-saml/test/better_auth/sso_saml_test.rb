@@ -882,15 +882,27 @@ class BetterAuthPluginsSSOSAMLTest < Minitest::Test
 
     assert_equal 302, status
     session_token = headers.fetch("set-cookie")[/better-auth\.session_token=([^.;]+)/, 1]
+    session = auth.context.internal_adapter.find_session(session_token).fetch(:session)
+    session_id = session.fetch("id")
     session_record = auth.context.internal_adapter.find_verification_value("saml-session:saml:name-id-123")
-    by_id_record = auth.context.internal_adapter.find_verification_value("saml-session-by-id:#{session_token}")
+    by_id_record = auth.context.internal_adapter.find_verification_value("saml-session-by-id:#{session_id}")
     parsed = JSON.parse(session_record.fetch("value"))
 
-    assert_equal session_token, parsed.fetch("sessionToken")
-    assert_equal "saml", parsed.fetch("providerId")
-    assert_equal "name-id-123", parsed.fetch("nameId")
-    assert_equal "session-index-456", parsed.fetch("sessionIndex")
+    refute_equal session_id, session_token
+    assert_equal(
+      {
+        "sessionId" => session_id,
+        "sessionToken" => session_token,
+        "providerId" => "saml",
+        "nameID" => "name-id-123",
+        "sessionIndex" => "session-index-456"
+      },
+      parsed
+    )
     assert_equal "saml-session:saml:name-id-123", by_id_record.fetch("value")
+    assert_equal session.fetch("expiresAt"), session_record.fetch("expiresAt")
+    assert_equal session.fetch("expiresAt"), by_id_record.fetch("expiresAt")
+    assert_nil auth.context.internal_adapter.find_verification_value("saml-session-by-id:#{session_token}")
   end
 
   def test_saml_initiate_slo_uses_stored_name_id_and_session_index
@@ -933,6 +945,10 @@ class BetterAuthPluginsSSOSAMLTest < Minitest::Test
       as_response: true
     )
     saml_cookie = headers.fetch("set-cookie").lines.map { |line| line.split(";").first }.join("; ")
+    session_token = saml_cookie[/better-auth\.session_token=([^;]+)/, 1].to_s.rpartition(".").first
+    session_id = auth.context.internal_adapter.find_session(session_token).fetch(:session).fetch("id")
+    assert auth.context.internal_adapter.find_verification_value("saml-session-by-id:#{session_id}")
+    assert_nil auth.context.internal_adapter.find_verification_value("saml-session-by-id:#{session_token}")
 
     status, initiated_headers, _body = auth.api.initiate_slo(
       headers: {"cookie" => saml_cookie},
@@ -946,7 +962,7 @@ class BetterAuthPluginsSSOSAMLTest < Minitest::Test
     assert_includes logout_request_xml, "<saml:NameID>name-id-request</saml:NameID>"
     assert_includes logout_request_xml, "<samlp:SessionIndex>session-index-request</samlp:SessionIndex>"
     assert_nil auth.context.internal_adapter.find_verification_value("saml-session:saml:name-id-request")
-    session_token = saml_cookie[/better-auth\.session_token=([^;]+)/, 1]
+    assert_nil auth.context.internal_adapter.find_verification_value("saml-session-by-id:#{session_id}")
     assert_nil auth.context.internal_adapter.find_verification_value("saml-session-by-id:#{session_token}")
     assert_nil auth.context.internal_adapter.find_session(session_token)
   end
@@ -991,7 +1007,10 @@ class BetterAuthPluginsSSOSAMLTest < Minitest::Test
       as_response: true
     )
     session_token = headers.fetch("set-cookie")[/better-auth\.session_token=([^.;]+)/, 1]
+    session_id = auth.context.internal_adapter.find_session(session_token).fetch(:session).fetch("id")
     assert auth.context.internal_adapter.find_session(session_token)
+    assert auth.context.internal_adapter.find_verification_value("saml-session-by-id:#{session_id}")
+    assert_nil auth.context.internal_adapter.find_verification_value("saml-session-by-id:#{session_token}")
 
     status, response_headers, response_body = auth.api.slo_endpoint(
       params: {providerId: "saml"},
@@ -1005,7 +1024,34 @@ class BetterAuthPluginsSSOSAMLTest < Minitest::Test
     assert_includes response_body.join, "name=\"RelayState\" value=\"/signed-out\""
     assert_nil auth.context.internal_adapter.find_session(session_token)
     assert_nil auth.context.internal_adapter.find_verification_value("saml-session:saml:name-id-delete")
+    assert_nil auth.context.internal_adapter.find_verification_value("saml-session-by-id:#{session_id}")
     assert_nil auth.context.internal_adapter.find_verification_value("saml-session-by-id:#{session_token}")
+  end
+
+  def test_saml_slo_logout_request_keeps_session_id_reverse_lookup_when_session_index_mismatches
+    auth = build_auth
+    user = auth.context.internal_adapter.create_user(email: "slo-mismatch@example.com", name: "SLO Mismatch")
+    session = auth.context.internal_adapter.create_session(user.fetch("id"))
+    provider = {"providerId" => "saml"}
+    context = Struct.new(:context).new(auth.context)
+    session_key = "saml-session:saml:name-id-mismatch"
+    reverse_key = "saml-session-by-id:#{session.fetch("id")}"
+
+    BetterAuth::Plugins.sso_store_saml_session(
+      context,
+      provider,
+      {name_id: "name-id-mismatch", session_index: "session-index-stored"},
+      session
+    )
+    BetterAuth::Plugins.sso_process_saml_logout_request(
+      context,
+      provider,
+      saml_logout_request(name_id: "name-id-mismatch", session_index: "session-index-requested")
+    )
+
+    assert_nil auth.context.internal_adapter.find_verification_value(session_key)
+    assert auth.context.internal_adapter.find_session(session.fetch("token"))
+    assert auth.context.internal_adapter.find_verification_value(reverse_key)
   end
 
   def test_saml_initiate_slo_stores_logout_request_and_response_consumes_it

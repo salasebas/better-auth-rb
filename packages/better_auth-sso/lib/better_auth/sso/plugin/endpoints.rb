@@ -73,11 +73,12 @@ module BetterAuth
 
         relay_state = sso_fetch(ctx.body, :callback_url) || ctx.context.base_url
         session_token = session.fetch(:session).fetch("token")
+        session_id = session.fetch(:session).fetch("id")
         user_email = session.fetch(:user).fetch("email")
-        saml_session_key = ctx.context.internal_adapter.find_verification_value("#{SSO_SAML_SESSION_BY_ID_KEY_PREFIX}#{session_token}")&.fetch("value")
+        saml_session_key = ctx.context.internal_adapter.find_verification_value("#{SSO_SAML_SESSION_BY_ID_KEY_PREFIX}#{session_id}")&.fetch("value")
         saml_session = saml_session_key && ctx.context.internal_adapter.find_verification_value(saml_session_key)
         saml_record = saml_session ? JSON.parse(saml_session.fetch("value")) : {}
-        name_id = saml_record["nameId"] || user_email
+        name_id = saml_record["nameID"] || user_email
         session_index = saml_record["sessionIndex"]
 
         request_id = "_#{BetterAuth::Crypto.random_string(32)}"
@@ -85,7 +86,7 @@ module BetterAuth
         request = Base64.strict_encode64("<samlp:LogoutRequest xmlns:samlp=\"urn:oasis:names:tc:SAML:2.0:protocol\" xmlns:saml=\"urn:oasis:names:tc:SAML:2.0:assertion\" ID=\"#{request_id}\" Version=\"2.0\" IssueInstant=\"#{Time.now.utc.iso8601}\" Destination=\"#{CGI.escapeHTML(destination.to_s)}\"><saml:NameID>#{CGI.escapeHTML(name_id.to_s)}</saml:NameID>#{session_index_xml}</samlp:LogoutRequest>")
         sso_store_saml_logout_request(ctx, provider, request_id, config)
         ctx.context.internal_adapter.delete_verification_by_identifier(saml_session_key) if saml_session_key
-        ctx.context.internal_adapter.delete_verification_by_identifier("#{SSO_SAML_SESSION_BY_ID_KEY_PREFIX}#{session_token}")
+        ctx.context.internal_adapter.delete_verification_by_identifier("#{SSO_SAML_SESSION_BY_ID_KEY_PREFIX}#{session_id}")
         ctx.context.internal_adapter.delete_session(session_token)
         Cookies.delete_session_cookie(ctx)
         query = {SAMLRequest: request, RelayState: relay_state}

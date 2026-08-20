@@ -62,7 +62,11 @@ module BetterAuth
       session_token = ctx.get_signed_cookie(token_cookie.name, ctx.context.secret)
       return if session_token.to_s.empty?
 
-      lookup_key = "#{SSO_SAML_SESSION_BY_ID_KEY_PREFIX}#{session_token}"
+      session = ctx.context.internal_adapter.find_session(session_token)
+      session_id = session&.dig(:session, "id")
+      return if session_id.to_s.empty?
+
+      lookup_key = "#{SSO_SAML_SESSION_BY_ID_KEY_PREFIX}#{session_id}"
       session_lookup = ctx.context.internal_adapter.find_verification_value(lookup_key)
       saml_session_key = session_lookup&.fetch("value", nil)
       ctx.context.internal_adapter.delete_verification_by_identifier(saml_session_key) if saml_session_key
