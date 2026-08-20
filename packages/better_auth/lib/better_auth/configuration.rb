@@ -323,7 +323,9 @@ module BetterAuth
 
     def normalize_account(value)
       configured = symbolize_keys(value || {})
-      database.nil? ? deep_merge(DEFAULT_STATELESS_ACCOUNT, configured) : configured
+      defaults = database.nil? ? DEFAULT_STATELESS_ACCOUNT : {}
+      defaults = defaults.merge(store_state_strategy: "database") if secondary_storage
+      deep_merge(defaults, configured)
     end
 
     def normalize_email_and_password(value)
