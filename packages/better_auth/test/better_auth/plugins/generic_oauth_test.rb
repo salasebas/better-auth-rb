@@ -1666,6 +1666,43 @@ class BetterAuthPluginsGenericOAuthTest < Minitest::Test
     assert_equal "relinked-provider-tag", updated.fetch("profileTag")
   end
 
+  def test_update_user_info_on_link_rejects_vetoed_new_account_without_profile_mutation
+    email = "generic-update-link-create-veto@example.com"
+    account_id = "generic-update-link-create-veto"
+    auth = build_auth(
+      account: {account_linking: {update_user_info_on_link: true}},
+      database_hooks: {
+        account: {
+          create: {
+            before: ->(data, _context) { false if data["providerId"] == "custom" }
+          }
+        }
+      },
+      user_info: {
+        id: account_id,
+        email: email,
+        name: "Provider Name",
+        image: "https://example.com/provider.png",
+        emailVerified: true
+      }
+    )
+    cookie = sign_up_cookie(auth, email: email)
+    original = auth.context.internal_adapter.find_user_by_email(email).fetch(:user)
+    auth.context.internal_adapter.update_user(
+      original.fetch("id"),
+      name: "Local Name",
+      image: "https://example.com/local.png"
+    )
+    local = auth.context.internal_adapter.find_user_by_id(original.fetch("id"))
+
+    status, headers, = complete_explicit_generic_oauth_link(auth, cookie: cookie)
+
+    assert_equal 302, status
+    assert_equal "/error?error=unable_to_link_account", headers.fetch("location")
+    assert_nil auth.context.internal_adapter.find_account_by_provider_id(account_id, "custom")
+    assert_equal local, auth.context.internal_adapter.find_user_by_id(original.fetch("id"))
+  end
+
   def test_update_user_info_on_link_rejects_mismatched_email_before_explicit_link_mutation
     auth = build_auth(
       account: {account_linking: {update_user_info_on_link: true}},
