@@ -574,7 +574,7 @@ auth = BetterAuth.auth(
 Set custom strategies for ID generation and findMany queries.
 
 * `generate_id`: Controls how record IDs are generated. Accepts a custom function, `false`, `"serial"`, or `"uuid"` (default: [random base62 string](https://github.com/better-auth/better-auth/blob/main/packages/core/src/utils/id.ts)). See the [Database documentation](/docs/concepts/database#id-generation) for more info.
-* `defaultFindManyLimit`: The default maximum number of records returned by the `findMany` adapter method. (default: `100`)
+* `default_find_many_limit`: The maximum number of records returned when a core Memory or SQL adapter `find_many` call omits `limit:` or passes `nil`. The same default applies to one-to-many joins without their own limit. An explicit `limit:` overrides it. Use non-negative values for portable behavior; `0` returns no base rows, while negative pagination is adapter-specific and does not mirror JavaScript `slice` semantics. (default: `100`)
 
 ```ruby
 require "better_auth"
@@ -584,8 +584,9 @@ auth = BetterAuth.auth(
   base_url: ENV.fetch("BETTER_AUTH_URL", "http://localhost:3000"),
   database: :postgres,
   advanced: {
-    cookie_prefix: "better-auth",
-    use_secure_cookies: true
+    database: {
+      default_find_many_limit: 250
+    }
   }
 )
 ```

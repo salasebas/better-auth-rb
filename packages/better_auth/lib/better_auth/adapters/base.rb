@@ -3,6 +3,8 @@
 module BetterAuth
   module Adapters
     class Base
+      DEFAULT_FIND_MANY_LIMIT = 100
+
       attr_reader :options
 
       TRANSACTION_CONTEXT_KEY = :better_auth_adapter_transaction_context
@@ -78,6 +80,15 @@ module BetterAuth
       private
 
       attr_reader :transaction_context_key
+
+      def find_many_limit(limit)
+        limit.nil? ? default_find_many_limit : limit
+      end
+
+      def default_find_many_limit
+        configured = options.advanced.dig(:database, :default_find_many_limit) if options.respond_to?(:advanced)
+        configured.nil? ? DEFAULT_FIND_MANY_LIMIT : configured
+      end
 
       def active_transaction_adapter
         Thread.current[TRANSACTION_CONTEXT_KEY]&.fetch(transaction_context_key, nil)

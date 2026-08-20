@@ -74,17 +74,23 @@ module BetterAuth
 
       def find_many(model:, where: [], sort_by: nil, limit: nil, offset: nil, select: nil, join: nil)
         model = model.to_s
+        limit = find_many_limit(limit)
         params = []
-        sql = +"SELECT "
-        sql << "TOP (#{Integer(limit)}) " if dialect == :mssql && limit && !offset
-        sql << select_sql(model, select, join)
-        sql << " FROM "
-        sql << quote(table_for(model))
-        sql << join_sql(model, join)
         where_sql = build_where(model, where || [], params)
-        sql << " WHERE #{where_sql}" unless where_sql.empty?
-        sql << order_sql(model, sort_by) if sort_by
-        append_pagination_sql(sql, model, sort_by, limit, offset)
+        sql = if collection_join?(model, join)
+          collection_join_find_many_sql(model, where_sql, sort_by, limit, offset, select, join)
+        else
+          statement = +"SELECT "
+          statement << "TOP (#{Integer(limit)}) " if dialect == :mssql && limit && !offset
+          statement << select_sql(model, select, join)
+          statement << " FROM "
+          statement << quote(table_for(model))
+          statement << join_sql(model, join)
+          statement << " WHERE #{where_sql}" unless where_sql.empty?
+          statement << order_sql(model, sort_by) if sort_by
+          append_pagination_sql(statement, model, sort_by, limit, offset)
+          statement
+        end
 
         records = execute(sql, params).map { |row| normalize_record(model, row, join: join) }
         collection_join?(model, join) ? aggregate_collection_joins(model, records, join) : records
@@ -562,6 +568,21 @@ module BetterAuth
 
         sql << " LIMIT #{Integer(limit)}" if limit
         sql << " OFFSET #{Integer(offset)}" if offset
+      end
+
+      def collection_join_find_many_sql(model, where_sql, sort_by, limit, offset, select, join)
+        base = +"SELECT "
+        base << "TOP (#{Integer(limit)}) " if dialect == :mssql && limit && !offset
+        base << "* FROM #{quote(table_for(model))}"
+        base << " WHERE #{where_sql}" unless where_sql.empty?
+        base << order_sql(model, sort_by) if sort_by
+        append_pagination_sql(base, model, sort_by, limit, offset)
+
+        sql = "SELECT #{select_sql(model, select, join)}"
+        sql << " FROM (#{base}) AS #{quote(table_for(model))}"
+        sql << join_sql(model, join)
+        sql << order_sql(model, sort_by) if sort_by
+        sql
       end
 
       def sql_operator(operator)
