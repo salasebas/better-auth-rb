@@ -33,12 +33,11 @@ class BetterAuthAPIKeyPluginTest < Minitest::Test
     assert_equal 12, plugin.options[:default_key_length]
   end
 
-  def test_visible_endpoints_have_complete_open_api_metadata
-    missing = BetterAuth::Plugins.api_key.endpoints.filter_map do |key, endpoint|
-      next unless endpoint.path
-      next if endpoint.metadata[:hide] || endpoint.metadata[:SERVER_ONLY] || endpoint.metadata[:server_only]
-
-      "#{BetterAuth::Plugins.api_key.id}.#{key}" unless rich_openapi?(endpoint)
+  def test_upstream_http_endpoints_have_complete_open_api_metadata
+    endpoints = BetterAuth::Plugins.api_key.endpoints
+    upstream_http_keys = %i[create_api_key get_api_key update_api_key delete_api_key list_api_keys]
+    missing = upstream_http_keys.filter_map do |key|
+      "#{BetterAuth::Plugins.api_key.id}.#{key}" unless rich_openapi?(endpoints.fetch(key))
     end
 
     assert_empty missing
@@ -67,16 +66,158 @@ class BetterAuthAPIKeyPluginTest < Minitest::Test
 
     update_schema = request_body_schema(endpoints.fetch(:update_api_key))
     assert_includes update_schema[:required], "keyId"
-    assert_includes update_schema[:properties].keys, :enabled
+    assert_equal %i[
+      configId
+      enabled
+      expiresIn
+      keyId
+      metadata
+      name
+      permissions
+      rateLimitEnabled
+      rateLimitMax
+      rateLimitTimeWindow
+      refillAmount
+      refillInterval
+      remaining
+      userId
+    ].sort, update_schema[:properties].keys.sort
+    assert_equal "number", update_schema.dig(:properties, :remaining, :type)
+    assert_equal ["object", "null"], update_schema.dig(:properties, :permissions, :type)
+    assert_equal({type: "string"}, update_schema.dig(:properties, :permissions, :propertyNames))
 
     delete_schema = request_body_schema(endpoints.fetch(:delete_api_key))
     assert_equal ["keyId"], delete_schema[:required]
+    assert_equal [:keyId], delete_schema[:properties].keys
+    refute endpoints.fetch(:delete_api_key).metadata.dig(:openapi, :requestBody).key?(:required)
 
     verify_schema = request_body_schema(endpoints.fetch(:verify_api_key))
     assert_equal ["key"], verify_schema[:required]
 
     get_params = endpoints.fetch(:get_api_key).metadata.dig(:openapi, :parameters)
     assert get_params.any? { |parameter| parameter[:name] == "id" && parameter[:required] == true }
+
+    list_params = endpoints.fetch(:list_api_keys).metadata.dig(:openapi, :parameters)
+    assert_equal "number", list_params.find { |parameter| parameter[:name] == "limit" }.dig(:schema, :type)
+    assert_equal "number", list_params.find { |parameter| parameter[:name] == "offset" }.dig(:schema, :type)
+
+    create_properties = request_body_properties(endpoints.fetch(:create_api_key))
+    %i[expiresIn prefix refillAmount remaining].each do |field|
+      refute create_properties.fetch(field).key?(:minimum)
+      refute create_properties.fetch(field).key?(:pattern)
+    end
+    %i[expiresIn remaining].each do |field|
+      refute update_schema.fetch(:properties).fetch(field).key?(:minimum)
+    end
+  end
+
+  def test_api_key_open_api_response_fields_preserve_v1_7_1_route_contracts
+    endpoints = BetterAuth::Plugins.api_key.endpoints
+    create_schema = response_schema(endpoints.fetch(:create_api_key))
+    create_fields = %i[
+      createdAt
+      enabled
+      expiresAt
+      id
+      key
+      lastRefillAt
+      lastRequest
+      metadata
+      name
+      permissions
+      prefix
+      rateLimitEnabled
+      rateLimitMax
+      rateLimitTimeWindow
+      referenceId
+      refillAmount
+      refillInterval
+      remaining
+      requestCount
+      start
+      updatedAt
+    ]
+    assert_equal create_fields.sort, create_schema.fetch(:properties).keys.sort
+    assert_equal %w[id createdAt updatedAt enabled referenceId rateLimitEnabled requestCount key].sort,
+      create_schema.fetch(:required).sort
+    refute_includes create_schema.fetch(:properties), :configId
+    refute_includes create_schema.fetch(:properties), :userId
+    assert_equal %i[
+      expiresAt
+      lastRefillAt
+      lastRequest
+      metadata
+      name
+      permissions
+      prefix
+      rateLimitMax
+      rateLimitTimeWindow
+      refillAmount
+      refillInterval
+      remaining
+      start
+    ].sort, nullable_properties(create_schema).sort
+
+    legacy_fields = (create_fields - %i[key referenceId]) + %i[userId]
+    legacy_schemas = [
+      response_schema(endpoints.fetch(:get_api_key)),
+      response_schema(endpoints.fetch(:update_api_key)),
+      response_schema(endpoints.fetch(:list_api_keys)).dig(:properties, :apiKeys, :items)
+    ]
+    legacy_schemas.each do |schema|
+      assert_equal legacy_fields.sort, schema.fetch(:properties).keys.sort
+      assert_equal %w[id userId enabled rateLimitEnabled requestCount createdAt updatedAt].sort,
+        schema.fetch(:required).sort
+      assert_equal "string", schema.dig(:properties, :permissions, :type)
+      assert_equal true, schema.dig(:properties, :permissions, :nullable)
+      assert_equal true, schema.dig(:properties, :enabled, :default)
+      assert_equal %i[
+        expiresAt
+        lastRefillAt
+        lastRequest
+        metadata
+        name
+        permissions
+        prefix
+        rateLimitMax
+        rateLimitTimeWindow
+        refillAmount
+        refillInterval
+        remaining
+        start
+      ].sort, nullable_properties(schema).sort
+      refute_includes schema.fetch(:properties), :configId
+      refute_includes schema.fetch(:properties), :referenceId
+      refute_includes schema.fetch(:properties), :key
+    end
+
+    verify_key_schema = response_schema(endpoints.fetch(:verify_api_key)).dig(:properties, :key)
+    assert_includes verify_key_schema.fetch(:properties), :configId
+    assert_includes verify_key_schema.fetch(:properties), :referenceId
+    assert_includes verify_key_schema.fetch(:properties), :requestCount
+    refute_includes verify_key_schema.fetch(:properties), :userId
+    refute_includes verify_key_schema.fetch(:properties), :key
+
+    verify_error_schema = response_schema(endpoints.fetch(:verify_api_key)).dig(:properties, :error)
+    assert_equal %i[code message], verify_error_schema.fetch(:properties).keys.sort
+    assert_equal %w[code message], verify_error_schema.fetch(:required).sort
+    assert_equal true, verify_error_schema.fetch(:nullable)
+  end
+
+  def test_route_source_constants_point_to_audited_v1_7_1_files
+    sources = {
+      BetterAuth::APIKey::Routes::CreateAPIKey::UPSTREAM_SOURCE => "create-api-key.ts",
+      BetterAuth::APIKey::Routes::VerifyAPIKey::UPSTREAM_SOURCE => "verify-api-key.ts",
+      BetterAuth::APIKey::Routes::GetAPIKey::UPSTREAM_SOURCE => "get-api-key.ts",
+      BetterAuth::APIKey::Routes::UpdateAPIKey::UPSTREAM_SOURCE => "update-api-key.ts",
+      BetterAuth::APIKey::Routes::DeleteAPIKey::UPSTREAM_SOURCE => "delete-api-key.ts",
+      BetterAuth::APIKey::Routes::ListAPIKeys::UPSTREAM_SOURCE => "list-api-keys.ts",
+      BetterAuth::APIKey::Routes::DeleteAllExpiredAPIKeys::UPSTREAM_SOURCE => "delete-all-expired-api-keys.ts"
+    }
+
+    sources.each do |source, filename|
+      assert_equal "reference/upstream-src/1.7.1/repository/packages/api-key/src/routes/#{filename}", source
+    end
   end
 
   def test_default_key_hasher_matches_sha256_base64url_contract
@@ -125,5 +266,15 @@ class BetterAuthAPIKeyPluginTest < Minitest::Test
 
   def request_body_properties(endpoint)
     request_body_schema(endpoint).fetch(:properties)
+  end
+
+  def response_schema(endpoint, status = "200")
+    endpoint.metadata.dig(:openapi, :responses, status, :content, "application/json", :schema)
+  end
+
+  def nullable_properties(schema)
+    schema.fetch(:properties).filter_map do |name, property|
+      name if property[:nullable] || Array(property[:type]).include?("null")
+    end
   end
 end

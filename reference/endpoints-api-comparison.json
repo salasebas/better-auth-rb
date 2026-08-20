@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-07-16T01:47:43Z",
+  "generated_at": "2026-08-20T19:31:24Z",
   "upstream_route_count": 236,
   "upstream_http_route_count": 222,
   "upstream_server_only_count": 14,
@@ -4295,7 +4295,7 @@
         "POST"
       ],
       "file": "packages/better_auth-oauth-provider/lib/better_auth/plugins/oauth_provider/oauth_client/endpoints.rb",
-      "line": 127,
+      "line": 126,
       "endpoint_key": "admin_create_oauth_client",
       "plugin_hint": "better_auth/plugins/oauth_provider",
       "body_fields": [],
@@ -4322,7 +4322,7 @@
         "PATCH"
       ],
       "file": "packages/better_auth-oauth-provider/lib/better_auth/plugins/oauth_provider/oauth_client/endpoints.rb",
-      "line": 157,
+      "line": 155,
       "endpoint_key": "admin_update_oauth_client",
       "plugin_hint": "better_auth/plugins/oauth_provider",
       "body_fields": [],
@@ -4644,7 +4644,7 @@
         "POST"
       ],
       "file": "packages/better_auth/lib/better_auth/plugins/organization.rb",
-      "line": 498,
+      "line": 529,
       "endpoint_key": "add_member",
       "plugin_hint": "organization",
       "body_fields": [
