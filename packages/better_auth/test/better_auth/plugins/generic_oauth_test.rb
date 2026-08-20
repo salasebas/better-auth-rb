@@ -1586,6 +1586,294 @@ class BetterAuthPluginsGenericOAuthTest < Minitest::Test
     end
   end
 
+  def test_update_user_info_on_link_omitted_and_false_leave_explicit_link_profile_unchanged
+    [
+      ["omitted", {}],
+      ["false", {update_user_info_on_link: false}]
+    ].each do |label, account_linking|
+      email = "generic-update-link-#{label}@example.com"
+      account_id = "generic-update-link-#{label}"
+      auth = build_auth(
+        user: {additional_fields: {profileTag: {type: "string", required: false}}},
+        account: {account_linking: account_linking},
+        user_info: {
+          id: account_id,
+          email: email,
+          name: "Provider Name",
+          image: "https://example.com/provider.png",
+          emailVerified: true,
+          profileTag: "provider-tag"
+        }
+      )
+      cookie = sign_up_cookie(auth, email: email)
+      original = auth.context.internal_adapter.find_user_by_email(email).fetch(:user)
+      auth.context.internal_adapter.update_user(
+        original.fetch("id"),
+        name: "Local Name",
+        image: "https://example.com/local.png",
+        emailVerified: false,
+        profileTag: "local-tag"
+      )
+
+      status, headers, = complete_explicit_generic_oauth_link(auth, cookie: cookie)
+      account = auth.context.internal_adapter.find_account_by_provider_id(account_id, "custom")
+      updated = auth.context.internal_adapter.find_user_by_id(original.fetch("id"))
+
+      assert_equal 302, status, label
+      assert_equal "/settings", headers.fetch("location"), label
+      assert_equal original.fetch("id"), account.fetch("userId"), label
+      assert_equal original.fetch("id"), updated.fetch("id"), label
+      assert_equal email, updated.fetch("email"), label
+      assert_equal false, updated.fetch("emailVerified"), label
+      assert_equal "Local Name", updated.fetch("name"), label
+      assert_equal "https://example.com/local.png", updated.fetch("image"), label
+      assert_equal "local-tag", updated.fetch("profileTag"), label
+    end
+  end
+
+  def test_update_user_info_on_link_true_persists_mapped_fields_without_rebinding_identity
+    auth = build_auth(
+      user: {additional_fields: {profileTag: {type: "string", required: false}}},
+      account: {
+        account_linking: {
+          allow_different_emails: true,
+          update_user_info_on_link: true
+        }
+      },
+      user_info: {
+        id: "generic-update-link-mapped",
+        email: "provider-update-link@example.com",
+        name: "Raw Provider Name",
+        image: "https://example.com/raw-provider.png",
+        emailVerified: true
+      },
+      provider_overrides: {
+        map_profile_to_user: ->(_profile) {
+          {
+            name: "Mapped Provider Name",
+            image: "https://example.com/mapped-provider.png",
+            profileTag: "mapped-provider-tag"
+          }
+        }
+      }
+    )
+    local_email = "local-update-link@example.com"
+    cookie = sign_up_cookie(auth, email: local_email)
+    original = auth.context.internal_adapter.find_user_by_email(local_email).fetch(:user)
+
+    status, headers, = complete_explicit_generic_oauth_link(auth, cookie: cookie)
+    account = auth.context.internal_adapter.find_account_by_provider_id("generic-update-link-mapped", "custom")
+    updated = auth.context.internal_adapter.find_user_by_id(original.fetch("id"))
+
+    assert_equal 302, status
+    assert_equal "/settings", headers.fetch("location")
+    assert_equal original.fetch("id"), account.fetch("userId")
+    assert_equal original.fetch("id"), updated.fetch("id")
+    assert_equal local_email, updated.fetch("email")
+    assert_equal false, updated.fetch("emailVerified")
+    assert_equal "Mapped Provider Name", updated.fetch("name")
+    assert_equal "https://example.com/mapped-provider.png", updated.fetch("image")
+    assert_equal "mapped-provider-tag", updated.fetch("profileTag")
+  end
+
+  def test_update_user_info_on_link_updates_same_owner_when_account_update_is_vetoed
+    tokens = {
+      accessToken: "initial-access-token",
+      refreshToken: "initial-refresh-token"
+    }
+    mapped_profile = {
+      name: "Initial Provider Name",
+      image: "https://example.com/initial-provider.png",
+      profileTag: "initial-provider-tag"
+    }
+    email = "generic-update-link-veto@example.com"
+    account_id = "generic-update-link-veto"
+    auth = build_auth(
+      user: {additional_fields: {profileTag: {type: "string", required: false}}},
+      account: {account_linking: {update_user_info_on_link: true}},
+      database_hooks: {
+        account: {
+          update: {
+            before: ->(_data, _context) { false }
+          }
+        }
+      },
+      user_info: {
+        id: account_id,
+        email: email,
+        name: "Raw Provider Name",
+        emailVerified: true
+      },
+      provider_overrides: {
+        get_token: ->(code:, **_data) {
+          raise "unexpected code" unless code == "oauth-code"
+
+          tokens.dup
+        },
+        map_profile_to_user: ->(_profile) { mapped_profile.dup }
+      }
+    )
+    cookie = sign_up_cookie(auth, email: email)
+    user = auth.context.internal_adapter.find_user_by_email(email).fetch(:user)
+    complete_explicit_generic_oauth_link(auth, cookie: cookie)
+    initial_account = auth.context.internal_adapter.find_account_by_provider_id(account_id, "custom")
+    initially_updated = auth.context.internal_adapter.find_user_by_id(user.fetch("id"))
+
+    assert_equal "Initial Provider Name", initially_updated.fetch("name")
+    assert_equal "initial-access-token", initial_account.fetch("accessToken")
+
+    tokens[:accessToken] = "vetoed-access-token"
+    tokens[:refreshToken] = "vetoed-refresh-token"
+    mapped_profile[:name] = "Relinked Provider Name"
+    mapped_profile[:image] = "https://example.com/relinked-provider.png"
+    mapped_profile[:profileTag] = "relinked-provider-tag"
+
+    status, headers, = complete_explicit_generic_oauth_link(auth, cookie: cookie)
+    account = auth.context.internal_adapter.find_account_by_provider_id(account_id, "custom")
+    updated = auth.context.internal_adapter.find_user_by_id(user.fetch("id"))
+
+    assert_equal 302, status
+    assert_equal "/settings", headers.fetch("location")
+    assert_equal user.fetch("id"), account.fetch("userId")
+    assert_equal "initial-access-token", account.fetch("accessToken")
+    assert_equal "initial-refresh-token", account.fetch("refreshToken")
+    assert_equal initial_account.fetch("updatedAt"), account.fetch("updatedAt")
+    assert_equal "Relinked Provider Name", updated.fetch("name")
+    assert_equal "https://example.com/relinked-provider.png", updated.fetch("image")
+    assert_equal "relinked-provider-tag", updated.fetch("profileTag")
+  end
+
+  def test_update_user_info_on_link_rejects_vetoed_new_account_without_profile_mutation
+    email = "generic-update-link-create-veto@example.com"
+    account_id = "generic-update-link-create-veto"
+    auth = build_auth(
+      account: {account_linking: {update_user_info_on_link: true}},
+      database_hooks: {
+        account: {
+          create: {
+            before: ->(data, _context) { false if data["providerId"] == "custom" }
+          }
+        }
+      },
+      user_info: {
+        id: account_id,
+        email: email,
+        name: "Provider Name",
+        image: "https://example.com/provider.png",
+        emailVerified: true
+      }
+    )
+    cookie = sign_up_cookie(auth, email: email)
+    original = auth.context.internal_adapter.find_user_by_email(email).fetch(:user)
+    auth.context.internal_adapter.update_user(
+      original.fetch("id"),
+      name: "Local Name",
+      image: "https://example.com/local.png"
+    )
+    local = auth.context.internal_adapter.find_user_by_id(original.fetch("id"))
+
+    status, headers, = complete_explicit_generic_oauth_link(auth, cookie: cookie)
+
+    assert_equal 302, status
+    assert_equal "/error?error=unable_to_link_account", headers.fetch("location")
+    assert_nil auth.context.internal_adapter.find_account_by_provider_id(account_id, "custom")
+    assert_equal local, auth.context.internal_adapter.find_user_by_id(original.fetch("id"))
+  end
+
+  def test_update_user_info_on_link_rejects_mismatched_email_before_explicit_link_mutation
+    auth = build_auth(
+      account: {account_linking: {update_user_info_on_link: true}},
+      user_info: {
+        id: "generic-update-link-mismatch",
+        email: "provider-mismatch@example.com",
+        name: "Provider Name",
+        image: "https://example.com/provider.png",
+        emailVerified: true
+      }
+    )
+    local_email = "local-mismatch@example.com"
+    cookie = sign_up_cookie(auth, email: local_email)
+    original = auth.context.internal_adapter.find_user_by_email(local_email).fetch(:user)
+
+    status, headers, = complete_explicit_generic_oauth_link(auth, cookie: cookie)
+    updated = auth.context.internal_adapter.find_user_by_id(original.fetch("id"))
+
+    assert_equal 302, status
+    assert_equal "/error?error=email_doesn%27t_match", headers.fetch("location")
+    assert_nil auth.context.internal_adapter.find_account_by_provider_id("generic-update-link-mismatch", "custom")
+    assert_equal original, updated
+  end
+
+  def test_update_user_info_on_link_rejects_explicit_link_owned_by_another_user_without_mutation
+    profile = {
+      id: "generic-update-link-owned",
+      email: "owner-update-link@example.com",
+      name: "Owner Provider Name",
+      image: "https://example.com/owner-provider.png",
+      emailVerified: true
+    }
+    auth = build_auth(
+      account: {account_linking: {update_user_info_on_link: true}},
+      user_info: profile
+    )
+    owner_cookie = sign_up_cookie(auth, email: profile.fetch(:email))
+    owner = auth.context.internal_adapter.find_user_by_email(profile.fetch(:email)).fetch(:user)
+    complete_explicit_generic_oauth_link(auth, cookie: owner_cookie)
+
+    second_email = "second-update-link@example.com"
+    second_cookie = sign_up_cookie(auth, email: second_email)
+    second = auth.context.internal_adapter.find_user_by_email(second_email).fetch(:user)
+    owner_before = auth.context.internal_adapter.find_user_by_id(owner.fetch("id"))
+    second_before = auth.context.internal_adapter.find_user_by_id(second.fetch("id"))
+    profile[:email] = second_email
+    profile[:name] = "Unauthorized Provider Name"
+    profile[:image] = "https://example.com/unauthorized.png"
+
+    status, headers, = complete_explicit_generic_oauth_link(auth, cookie: second_cookie)
+    account = auth.context.internal_adapter.find_account_by_provider_id(profile.fetch(:id), "custom")
+
+    assert_equal 302, status
+    assert_equal "/error?error=account_already_linked_to_different_user", headers.fetch("location")
+    assert_equal owner.fetch("id"), account.fetch("userId")
+    assert_equal owner_before, auth.context.internal_adapter.find_user_by_id(owner.fetch("id"))
+    assert_equal second_before, auth.context.internal_adapter.find_user_by_id(second.fetch("id"))
+  end
+
+  def test_update_user_info_on_link_validation_failure_keeps_successful_explicit_link
+    email = "generic-update-link-invalid@example.com"
+    auth = build_auth(
+      user: {
+        additional_fields: {
+          profileTag: {
+            type: "string",
+            required: false,
+            validator: ->(value) { value == "allowed" }
+          }
+        }
+      },
+      account: {account_linking: {update_user_info_on_link: true}},
+      user_info: {
+        id: "generic-update-link-invalid",
+        email: email,
+        name: "Provider Name",
+        image: "https://example.com/provider.png",
+        emailVerified: true,
+        profileTag: "invalid"
+      }
+    )
+    cookie = sign_up_cookie(auth, email: email)
+    original = auth.context.internal_adapter.find_user_by_email(email).fetch(:user)
+
+    status, headers, = complete_explicit_generic_oauth_link(auth, cookie: cookie)
+    account = auth.context.internal_adapter.find_account_by_provider_id("generic-update-link-invalid", "custom")
+    updated = auth.context.internal_adapter.find_user_by_id(original.fetch("id"))
+
+    assert_equal 302, status
+    assert_equal "/settings", headers.fetch("location")
+    assert_equal original.fetch("id"), account.fetch("userId")
+    assert_equal original, updated
+  end
+
   private
 
   def helper_expectations
@@ -1796,6 +2084,23 @@ class BetterAuthPluginsGenericOAuthTest < Minitest::Test
       as_response: true
     )
     headers.fetch("set-cookie").lines.map { |line| line.split(";").first }.join("; ")
+  end
+
+  def complete_explicit_generic_oauth_link(auth, cookie:)
+    link = auth.api.oauth2_link_account(
+      headers: {"cookie" => cookie},
+      body: {
+        providerId: "custom",
+        callbackURL: "/settings",
+        errorCallbackURL: "/error"
+      }
+    )
+    state = Rack::Utils.parse_query(URI.parse(link.fetch(:url)).query).fetch("state")
+    auth.api.oauth2_callback(
+      params: {providerId: "custom"},
+      query: {code: "oauth-code", state: state},
+      as_response: true
+    )
   end
 
   def cookie_header(set_cookie)
