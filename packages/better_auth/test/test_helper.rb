@@ -11,15 +11,12 @@ require "minitest/spec"
 
 require_relative "support/auth_test_helpers"
 require_relative "support/password_test_helpers"
+require_relative "../../../test/support/test_databases"
 
 module BetterAuthMySQLTestHelpers
   def mysql_connection
     Mysql2::Client.new(
-      host: ENV.fetch("BETTER_AUTH_MYSQL_HOST", "127.0.0.1"),
-      port: ENV.fetch("BETTER_AUTH_MYSQL_PORT", "3306").to_i,
-      username: ENV.fetch("BETTER_AUTH_MYSQL_USER", "user"),
-      password: ENV.fetch("BETTER_AUTH_MYSQL_PASSWORD", "password"),
-      database: ENV.fetch("BETTER_AUTH_MYSQL_DATABASE", "better_auth"),
+      **TestDatabases.mysql_options,
       symbolize_keys: false
     )
   end

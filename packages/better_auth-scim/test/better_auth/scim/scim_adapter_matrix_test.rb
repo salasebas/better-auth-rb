@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require_relative "../scim_test_helper"
+require_relative "../../../../../test/support/test_databases"
 
 class BetterAuthPluginsScimAdapterMatrixTest < Minitest::Test
   include SCIMTestHelper
@@ -35,7 +36,7 @@ class BetterAuthPluginsScimAdapterMatrixTest < Minitest::Test
       require "pg"
 
       config = scim_schema_config
-      connection = PG.connect(ENV.fetch("BETTER_AUTH_POSTGRES_URL", "postgres://user:password@localhost:5432/better_auth"))
+      connection = PG.connect(TestDatabases.postgres_url)
       reset_postgres_schema(connection, config)
       create_sql_schema(connection, config, :postgres)
       auth = build_scim_auth_with_database(
@@ -60,11 +61,7 @@ class BetterAuthPluginsScimAdapterMatrixTest < Minitest::Test
 
       config = scim_schema_config
       connection = Mysql2::Client.new(
-        host: ENV.fetch("BETTER_AUTH_MYSQL_HOST", "127.0.0.1"),
-        port: ENV.fetch("BETTER_AUTH_MYSQL_PORT", "3306").to_i,
-        username: ENV.fetch("BETTER_AUTH_MYSQL_USER", "user"),
-        password: ENV.fetch("BETTER_AUTH_MYSQL_PASSWORD", "password"),
-        database: ENV.fetch("BETTER_AUTH_MYSQL_DATABASE", "better_auth"),
+        **TestDatabases.mysql_options,
         symbolize_keys: false
       )
       reset_mysql_schema(connection, config)
@@ -90,9 +87,9 @@ class BetterAuthPluginsScimAdapterMatrixTest < Minitest::Test
       require "sequel"
       require "tiny_tds"
 
-      ensure_mssql_database
+      TestDatabases.ensure_mssql_database
       config = scim_schema_config
-      connection = Sequel.connect(ENV.fetch("BETTER_AUTH_MSSQL_URL", "tinytds://sa:Password123!@127.0.0.1:1433/better_auth?timeout=30"))
+      connection = Sequel.connect(TestDatabases.mssql_url)
       reset_mssql_schema(connection)
       create_sql_schema(connection, config, :mssql)
       auth = build_scim_auth_with_database(
@@ -116,8 +113,7 @@ class BetterAuthPluginsScimAdapterMatrixTest < Minitest::Test
       require "better_auth/mongodb"
       require "mongo"
 
-      database_name = "better-auth-scim-ruby-test"
-      client = Mongo::Client.new(ENV.fetch("BETTER_AUTH_MONGODB_URL", "mongodb://127.0.0.1:27017/#{database_name}"), server_selection_timeout: 1)
+      client = Mongo::Client.new(TestDatabases.mongodb_url("better-auth-scim-ruby-test"), server_selection_timeout: 1)
       client.database.collections.each { |collection| collection.drop unless collection.name.start_with?("system.") }
       auth = build_scim_auth_with_database(
         ->(options) { BetterAuth::Adapters::MongoDB.new(options, database: client.database, client: client, transaction: false) }
@@ -175,15 +171,6 @@ class BetterAuthPluginsScimAdapterMatrixTest < Minitest::Test
 
   def quote_mysql_identifier(identifier)
     "`#{identifier.to_s.gsub("`", "``")}`"
-  end
-
-  def ensure_mssql_database
-    master = Sequel.connect(ENV.fetch("BETTER_AUTH_MSSQL_MASTER_URL", "tinytds://sa:Password123!@127.0.0.1:1433/master?timeout=30"))
-    master.run("IF DB_ID(N'better_auth') IS NULL CREATE DATABASE [better_auth]")
-  rescue Sequel::DatabaseConnectionError
-    skip "MSSQL test service is not available"
-  ensure
-    master&.disconnect
   end
 
   def reset_mssql_schema(connection)

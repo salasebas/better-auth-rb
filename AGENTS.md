@@ -49,10 +49,20 @@ fixed project name prevents worktrees from creating conflicting containers;
 docker compose -p better-auth up -d --wait
 ```
 
-Run only one database/Redis-backed suite across worktrees at a time, including
-`bundle exec rake ci` and adapter integration tests. Tests that do not use these
-services may run in parallel. Do not stop the shared stack while another
-worktree may be using it.
+Run database-backed suites through `scripts/with_test_databases.rb`. It gives
+this worktree its own databases on the shared stack (`better_auth_<id>`, with
+`<id>` a hash of the worktree path) and creates them if needed. Worktrees can
+then run suites in parallel without resetting each other's tables:
+
+```bash
+cd packages/better_auth && ../../scripts/with_test_databases.rb bundle exec rake test:integration
+scripts/with_test_databases.rb bundle exec rake test:integration   # workspace MySQL smoke
+```
+
+Tests read connection settings from `test/support/test_databases.rb`. Explicit
+`BETTER_AUTH_*_URL` variables override it, as in CI, so the wrapper refuses to
+run while they are set. Redis tests already isolate their keys with random
+prefixes. Do not stop the shared stack while another worktree may be using it.
 
 ```bash
 bundle exec rake ci          # workspace

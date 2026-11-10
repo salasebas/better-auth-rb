@@ -21,8 +21,8 @@ class BetterAuthMSSQLAdapterTest < Minitest::Test
     require "sequel"
     require "tiny_tds"
 
-    ensure_database
-    connection = Sequel.connect(mssql_url)
+    TestDatabases.ensure_mssql_database
+    connection = Sequel.connect(TestDatabases.mssql_url)
     config = BetterAuth::Configuration.new(secret: SECRET, database: :memory)
     reset_schema(connection)
     create_schema(connection, config)
@@ -65,8 +65,8 @@ class BetterAuthMSSQLAdapterTest < Minitest::Test
     require "sequel"
     require "tiny_tds"
 
-    ensure_database
-    connection = Sequel.connect(mssql_url)
+    TestDatabases.ensure_mssql_database
+    connection = Sequel.connect(TestDatabases.mssql_url)
     auth = BetterAuth.auth(
       base_url: "http://localhost:3000",
       secret: SECRET,
@@ -96,8 +96,8 @@ class BetterAuthMSSQLAdapterTest < Minitest::Test
     require "sequel"
     require "tiny_tds"
 
-    ensure_database
-    connection = Sequel.connect(mssql_url)
+    TestDatabases.ensure_mssql_database
+    connection = Sequel.connect(TestDatabases.mssql_url)
     reset_schema(connection)
     create_schema(connection, config)
     yield BetterAuth::Adapters::MSSQL.new(config, connection: connection)
@@ -107,23 +107,6 @@ class BetterAuthMSSQLAdapterTest < Minitest::Test
     skip "MSSQL test service is not available"
   ensure
     connection&.disconnect
-  end
-
-  def ensure_database
-    master = Sequel.connect(mssql_master_url)
-    master.run("IF DB_ID(N'better_auth') IS NULL CREATE DATABASE [better_auth]")
-  rescue Sequel::DatabaseConnectionError
-    skip "MSSQL test service is not available"
-  ensure
-    master&.disconnect
-  end
-
-  def mssql_url
-    ENV.fetch("BETTER_AUTH_MSSQL_URL") { skip "MSSQL test service is not configured" }
-  end
-
-  def mssql_master_url
-    ENV.fetch("BETTER_AUTH_MSSQL_MASTER_URL") { skip "MSSQL test service is not configured" }
   end
 
   def reset_schema(connection)

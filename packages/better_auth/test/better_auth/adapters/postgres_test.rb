@@ -21,7 +21,7 @@ class BetterAuthPostgresAdapterTest < Minitest::Test
     require "pg"
 
     config = BetterAuth::Configuration.new(secret: SECRET, database: :memory)
-    connection = PG.connect(ENV.fetch("BETTER_AUTH_POSTGRES_URL", "postgres://user:password@localhost:5432/better_auth"))
+    connection = PG.connect(TestDatabases.postgres_url)
     reset_schema(connection)
     BetterAuth::Schema::SQL.create_statements(config, dialect: :postgres).each { |statement| connection.exec(statement) }
     adapter = BetterAuth::Adapters::Postgres.new(config, connection: connection)
@@ -44,7 +44,7 @@ class BetterAuthPostgresAdapterTest < Minitest::Test
     require "pg"
 
     config = BetterAuth::Configuration.new(secret: SECRET, database: :memory)
-    connection = PG.connect(ENV.fetch("BETTER_AUTH_POSTGRES_URL", "postgres://user:password@localhost:5432/better_auth"))
+    connection = PG.connect(TestDatabases.postgres_url)
     reset_schema(connection)
     create_schema(connection, config)
     auth = BetterAuth.auth(
@@ -86,7 +86,7 @@ class BetterAuthPostgresAdapterTest < Minitest::Test
     require "pg"
 
     sent = []
-    connection = PG.connect(ENV.fetch("BETTER_AUTH_POSTGRES_URL", "postgres://user:password@localhost:5432/better_auth"))
+    connection = PG.connect(TestDatabases.postgres_url)
     auth = BetterAuth.auth(
       base_url: "http://localhost:3000",
       secret: SECRET,
@@ -148,10 +148,10 @@ class BetterAuthPostgresAdapterTest < Minitest::Test
     require "pg"
 
     config = BetterAuth::Configuration.new(secret: SECRET, database: :memory)
-    setup = PG.connect(ENV.fetch("BETTER_AUTH_POSTGRES_URL", "postgres://user:password@localhost:5432/better_auth"))
+    setup = PG.connect(TestDatabases.postgres_url)
     reset_schema(setup)
     create_schema(setup, config)
-    connections = 2.times.map { PG.connect(ENV.fetch("BETTER_AUTH_POSTGRES_URL", "postgres://user:password@localhost:5432/better_auth")) }
+    connections = 2.times.map { PG.connect(TestDatabases.postgres_url) }
     ready = Queue.new
     start = Queue.new
     threads = connections.map do |connection|
@@ -187,7 +187,7 @@ class BetterAuthPostgresAdapterTest < Minitest::Test
   def with_contract_adapter(config)
     require "pg"
 
-    connection = PG.connect(ENV.fetch("BETTER_AUTH_POSTGRES_URL", "postgres://user:password@localhost:5432/better_auth"))
+    connection = PG.connect(TestDatabases.postgres_url)
     reset_schema(connection)
     create_schema(connection, config)
     yield BetterAuth::Adapters::Postgres.new(config, connection: connection)
