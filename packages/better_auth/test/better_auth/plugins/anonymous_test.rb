@@ -148,7 +148,7 @@ class BetterAuthPluginsAnonymousTest < Minitest::Test
   def test_delete_anonymous_user_reports_session_cleanup_failure_when_logging_fails
     storage = MemoryStorage.new
     log_entries = []
-    logger = lambda do |level, message|
+    logger = lambda do |level, message, _details|
       log_entries << [level, message]
       raise "logger unavailable"
     end

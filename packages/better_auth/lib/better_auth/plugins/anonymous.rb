@@ -215,10 +215,7 @@ module BetterAuth
     def anonymous_log(ctx, message, details)
       logger = ctx.context.logger
       if logger.respond_to?(:call)
-        arity = logger.respond_to?(:arity) ? logger.arity : logger.method(:call).arity
-        arguments = [:error, message]
-        arguments << details unless arity == 2
-        logger.call(*arguments)
+        logger.call(:error, message, details)
       elsif logger.respond_to?(:error)
         logger.error(message, details)
       end
