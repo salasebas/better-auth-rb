@@ -1553,6 +1553,7 @@ class BetterAuthRoutesSocialTest < Minitest::Test
 
   def test_sign_in_social_updates_linked_account_tokens_by_default
     auth = build_auth(
+      account: {store_account_cookie: true},
       social_providers: {
         github: {
           id: "github",
@@ -1579,11 +1580,15 @@ class BetterAuthRoutesSocialTest < Minitest::Test
       "accessToken" => "old-access"
     )
 
-    auth.api.sign_in_social(body: {provider: "github", idToken: {token: "new-id-token", accessToken: "new-access"}})
+    _status, headers, = auth.api.sign_in_social(body: {provider: "github", idToken: {token: "new-id-token", accessToken: "new-access"}}, as_response: true)
 
     stored = auth.context.internal_adapter.find_accounts(user_id).find { |entry| entry["id"] == account["id"] }
+    account_cookie = decoded_account_cookie(headers.fetch("set-cookie"), auth)
     assert_equal "new-access", stored["accessToken"]
     assert_equal "new-id-token", stored["idToken"]
+    assert_equal account["id"], account_cookie.fetch("id")
+    assert_equal "new-access", account_cookie.fetch("accessToken")
+    assert_equal "new-id-token", account_cookie.fetch("idToken")
   end
 
   def test_link_social_redirect_flow_rejects_account_owned_by_another_user
