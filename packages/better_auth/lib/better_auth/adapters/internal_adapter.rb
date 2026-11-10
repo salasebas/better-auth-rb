@@ -71,7 +71,7 @@ module BetterAuth
       end
 
       def create_session(user_id, dont_remember_me = false, override = nil, override_all = false, context = nil)
-        override = stringify_keys(override || {})
+        override = stringify_keys(override || {}).except("id")
         token = override.delete("token") || SecureRandom.hex(16)
         base = {
           "ipAddress" => "",
@@ -80,14 +80,18 @@ module BetterAuth
           "userId" => user_id,
           "token" => token
         }.merge(timestamps)
-        base["id"] = generated_id if secondary_storage
+        store_in_database = options.session[:store_session_in_database]
+        base["id"] = generated_id if secondary_storage && !store_in_database
         data = override_all ? base.merge(override) : override.merge(base)
 
         custom = secondary_storage && lambda do |session_data|
-          actual_session = apply_schema_create("session", session_data)
-          store_session(actual_session)
-          adapter.create(model: "session", data: actual_session, force_allow_id: true) if options.session[:store_session_in_database]
-          actual_session
+          session = if store_in_database
+            adapter.create(model: "session", data: session_data, force_allow_id: true) || session_data
+          else
+            apply_schema_create("session", session_data)
+          end
+          store_session(session, user_id: user_id, token: data["token"], expires_at: data["expiresAt"])
+          session
         end
         hooks.create(data, "session", custom: custom, context: context)
       end
@@ -598,17 +602,17 @@ module BetterAuth
         value
       end
 
-      def store_session(session)
-        user = adapter.find_one(model: "user", where: [{field: "id", value: session["userId"]}])
+      def store_session(session, user_id:, token:, expires_at:)
+        user = adapter.find_one(model: "user", where: [{field: "id", value: user_id}])
         now_ms = current_millis
-        expires_ms = millis(session["expiresAt"])
-        entries = active_session_entries(session["userId"])
-          .reject { |entry| entry["expiresAt"].to_i <= now_ms || entry["token"] == session["token"] }
-          .push({"token" => session["token"], "expiresAt" => expires_ms})
+        expires_ms = millis(expires_at)
+        entries = active_session_entries(user_id)
+          .reject { |entry| entry["expiresAt"].to_i <= now_ms || entry["token"] == token }
+          .push({"token" => token, "expiresAt" => expires_ms})
           .sort_by { |entry| entry["expiresAt"] }
-        write_active_sessions(session["userId"], entries)
+        write_active_sessions(user_id, entries)
         ttl_seconds = ttl(expires_ms)
-        secondary_storage.set(session["token"], JSON.generate({session: session, user: user}), ttl_seconds) if ttl_seconds.positive?
+        secondary_storage.set(token, JSON.generate({session: session, user: user}), ttl_seconds) if ttl_seconds.positive?
       end
 
       def update_stored_session(token, data)
