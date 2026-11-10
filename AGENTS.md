@@ -66,8 +66,10 @@ prefixes. Do not stop the shared stack while another worktree may be using it.
 
 `scripts/with_test_databases.rb --prune` drops the databases of this clone's
 deleted worktrees; add `--dry-run` to list them first. The wrapper records each
-id it generates in `.git/better-auth-test-databases`, and prune only drops those,
-so other clones, preset ids, and unsuffixed names are never touched.
+id it generates in a registry in the clone's shared git directory
+(`git rev-parse --git-common-dir`), keyed by that directory's path, and prune
+only drops those ids. Other clones, copies, preset ids, and unsuffixed names are
+never touched.
 
 ```bash
 bundle exec rake ci          # workspace

@@ -51,7 +51,8 @@ def git(*args)
 end
 
 def with_clone_registry
-  path = File.join(git("rev-parse", "--path-format=absolute", "--git-common-dir").strip, "better-auth-test-databases")
+  common_dir = git("rev-parse", "--path-format=absolute", "--git-common-dir").strip
+  path = File.join(common_dir, "better-auth-test-databases-#{generated_worktree_id(common_dir)}")
   File.open(path, File::RDWR | File::CREAT) do |file|
     file.flock(File::LOCK_EX)
     yield file
