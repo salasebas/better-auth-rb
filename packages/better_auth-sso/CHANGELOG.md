@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- SP-initiated SAML logout and sign-out now find the SAML Single Logout record by session ID, matching Better Auth v1.6.23. SAML sessions created before the upgrade fall back to email-based SP-initiated logout until they expire.
 - **Breaking:** SAML is no longer a transitive dependency. Add `gem "better_auth-saml"` when using SAML providers.
 - Split protocol code into `better_auth-oidc` and `better_auth-saml`; this gem is now the convenience facade.
 - Hardened provider/domain lifecycle and SAML/OIDC request validation, with
