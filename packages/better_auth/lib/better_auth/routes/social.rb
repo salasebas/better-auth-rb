@@ -71,7 +71,6 @@ module BetterAuth
           )
           raise APIError.new("UNAUTHORIZED", message: session_data[:error], code: "OAUTH_LINK_ERROR") if session_data[:error]
 
-          Cookies.set_account_cookie(ctx, session_data[:account]) if session_data[:account]
           Cookies.set_session_cookie(ctx, session_data)
           next ctx.json({
             redirect: false,
@@ -204,7 +203,6 @@ module BetterAuth
           disable_sign_up: provider_disable_sign_up?(provider) || (provider_disable_implicit_sign_up?(provider) && !state_data["requestSignUp"])
         )
         raise ctx.redirect(oauth_error_url(error_url, session_data[:error].tr(" ", "_"))) if session_data[:error]
-        Cookies.set_account_cookie(ctx, session_data[:account]) if session_data[:account]
         Cookies.set_session_cookie(ctx, session_data)
         callback_url = session_data[:new_user] ? (state_data["newUserURL"] || state_data["newUserCallbackURL"] || state_data["callbackURL"] || "/") : (state_data["callbackURL"] || "/")
         raise ctx.redirect(callback_url)
@@ -363,17 +361,14 @@ module BetterAuth
 
       if existing && existing[:linked_account]
         user = existing[:user]
-        account = existing[:linked_account]
-        if ctx.context.options.account[:update_account_on_sign_in] != false
-          update_data = account_storage_fields(account_info)
-          unless update_data.empty?
-            begin
-              updated_account = ctx.context.internal_adapter.update_account(existing[:linked_account]["id"], update_data)
-              account = account.merge(updated_account.is_a?(Hash) ? updated_account : update_data)
-            rescue
-              social_log(ctx.context, :error, "Unable to link social account")
-              raise
-            end
+        fresh_tokens = (ctx.context.options.account[:update_account_on_sign_in] != false) ? account_storage_fields(account_info) : {}
+        Cookies.set_account_cookie(ctx, existing[:linked_account].merge(fresh_tokens))
+        unless fresh_tokens.empty?
+          begin
+            ctx.context.internal_adapter.update_account(existing[:linked_account]["id"], fresh_tokens)
+          rescue
+            social_log(ctx.context, :error, "Unable to link social account")
+            raise
           end
         end
         verified_user = update_verified_email_on_link(ctx, user["id"], user["email"], user_info)
@@ -418,12 +413,13 @@ module BetterAuth
             context: ctx
           )
           raise BetterAuth::Error, "Failed to create social user" unless created
+
+          Cookies.set_account_cookie(ctx, created[:account])
         rescue
           social_log(ctx.context, :error, "Unable to create social user")
           return {error: "unable to create user"}
         end
         user = created[:user]
-        account = created[:account]
         new_user = true
       end
       if existing && (override_user_info || provider_override_user_info_on_sign_in?(provider_id, ctx.context))
@@ -432,7 +428,7 @@ module BetterAuth
       return {error: "unable to create user"} unless user
 
       session = ctx.context.internal_adapter.create_session(user["id"], false, session_overrides(ctx), true, ctx)
-      {session: session, user: user, account: account, new_user: new_user}
+      {session: session, user: user, new_user: new_user}
     end
 
     def self.store_oauth_state_cookie(ctx, state)

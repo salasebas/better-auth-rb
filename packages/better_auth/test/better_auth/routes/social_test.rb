@@ -1365,6 +1365,7 @@ class BetterAuthRoutesSocialTest < Minitest::Test
       emailVerified: true
     }
     auth = build_auth(
+      account: {store_account_cookie: true},
       social_providers: {
         github: {
           id: "github",
@@ -1377,10 +1378,12 @@ class BetterAuthRoutesSocialTest < Minitest::Test
     user = auth.context.internal_adapter.find_user_by_email(provider_user[:email])[:user]
     auth.context.internal_adapter.update_user(user["id"], emailVerified: true)
 
-    result = auth.api.sign_in_social(body: {provider: "github", idToken: {token: "id-token"}})
+    _status, headers, body = auth.api.sign_in_social(body: {provider: "github", idToken: {token: "id-token"}}, as_response: true)
+    result = JSON.parse(body.join)
 
-    assert_equal user["id"], result[:user]["id"]
+    assert_equal user["id"], result["user"]["id"]
     assert auth.context.internal_adapter.find_account_by_provider_id(provider_user[:id], "github")
+    refute_includes headers.fetch("set-cookie"), "#{auth.context.auth_cookies[:account_data].name}="
   end
 
   def test_sign_in_social_require_local_email_verified_opt_out_supports_snake_and_camel_case
@@ -2017,8 +2020,8 @@ class BetterAuthRoutesSocialTest < Minitest::Test
   def decoded_account_cookie(set_cookie, auth)
     cookie_name = auth.context.auth_cookies[:account_data].name
     line = set_cookie.lines.find { |entry| entry.start_with?("#{cookie_name}=") && !entry.match?(/Max-Age=0/i) }
-    value = line.to_s.split(";", 2).first.split("=", 2).last
-    assert value && !value.empty?
+    assert line, "expected a #{cookie_name} Set-Cookie header"
+    value = line.split(";", 2).first.split("=", 2).last
 
     BetterAuth::Crypto.symmetric_decode_jwt(value, auth.context.secret_config, "better-auth-account")
   end

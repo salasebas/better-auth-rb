@@ -368,7 +368,6 @@ module BetterAuth
           redirect_error.call(error.code, error.message)
         end
         redirect_error.call(session_data[:error].tr(" ", "_")) if session_data[:error]
-        generic_oauth_set_account_cookie(ctx, provider_id, account_id, session_data[:user]["id"])
         Cookies.set_session_cookie(ctx, session_data)
         raise ctx.redirect(existing ? callback_url : (state_data["newUserURL"] || state_data["newUserCallbackURL"] || callback_url))
       end
@@ -595,13 +594,6 @@ module BetterAuth
       return token unless ctx.context.options.account[:encrypt_oauth_tokens]
 
       Crypto.symmetric_encrypt(key: ctx.context.secret_config, data: token)
-    end
-
-    def generic_oauth_set_account_cookie(ctx, provider_id, account_id, user_id)
-      account = ctx.context.internal_adapter.find_accounts(user_id).find do |entry|
-        entry["providerId"] == provider_id && entry["accountId"] == account_id
-      end
-      Cookies.set_account_cookie(ctx, account) if account
     end
 
     def generic_oauth_provider!(config, provider_id)
