@@ -81,24 +81,28 @@ module BetterAuth
         end
 
         code_verifier = Crypto.random_string(128)
-        state = Crypto.sign_jwt(
-          {
-            "callbackURL" => body["callbackURL"] || body["callbackUrl"] || body["callback_url"] || "/",
-            "errorCallbackURL" => body["errorCallbackURL"] || body["errorCallbackUrl"] || body["error_callback_url"],
-            "newUserCallbackURL" => body["newUserCallbackURL"] || body["newUserCallbackUrl"] || body["new_user_callback_url"],
-            "requestSignUp" => body["requestSignUp"] || body["request_sign_up"],
-            "codeVerifier" => code_verifier
-          }.merge(safe_additional_state(body)),
-          ctx.context.secret,
-          expires_in: 600
-        )
-        store_oauth_state_cookie(ctx, state)
+        state_data = {
+          "callbackURL" => body["callbackURL"] || body["callbackUrl"] || body["callback_url"] || "/",
+          "errorCallbackURL" => body["errorCallbackURL"] || body["errorCallbackUrl"] || body["error_callback_url"],
+          "newUserCallbackURL" => body["newUserCallbackURL"] || body["newUserCallbackUrl"] || body["new_user_callback_url"],
+          "requestSignUp" => body["requestSignUp"] || body["request_sign_up"],
+          "codeVerifier" => code_verifier
+        }.merge(safe_additional_state(body))
+        proxy_state = ctx.instance_variable_get(:@oauth_proxy_state) == true
+        state_data["expiresAt"] = Time.now.to_i + 600 if proxy_state
+        state = if proxy_state
+          OAuthState.generate(ctx, state_data)
+        else
+          Crypto.sign_jwt(state_data, ctx.context.secret, expires_in: 600)
+        end
+        store_oauth_state_cookie(ctx, state) unless proxy_state
+        redirect_base = ctx.instance_variable_get(:@oauth_proxy_redirect_uri) || ctx.context.canonical_base_url
         url = call_provider(provider, :create_authorization_url, {
           state: state,
           codeVerifier: code_verifier,
           code_verifier: code_verifier,
-          redirectURI: "#{ctx.context.canonical_base_url}/callback/#{provider_id}",
-          redirect_uri: "#{ctx.context.canonical_base_url}/callback/#{provider_id}",
+          redirectURI: "#{redirect_base}/callback/#{provider_id}",
+          redirect_uri: "#{redirect_base}/callback/#{provider_id}",
           scopes: body["scopes"],
           loginHint: body["loginHint"] || body["login_hint"]
         })
