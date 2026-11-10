@@ -500,7 +500,7 @@ class BetterAuthInternalAdapterTest < Minitest::Test
     end
   end
 
-  def test_find_session_rejects_doubly_encoded_cached_session_payload
+  def test_find_session_raises_on_unreadable_cached_session_payload
     storage = MemoryStorage.new
     internal = internal_adapter(secondary_storage: storage)
     user = internal.create_user(name: "Ada", email: "doubly-encoded-cache@example.com")
@@ -508,9 +508,17 @@ class BetterAuthInternalAdapterTest < Minitest::Test
 
     assert_equal session["token"], internal.find_session(session["token"])[:session]["token"]
 
-    storage.set(session["token"], JSON.generate(storage.get(session["token"])), 60)
+    cached = JSON.parse(storage.get(session["token"]))
+    [
+      JSON.generate(storage.get(session["token"])),
+      JSON.generate("garbage"),
+      JSON.generate(cached.merge("user" => nil)),
+      JSON.generate(cached.merge("session" => nil))
+    ].each do |value|
+      storage.set(session["token"], value, 60)
 
-    assert_raises(NoMethodError) { internal.find_session(session["token"]) }
+      assert_raises(NoMethodError) { internal.find_session(session["token"]) }
+    end
   end
 
   def test_update_session_with_secondary_storage_updates_database_copy_when_enabled

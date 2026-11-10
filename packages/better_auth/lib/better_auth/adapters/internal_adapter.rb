@@ -104,8 +104,8 @@ module BetterAuth
             return nil if javascript_falsy?(data)
 
             return {
-              session: normalize_session_dates(data["session"]),
-              user: normalize_user_dates(data["user"])
+              session: normalize_session_dates(data.fetch("session").to_hash),
+              user: normalize_user_dates(data.fetch("user").to_hash)
             }
           end
 
@@ -693,7 +693,7 @@ module BetterAuth
       end
 
       def parse_session_storage(value)
-        return parse_storage(value) if value.is_a?(Hash) || value.is_a?(Array)
+        return value.transform_keys(&:to_s) if value.is_a?(Hash)
         return value unless value.is_a?(String)
 
         JSON.parse(value)
