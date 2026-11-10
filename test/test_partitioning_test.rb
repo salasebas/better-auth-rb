@@ -112,4 +112,14 @@ class TestPartitioningTest < Minitest::Test
       assert strict, "#{step["name"] || step["run"]} must load a strict test helper"
     end
   end
+
+  def test_sso_integration_runs_when_its_oidc_or_saml_dependency_changes
+    filter_step = YAML.safe_load_file(".github/workflows/integration.yml", aliases: true)
+      .dig("jobs", "changes", "steps").find { |step| step["id"] == "filter" }
+    sso_paths = YAML.safe_load(filter_step.dig("with", "filters")).fetch("sso")
+
+    assert_equal "some-with-excludes", filter_step.dig("with", "predicate-quantifier")
+    assert_includes sso_paths, "packages/better_auth-oidc/**"
+    assert_includes sso_paths, "packages/better_auth-saml/**"
+  end
 end

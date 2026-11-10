@@ -64,6 +64,7 @@ jobs:
         id: filter
         uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
         with:
+          predicate-quantifier: some-with-excludes
           filters: |
             full:
               - "packages/better_auth/**"
@@ -76,6 +77,7 @@ jobs:
               - "scripts/**"
               - "test/support/**"
               - ".github/workflows/**"
+              - "reference/upstream-better-auth/**"
             api_key:
               - "packages/better_auth-api-key/**"
               - "!packages/better_auth-api-key/**/*.md"
@@ -90,7 +92,9 @@ jobs:
               - "!packages/better_auth-scim/**/*.md"
             sso:
               - "packages/better_auth-sso/**"
-              - "!packages/better_auth-sso/**/*.md"
+              - "packages/better_auth-oidc/**"
+              - "packages/better_auth-saml/**"
+              - "!**/*.md"
             stripe:
               - "packages/better_auth-stripe/**"
               - "!packages/better_auth-stripe/**/*.md"
