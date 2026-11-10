@@ -92,7 +92,9 @@ jobs:
               - "!packages/better_auth-scim/**/*.md"
             sso:
               - "packages/better_auth-sso/**"
-              - "!packages/better_auth-sso/**/*.md"
+              - "packages/better_auth-oidc/**"
+              - "packages/better_auth-saml/**"
+              - "!**/*.md"
             stripe:
               - "packages/better_auth-stripe/**"
               - "!packages/better_auth-stripe/**/*.md"
