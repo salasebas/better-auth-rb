@@ -554,12 +554,16 @@ module BetterAuth
     def email_otp_store(ctx, config, email:, type:, otp:)
       stored = email_otp_stored_value(ctx, config, otp)
       identifier = email_otp_identifier(email, type)
-      ctx.context.internal_adapter.delete_verification_by_identifier(identifier)
-      ctx.context.internal_adapter.create_verification_value(
+      verification = {
         identifier: identifier,
-        value: "#{stored}:0",
-        expiresAt: Time.now + config[:expires_in].to_i
-      )
+        value: "#{stored}:0"
+      }
+      begin
+        ctx.context.internal_adapter.create_verification_value(verification.merge(expiresAt: Time.now + config[:expires_in].to_i))
+      rescue
+        ctx.context.internal_adapter.delete_verification_by_identifier(identifier)
+        ctx.context.internal_adapter.create_verification_value(verification.merge(expiresAt: Time.now + config[:expires_in].to_i))
+      end
     end
 
     def email_otp_resolve(ctx, config, email:, type:, identifier_email: email)
