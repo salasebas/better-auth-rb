@@ -367,9 +367,7 @@ module BetterAuth
     def self.delete_current_user!(ctx, session)
       config = ctx.context.options.user[:delete_user] || {}
       call_option(config[:before_delete], session[:user], ctx.request)
-      deleted = ctx.context.internal_adapter.delete_user(session[:user]["id"])
-      raise APIError.new("BAD_REQUEST", message: "User delete aborted") if deleted == false
-
+      ctx.context.internal_adapter.delete_user(session[:user]["id"])
       ctx.context.internal_adapter.delete_user_sessions(session[:user]["id"])
       Cookies.delete_session_cookie(ctx)
       call_option(config[:after_delete], session[:user], ctx.request)

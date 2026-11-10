@@ -562,9 +562,11 @@ class BetterAuthRoutesUserTest < Minitest::Test
     assert_equal ["before:#{email}", "after:#{email}"], calls
   end
 
-  def test_delete_user_database_hooks_can_abort_delete
+  def test_delete_user_database_hooks_can_abort_user_row_delete
     calls = []
+    storage = LoggingStorage.new
     auth = build_auth(
+      secondary_storage: storage,
       user: {delete_user: {enabled: true}},
       database_hooks: {
         user: {
@@ -579,16 +581,18 @@ class BetterAuthRoutesUserTest < Minitest::Test
       }
     )
     cookie = sign_up_cookie(auth, email: "abort-delete@example.com", password: "password123")
-    user_id = auth.api.get_session(headers: {"cookie" => cookie})[:user]["id"]
+    session = auth.api.get_session(headers: {"cookie" => cookie})
+    user_id = session[:user]["id"]
+    token = session[:session]["token"]
 
-    error = assert_raises(BetterAuth::APIError) do
-      auth.api.delete_user(headers: {"cookie" => cookie}, body: {password: "password123"})
-    end
+    result = auth.api.delete_user(headers: {"cookie" => cookie}, body: {password: "password123"})
 
-    assert_equal "BAD_REQUEST", error.code
+    assert_equal({success: true, message: "User deleted"}, result)
     assert_equal [[:before, "abort-delete@example.com"]], calls
     assert auth.context.internal_adapter.find_user_by_id(user_id)
-    assert auth.api.get_session(headers: {"cookie" => cookie})
+    assert_nil storage.get(token)
+    assert_nil storage.get("active-sessions-#{user_id}")
+    assert_nil auth.api.get_session(headers: {"cookie" => cookie})
   end
 
   def test_delete_user_deletes_all_secondary_storage_sessions

@@ -621,6 +621,7 @@ module BetterAuth
         user_id = normalize_hash(ctx.body)[:user_id]
         raise APIError.new("BAD_REQUEST", code: "YOU_CANNOT_REMOVE_YOURSELF", message: ADMIN_ERROR_CODES.fetch("YOU_CANNOT_REMOVE_YOURSELF")) if user_id == session[:user]["id"]
         raise APIError.new("NOT_FOUND", code: "USER_NOT_FOUND", message: BASE_ERROR_CODES.fetch("USER_NOT_FOUND")) unless ctx.context.internal_adapter.find_user_by_id(user_id)
+        ctx.context.internal_adapter.delete_user_sessions(user_id)
         ctx.context.internal_adapter.delete_user(user_id)
         ctx.json({success: true})
       end

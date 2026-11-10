@@ -233,7 +233,7 @@ class BetterAuthInternalAdapterTest < Minitest::Test
     assert_nil internal.find_session("token-1")
   end
 
-  def test_delete_user_removes_secondary_only_sessions_and_active_index
+  def test_delete_user_sessions_removes_secondary_only_sessions_and_active_index
     storage = MemoryStorage.new
     internal = internal_adapter(secondary_storage: storage)
     user = internal.create_user(name: "Ada", email: "secondary-delete@example.com")
@@ -243,11 +243,63 @@ class BetterAuthInternalAdapterTest < Minitest::Test
     assert storage.get(session["token"])
     assert storage.get(active_key)
 
-    internal.delete_user(user["id"])
+    internal.delete_user_sessions(user["id"])
 
     assert_nil storage.get(session["token"])
     assert_nil storage.get(active_key)
     assert_nil internal.find_session(session["token"])
+  end
+
+  def test_delete_user_deletes_dual_written_database_sessions_after_preserved_secondary_cleanup
+    storage = MemoryStorage.new
+    calls = []
+    internal = internal_adapter(
+      secondary_storage: storage,
+      session: {store_session_in_database: true, preserve_session_in_database: true},
+      database_hooks: {
+        session: {
+          delete: {
+            before: ->(_session, _context) { calls << :session_before },
+            after: ->(_session, _context) { calls << :session_after }
+          }
+        },
+        account: {
+          delete: {
+            before: ->(_account, _context) { calls << :account_before },
+            after: ->(_account, _context) { calls << :account_after }
+          }
+        },
+        user: {
+          delete: {
+            before: ->(_user, _context) { calls << :user_before },
+            after: ->(_user, _context) { calls << :user_after }
+          }
+        }
+      }
+    )
+    user = internal.create_user(name: "Ada", email: "dual-written-delete@example.com")
+    account = internal.create_account(userId: user["id"], providerId: "credential", accountId: user["id"], password: "secret")
+    session = internal.create_session(user["id"], false, {token: "dual-written-delete-token"}, true)
+    active_key = "active-sessions-#{user["id"]}"
+
+    internal.delete_user_sessions(user["id"])
+
+    assert_nil storage.get(session["token"])
+    assert_nil storage.get(active_key)
+
+    internal.delete_user(user["id"])
+
+    assert_empty internal.adapter.find_many(model: "session", where: [{field: "userId", value: user["id"]}])
+    assert_nil internal.adapter.find_one(model: "account", where: [{field: "id", value: account["id"]}])
+    assert_nil internal.find_user_by_id(user["id"])
+    assert_equal [
+      :session_before,
+      :session_after,
+      :account_before,
+      :account_after,
+      :user_before,
+      :user_after
+    ], calls
   end
 
   def test_revoke_unproven_account_access_removes_credentials_and_database_sessions_only

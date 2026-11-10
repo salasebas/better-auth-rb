@@ -62,12 +62,11 @@ module BetterAuth
       end
 
       def delete_user(user_id)
-        deleted = hooks.delete([{field: "id", value: user_id}], "user")
-        return false if deleted == false
-
+        if !secondary_storage || options.session[:store_session_in_database]
+          hooks.delete_many([{field: "userId", value: user_id}], "session")
+        end
         hooks.delete_many([{field: "userId", value: user_id}], "account")
-        delete_user_sessions(user_id)
-        deleted
+        hooks.delete([{field: "id", value: user_id}], "user")
       end
 
       def create_session(user_id, dont_remember_me = false, override = nil, override_all = false, context = nil)
