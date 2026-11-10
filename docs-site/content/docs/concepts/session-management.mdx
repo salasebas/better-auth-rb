@@ -395,7 +395,7 @@ RubyAuth supports stateless session management without any database. This means 
 
 ### Basic Stateless Setup
 
-If you don't pass a database configuration, RubyAuth will automatically enable stateless mode.
+If you don't pass a database or `secondary_storage` configuration, RubyAuth will automatically enable stateless mode.
 
 ```ruby title="config/better_auth.rb"
 require "better_auth"
@@ -433,14 +433,14 @@ auth = BetterAuth.auth(
 ```
 
 <Callout type="info">
-  If you don't provide a database, by default we provide the above configuration for you.
+  If you don't provide a database or secondary storage, we provide the above configuration by default.
 </Callout>
 
 ### Understanding `refreshCache`
 
 The Ruby `refresh_cache` option maps to upstream `refreshCache` and controls automatic cookie refresh **before expiry** without querying any database:
 
-* **`false`** (default for stateful/server-store configurations): No automatic refresh. When the cookie cache expires (reaches `max_age`), it will attempt to fetch from the database if available. Fully stateless, database-less configurations default to `true`.
+* **`false`** (default for stateful/server-store configurations): No automatic refresh. When the cookie cache expires (reaches `max_age`), it will attempt to fetch from the database if available. Fully stateless configurations, without a database or secondary storage, default to `true`.
 * **`true`**: Enable automatic refresh with default settings. Refreshes after 80% of `max_age` has elapsed, when less than 20% remains.
 * **`object`**: Custom refresh configuration with `update_age` property.
 
