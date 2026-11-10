@@ -1054,6 +1054,43 @@ class BetterAuthPluginsSSOSAMLTest < Minitest::Test
     assert auth.context.internal_adapter.find_verification_value(reverse_key)
   end
 
+  def test_saml_session_record_requires_name_id_and_omits_missing_session_index
+    auth = build_auth
+    user = auth.context.internal_adapter.create_user(email: "slo-optional@example.com", name: "SLO Optional")
+    session = auth.context.internal_adapter.create_session(user.fetch("id"))
+    provider = {"providerId" => "saml"}
+    context = Struct.new(:context).new(auth.context)
+
+    BetterAuth::Plugins.sso_store_saml_session(
+      context,
+      provider,
+      {email: "slo-optional@example.com", id: "assertion-without-name-id"},
+      session
+    )
+    assert_nil auth.context.internal_adapter.find_verification_value("saml-session:saml:slo-optional@example.com")
+    assert_nil auth.context.internal_adapter.find_verification_value("saml-session-by-id:#{session.fetch("id")}")
+
+    BetterAuth::Plugins.sso_store_saml_session(
+      context,
+      provider,
+      {name_id: "name-id-no-index", id: "assertion-without-session-index"},
+      session
+    )
+    session_record = auth.context.internal_adapter.find_verification_value("saml-session:saml:name-id-no-index")
+
+    assert_equal(
+      {
+        "sessionId" => session.fetch("id"),
+        "sessionToken" => session.fetch("token"),
+        "providerId" => "saml",
+        "nameID" => "name-id-no-index"
+      },
+      JSON.parse(session_record.fetch("value"))
+    )
+    assert_equal "saml-session:saml:name-id-no-index",
+      auth.context.internal_adapter.find_verification_value("saml-session-by-id:#{session.fetch("id")}").fetch("value")
+  end
+
   def test_saml_initiate_slo_stores_logout_request_and_response_consumes_it
     auth = build_auth(plugins: [BetterAuth::Plugins.sso(saml: {enable_single_logout: true})])
     cookie = sign_up_cookie(auth)

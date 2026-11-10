@@ -201,7 +201,7 @@ module BetterAuth
         nameID: name_id.to_s
       }
       record[:sessionIndex] = session_index.to_s unless session_index.to_s.empty?
-      expires_at = session["expiresAt"] || Time.now + (SSO_DEFAULT_ASSERTION_TTL_MS / 1000.0)
+      expires_at = session.fetch("expiresAt")
       value = JSON.generate(record)
       session_identifier = "#{SSO_SAML_SESSION_KEY_PREFIX}#{provider.fetch("providerId")}:#{name_id}"
       ctx.context.internal_adapter.create_verification_value(
