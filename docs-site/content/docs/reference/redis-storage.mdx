@@ -64,7 +64,9 @@ The Redis client must respond to `get`, `set` (including `nx:` and optional `ex:
 
 The storage exposes `get_and_delete` (`getAndDelete`) for atomic single-use
 consumption. It prefers Redis `GETDEL` and falls back to Lua for Redis versions
-before 6.2. `increment(key, ttl)` atomically returns the post-increment value
+before 6.2. A `Redis::Namespace` client always uses the Lua script, because
+redis-namespace 1.11 forwards `GETDEL` without applying its namespace.
+`increment(key, ttl)` atomically returns the post-increment value
 and sets expiry only when it creates the counter, so later increments do not
 extend the fixed window. `set_if_absent(key, value, ttl)` (`setIfAbsent`) uses
 Redis `SET NX` with optional expiry and returns `true` only to the caller that

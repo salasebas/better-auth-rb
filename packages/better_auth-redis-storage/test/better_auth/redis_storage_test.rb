@@ -138,6 +138,19 @@ class RedisStorageTest < Minitest::Test
     assert_equal [["GETDEL", "better-auth:verification"], ["GETDEL", "better-auth:verification"]], @client.call_calls
   end
 
+  def test_get_and_delete_preserves_redis_namespace_key_isolation_when_getdel_is_forwarded_raw
+    with_redis_namespace do |namespace_class|
+      raw_client = FakeRedisClient.new
+      storage = BetterAuth::RedisStorage.new(client: namespace_class.new("tenant", redis: raw_client))
+      storage.set("verification", "namespaced")
+      raw_client.set("better-auth:verification", "unnamespaced")
+
+      assert_equal "namespaced", storage.get_and_delete("verification")
+      assert_nil raw_client.get("tenant:better-auth:verification")
+      assert_equal "unnamespaced", raw_client.get("better-auth:verification")
+    end
+  end
+
   def test_get_and_delete_falls_back_to_lua_when_getdel_is_unavailable
     client = UnknownGetdelFakeRedisClient.new
     storage = BetterAuth::RedisStorage.new(client: client)
@@ -792,6 +805,15 @@ class RedisStorageTest < Minitest::Test
 
   private
 
+  def with_redis_namespace
+    require "redis"
+    stubbed = !defined?(::Redis::Namespace)
+    ::Redis.const_set(:Namespace, RedisNamespaceGetdelDispatchFake) if stubbed
+    yield ::Redis::Namespace
+  ensure
+    ::Redis.send(:remove_const, :Namespace) if stubbed
+  end
+
   def rack_env(method, path)
     {
       "REQUEST_METHOD" => method,
@@ -989,6 +1011,43 @@ class RedisStorageTest < Minitest::Test
     def call(command, key)
       call_calls << [command, key]
       raise "ERR unknown command '#{command}'"
+    end
+  end
+
+  # Models redis-namespace 1.11: declared commands namespace their keys, while
+  # commands missing from its table (getdel, call) pass through to Redis raw.
+  class RedisNamespaceGetdelDispatchFake
+    attr_reader :redis
+
+    def initialize(namespace, redis:)
+      @redis = redis
+      @namespace = namespace
+    end
+
+    def get(key)
+      redis.get(namespaced_key(key))
+    end
+
+    def set(key, value, **options)
+      redis.set(namespaced_key(key), value, **options)
+    end
+
+    def eval(script, keys: [], argv: [])
+      redis.eval(script, keys: keys.map { |key| namespaced_key(key) }, argv: argv)
+    end
+
+    def method_missing(command, *args, &block)
+      redis.public_send(command, *args, &block)
+    end
+
+    def respond_to_missing?(command, include_private = false)
+      redis.respond_to?(command, include_private) || super
+    end
+
+    private
+
+    def namespaced_key(key)
+      "#{@namespace}:#{key}"
     end
   end
 

@@ -148,7 +148,7 @@ module BetterAuth
       end
       @scan_count = scan_count
       @atomic_clear = !!atomic_clear
-      @supports_getdel = true
+      @supports_getdel = !redis_namespace_client?
     end
 
     def self.extract_key_prefix_camel!(options)
@@ -375,6 +375,12 @@ module BetterAuth
 
     def unknown_command_error?(error)
       error.message.to_s.downcase.include?("unknown command")
+    end
+
+    # redis-namespace 1.11 has no GETDEL entry in its command table, so it
+    # forwards getdel/call("GETDEL") to Redis without applying its namespace.
+    def redis_namespace_client?
+      defined?(::Redis::Namespace) && client.is_a?(::Redis::Namespace)
     end
   end
 

@@ -135,7 +135,9 @@ storage.clear
 ```
 
 `get_and_delete` atomically returns and removes a value. It uses Redis `GETDEL`
-when available and falls back to a Lua script on older servers. `increment`
+when available and falls back to a Lua script on older servers. With
+`Redis::Namespace`, it uses the Lua script because redis-namespace 1.11 forwards
+`GETDEL` without applying its namespace. `increment`
 atomically increments a counter and applies its TTL only when the counter is
 created, so subsequent traffic never extends the fixed window.
 `set_if_absent` uses Redis `SET NX` (with `EX` when a TTL is supplied) for
