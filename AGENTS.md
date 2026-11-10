@@ -64,6 +64,11 @@ Tests read connection settings from `test/support/test_databases.rb`. Explicit
 run while they are set. Redis tests already isolate their keys with random
 prefixes. Do not stop the shared stack while another worktree may be using it.
 
+`scripts/with_test_databases.rb --prune` drops the databases of worktrees that
+`git worktree list` no longer shows; add `--dry-run` to list them first. It
+skips unsuffixed names and ids that are not 8 hex characters. It only knows
+this clone's worktrees, so do not run it while another clone uses the stack.
+
 ```bash
 bundle exec rake ci          # workspace
 bundle exec rake test        # core only
