@@ -271,10 +271,15 @@ module BetterAuth
         payload["identifier"] = stored_identifier
 
         custom = secondary_storage && lambda do |verification_data|
-          actual = apply_schema_create("verification", verification_data)
-          actual["id"] ||= generated_id
-          store_verification(actual)
-          adapter.create(model: "verification", data: actual, force_allow_id: true) if verification_store_in_database?
+          actual = if verification_store_in_database?
+            created = adapter.create(model: "verification", data: verification_data, force_allow_id: true)
+            created.nil? ? verification_data : created
+          else
+            storage_record = apply_schema_create("verification", verification_data)
+            storage_record["id"] ||= generated_id
+            storage_record
+          end
+          store_verification(stored_identifier, actual)
           actual
         end
 
@@ -394,7 +399,7 @@ module BetterAuth
             cached = read_verification(stored_identifier)
             if cached
               updated = cached.merge(update)
-              store_verification(updated)
+              store_verification(stored_identifier, updated)
               return updated unless verification_store_in_database?
             end
           elsif !verification_store_in_database?
@@ -411,7 +416,7 @@ module BetterAuth
         if secondary_storage
           cached = read_verification(stored_identifier)
           if cached
-            updated = store_verification(cached.merge(update))
+            updated = store_verification(stored_identifier, cached.merge(update))
             return updated unless verification_store_in_database?
           end
           return update unless verification_store_in_database?
@@ -734,13 +739,13 @@ module BetterAuth
         )
       end
 
-      def store_verification(verification)
+      def store_verification(identifier, verification)
         normalized = normalize_verification_dates(verification)
         ttl_seconds = ttl(millis(normalized["expiresAt"]))
         return normalized unless ttl_seconds.positive?
 
-        secondary_storage.set(verification_key(normalized["identifier"]), JSON.generate(normalized), ttl_seconds)
-        secondary_storage.set(verification_id_key(normalized["id"]), normalized["identifier"], ttl_seconds) if normalized["id"]
+        secondary_storage.set(verification_key(identifier), JSON.generate(normalized), ttl_seconds)
+        secondary_storage.set(verification_id_key(normalized["id"]), identifier, ttl_seconds) if normalized["id"]
         normalized
       end
 
