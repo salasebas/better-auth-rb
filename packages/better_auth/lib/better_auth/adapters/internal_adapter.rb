@@ -423,7 +423,7 @@ module BetterAuth
             raise Error, "Secondary storage must implement atomic `get_and_delete`/`getAndDelete`, or verification values must be database-backed"
           end
           consumed = begin
-            parsed = parse_storage(raw)
+            parsed = parse_verification_storage(raw)
             parsed ? normalize_verification_dates(parsed) : nil
           rescue ArgumentError, TypeError
             nil
@@ -661,6 +661,13 @@ module BetterAuth
 
         parsed = JSON.parse(value)
         parse_storage(parsed)
+      rescue JSON::ParserError
+        nil
+      end
+
+      def parse_verification_storage(value)
+        parsed = value.is_a?(String) ? JSON.parse(value) : value
+        parsed if parsed.is_a?(Hash)
       rescue JSON::ParserError
         nil
       end
