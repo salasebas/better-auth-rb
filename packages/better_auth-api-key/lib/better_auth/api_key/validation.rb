@@ -80,57 +80,56 @@ module BetterAuth
         update
       end
 
-      def validate_api_key!(ctx, key, config, permissions: nil)
+      def validate_api_key!(ctx, key, config, permissions: nil, configurations: nil, expected_config_id: config[:config_id], run_custom_validator: false)
         hashed = BetterAuth::APIKey::Keys.hash(key, config)
         record = BetterAuth::APIKey::Adapter.find_by_hash(ctx, hashed, config)
-
-        # In fallback mode the database is authoritative. A cache hit must be
-        # re-read so revocation, expiry, permission, and counter updates cannot
-        # be hidden by a stale secondary snapshot.
-        if record && config[:storage] == "secondary-storage" && config[:fallback_to_database]
-          authoritative = ctx.context.adapter.find_one(
-            model: BetterAuth::Plugins::API_KEY_TABLE_NAME,
-            where: [{field: "key", value: hashed}]
-          )
-          unless authoritative
-            BetterAuth::APIKey::Adapter.delete(ctx, record, config)
-            record = nil
-          end
-          record = authoritative if authoritative
-        end
-
         raise invalid_api_key_error unless record
         # Adapters are expected to return row snapshots. The in-memory test
         # adapter exposes its backing hash directly, so copy the top-level row
         # before evaluating guards to avoid one request mutating another's
         # decision snapshot.
         record = record.dup
-        unless BetterAuth::APIKey::Routes.config_id_matches?(BetterAuth::APIKey::Types.record_config_id(record), config[:config_id])
+        if !expected_config_id.nil? && !BetterAuth::APIKey::Routes.config_id_matches?(BetterAuth::APIKey::Types.record_config_id(record), expected_config_id)
           raise invalid_api_key_error
         end
+        validation_config = if configurations
+          BetterAuth::APIKey::Routes.resolve_config(
+            ctx.context,
+            {configurations: configurations},
+            BetterAuth::APIKey::Types.record_config_id(record)
+          )
+        else
+          config
+        end
+
+        validator = validation_config[:custom_api_key_validator]
+        if run_custom_validator && validator.respond_to?(:call) && !validator.call({ctx: ctx, key: key})
+          raise BetterAuth::APIError.new(
+            "UNAUTHORIZED",
+            message: BetterAuth::Plugins::API_KEY_ERROR_CODES["KEY_NOT_FOUND"],
+            code: "KEY_NOT_FOUND"
+          )
+        end
+
         raise BetterAuth::APIError.new("UNAUTHORIZED", message: BetterAuth::Plugins::API_KEY_ERROR_CODES["KEY_DISABLED"]) if record["enabled"] == false
         if record["expiresAt"] && BetterAuth::APIKey::Utils.normalize_time(record["expiresAt"]) < Time.now
-          BetterAuth::APIKey::Adapter.schedule_record_delete(ctx, record, config)
+          BetterAuth::APIKey::Adapter.schedule_record_delete(ctx, record, validation_config)
           raise BetterAuth::APIError.new("UNAUTHORIZED", message: BetterAuth::Plugins::API_KEY_ERROR_CODES["KEY_EXPIRED"])
-        end
-        # Keep an exhausted row inert until an explicit cleanup pass. Eager
-        # deletion here can race a concurrent winner between its guarded quota
-        # decrement and final row refresh, causing a valid request to observe a
-        # missing row. The database remains authoritative and the next request
-        # is still rejected with USAGE_EXCEEDED.
-        if record["remaining"].to_i <= 0 && !record["remaining"].nil? && record["refillAmount"].to_i <= 0
-          raise usage_exceeded_error
         end
 
         check_permissions!(record, permissions)
-        updated = if config[:storage] == "database" || config[:fallback_to_database]
-          claim_usage_in_database(ctx, record, config)
-        else
-          warn_best_effort_secondary(ctx, config)
-          claim_usage_in_secondary(ctx, record, config, hashed)
+
+        if record["remaining"] == 0 && record["refillAmount"].nil?
+          BetterAuth::APIKey::Adapter.schedule_record_delete(ctx, record, validation_config)
+          raise usage_exceeded_error
         end
 
-        BetterAuth::APIKey::Adapter.migrate_legacy_metadata(ctx, updated, config)
+        if validation_config[:storage] == "database" || validation_config[:fallback_to_database]
+          claim_usage_in_database(ctx, record, validation_config)
+        else
+          warn_best_effort_secondary(ctx, validation_config)
+          claim_usage_in_secondary(ctx, record, validation_config, hashed)
+        end
       end
 
       def claim_usage_in_database(ctx, record, config)
@@ -143,31 +142,10 @@ module BetterAuth
           where: [{field: "id", value: row["id"]}],
           update: {updatedAt: Time.now}
         )
-        unless final_row
-          if ctx.context.adapter.find_one(model: BetterAuth::Plugins::API_KEY_TABLE_NAME, where: [{field: "id", value: row["id"]}])
-            raise BetterAuth::APIError.new(
-              "INTERNAL_SERVER_ERROR",
-              message: BetterAuth::Plugins::API_KEY_ERROR_CODES["FAILED_TO_UPDATE_API_KEY"],
-              code: "FAILED_TO_UPDATE_API_KEY"
-            )
-          end
-          BetterAuth::APIKey::Adapter.delete(ctx, record, config)
-          raise invalid_api_key_error
-        end
+        raise invalid_api_key_error unless final_row
 
         if config[:storage] == "secondary-storage"
           BetterAuth::APIKey::Adapter.set(ctx, final_row, config)
-          # A delete can commit after the counter update but before this cache
-          # publication. Re-check after publishing so that interleaving cannot
-          # leave a non-expiring ghost entry behind.
-          authoritative = ctx.context.adapter.find_one(
-            model: BetterAuth::Plugins::API_KEY_TABLE_NAME,
-            where: [{field: "id", value: final_row["id"]}]
-          )
-          unless authoritative
-            BetterAuth::APIKey::Adapter.delete(ctx, final_row, config)
-            raise invalid_api_key_error
-          end
         end
         final_row
       end
@@ -269,13 +247,26 @@ module BetterAuth
 
       def claim_usage_in_secondary(ctx, record, config, hashed)
         now = Time.now
-        fresh = BetterAuth::APIKey::Adapter.find_by_hash(ctx, hashed, config)
-        raise invalid_api_key_error unless fresh
+        update = usage_update(record, config, now)
+        storage_update = update.transform_keys { |key_name| BetterAuth::Schema.storage_key(key_name) }
+        performer = lambda do
+          fresh = BetterAuth::APIKey::Adapter.find_by_hash(ctx, hashed, config)
+          next nil unless fresh
 
-        update = usage_update(fresh, config, now)
-        merged = fresh.merge(update.transform_keys { |key_name| BetterAuth::Schema.storage_key(key_name) })
-        BetterAuth::APIKey::Adapter.set(ctx, merged, config)
-        merged
+          merged = fresh.merge(storage_update)
+          BetterAuth::APIKey::Adapter.set(ctx, merged, config)
+          merged
+        end
+
+        if config[:defer_updates]
+          BetterAuth::APIKey::Utils.run_background_task(ctx, "API key update", performer)
+          return record.merge(storage_update)
+        end
+
+        updated = performer.call
+        raise failed_to_update_api_key_error unless updated
+
+        updated
       end
 
       def usage_update(record, config, now = Time.now)
@@ -300,14 +291,14 @@ module BetterAuth
 
         remaining = record["remaining"]
         if !remaining.nil?
-          if remaining.to_i <= 0 && record["refillAmount"].to_i.positive? && record["refillInterval"]
+          if record["refillAmount"].to_i.positive? && record["refillInterval"]
             last_refill = BetterAuth::APIKey::Utils.normalize_time(record["lastRefillAt"] || record["createdAt"])
             if !last_refill || ((now - last_refill) * 1000) > record["refillInterval"].to_i
               remaining = record["refillAmount"].to_i
               update[:lastRefillAt] = now
             end
           end
-          raise usage_exceeded_error if remaining.to_i <= 0
+          raise usage_exceeded_error if remaining.to_i == 0
 
           update[:remaining] = remaining.to_i - 1
         end
@@ -322,6 +313,14 @@ module BetterAuth
         BetterAuth::APIError.new("TOO_MANY_REQUESTS", message: BetterAuth::Plugins::API_KEY_ERROR_CODES["USAGE_EXCEEDED"])
       end
 
+      def failed_to_update_api_key_error
+        BetterAuth::APIError.new(
+          "INTERNAL_SERVER_ERROR",
+          message: BetterAuth::Plugins::API_KEY_ERROR_CODES["FAILED_TO_UPDATE_API_KEY"],
+          code: "FAILED_TO_UPDATE_API_KEY"
+        )
+      end
+
       def warn_best_effort_secondary(ctx, config)
         return if config[:storage] != "secondary-storage" || config[:fallback_to_database]
         return if ctx.context.respond_to?(:runtime_fetch) && ctx.context.runtime_fetch(:api_key_secondary_warning, false)
@@ -332,10 +331,13 @@ module BetterAuth
       end
 
       def check_permissions!(record, required)
-        return if required.nil? || required == {}
+        return if required.nil?
 
         BetterAuth::Plugins.load_plugin!(:access)
-        actual = BetterAuth::APIKey::Utils.decode_json(record["permissions"]) || {}
+        actual = BetterAuth::APIKey::Utils.decode_json(record["permissions"])
+        unless actual
+          raise BetterAuth::APIError.new("UNAUTHORIZED", message: BetterAuth::Plugins::API_KEY_ERROR_CODES["KEY_NOT_FOUND"], code: "KEY_NOT_FOUND")
+        end
         result = BetterAuth::Plugins::Role.new(actual).authorize(required)
         unless result[:success]
           raise BetterAuth::APIError.new("UNAUTHORIZED", message: BetterAuth::Plugins::API_KEY_ERROR_CODES["KEY_NOT_FOUND"], code: "KEY_NOT_FOUND")
