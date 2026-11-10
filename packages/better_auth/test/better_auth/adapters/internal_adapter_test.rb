@@ -373,6 +373,29 @@ class BetterAuthInternalAdapterTest < Minitest::Test
     assert_equal user["id"], found[:user]["id"]
   end
 
+  def test_dual_write_session_cache_metadata_uses_pre_hook_token_and_user_id_argument
+    storage = MemoryStorage.new
+    internal = internal_adapter(
+      secondary_storage: storage,
+      session: {store_session_in_database: true},
+      database_hooks: {
+        session: {create: {before: ->(_data, _context) { {data: {token: "token-from-hook"}} }}}
+      }
+    )
+    user = internal.create_user(name: "Ada", email: "cache-metadata@example.com")
+    other_user = internal.create_user(name: "Grace", email: "cache-metadata-other@example.com")
+
+    internal.create_session(user["id"], false, {token: "token-before-hook", userId: other_user["id"]}, true)
+    cached = JSON.parse(storage.get("token-before-hook"))
+    active_tokens = JSON.parse(storage.get("active-sessions-#{user["id"]}")).map { |entry| entry["token"] }
+
+    assert_equal "token-from-hook", cached.dig("session", "token")
+    assert_equal user["id"], cached.dig("user", "id")
+    assert_nil storage.get("token-from-hook")
+    assert_nil storage.get("active-sessions-#{other_user["id"]}")
+    assert_equal ["token-before-hook"], active_tokens
+  end
+
   def test_dual_write_session_does_not_publish_secondary_storage_when_database_insert_fails
     storage = MemoryStorage.new
     internal = internal_adapter(

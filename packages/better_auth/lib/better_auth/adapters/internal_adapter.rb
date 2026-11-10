@@ -90,7 +90,7 @@ module BetterAuth
           else
             apply_schema_create("session", session_data)
           end
-          store_session(session, cache_data: data)
+          store_session(session, user_id: user_id, token: data["token"], expires_at: data["expiresAt"])
           session
         end
         hooks.create(data, "session", custom: custom, context: context)
@@ -587,17 +587,17 @@ module BetterAuth
         value
       end
 
-      def store_session(session, cache_data:)
-        user = adapter.find_one(model: "user", where: [{field: "id", value: cache_data["userId"]}])
+      def store_session(session, user_id:, token:, expires_at:)
+        user = adapter.find_one(model: "user", where: [{field: "id", value: user_id}])
         now_ms = current_millis
-        expires_ms = millis(cache_data["expiresAt"])
-        entries = active_session_entries(cache_data["userId"])
-          .reject { |entry| entry["expiresAt"].to_i <= now_ms || entry["token"] == cache_data["token"] }
-          .push({"token" => cache_data["token"], "expiresAt" => expires_ms})
+        expires_ms = millis(expires_at)
+        entries = active_session_entries(user_id)
+          .reject { |entry| entry["expiresAt"].to_i <= now_ms || entry["token"] == token }
+          .push({"token" => token, "expiresAt" => expires_ms})
           .sort_by { |entry| entry["expiresAt"] }
-        write_active_sessions(cache_data["userId"], entries)
+        write_active_sessions(user_id, entries)
         ttl_seconds = ttl(expires_ms)
-        secondary_storage.set(cache_data["token"], JSON.generate({session: session, user: user}), ttl_seconds) if ttl_seconds.positive?
+        secondary_storage.set(token, JSON.generate({session: session, user: user}), ttl_seconds) if ttl_seconds.positive?
       end
 
       def update_stored_session(token, data)
