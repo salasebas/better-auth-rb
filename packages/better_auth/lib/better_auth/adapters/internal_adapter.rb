@@ -279,7 +279,7 @@ module BetterAuth
             storage_record["id"] ||= generated_id
             storage_record
           end
-          store_verification(actual)
+          store_verification(stored_identifier, actual)
           actual
         end
 
@@ -399,7 +399,7 @@ module BetterAuth
             cached = read_verification(stored_identifier)
             if cached
               updated = cached.merge(update)
-              store_verification(updated)
+              store_verification(stored_identifier, updated)
               return updated unless verification_store_in_database?
             end
           elsif !verification_store_in_database?
@@ -739,13 +739,13 @@ module BetterAuth
         )
       end
 
-      def store_verification(verification)
+      def store_verification(identifier, verification)
         normalized = normalize_verification_dates(verification)
         ttl_seconds = ttl(millis(normalized["expiresAt"]))
         return normalized unless ttl_seconds.positive?
 
-        secondary_storage.set(verification_key(normalized["identifier"]), JSON.generate(normalized), ttl_seconds)
-        secondary_storage.set(verification_id_key(normalized["id"]), normalized["identifier"], ttl_seconds) if normalized["id"]
+        secondary_storage.set(verification_key(identifier), JSON.generate(normalized), ttl_seconds)
+        secondary_storage.set(verification_id_key(normalized["id"]), identifier, ttl_seconds) if normalized["id"]
         normalized
       end
 

@@ -770,6 +770,7 @@ class BetterAuthInternalAdapterTest < Minitest::Test
     assert_equal verification, adapter.find_one(model: "verification", where: [{field: "id", value: verification.fetch("id")}])
     assert_equal verification.fetch("id"), stored.fetch("id")
     assert_equal verification.fetch("value"), stored.fetch("value")
+    assert_equal verification.slice("id", "identifier", "value"), internal.find_verification_value("normalized-dual-write").slice("id", "identifier", "value")
     assert_equal "normalized-dual-write", storage.get("verification-id:adapter-normalized-id")
     assert_equal [verification], after_values
   end
@@ -1070,7 +1071,7 @@ class BetterAuthInternalAdapterTest < Minitest::Test
   class NormalizingVerificationCreateAdapter < BetterAuth::Adapters::Memory
     def create(model:, data:, force_allow_id: false)
       if model.to_s == "verification"
-        data = data.merge("id" => "adapter-normalized-id", "value" => "adapter-normalized")
+        data = data.merge("id" => "adapter-normalized-id", "identifier" => "adapter-normalized-identifier", "value" => "adapter-normalized")
       end
 
       super
