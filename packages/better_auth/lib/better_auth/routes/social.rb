@@ -361,15 +361,14 @@ module BetterAuth
 
       if existing && existing[:linked_account]
         user = existing[:user]
-        if ctx.context.options.account[:update_account_on_sign_in] != false
-          update_data = account_storage_fields(account_info)
-          unless update_data.empty?
-            begin
-              ctx.context.internal_adapter.update_account(existing[:linked_account]["id"], update_data)
-            rescue
-              social_log(ctx.context, :error, "Unable to link social account")
-              raise
-            end
+        fresh_tokens = (ctx.context.options.account[:update_account_on_sign_in] != false) ? account_storage_fields(account_info) : {}
+        Cookies.set_account_cookie(ctx, existing[:linked_account].merge(fresh_tokens))
+        unless fresh_tokens.empty?
+          begin
+            ctx.context.internal_adapter.update_account(existing[:linked_account]["id"], fresh_tokens)
+          rescue
+            social_log(ctx.context, :error, "Unable to link social account")
+            raise
           end
         end
         verified_user = update_verified_email_on_link(ctx, user["id"], user["email"], user_info)
@@ -414,6 +413,8 @@ module BetterAuth
             context: ctx
           )
           raise BetterAuth::Error, "Failed to create social user" unless created
+
+          Cookies.set_account_cookie(ctx, created[:account])
         rescue
           social_log(ctx.context, :error, "Unable to create social user")
           return {error: "unable to create user"}

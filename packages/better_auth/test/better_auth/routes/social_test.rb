@@ -76,6 +76,83 @@ class BetterAuthRoutesSocialTest < Minitest::Test
     assert_equal "access-token", account["accessToken"]
   end
 
+  def test_callback_oauth_stores_account_cookie_with_secondary_storage
+    storage = SecondaryStorage.new
+    auth = build_auth(
+      database: nil,
+      secondary_storage: storage,
+      social_providers: {
+        github: callback_provider(
+          user: {id: "github-secondary", email: "secondary-social@example.com", name: "Secondary Social", emailVerified: true},
+          tokens: {accessToken: "secondary-access", refreshToken: "secondary-refresh"}
+        )
+      }
+    )
+
+    state = social_oauth_state(auth)
+    status, headers, = auth.api.callback_oauth(
+      params: {providerId: "github"},
+      query: {code: "oauth-code", state: state},
+      as_response: true
+    )
+
+    account = decoded_account_cookie(headers.fetch("set-cookie"), auth)
+    auth.context.internal_adapter.define_singleton_method(:find_accounts) do |_user_id|
+      raise "get_access_token should use the account cookie"
+    end
+    access_token = auth.api.get_access_token(
+      headers: {"cookie" => cookie_header(headers.fetch("set-cookie"))},
+      body: {providerId: "github"}
+    )
+
+    assert_equal 302, status
+    assert_equal "github", account.fetch("providerId")
+    assert_equal "github-secondary", account.fetch("accountId")
+    assert account.fetch("userId")
+    assert_equal "secondary-access", account.fetch("accessToken")
+    assert_equal "secondary-refresh", account.fetch("refreshToken")
+    assert_equal "secondary-access", access_token.fetch(:accessToken)
+    assert_includes headers.fetch("set-cookie"), "#{auth.context.auth_cookies[:session_token].name}="
+  end
+
+  def test_callback_oauth_reuses_stored_account_cookie_when_token_updates_are_disabled
+    storage = SecondaryStorage.new
+    auth = build_auth(
+      database: nil,
+      secondary_storage: storage,
+      account: {update_account_on_sign_in: false},
+      social_providers: {
+        github: callback_provider(
+          user: {id: "github-linked", email: "linked-social@example.com", name: "Linked Social", emailVerified: true},
+          tokens: {accessToken: "fresh-access", refreshToken: "fresh-refresh"}
+        )
+      }
+    )
+    created = auth.context.internal_adapter.create_oauth_user(
+      {email: "linked-social@example.com", name: "Linked Social", emailVerified: true},
+      {providerId: "github", accountId: "github-linked", accessToken: "stored-access", refreshToken: "stored-refresh"}
+    )
+
+    state = social_oauth_state(auth)
+    status, headers, = auth.api.callback_oauth(
+      params: {providerId: "github"},
+      query: {code: "oauth-code", state: state},
+      as_response: true
+    )
+
+    account_cookie = decoded_account_cookie(headers.fetch("set-cookie"), auth)
+    stored_account = auth.context.internal_adapter.find_account_by_provider_id("github-linked", "github")
+
+    assert_equal 302, status
+    assert_equal created.fetch(:account).fetch("userId"), account_cookie.fetch("userId")
+    assert_equal "stored-access", account_cookie.fetch("accessToken")
+    assert_equal "stored-refresh", account_cookie.fetch("refreshToken")
+    assert_equal "stored-access", stored_account.fetch("accessToken")
+    assert_equal "stored-refresh", stored_account.fetch("refreshToken")
+    refute_equal "fresh-access", account_cookie.fetch("accessToken")
+    refute_equal "fresh-refresh", account_cookie.fetch("refreshToken")
+  end
+
   def test_sign_in_social_with_id_token_rejects_blank_remote_id_without_persistence
     auth = build_auth(
       social_providers: {
@@ -1288,6 +1365,7 @@ class BetterAuthRoutesSocialTest < Minitest::Test
       emailVerified: true
     }
     auth = build_auth(
+      account: {store_account_cookie: true},
       social_providers: {
         github: {
           id: "github",
@@ -1300,10 +1378,12 @@ class BetterAuthRoutesSocialTest < Minitest::Test
     user = auth.context.internal_adapter.find_user_by_email(provider_user[:email])[:user]
     auth.context.internal_adapter.update_user(user["id"], emailVerified: true)
 
-    result = auth.api.sign_in_social(body: {provider: "github", idToken: {token: "id-token"}})
+    _status, headers, body = auth.api.sign_in_social(body: {provider: "github", idToken: {token: "id-token"}}, as_response: true)
+    result = JSON.parse(body.join)
 
-    assert_equal user["id"], result[:user]["id"]
+    assert_equal user["id"], result["user"]["id"]
     assert auth.context.internal_adapter.find_account_by_provider_id(provider_user[:id], "github")
+    refute_includes headers.fetch("set-cookie"), "#{auth.context.auth_cookies[:account_data].name}="
   end
 
   def test_sign_in_social_require_local_email_verified_opt_out_supports_snake_and_camel_case
@@ -1473,6 +1553,7 @@ class BetterAuthRoutesSocialTest < Minitest::Test
 
   def test_sign_in_social_updates_linked_account_tokens_by_default
     auth = build_auth(
+      account: {store_account_cookie: true},
       social_providers: {
         github: {
           id: "github",
@@ -1499,11 +1580,15 @@ class BetterAuthRoutesSocialTest < Minitest::Test
       "accessToken" => "old-access"
     )
 
-    auth.api.sign_in_social(body: {provider: "github", idToken: {token: "new-id-token", accessToken: "new-access"}})
+    _status, headers, = auth.api.sign_in_social(body: {provider: "github", idToken: {token: "new-id-token", accessToken: "new-access"}}, as_response: true)
 
     stored = auth.context.internal_adapter.find_accounts(user_id).find { |entry| entry["id"] == account["id"] }
+    account_cookie = decoded_account_cookie(headers.fetch("set-cookie"), auth)
     assert_equal "new-access", stored["accessToken"]
     assert_equal "new-id-token", stored["idToken"]
+    assert_equal account["id"], account_cookie.fetch("id")
+    assert_equal "new-access", account_cookie.fetch("accessToken")
+    assert_equal "new-id-token", account_cookie.fetch("idToken")
   end
 
   def test_link_social_redirect_flow_rejects_account_owned_by_another_user
@@ -1923,6 +2008,33 @@ class BetterAuthRoutesSocialTest < Minitest::Test
 
   private
 
+  def callback_provider(user:, tokens:)
+    {
+      id: "github",
+      create_authorization_url: ->(data) { "https://github.example/oauth?#{URI.encode_www_form(state: data.fetch(:state))}" },
+      validate_authorization_code: ->(_data) { tokens },
+      get_user_info: ->(_tokens) { {user: user} }
+    }
+  end
+
+  def social_oauth_state(auth)
+    response = auth.api.sign_in_social(body: {provider: "github", callbackURL: "/app", disableRedirect: true})
+    URI.decode_www_form(URI.parse(response.fetch(:url)).query).to_h.fetch("state")
+  end
+
+  def decoded_account_cookie(set_cookie, auth)
+    cookie_name = auth.context.auth_cookies[:account_data].name
+    line = set_cookie.lines.find { |entry| entry.start_with?("#{cookie_name}=") && !entry.match?(/Max-Age=0/i) }
+    assert line, "expected a #{cookie_name} Set-Cookie header"
+    value = line.split(";", 2).first.split("=", 2).last
+
+    BetterAuth::Crypto.symmetric_decode_jwt(value, auth.context.secret_config, "better-auth-account")
+  end
+
+  def cookie_header(set_cookie)
+    set_cookie.lines.map { |line| line.split(";", 2).first }.join("; ")
+  end
+
   def build_auth(options = {})
     email_and_password = {enabled: true}.merge(options.fetch(:email_and_password, {}))
     BetterAuth.auth({base_url: "http://localhost:3000", secret: SECRET, database: :memory}.merge(options).merge(email_and_password: email_and_password))
@@ -1983,5 +2095,23 @@ class BetterAuthRoutesSocialTest < Minitest::Test
       "HTTP_COOKIE" => cookie,
       "HTTP_ORIGIN" => "http://localhost:3000"
     }.compact
+  end
+
+  class SecondaryStorage
+    def initialize
+      @store = {}
+    end
+
+    def set(key, value, _ttl = nil)
+      @store[key] = value
+    end
+
+    def get(key)
+      @store[key]
+    end
+
+    def delete(key)
+      @store.delete(key)
+    end
   end
 end
