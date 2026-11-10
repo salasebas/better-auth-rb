@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Keep `get_and_delete` inside the namespace of a `Redis::Namespace` client by
+  using the atomic Lua script, since redis-namespace 1.11 forwards `GETDEL`
+  without its namespace.
 - Prevent `atomic_clear` from reusing revoked generations after a missing or
   corrupt marker by atomically repairing and rotating opaque generation tokens.
 - Added a checked upstream test inventory for the Redis storage reference
