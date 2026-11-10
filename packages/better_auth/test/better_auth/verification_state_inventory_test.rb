@@ -19,6 +19,7 @@ class BetterAuthVerificationStateInventoryTest < Minitest::Test
     "packages/better_auth-passkey/lib/better_auth/passkey/challenges.rb" => ["consume_verification_value(verification_token)"],
     "packages/better_auth-passkey/lib/better_auth/passkey/routes/authentication.rb" => ["adapter.increment_one("],
     "packages/better_auth-saml/lib/better_auth/sso/plugin/saml_response.rb" => ["reserve_verification_value("],
+    "packages/better_auth-saml/lib/better_auth/sso/plugin/saml_validation_and_state.rb" => ["find_verification_value(relay_state)", "consume_verification_value(relay_state)"],
     "packages/better_auth-oidc/lib/better_auth/sso/plugin/oidc_runtime.rb" => ["consume_verification_value(identifier)", "sso_restore_oidc_pkce_verifier"],
     "packages/better_auth/lib/better_auth/plugins/oauth_protocol.rb" => ["consume_verification_value(stored_code)", "rescue JSON::ParserError"]
   }.freeze
@@ -28,7 +29,6 @@ class BetterAuthVerificationStateInventoryTest < Minitest::Test
     "packages/better_auth/lib/better_auth/plugins/email_otp.rb" => ["find_verification_value(email_otp_identifier(email, type))"],
     "packages/better_auth/lib/better_auth/plugins/phone_number.rb" => ["existing = ctx.context.internal_adapter.find_verification_value(identifier)"],
     "packages/better_auth/lib/better_auth/plugins/two_factor.rb" => ["find_verification_value(identifier)"],
-    "packages/better_auth-saml/lib/better_auth/sso/plugin/saml_validation_and_state.rb" => ["find_verification_value(\"\#{SSO_SAML_RELAY_STATE_KEY_PREFIX}\#{relay_state}\")"],
     "packages/better_auth-saml/lib/better_auth/sso/plugin/saml_metadata_and_logout.rb" => ["find_verification_value(session_identifier)"]
   }.freeze
 
