@@ -13,7 +13,6 @@ require_relative "../test/support/test_databases"
 
 ROOT = File.expand_path("..", __dir__)
 USAGE = "Usage: scripts/with_test_databases.rb COMMAND [ARGS...] | --prune [--dry-run]"
-GENERATED_SUFFIX = /_(?<id>[0-9a-f]{8})\z/
 
 POSTGRES = 'psql -v ON_ERROR_STOP=1 -qAt -U "$POSTGRES_USER" -d postgres'
 MYSQL = 'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" mysql -uroot -N'
@@ -45,31 +44,55 @@ def compose_exec(service, script, input)
   output
 end
 
+def git(*args)
+  output = IO.popen(["git", "-C", ROOT, *args], &:read)
+  abort "git #{args.join(" ")} failed." unless $?.success?
+  output
+end
+
+def with_clone_registry
+  path = File.join(git("rev-parse", "--path-format=absolute", "--git-common-dir").strip, "better-auth-test-databases")
+  File.open(path, File::RDWR | File::CREAT) do |file|
+    file.flock(File::LOCK_EX)
+    yield file
+  end
+end
+
+def register_worktree_id(id)
+  with_clone_registry do |file|
+    file.puts(id) unless file.each_line(chomp: true).include?(id)
+  end
+end
+
 def live_worktree_ids
-  listing = IO.popen(["git", "-C", ROOT, "worktree", "list", "--porcelain"], &:read)
-  abort "git worktree list failed." unless $?.success?
-  paths = listing.scan(/^worktree (.+)$/).flatten.select { |path| File.exist?(path) }
+  paths = git("worktree", "list", "--porcelain").scan(/^worktree (.+)$/).flatten.select { |path| File.exist?(path) }
   ids = paths.map { |path| generated_worktree_id(path) }
   abort "git worktree list did not include this worktree (#{ROOT})." unless ids.include?(generated_worktree_id(ROOT))
   ids
 end
 
-def stale?(name, live_ids)
-  id = name[GENERATED_SUFFIX, :id]
-  !id.nil? && !live_ids.include?(id)
-end
-
 def prune(dry_run:)
-  live_ids = live_worktree_ids
-  PRUNABLE.each do |service, (client, list, drop)|
-    compose_exec(service, client, list).split("\n").map(&:strip).select { |name| stale?(name, live_ids) }.each do |name|
-      if dry_run
-        puts "Would drop #{service} database #{name}"
-      else
-        compose_exec(service, client, drop.call(name))
-        puts "Dropped #{service} database #{name}"
+  with_clone_registry do |file|
+    live_ids = live_worktree_ids
+    stale_ids, kept_ids = file.each_line(chomp: true).uniq.partition { |id| !live_ids.include?(id) }
+    return if stale_ids.empty?
+
+    PRUNABLE.each do |service, (client, list, drop)|
+      names = compose_exec(service, client, list).split("\n").map(&:strip)
+      names.select { |name| stale_ids.any? { |id| name.end_with?("_#{id}") } }.each do |name|
+        if dry_run
+          puts "Would drop #{service} database #{name}"
+        else
+          compose_exec(service, client, drop.call(name))
+          puts "Dropped #{service} database #{name}"
+        end
       end
     end
+    return if dry_run
+
+    file.rewind
+    file.truncate(0)
+    file.write(kept_ids.map { |id| "#{id}\n" }.join)
   end
 end
 
@@ -84,7 +107,12 @@ end
 explicit = TestDatabases::CONNECTION_ENV.reject { |name| ENV.fetch(name, "").empty? }
 abort "Unset #{explicit.join(", ")} to run against per-worktree test databases." unless explicit.empty?
 
-ENV[TestDatabases::WORKTREE_ID_ENV] = generated_worktree_id(ROOT) if ENV.fetch(TestDatabases::WORKTREE_ID_ENV, "").empty?
+if ENV.fetch(TestDatabases::WORKTREE_ID_ENV, "").empty?
+  ENV[TestDatabases::WORKTREE_ID_ENV] = generated_worktree_id(ROOT)
+  register_worktree_id(TestDatabases.worktree_id)
+else
+  warn "#{TestDatabases::WORKTREE_ID_ENV} is preset, so --prune will never drop these databases."
+end
 database = TestDatabases.sql_database
 
 compose_exec("postgres", POSTGRES, <<~SQL)
