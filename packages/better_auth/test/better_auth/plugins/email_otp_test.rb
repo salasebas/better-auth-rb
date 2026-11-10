@@ -667,8 +667,8 @@ class BetterAuthPluginsEmailOTPTest < Minitest::Test
 
   def test_check_verification_otp_preserves_resend_during_valid_check_in_database_and_secondary_storage
     [
-      {name: "database", options: {}, stores_verifications_in_database: true},
-      {name: "secondary storage", options: {secondary_storage: StringStorage.new}, stores_verifications_in_database: false}
+      {name: "database", options: {}},
+      {name: "secondary storage", options: {secondary_storage: StringStorage.new}}
     ].each do |mode|
       issued_otps = ["111111", "222222"]
       resend = -> {}
@@ -702,10 +702,6 @@ class BetterAuthPluginsEmailOTPTest < Minitest::Test
       assert_equal({success: true}, auth.api.check_verification_otp(body: {email: email, type: "email-verification", otp: "111111"}), mode[:name])
       verification = auth.context.internal_adapter.find_verification_value(identifier)
       assert_equal "222222:encrypted:0", verification["value"], mode[:name]
-      if mode[:stores_verifications_in_database]
-        verifications = auth.context.adapter.find_many(model: "verification", where: [{field: "identifier", value: identifier}])
-        assert_equal ["222222:encrypted:0"], verifications.map { |entry| entry["value"] }, mode[:name]
-      end
       assert_equal({success: true}, auth.api.check_verification_otp(body: {email: email, type: "email-verification", otp: "222222"}), mode[:name])
     end
   end

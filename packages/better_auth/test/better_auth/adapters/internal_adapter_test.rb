@@ -524,6 +524,28 @@ class BetterAuthInternalAdapterTest < Minitest::Test
     assert_nil storage.get(key)
   end
 
+  def test_update_verification_by_identifier_updates_hashed_records_in_every_storage_mode
+    hashed = BetterAuth::Crypto.sha256("update-by-identifier", encoding: :base64url)
+    [
+      ["database", nil, {store_identifier: "hashed"}],
+      ["secondary storage", MemoryStorage.new, {store_identifier: "hashed"}],
+      ["dual storage", MemoryStorage.new, {store_identifier: "hashed", store_in_database: true}]
+    ].each do |mode, storage, verification_options|
+      internal = internal_adapter(secondary_storage: storage, verification: verification_options)
+      internal.create_verification_value(identifier: "update-by-identifier", value: "initial", expiresAt: Time.now + 120)
+
+      internal.update_verification_by_identifier("update-by-identifier", value: "updated")
+
+      assert_equal "updated", internal.find_verification_value("update-by-identifier")["value"], mode
+      if storage
+        assert_equal "updated", JSON.parse(storage.get("verification:#{hashed}")).fetch("value"), mode
+        assert_in_delta 120, storage.ttls.fetch("verification:#{hashed}"), 2, mode
+      end
+      database_values = internal.adapter.find_many(model: "verification").map { |row| row.fetch("value") }
+      assert_equal((mode == "secondary storage") ? [] : ["updated"], database_values, mode)
+    end
+  end
+
   def test_delete_verification_by_identifier_skips_adapter_delete_when_record_is_missing
     config = BetterAuth::Configuration.new(secret: SECRET, database: :memory, verification: {store_in_database: true})
     adapter = RecordingMemoryAdapter.new(config)

@@ -400,6 +400,21 @@ module BetterAuth
         hooks.update(update, [{field: "id", value: id}], "verification")
       end
 
+      def update_verification_by_identifier(identifier, data)
+        update = stringify_keys(data)
+        stored_identifier = processed_verification_identifier(identifier)
+        if secondary_storage
+          cached = read_verification(stored_identifier)
+          if cached
+            updated = store_verification(cached.merge(update))
+            return updated unless verification_store_in_database?
+          end
+          return update unless verification_store_in_database?
+        end
+
+        hooks.update(update, [{field: "identifier", value: stored_identifier}], "verification")
+      end
+
       private
 
       def verification_identifiers(identifier)

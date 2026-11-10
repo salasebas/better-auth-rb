@@ -606,7 +606,7 @@ module BetterAuth
       end
 
       unless email_otp_matches?(ctx, config, otp_value, otp)
-        ctx.context.internal_adapter.update_verification_value(verification["id"], value: "#{otp_value}:#{attempts_count + 1}")
+        ctx.context.internal_adapter.update_verification_by_identifier(identifier, value: "#{otp_value}:#{attempts_count + 1}")
         raise APIError.new("BAD_REQUEST", message: EMAIL_OTP_ERROR_CODES["INVALID_OTP"])
       end
 
