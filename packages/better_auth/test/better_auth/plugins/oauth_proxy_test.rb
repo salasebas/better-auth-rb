@@ -9,12 +9,25 @@ class BetterAuthPluginsOAuthProxyTest < Minitest::Test
 
   def test_sign_in_social_rewrites_callback_to_current_url_proxy
     auth = build_auth(plugins: [BetterAuth::Plugins.oauth_proxy(current_url: "http://preview.local")])
+    request = Rack::MockRequest.new(auth)
+    request_options = {input: JSON.generate(provider: "google", callbackURL: "/dashboard", disableRedirect: true)}
+    request_options["CONTENT_TYPE"] = "application/json"
 
-    result = auth.api.sign_in_social(body: {provider: "google", callbackURL: "/dashboard"})
-    state = Rack::Utils.parse_query(URI.parse(result[:url]).query).fetch("state")
-    state_data = BetterAuth::Crypto.verify_jwt(state, auth.context.secret)
+    initiation = request.post(
+      "/api/auth/sign-in/social",
+      request_options
+    )
+    state = Rack::Utils.parse_query(URI.parse(JSON.parse(initiation.body).fetch("url")).query).fetch("state")
+    callback = request.get(
+      "/api/auth/callback/google?code=code&state=#{Rack::Utils.escape(state)}",
+      "HTTP_COOKIE" => cookie_header(initiation.headers.fetch("set-cookie"))
+    )
+    location = URI.parse(callback.headers.fetch("location"))
 
-    assert_match(%r{\Ahttp://preview\.local/api/auth/oauth-proxy-callback\?callbackURL=%2Fdashboard\z}, state_data.fetch("callbackURL"))
+    assert_equal 302, callback.status
+    assert_equal "http://preview.local", "#{location.scheme}://#{location.host}"
+    assert_equal "/api/auth/oauth-proxy-callback", location.path
+    assert_equal "/dashboard", Rack::Utils.parse_query(location.query).fetch("callbackURL")
   end
 
   def test_callback_to_cross_origin_proxy_appends_encrypted_cookies
@@ -239,5 +252,9 @@ class BetterAuthPluginsOAuthProxyTest < Minitest::Test
         }
       ]
     )
+  end
+
+  def cookie_header(set_cookie)
+    set_cookie.to_s.lines.map { |line| line.split(";").first }.join("; ")
   end
 end
