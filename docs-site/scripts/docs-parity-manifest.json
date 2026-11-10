@@ -2117,7 +2117,7 @@
       "reason": "Ruby-specific Redis storage reference",
       "local_exists": true,
       "upstream_exists": false,
-      "current_local_lines": 121,
+      "current_local_lines": 123,
       "upstream_lines": 0,
       "status": "keep_local"
     },
