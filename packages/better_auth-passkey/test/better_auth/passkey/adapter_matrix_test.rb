@@ -2,6 +2,7 @@
 
 require "tempfile"
 require_relative "support"
+require_relative "../../../../../test/support/test_databases"
 
 class BetterAuthPasskeyAdapterMatrixTest < Minitest::Test
   include BetterAuthPasskeyTestSupport
@@ -33,7 +34,7 @@ class BetterAuthPasskeyAdapterMatrixTest < Minitest::Test
     begin
       require "pg"
 
-      connection = PG.connect(ENV.fetch("BETTER_AUTH_POSTGRES_URL", "postgres://user:password@localhost:5432/better_auth"))
+      connection = PG.connect(TestDatabases.postgres_url)
       config = passkey_config
       reset_postgres_schema(connection)
       create_sql_schema(connection, config, dialect: :postgres)
@@ -82,8 +83,8 @@ class BetterAuthPasskeyAdapterMatrixTest < Minitest::Test
       require "sequel"
       require "tiny_tds"
 
-      ensure_mssql_database
-      connection = Sequel.connect(ENV.fetch("BETTER_AUTH_MSSQL_URL", "tinytds://sa:Password123!@127.0.0.1:1433/better_auth?timeout=30"))
+      TestDatabases.ensure_mssql_database
+      connection = Sequel.connect(TestDatabases.mssql_url)
       config = passkey_config
       reset_mssql_schema(connection)
       create_sql_schema(connection, config, dialect: :mssql)
@@ -105,7 +106,7 @@ class BetterAuthPasskeyAdapterMatrixTest < Minitest::Test
     require_adapter_integration!
 
     begin
-      url = ENV.fetch("BETTER_AUTH_MONGODB_URL", "mongodb://127.0.0.1:27017/better_auth_passkey_test")
+      url = TestDatabases.mongodb_url("better_auth_passkey_test")
       skip "MongoDB test service is not available" unless tcp_reachable?(url, default_port: 27017)
       require "mongo"
       require "better_auth/mongodb"
@@ -166,11 +167,7 @@ class BetterAuthPasskeyAdapterMatrixTest < Minitest::Test
 
   def mysql_connection
     Mysql2::Client.new(
-      host: ENV.fetch("BETTER_AUTH_MYSQL_HOST", "127.0.0.1"),
-      port: ENV.fetch("BETTER_AUTH_MYSQL_PORT", "3306").to_i,
-      username: ENV.fetch("BETTER_AUTH_MYSQL_USER", "user"),
-      password: ENV.fetch("BETTER_AUTH_MYSQL_PASSWORD", "password"),
-      database: ENV.fetch("BETTER_AUTH_MYSQL_DATABASE", "better_auth"),
+      **TestDatabases.mysql_options,
       symbolize_keys: false
     )
   end
@@ -194,15 +191,6 @@ class BetterAuthPasskeyAdapterMatrixTest < Minitest::Test
 
   def quote_mysql_identifier(identifier)
     "`#{identifier.to_s.gsub("`", "``")}`"
-  end
-
-  def ensure_mssql_database
-    master = Sequel.connect(ENV.fetch("BETTER_AUTH_MSSQL_MASTER_URL", "tinytds://sa:Password123!@127.0.0.1:1433/master?timeout=30"))
-    master.run("IF DB_ID(N'better_auth') IS NULL CREATE DATABASE [better_auth]")
-  rescue Sequel::DatabaseConnectionError
-    skip "MSSQL test service is not available"
-  ensure
-    master&.disconnect
   end
 
   def reset_mssql_schema(connection)

@@ -9,6 +9,7 @@ require "better_auth/oauth_provider"
 require "better_auth/scim"
 require "better_auth/sso"
 require "better_auth/stripe"
+require_relative "support/test_databases"
 
 class BetterAuthMySQLPluginSchemaSmokeTest < Minitest::Test
   SECRET = "test-secret-that-is-long-enough-for-validation"
@@ -88,11 +89,7 @@ class BetterAuthMySQLPluginSchemaSmokeTest < Minitest::Test
 
   def mysql_connection
     Mysql2::Client.new(
-      host: ENV.fetch("BETTER_AUTH_MYSQL_HOST", "127.0.0.1"),
-      port: ENV.fetch("BETTER_AUTH_MYSQL_PORT", "3306").to_i,
-      username: ENV.fetch("BETTER_AUTH_MYSQL_USER", "user"),
-      password: ENV.fetch("BETTER_AUTH_MYSQL_PASSWORD", "password"),
-      database: ENV.fetch("BETTER_AUTH_MYSQL_DATABASE", "better_auth"),
+      **TestDatabases.mysql_options,
       symbolize_keys: false
     )
   end

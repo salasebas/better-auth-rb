@@ -138,8 +138,7 @@ class BetterAuthMySQLAdapterTest < Minitest::Test
   end
 
   def test_mysql_adapter_can_be_instantiated_without_rails
-    port = ENV.fetch("BETTER_AUTH_MYSQL_PORT", "3306")
-    adapter = BetterAuth::Adapters::MySQL.new(url: "mysql2://user:password@127.0.0.1:#{port}/better_auth")
+    adapter = BetterAuth::Adapters::MySQL.new(url: TestDatabases.mysql_url)
 
     assert_equal :mysql, adapter.dialect
   rescue LoadError
@@ -152,14 +151,7 @@ class BetterAuthMySQLAdapterTest < Minitest::Test
     require "mysql2"
 
     config = BetterAuth::Configuration.new(secret: SECRET, database: :memory)
-    connection = Mysql2::Client.new(
-      host: ENV.fetch("BETTER_AUTH_MYSQL_HOST", "127.0.0.1"),
-      port: ENV.fetch("BETTER_AUTH_MYSQL_PORT", "3306").to_i,
-      username: ENV.fetch("BETTER_AUTH_MYSQL_USER", "user"),
-      password: ENV.fetch("BETTER_AUTH_MYSQL_PASSWORD", "password"),
-      database: ENV.fetch("BETTER_AUTH_MYSQL_DATABASE", "better_auth"),
-      symbolize_keys: false
-    )
+    connection = mysql_connection
     reset_mysql_schema(connection)
     BetterAuth::Schema::SQL.create_statements(config, dialect: :mysql).each { |statement| connection.query(statement) }
     adapter = BetterAuth::Adapters::MySQL.new(config, connection: connection)

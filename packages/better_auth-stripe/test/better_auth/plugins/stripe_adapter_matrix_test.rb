@@ -4,6 +4,7 @@ require "json"
 require "tempfile"
 require_relative "../../test_helper"
 require_relative "../../support/stripe_helpers"
+require_relative "../../../../../test/support/test_databases"
 
 class BetterAuthPluginsStripeAdapterMatrixTest < Minitest::Test
   include BetterAuthStripeTestHelpers
@@ -41,7 +42,7 @@ class BetterAuthPluginsStripeAdapterMatrixTest < Minitest::Test
   def test_postgres_adapter_persists_representative_stripe_flow_when_available
     require "pg"
 
-    connection = PG.connect(ENV.fetch("BETTER_AUTH_POSTGRES_URL", "postgres://user:password@localhost:5432/better_auth"))
+    connection = PG.connect(TestDatabases.postgres_url)
     stripe = FakeStripeClient.new
     plugin = stripe_plugin(stripe)
     config = matrix_config(plugin)
@@ -82,8 +83,8 @@ class BetterAuthPluginsStripeAdapterMatrixTest < Minitest::Test
     require "sequel"
     require "tiny_tds"
 
-    ensure_mssql_database
-    connection = Sequel.connect(ENV.fetch("BETTER_AUTH_MSSQL_URL", "tinytds://sa:Password123!@127.0.0.1:1433/better_auth?timeout=30"))
+    TestDatabases.ensure_mssql_database
+    connection = Sequel.connect(TestDatabases.mssql_url)
     stripe = FakeStripeClient.new
     plugin = stripe_plugin(stripe)
     config = matrix_config(plugin)
@@ -184,11 +185,7 @@ class BetterAuthPluginsStripeAdapterMatrixTest < Minitest::Test
 
   def mysql_connection
     Mysql2::Client.new(
-      host: ENV.fetch("BETTER_AUTH_MYSQL_HOST", "127.0.0.1"),
-      port: ENV.fetch("BETTER_AUTH_MYSQL_PORT", "3306").to_i,
-      username: ENV.fetch("BETTER_AUTH_MYSQL_USER", "user"),
-      password: ENV.fetch("BETTER_AUTH_MYSQL_PASSWORD", "password"),
-      database: ENV.fetch("BETTER_AUTH_MYSQL_DATABASE", "better_auth"),
+      **TestDatabases.mysql_options,
       symbolize_keys: false
     )
   end
@@ -208,13 +205,6 @@ class BetterAuthPluginsStripeAdapterMatrixTest < Minitest::Test
       FROM information_schema.tables
       WHERE table_schema = DATABASE()
     SQL
-  end
-
-  def ensure_mssql_database
-    master = Sequel.connect(ENV.fetch("BETTER_AUTH_MSSQL_MASTER_URL", "tinytds://sa:Password123!@127.0.0.1:1433/master?timeout=30"))
-    master.run("IF DB_ID(N'better_auth') IS NULL CREATE DATABASE [better_auth]")
-  ensure
-    master&.disconnect
   end
 
   def reset_mssql_schema(connection)

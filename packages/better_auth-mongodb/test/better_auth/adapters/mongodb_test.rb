@@ -3,6 +3,7 @@
 require "json"
 require_relative "../../test_helper"
 require_relative "../../support/fake_mongo"
+require_relative "../../../../../test/support/test_databases"
 
 class BetterAuthMongoDBAdapterTest < Minitest::Test
   include BetterAuthMongoAdapterTestSupport
@@ -886,7 +887,7 @@ class BetterAuthMongoDBAdapterTest < Minitest::Test
     url = ENV["BETTER_AUTH_MONGODB_REPLICA_SET_URL"]
     skip "BETTER_AUTH_MONGODB_REPLICA_SET_URL is not configured" unless url && !url.empty?
 
-    client = Mongo::Client.new(url, database: "better-auth-ruby-transaction-test", server_selection_timeout: 1)
+    client = Mongo::Client.new(url, database: TestDatabases.namespaced("better-auth-ruby-transaction-test"), server_selection_timeout: 1)
     drop_real_database(client)
     adapter = BetterAuth::Adapters::MongoDB.new(@config, database: client.database, client: client, transaction: true)
 
@@ -1229,7 +1230,7 @@ class BetterAuthMongoDBAdapterTest < Minitest::Test
   end
 
   def real_mongo_client(database_name)
-    Mongo::Client.new(ENV.fetch("BETTER_AUTH_MONGODB_URL", "mongodb://127.0.0.1:27017/#{database_name}"), server_selection_timeout: 1)
+    Mongo::Client.new(TestDatabases.mongodb_url(database_name), server_selection_timeout: 1)
   end
 
   def drop_real_database(client)

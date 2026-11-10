@@ -2,9 +2,10 @@
 
 require "tmpdir"
 require_relative "../../spec_helper"
+require_relative "../../../../../test/support/test_databases"
 
 RSpec.describe "BetterAuth::Rails PostgreSQL integration", :integration do
-  let(:url) { ENV.fetch("BETTER_AUTH_POSTGRES_URL", "postgres://user:password@localhost:5432/better_auth") }
+  let(:url) { TestDatabases.postgres_url }
   let(:secret) { "test-secret-that-is-long-enough-for-validation" }
   let(:config) { BetterAuth::Configuration.new(secret: secret, database: :memory) }
   let(:plugin) do

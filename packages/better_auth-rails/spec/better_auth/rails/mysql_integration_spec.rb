@@ -2,9 +2,10 @@
 
 require "tmpdir"
 require_relative "../../spec_helper"
+require_relative "../../../../../test/support/test_databases"
 
 RSpec.describe "BetterAuth::Rails MySQL integration", :integration do
-  let(:url) { ENV.fetch("BETTER_AUTH_MYSQL_URL", "mysql2://user:password@127.0.0.1:3306/better_auth") }
+  let(:url) { TestDatabases.mysql_url }
   let(:secret) { "test-secret-that-is-long-enough-for-validation" }
   let(:config) { BetterAuth::Configuration.new(secret: secret, database: :memory) }
   let(:plugin) do
@@ -201,11 +202,7 @@ RSpec.describe "BetterAuth::Rails MySQL integration", :integration do
 
   def with_mysql_connection
     connection = Mysql2::Client.new(
-      host: ENV.fetch("BETTER_AUTH_MYSQL_HOST", "127.0.0.1"),
-      port: ENV.fetch("BETTER_AUTH_MYSQL_PORT", "3306").to_i,
-      username: ENV.fetch("BETTER_AUTH_MYSQL_USER", "user"),
-      password: ENV.fetch("BETTER_AUTH_MYSQL_PASSWORD", "password"),
-      database: ENV.fetch("BETTER_AUTH_MYSQL_DATABASE", "better_auth"),
+      **TestDatabases.mysql_options,
       symbolize_keys: false
     )
     yield connection

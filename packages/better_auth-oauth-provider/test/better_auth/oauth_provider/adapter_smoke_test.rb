@@ -3,6 +3,7 @@
 require "json"
 require "tempfile"
 require_relative "../../test_helper"
+require_relative "../../../../../test/support/test_databases"
 
 class OAuthProviderAdapterSmokeTest < Minitest::Test
   include OAuthProviderFlowHelpers
@@ -36,7 +37,7 @@ class OAuthProviderAdapterSmokeTest < Minitest::Test
     begin
       require "pg"
 
-      connection = PG.connect(ENV.fetch("BETTER_AUTH_POSTGRES_URL", "postgres://user:password@localhost:5432/better_auth"))
+      connection = PG.connect(TestDatabases.postgres_url)
       reset_postgres_schema(connection)
       create_sql_schema(connection, :postgres)
 
@@ -59,11 +60,7 @@ class OAuthProviderAdapterSmokeTest < Minitest::Test
       require "mysql2"
 
       connection = Mysql2::Client.new(
-        host: ENV.fetch("BETTER_AUTH_MYSQL_HOST", "127.0.0.1"),
-        port: ENV.fetch("BETTER_AUTH_MYSQL_PORT", "3306").to_i,
-        username: ENV.fetch("BETTER_AUTH_MYSQL_USER", "user"),
-        password: ENV.fetch("BETTER_AUTH_MYSQL_PASSWORD", "password"),
-        database: ENV.fetch("BETTER_AUTH_MYSQL_DATABASE", "better_auth"),
+        **TestDatabases.mysql_options,
         symbolize_keys: false
       )
       reset_mysql_schema(connection)
@@ -88,8 +85,8 @@ class OAuthProviderAdapterSmokeTest < Minitest::Test
       require "sequel"
       require "tiny_tds"
 
-      ensure_mssql_database
-      connection = Sequel.connect(ENV.fetch("BETTER_AUTH_MSSQL_URL", "tinytds://sa:Password123!@127.0.0.1:1433/better_auth?timeout=30"))
+      TestDatabases.ensure_mssql_database
+      connection = Sequel.connect(TestDatabases.mssql_url)
       reset_mssql_schema(connection)
       create_sql_schema(connection, :mssql)
 
@@ -249,15 +246,6 @@ class OAuthProviderAdapterSmokeTest < Minitest::Test
       connection.query("DROP TABLE IF EXISTS `#{table.to_s.gsub("`", "``")}`")
     end
     connection.query("SET FOREIGN_KEY_CHECKS = 1")
-  end
-
-  def ensure_mssql_database
-    master = Sequel.connect(ENV.fetch("BETTER_AUTH_MSSQL_MASTER_URL", "tinytds://sa:Password123!@127.0.0.1:1433/master?timeout=30"))
-    master.run("IF DB_ID(N'better_auth') IS NULL CREATE DATABASE [better_auth]")
-  rescue Sequel::DatabaseConnectionError
-    skip "MSSQL test service is not available"
-  ensure
-    master&.disconnect
   end
 
   def reset_mssql_schema(connection)

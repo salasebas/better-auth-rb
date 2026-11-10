@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require_relative "../../spec_helper"
+require_relative "../../../../../test/support/test_databases"
 
 RSpec.describe "BetterAuth::Hanami::SequelAdapter database integrations", :integration do
   let(:secret) { "test-secret-that-is-long-enough-for-validation" }
@@ -106,26 +107,19 @@ RSpec.describe "BetterAuth::Hanami::SequelAdapter database integrations", :integ
     case database
     when :postgres
       require "pg"
-      Sequel.connect(ENV.fetch("BETTER_AUTH_POSTGRES_URL", "postgres://user:password@localhost:5432/better_auth"))
+      Sequel.connect(TestDatabases.postgres_url)
     when :mysql
       require "mysql2"
-      Sequel.connect(ENV.fetch("BETTER_AUTH_MYSQL_URL", "mysql2://user:password@127.0.0.1:3306/better_auth"))
+      Sequel.connect(TestDatabases.mysql_url)
     when :mssql
       require "tiny_tds"
-      ensure_mssql_database
-      Sequel.connect(ENV.fetch("BETTER_AUTH_MSSQL_URL", "tinytds://sa:Password123!@127.0.0.1:1433/better_auth?timeout=30"))
+      TestDatabases.ensure_mssql_database
+      Sequel.connect(TestDatabases.mssql_url)
     end
   rescue LoadError
     skip "#{database} driver gem is not installed"
   rescue Sequel::DatabaseConnectionError
     skip "#{database} test service is not available"
-  end
-
-  def ensure_mssql_database
-    master = Sequel.connect(ENV.fetch("BETTER_AUTH_MSSQL_MASTER_URL", "tinytds://sa:Password123!@127.0.0.1:1433/master?timeout=30"))
-    master.run("IF DB_ID(N'better_auth') IS NULL CREATE DATABASE [better_auth]")
-  ensure
-    master&.disconnect
   end
 
   def reset_database(db, database)

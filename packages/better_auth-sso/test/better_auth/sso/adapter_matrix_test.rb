@@ -3,6 +3,7 @@
 require "tempfile"
 require_relative "../../test_helper"
 require_relative "../../support/sso_test_helpers"
+require_relative "../../../../../test/support/test_databases"
 
 class BetterAuthSSOAdapterMatrixTest < Minitest::Test
   include BetterAuthSSOTestHelpers
@@ -36,7 +37,7 @@ class BetterAuthSSOAdapterMatrixTest < Minitest::Test
     begin
       require "pg"
 
-      connection = PG.connect(ENV.fetch("BETTER_AUTH_POSTGRES_URL", "postgres://user:password@localhost:5432/better_auth"))
+      connection = PG.connect(TestDatabases.postgres_url)
       reset_postgres_schema(connection)
       auth = sql_matrix_auth(:postgres, connection) { |options| BetterAuth::Adapters::Postgres.new(options, connection: connection) }
 
@@ -77,8 +78,8 @@ class BetterAuthSSOAdapterMatrixTest < Minitest::Test
       require "sequel"
       require "tiny_tds"
 
-      ensure_mssql_database
-      connection = Sequel.connect(ENV.fetch("BETTER_AUTH_MSSQL_URL", "tinytds://sa:Password123!@127.0.0.1:1433/better_auth?timeout=30"))
+      TestDatabases.ensure_mssql_database
+      connection = Sequel.connect(TestDatabases.mssql_url)
       reset_mssql_schema(connection)
       auth = sql_matrix_auth(:mssql, connection) { |options| BetterAuth::Adapters::MSSQL.new(options, connection: connection) }
 
@@ -94,13 +95,16 @@ class BetterAuthSSOAdapterMatrixTest < Minitest::Test
 
   def test_mongodb_adapter_is_exercised_when_real_mongo_package_and_service_are_available
     require_adapter_integration!
-    skip "Set BETTER_AUTH_MONGODB_URL to run the real MongoDB SSO matrix test" unless ENV["BETTER_AUTH_MONGODB_URL"]
 
     begin
       require "mongo"
       require "better_auth/mongodb"
 
-      client = Mongo::Client.new(ENV.fetch("BETTER_AUTH_MONGODB_URL"), database: ENV.fetch("BETTER_AUTH_MONGODB_DATABASE", "better_auth_sso_test"))
+      client = Mongo::Client.new(
+        TestDatabases.mongodb_url("better_auth_sso_test"),
+        database: ENV.fetch("BETTER_AUTH_MONGODB_DATABASE") { TestDatabases.namespaced("better_auth_sso_test") },
+        server_selection_timeout: 1
+      )
       client.database.collections.each(&:drop)
       auth = matrix_auth(database: ->(options) { BetterAuth::Adapters::MongoDB.new(options, database: client.database) })
 
@@ -287,11 +291,7 @@ class BetterAuthSSOAdapterMatrixTest < Minitest::Test
 
   def mysql_connection
     Mysql2::Client.new(
-      host: ENV.fetch("BETTER_AUTH_MYSQL_HOST", "127.0.0.1"),
-      port: ENV.fetch("BETTER_AUTH_MYSQL_PORT", "3306").to_i,
-      username: ENV.fetch("BETTER_AUTH_MYSQL_USER", "user"),
-      password: ENV.fetch("BETTER_AUTH_MYSQL_PASSWORD", "password"),
-      database: ENV.fetch("BETTER_AUTH_MYSQL_DATABASE", "better_auth"),
+      **TestDatabases.mysql_options,
       symbolize_keys: false
     )
   end
@@ -304,14 +304,6 @@ class BetterAuthSSOAdapterMatrixTest < Minitest::Test
     end
   ensure
     connection&.query("SET FOREIGN_KEY_CHECKS = 1")
-  end
-
-  def ensure_mssql_database
-    require "sequel"
-    master = Sequel.connect(ENV.fetch("BETTER_AUTH_MSSQL_MASTER_URL", "tinytds://sa:Password123!@127.0.0.1:1433/master?timeout=30"))
-    master.run("IF DB_ID(N'better_auth') IS NULL CREATE DATABASE [better_auth]")
-  ensure
-    master&.disconnect
   end
 
   def reset_mssql_schema(connection)
