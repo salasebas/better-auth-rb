@@ -375,7 +375,7 @@ class BetterAuthInternalAdapterTest < Minitest::Test
 
   def test_dual_write_session_does_not_publish_secondary_storage_when_database_insert_fails
     storage = MemoryStorage.new
-    internal = custom_internal_adapter(
+    internal = internal_adapter(
       FailingSessionMemoryAdapter,
       secondary_storage: storage,
       session: {store_session_in_database: true}
@@ -394,7 +394,7 @@ class BetterAuthInternalAdapterTest < Minitest::Test
 
   def test_dual_write_session_returns_and_caches_the_adapter_created_record
     storage = MemoryStorage.new
-    internal = custom_internal_adapter(
+    internal = internal_adapter(
       NormalizingSessionMemoryAdapter,
       secondary_storage: storage,
       session: {store_session_in_database: true}
@@ -407,6 +407,25 @@ class BetterAuthInternalAdapterTest < Minitest::Test
 
     assert_equal "database-normalized", session["userAgent"]
     assert_equal "database-normalized", cached.dig("session", "userAgent")
+  end
+
+  def test_dual_write_session_uses_the_database_id_and_ignores_override_id
+    storage = MemoryStorage.new
+    internal = internal_adapter(
+      secondary_storage: storage,
+      session: {store_session_in_database: true},
+      advanced: {database: {generate_id: "serial"}}
+    )
+    user = internal.create_user(name: "Ada", email: "session-serial-id@example.com")
+    token = "session-serial-id-token"
+
+    session = internal.create_session(user["id"], false, {id: "override-id", token: token})
+    cached = JSON.parse(storage.get(token))
+    stored = internal.adapter.find_one(model: "session", where: [{field: "token", value: token}])
+
+    assert_equal 1, session["id"]
+    assert_equal 1, stored["id"]
+    assert_equal 1, cached.dig("session", "id")
   end
 
   def test_update_session_with_secondary_storage_updates_database_copy_when_enabled
@@ -814,9 +833,9 @@ class BetterAuthInternalAdapterTest < Minitest::Test
 
   private
 
-  def internal_adapter(options = {})
+  def internal_adapter(adapter_class = BetterAuth::Adapters::Memory, **options)
     config = BetterAuth::Configuration.new({secret: SECRET, database: :memory}.merge(options))
-    adapter = BetterAuth::Adapters::Memory.new(config)
+    adapter = adapter_class.new(config)
     BetterAuth::Adapters::InternalAdapter.new(adapter, config)
   end
 
@@ -841,12 +860,6 @@ class BetterAuthInternalAdapterTest < Minitest::Test
       "createdAt" => Time.now.iso8601,
       "updatedAt" => Time.now.iso8601
     )
-  end
-
-  def custom_internal_adapter(adapter_class, options = {})
-    config = BetterAuth::Configuration.new({secret: SECRET, database: :memory}.merge(options))
-    adapter = adapter_class.new(config)
-    BetterAuth::Adapters::InternalAdapter.new(adapter, config)
   end
 
   class FailingSessionMemoryAdapter < BetterAuth::Adapters::Memory

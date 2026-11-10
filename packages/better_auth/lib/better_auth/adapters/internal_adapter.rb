@@ -71,7 +71,7 @@ module BetterAuth
       end
 
       def create_session(user_id, dont_remember_me = false, override = nil, override_all = false, context = nil)
-        override = stringify_keys(override || {})
+        override = stringify_keys(override || {}).except("id")
         token = override.delete("token") || SecureRandom.hex(16)
         base = {
           "ipAddress" => "",
@@ -80,20 +80,18 @@ module BetterAuth
           "userId" => user_id,
           "token" => token
         }.merge(timestamps)
-        base["id"] = generated_id if secondary_storage
+        store_in_database = options.session[:store_session_in_database]
+        base["id"] = generated_id if secondary_storage && !store_in_database
         data = override_all ? base.merge(override) : override.merge(base)
 
         custom = secondary_storage && lambda do |session_data|
-          if options.session[:store_session_in_database]
-            created = adapter.create(model: "session", data: session_data, force_allow_id: true)
-            session = created || session_data
-            store_session(session, cache_data: data)
-            session
+          session = if store_in_database
+            adapter.create(model: "session", data: session_data, force_allow_id: true) || session_data
           else
-            actual_session = apply_schema_create("session", session_data)
-            store_session(actual_session)
-            actual_session
+            apply_schema_create("session", session_data)
           end
+          store_session(session, cache_data: data)
+          session
         end
         hooks.create(data, "session", custom: custom, context: context)
       end
@@ -589,7 +587,7 @@ module BetterAuth
         value
       end
 
-      def store_session(session, cache_data: session)
+      def store_session(session, cache_data:)
         user = adapter.find_one(model: "user", where: [{field: "id", value: cache_data["userId"]}])
         now_ms = current_millis
         expires_ms = millis(cache_data["expiresAt"])
