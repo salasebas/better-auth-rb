@@ -101,7 +101,7 @@ class BetterAuthSSORateLimitIntegrationTest < Minitest::Test
     assert auth.context.internal_adapter.find_verification_value("saml-authn-request:#{request_id}")
   end
 
-  def test_oidc_callback_rate_limit_does_not_consume_pkce_state
+  def test_oidc_callback_rate_limit_does_not_consume_shared_state
     auth = rate_limited_auth(custom_rules: {"/sso/callback/*" => {window: 60, max: 1}})
     cookie = sign_up_cookie(auth)
     register_oidc_provider(auth, cookie: cookie, provider_id: "rate-oidc", domain: "oidc.example.com")
@@ -112,7 +112,7 @@ class BetterAuthSSORateLimitIntegrationTest < Minitest::Test
     limited = rack_json_request(auth, "GET", "/api/auth/sso/callback/rate-oidc?state=#{URI.encode_www_form_component(state)}&code=good")
 
     assert_equal 429, limited.first
-    assert auth.context.internal_adapter.find_verification_value("oidc-pkce-verifier:#{state}")
+    assert auth.context.internal_adapter.find_verification_value(state)
   end
 
   private
