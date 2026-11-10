@@ -666,12 +666,9 @@ module BetterAuth
       end
 
       def parse_verification_storage(value)
-        return value.transform_keys(&:to_s) if value.is_a?(Hash)
-        return nil unless value.is_a?(String)
-
-        parsed = JSON.parse(value)
-        parsed.is_a?(Hash) ? parsed.transform_keys(&:to_s) : nil
-      rescue JSON::ParserError, TypeError
+        parsed = value.is_a?(String) ? JSON.parse(value) : value
+        parsed if parsed.is_a?(Hash)
+      rescue JSON::ParserError
         nil
       end
 
