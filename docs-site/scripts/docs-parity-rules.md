@@ -106,3 +106,5 @@ steps titled "Add the client plugin".
 Never document unsupported plugins as supported: `mcp`, upstream
 `oidc-provider`, `test-utils`, non-Stripe payment plugins, and hosted
 infrastructure/product pages.
+
+This line is a CI selection probe for #150.
