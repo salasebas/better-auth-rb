@@ -312,7 +312,8 @@ jobs:
         if: contains(fromJSON('["better_auth-passkey", "better_auth-scim", "better_auth-sso"]'), matrix.package)
         run: |
           set -euo pipefail
-          docker run --detach --name mongodb-replica --publish 27017:27017 mongo:8.0 --replSet rs0 --bind_ip_all
+          # mongo:8.0 exits on the runner kernel unless glibc owns rseq: https://jira.mongodb.org/browse/SERVER-121912
+          docker run --detach --name mongodb-replica --publish 27017:27017 --env GLIBC_TUNABLES=glibc.pthread.rseq=1 mongo:8.0 --replSet rs0 --bind_ip_all
           for attempt in $(seq 1 60); do
             if docker exec mongodb-replica mongosh --quiet --eval 'db.adminCommand({ping: 1})' >/dev/null 2>&1; then
               break
@@ -565,7 +566,8 @@ jobs:
       - name: Start MongoDB replica set
         run: |
           set -euo pipefail
-          docker run --detach --name mongodb-replica --publish 27017:27017 mongo:8.0 --replSet rs0 --bind_ip_all
+          # mongo:8.0 exits on the runner kernel unless glibc owns rseq: https://jira.mongodb.org/browse/SERVER-121912
+          docker run --detach --name mongodb-replica --publish 27017:27017 --env GLIBC_TUNABLES=glibc.pthread.rseq=1 mongo:8.0 --replSet rs0 --bind_ip_all
           for attempt in $(seq 1 60); do
             if docker exec mongodb-replica mongosh --quiet --eval 'db.adminCommand({ping: 1})' >/dev/null 2>&1; then
               break
