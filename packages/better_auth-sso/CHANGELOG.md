@@ -9,6 +9,15 @@
   regression coverage for the supported Ruby protocol paths.
 - Added a checked upstream test inventory for the SSO plugin surface.
 
+## [0.11.1](https://github.com/salasebas/better-auth-rb/compare/better_auth-sso/v0.11.0...better_auth-sso/v0.11.1) (2026-11-10)
+
+
+### Bug Fixes
+
+* **core:** enforce path segment matcher boundaries ([#98](https://github.com/salasebas/better-auth-rb/issues/98)) ([ba26891](https://github.com/salasebas/better-auth-rb/commit/ba268919a58bd7d8abe67f2ad187b04baf77db42))
+* **last-login-method:** persist tracking through database hooks ([#74](https://github.com/salasebas/better-auth-rb/issues/74)) ([663600d](https://github.com/salasebas/better-auth-rb/commit/663600dc3a05856bf0e1697bb04f9f0a9d264476))
+* **saml:** align SLO session lookup layout ([#132](https://github.com/salasebas/better-auth-rb/issues/132)) ([04a6a02](https://github.com/salasebas/better-auth-rb/commit/04a6a02fc5f37816a119b71406ec9977fed0a6c4))
+
 ## [0.11.0](https://github.com/salasebas/better-auth-rb/compare/better_auth-sso-v0.10.0...better_auth-sso/v0.11.0) (2026-07-23)
 
 
