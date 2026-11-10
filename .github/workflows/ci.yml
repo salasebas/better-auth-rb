@@ -24,6 +24,108 @@ env:
   BETTER_AUTH_URL: http://localhost:3000
 
 jobs:
+  changes:
+    name: Select CI jobs
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      full: ${{ github.event_name != 'pull_request' || steps.filter.outputs.full == 'true' }}
+      changes: ${{ steps.filter.outputs.changes || '[]' }}
+    steps:
+      - name: Detect pull request changes
+        if: github.event_name == 'pull_request'
+        id: filter
+        uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
+        with:
+          predicate-quantifier: some-with-excludes
+          filters: |
+            full:
+              - "packages/better_auth/**"
+              - "Gemfile"
+              - "Gemfile.lock"
+              - "Rakefile"
+              - ".ruby-version"
+              - "scripts/**"
+              - "test/support/**"
+              - ".github/workflows/**"
+              - "reference/upstream-better-auth/**"
+              - "!packages/better_auth/**/*.md"
+            test-workspace:
+              - "**"
+              - "!docs/**"
+              - "!docs-site/**"
+            docs-site:
+              - "docs-site/**"
+              - deleted|renamed: "packages/**"
+            test-passkey:
+              - "packages/better_auth-passkey/**"
+              - "packages/better_auth-mongodb/**"
+              - "!**/*.md"
+            test-cli:
+              - "packages/better_auth-cli/**"
+              - "!**/*.md"
+            test-api-key:
+              - "packages/better_auth-api-key/**"
+              - "packages/better_auth-mongodb/**"
+              - "packages/better_auth-redis-storage/**"
+              - "!**/*.md"
+            test-rails:
+              - "packages/better_auth-rails/**"
+              - "packages/better_auth-passkey/**"
+              - "!**/*.md"
+            test-sinatra:
+              - "packages/better_auth-sinatra/**"
+              - "!**/*.md"
+            test-roda:
+              - "packages/better_auth-roda/**"
+              - "!**/*.md"
+            test-hanami:
+              - "packages/better_auth-hanami/**"
+              - "!**/*.md"
+            test-grape:
+              - "packages/better_auth-grape/**"
+              - "!**/*.md"
+            test-oauth-provider:
+              - "packages/better_auth-oauth-provider/**"
+              - "packages/better_auth-mongodb/**"
+              - "!**/*.md"
+            test-redis-storage:
+              - "packages/better_auth-redis-storage/**"
+              - "!**/*.md"
+            test-mongodb:
+              - "packages/better_auth-mongodb/**"
+              - "!**/*.md"
+            test-mongo-adapter:
+              - "packages/better_auth-mongo-adapter/**"
+              - "packages/better_auth-mongodb/**"
+              - "!**/*.md"
+            test-scim:
+              - "packages/better_auth-scim/**"
+              - "!**/*.md"
+            test-oidc:
+              - "packages/better_auth-oidc/**"
+              - "packages/better_auth-saml/**"
+              - "packages/better_auth-sso/**"
+              - "!**/*.md"
+            test-saml:
+              - "packages/better_auth-saml/**"
+              - "packages/better_auth-oidc/**"
+              - "packages/better_auth-sso/**"
+              - "!**/*.md"
+            test-sso:
+              - "packages/better_auth-sso/**"
+              - "packages/better_auth-oidc/**"
+              - "packages/better_auth-saml/**"
+              - "!**/*.md"
+            test-stripe:
+              - "packages/better_auth-stripe/**"
+              - "!**/*.md"
+            test-telemetry:
+              - "packages/better_auth-telemetry/**"
+              - "!**/*.md"
+
   lint-workspace:
     name: Lint workspace
     runs-on: ubuntu-latest
@@ -43,6 +145,8 @@ jobs:
 
   test-workspace:
     name: Test workspace release metadata
+    needs: changes
+    if: needs.changes.outputs.full == 'true' || contains(fromJSON(needs.changes.outputs.changes), 'test-workspace')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -74,6 +178,8 @@ jobs:
 
   test-core:
     name: Test better_auth (Core)
+    needs: changes
+    if: needs.changes.outputs.full == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -107,6 +213,8 @@ jobs:
 
   test-passkey:
     name: Test better_auth-passkey (Passkey Plugin)
+    needs: changes
+    if: needs.changes.outputs.full == 'true' || contains(fromJSON(needs.changes.outputs.changes), 'test-passkey')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -140,6 +248,8 @@ jobs:
 
   test-cli:
     name: Test better_auth-cli
+    needs: changes
+    if: needs.changes.outputs.full == 'true' || contains(fromJSON(needs.changes.outputs.changes), 'test-cli')
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -166,6 +276,8 @@ jobs:
 
   test-api-key:
     name: Test better_auth-api-key (API Key Plugin)
+    needs: changes
+    if: needs.changes.outputs.full == 'true' || contains(fromJSON(needs.changes.outputs.changes), 'test-api-key')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -199,6 +311,8 @@ jobs:
 
   test-rails:
     name: Test better_auth-rails (Rails Adapter)
+    needs: changes
+    if: needs.changes.outputs.full == 'true' || contains(fromJSON(needs.changes.outputs.changes), 'test-rails')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -221,6 +335,8 @@ jobs:
 
   test-sinatra:
     name: Test better_auth-sinatra (Sinatra Adapter)
+    needs: changes
+    if: needs.changes.outputs.full == 'true' || contains(fromJSON(needs.changes.outputs.changes), 'test-sinatra')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -243,6 +359,8 @@ jobs:
 
   test-roda:
     name: Test better_auth-roda (Roda Adapter)
+    needs: changes
+    if: needs.changes.outputs.full == 'true' || contains(fromJSON(needs.changes.outputs.changes), 'test-roda')
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -266,6 +384,8 @@ jobs:
 
   test-hanami:
     name: Test better_auth-hanami (Hanami Adapter)
+    needs: changes
+    if: needs.changes.outputs.full == 'true' || contains(fromJSON(needs.changes.outputs.changes), 'test-hanami')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -288,6 +408,8 @@ jobs:
 
   test-grape:
     name: Test better_auth-grape (Grape Adapter)
+    needs: changes
+    if: needs.changes.outputs.full == 'true' || contains(fromJSON(needs.changes.outputs.changes), 'test-grape')
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -311,6 +433,8 @@ jobs:
 
   test-oauth-provider:
     name: Test better_auth-oauth-provider (OAuth Provider Plugin)
+    needs: changes
+    if: needs.changes.outputs.full == 'true' || contains(fromJSON(needs.changes.outputs.changes), 'test-oauth-provider')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -336,6 +460,8 @@ jobs:
 
   test-redis-storage:
     name: Test better_auth-redis-storage (Redis Storage Plugin)
+    needs: changes
+    if: needs.changes.outputs.full == 'true' || contains(fromJSON(needs.changes.outputs.changes), 'test-redis-storage')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -361,6 +487,8 @@ jobs:
 
   test-mongodb:
     name: Test better_auth-mongodb (MongoDB Adapter)
+    needs: changes
+    if: needs.changes.outputs.full == 'true' || contains(fromJSON(needs.changes.outputs.changes), 'test-mongodb')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -383,6 +511,8 @@ jobs:
 
   test-mongo-adapter:
     name: Test better_auth-mongo-adapter (MongoDB compatibility package)
+    needs: changes
+    if: needs.changes.outputs.full == 'true' || contains(fromJSON(needs.changes.outputs.changes), 'test-mongo-adapter')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -405,6 +535,8 @@ jobs:
 
   test-scim:
     name: Test better_auth-scim (SCIM Plugin)
+    needs: changes
+    if: needs.changes.outputs.full == 'true' || contains(fromJSON(needs.changes.outputs.changes), 'test-scim')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -430,6 +562,8 @@ jobs:
 
   test-oidc:
     name: Test better_auth-oidc (OIDC SSO)
+    needs: changes
+    if: needs.changes.outputs.full == 'true' || contains(fromJSON(needs.changes.outputs.changes), 'test-oidc')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -452,6 +586,8 @@ jobs:
 
   test-saml:
     name: Test better_auth-saml (SAML SSO)
+    needs: changes
+    if: needs.changes.outputs.full == 'true' || contains(fromJSON(needs.changes.outputs.changes), 'test-saml')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -474,6 +610,8 @@ jobs:
 
   test-sso:
     name: Test better_auth-sso (SSO Plugin)
+    needs: changes
+    if: needs.changes.outputs.full == 'true' || contains(fromJSON(needs.changes.outputs.changes), 'test-sso')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -499,6 +637,8 @@ jobs:
 
   test-stripe:
     name: Test better_auth-stripe (Stripe Plugin)
+    needs: changes
+    if: needs.changes.outputs.full == 'true' || contains(fromJSON(needs.changes.outputs.changes), 'test-stripe')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -524,6 +664,8 @@ jobs:
 
   test-telemetry:
     name: Test better_auth-telemetry
+    needs: changes
+    if: needs.changes.outputs.full == 'true' || contains(fromJSON(needs.changes.outputs.changes), 'test-telemetry')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -546,6 +688,8 @@ jobs:
 
   docs-site:
     name: Docs site
+    needs: changes
+    if: needs.changes.outputs.full == 'true' || contains(fromJSON(needs.changes.outputs.changes), 'docs-site')
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -575,6 +719,7 @@ jobs:
     name: CI
     runs-on: ubuntu-latest
     needs:
+      - changes
       - lint-workspace
       - test-workspace
       - test-core
@@ -599,6 +744,8 @@ jobs:
       - docs-site
     if: always()
     steps:
-      - uses: re-actors/alls-green@b5b5b37504aa4183270bd3d855c52a67f212be35 # v1.3.0
-        with:
-          jobs: ${{ toJSON(needs) }}
+      - name: Require every selected CI job to pass
+        env:
+          NEEDS: ${{ toJSON(needs) }}
+        run: |
+          jq --exit-status 'all(.[]; .result == "success" or .result == "skipped")' <<< "$NEEDS"

@@ -47,6 +47,25 @@ class CIWorkflowPackageCoverageTest < Minitest::Test
     )
   end
 
+  def test_pull_requests_run_package_jobs_when_the_package_or_a_local_path_dependency_changes
+    filters = YAML.safe_load(@jobs.fetch("changes").fetch("steps").find { |step| step["id"] == "filter" }.dig("with", "filters"))
+
+    assert_includes filters.fetch("full"), "packages/better_auth/**"
+    assert_equal "needs.changes.outputs.full == 'true'", @jobs.fetch("test-core").fetch("if")
+
+    package_test_jobs_by_package.except("better_auth").each do |package, job_ids|
+      expected_paths = ([package] + local_path_dependencies(package)).map { |name| "packages/#{name}/**" }
+
+      job_ids.each do |job_id|
+        assert_empty expected_paths - filters.fetch(job_id, []), "#{job_id} must run when #{expected_paths.join(", ")} change"
+        assert_equal(
+          "needs.changes.outputs.full == 'true' || contains(fromJSON(needs.changes.outputs.changes), '#{job_id}')",
+          @jobs.fetch(job_id).fetch("if")
+        )
+      end
+    end
+  end
+
   def test_mongodb_packages_have_main_ci_regression_coverage
     REGRESSION_PACKAGES.each do |package|
       assert_includes(
@@ -126,6 +145,10 @@ class CIWorkflowPackageCoverageTest < Minitest::Test
 
       job_id
     end
+  end
+
+  def local_path_dependencies(package)
+    PACKAGES_PATH.join(package, "Gemfile").read.scan(%r{path: "\.\./([^"]+)"}).flatten - ["better_auth"]
   end
 
   def working_directories(value)
