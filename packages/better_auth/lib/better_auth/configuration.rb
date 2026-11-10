@@ -306,11 +306,11 @@ module BetterAuth
       cookie_cache = symbolize_keys(configured.delete(:cookie_cache) || {})
       session = deep_merge(DEFAULT_SESSION, configured)
 
-      if database.nil?
+      if StoreCapabilities.has_server_session_store?(self)
+        session[:cookie_cache] = cookie_cache unless cookie_cache.empty?
+      else
         session = deep_merge(session, deep_dup(DEFAULT_STATELESS_SESSION))
         session[:cookie_cache][:max_age] ||= session[:expires_in]
-      else
-        session[:cookie_cache] = cookie_cache unless cookie_cache.empty?
       end
 
       session[:cookie_cache] = deep_merge(session[:cookie_cache] || {}, cookie_cache) unless cookie_cache.empty?

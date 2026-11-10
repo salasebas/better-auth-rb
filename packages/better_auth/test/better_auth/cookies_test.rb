@@ -564,7 +564,152 @@ class BetterAuthCookiesTest < Minitest::Test
     assert_equal "a" * 8_000, account.fetch("accountId")
   end
 
+  def test_cookie_cache_refreshes_matching_database_account_cookie
+    auth = cookie_sync_auth(database: :memory)
+    issued_at = future_issue_time
+    renewed_at = issued_at + 60
+    account = {"userId" => "user-1", "providerId" => "github", "accountId" => "account-1"}
+    request_cookie = issue_account_cookie(auth, account, at: issued_at)
+    original = decoded_account_cookie(auth, request_cookie)
+    ctx = endpoint_context(auth, cookie: request_cookie)
+
+    Time.stub(:now, renewed_at) { BetterAuth::Cookies.set_cookie_cache(ctx, cookie_sync_session("user-1"), false) }
+
+    renewed = decoded_account_cookie(auth, request_cookie_header(ctx.response_headers.fetch("set-cookie")))
+    account_line = account_set_cookie_lines(ctx, auth).reverse.find do |line|
+      line.start_with?("#{auth.context.auth_cookies[:account_data].name}=") && !line.include?("Max-Age=0")
+    end
+
+    assert_operator renewed.fetch("exp"), :>, original.fetch("exp")
+    assert_equal "account-1", renewed.fetch("accountId")
+    assert_includes account_line, "Max-Age=120"
+  end
+
+  def test_cookie_cache_expires_mismatched_database_account_cookie_and_cleans_chunks
+    auth = cookie_sync_auth(database: :memory)
+    account = {"userId" => "other-user", "providerId" => "github", "accountId" => "a" * 8_000}
+    request_cookie = issue_account_cookie(auth, account, at: future_issue_time)
+    ctx = endpoint_context(auth, cookie: request_cookie)
+
+    BetterAuth::Cookies.set_cookie_cache(ctx, cookie_sync_session("user-1"), false)
+
+    lines = account_set_cookie_lines(ctx, auth)
+    assert lines.any? { |line| line.start_with?("#{auth.context.auth_cookies[:account_data].name}=") && line.include?("Max-Age=0") }
+    assert lines.any? { |line| line.start_with?("#{auth.context.auth_cookies[:account_data].name}.") && line.include?("Max-Age=0") }
+    assert lines.all? { |line| line.include?("Max-Age=0") }
+  end
+
+  def test_cookie_cache_renews_mismatched_account_cookie_with_secondary_storage_only
+    auth = cookie_sync_auth(database: nil, secondary_storage: Object.new)
+    account = {"userId" => "other-user", "providerId" => "github", "accountId" => "account-1"}
+    request_cookie = issue_account_cookie(auth, account, at: future_issue_time)
+    ctx = endpoint_context(auth, cookie: request_cookie)
+
+    BetterAuth::Cookies.set_cookie_cache(ctx, cookie_sync_session("user-1"), false)
+
+    renewed = decoded_account_cookie(auth, request_cookie_header(ctx.response_headers.fetch("set-cookie")))
+    lines = account_set_cookie_lines(ctx, auth)
+    assert_equal "other-user", renewed.fetch("userId")
+    assert_equal "account-1", renewed.fetch("accountId")
+    assert lines.any? { |line| line.include?("Max-Age=120") }
+    assert lines.last.include?("Max-Age=120")
+  end
+
+  def test_cookie_cache_preserves_pending_account_cookie_writes
+    auth = cookie_sync_auth(database: :memory)
+    stale_cookie = issue_account_cookie(
+      auth,
+      {"userId" => "other-user", "providerId" => "github", "accountId" => "stale"},
+      at: future_issue_time
+    )
+
+    fresh_ctx = endpoint_context(auth, cookie: stale_cookie)
+    BetterAuth::Cookies.set_account_cookie(fresh_ctx, {"userId" => "user-1", "providerId" => "github", "accountId" => "fresh"})
+    pending_fresh = account_set_cookie_lines(fresh_ctx, auth)
+    BetterAuth::Cookies.set_cookie_cache(fresh_ctx, cookie_sync_session("user-1"), false)
+
+    assert_equal pending_fresh, account_set_cookie_lines(fresh_ctx, auth)
+    assert_equal "fresh", decoded_account_cookie(auth, request_cookie_header(fresh_ctx.response_headers.fetch("set-cookie"))).fetch("accountId")
+
+    expiry_ctx = endpoint_context(auth, cookie: stale_cookie)
+    BetterAuth::Cookies.expire_cookie(expiry_ctx, auth.context.auth_cookies[:account_data])
+    pending_expiry = account_set_cookie_lines(expiry_ctx, auth)
+    BetterAuth::Cookies.set_cookie_cache(expiry_ctx, cookie_sync_session("user-1"), false)
+
+    assert_equal pending_expiry, account_set_cookie_lines(expiry_ctx, auth)
+  end
+
+  def test_cookie_cache_leaves_missing_invalid_and_disabled_account_cookies_untouched
+    auth = cookie_sync_auth(database: :memory)
+    missing_ctx = endpoint_context(auth)
+    BetterAuth::Cookies.set_cookie_cache(missing_ctx, cookie_sync_session("user-1"), false)
+    assert_empty account_set_cookie_lines(missing_ctx, auth)
+
+    invalid_ctx = endpoint_context(auth, cookie: "#{auth.context.auth_cookies[:account_data].name}=invalid")
+    BetterAuth::Cookies.set_cookie_cache(invalid_ctx, cookie_sync_session("user-1"), false)
+    assert_empty account_set_cookie_lines(invalid_ctx, auth)
+
+    enabled_auth = cookie_sync_auth(database: :memory)
+    valid_cookie = issue_account_cookie(
+      enabled_auth,
+      {"userId" => "user-1", "providerId" => "github", "accountId" => "account-1"},
+      at: future_issue_time
+    )
+    disabled_auth = BetterAuth.auth(
+      secret: SECRET,
+      database: :memory,
+      account: {store_account_cookie: false},
+      session: {cookie_cache: {enabled: true, max_age: 120}}
+    )
+    disabled_ctx = endpoint_context(disabled_auth, cookie: valid_cookie)
+    BetterAuth::Cookies.set_cookie_cache(disabled_ctx, cookie_sync_session("user-1"), false)
+
+    assert_empty account_set_cookie_lines(disabled_ctx, disabled_auth)
+  end
+
   private
+
+  def cookie_sync_auth(database:, secondary_storage: nil)
+    BetterAuth.auth(
+      secret: SECRET,
+      database: database,
+      secondary_storage: secondary_storage,
+      account: {store_account_cookie: true},
+      session: {cookie_cache: {enabled: true, max_age: 120}}
+    )
+  end
+
+  def cookie_sync_session(user_id)
+    {
+      session: {"id" => "session-1", "token" => "token-1", "userId" => user_id},
+      user: {"id" => user_id, "email" => "cookie-sync@example.com"}
+    }
+  end
+
+  def issue_account_cookie(auth, account, at:)
+    ctx = endpoint_context(auth)
+    Time.stub(:now, at) { BetterAuth::Cookies.set_account_cookie(ctx, account) }
+    request_cookie_header(ctx.response_headers.fetch("set-cookie"))
+  end
+
+  def decoded_account_cookie(auth, cookie)
+    BetterAuth::Cookies.get_account_cookie(endpoint_context(auth, cookie: cookie))
+  end
+
+  def account_set_cookie_lines(ctx, auth)
+    cookie_name = auth.context.auth_cookies[:account_data].name
+    BetterAuth::Cookies.split_set_cookie_header(ctx.response_headers["set-cookie"]).select do |line|
+      line.start_with?("#{cookie_name}=", "#{cookie_name}.")
+    end
+  end
+
+  def request_cookie_header(set_cookie)
+    BetterAuth::Cookies.split_set_cookie_header(set_cookie).map { |line| line.split(";", 2).first }.join("; ")
+  end
+
+  def future_issue_time
+    Time.now + 600
+  end
 
   def with_env(overrides)
     overrides = overrides.transform_keys(&:to_s)
