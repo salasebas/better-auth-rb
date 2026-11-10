@@ -416,7 +416,7 @@ module BetterAuth
         if secondary_storage
           cached = read_verification(stored_identifier)
           if cached
-            updated = store_verification(cached.merge(update))
+            updated = store_verification(stored_identifier, cached.merge(update))
             return updated unless verification_store_in_database?
           end
           return update unless verification_store_in_database?
