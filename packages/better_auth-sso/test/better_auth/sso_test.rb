@@ -405,12 +405,15 @@ class BetterAuthPluginsSSOTest < Minitest::Test
     auth = build_auth(saml: {enableSingleLogout: true})
     cookie = sign_up_cookie(auth, "saml-signout@example.com")
     token = cookie[/better-auth\.session_token=([^;]+)/, 1].to_s.rpartition(".").first
+    session_id = auth.context.internal_adapter.find_session(token).fetch(:session).fetch("id")
+    refute_equal session_id, token
     saml_session_key = "#{BetterAuth::Plugins::SSO_SAML_SESSION_KEY_PREFIX}saml:name-id"
-    lookup_key = "#{BetterAuth::Plugins::SSO_SAML_SESSION_BY_ID_KEY_PREFIX}#{token}"
+    lookup_key = "#{BetterAuth::Plugins::SSO_SAML_SESSION_BY_ID_KEY_PREFIX}#{session_id}"
+    token_lookup_key = "#{BetterAuth::Plugins::SSO_SAML_SESSION_BY_ID_KEY_PREFIX}#{token}"
 
     auth.context.internal_adapter.create_verification_value(
       identifier: saml_session_key,
-      value: JSON.generate({sessionToken: token}),
+      value: JSON.generate({sessionId: session_id, sessionToken: token, providerId: "saml", nameID: "name-id"}),
       expiresAt: Time.now + 300
     )
     auth.context.internal_adapter.create_verification_value(
@@ -419,9 +422,11 @@ class BetterAuthPluginsSSOTest < Minitest::Test
       expiresAt: Time.now + 300
     )
 
+    assert_nil auth.context.internal_adapter.find_verification_value(token_lookup_key)
     auth.api.sign_out(headers: {"cookie" => cookie})
 
     assert_nil auth.context.internal_adapter.find_verification_value(lookup_key)
+    assert_nil auth.context.internal_adapter.find_verification_value(token_lookup_key)
     assert_nil auth.context.internal_adapter.find_verification_value(saml_session_key)
   end
 

@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Stored the SAML Single Logout record in the Better Auth v1.6.23 layout (`nameID`, optional `sessionIndex`, reverse lookup keyed by session ID). A NameID is now enough to store it. SAML sessions created before the upgrade fall back to email-based SP-initiated logout until they expire.
 - Split SAML SP code out of `better_auth-sso` into a dedicated gem with `ruby-saml` as the only XML dependency surface.
 - Documented and tested the Ruby SAML integration boundary for the hardened SSO
   lifecycle work.
