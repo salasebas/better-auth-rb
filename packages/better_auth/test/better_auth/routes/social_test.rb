@@ -29,8 +29,6 @@ class BetterAuthRoutesSocialTest < Minitest::Test
     def delete(key)
       @data.delete(key)
     end
-
-    alias_method :get_and_delete, :delete
   end
 
   class FailingVerificationStorage < SecondaryStorage
