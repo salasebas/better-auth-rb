@@ -10,23 +10,33 @@ module BetterAuth
       nil
     end
 
-    def sso_oidc_authorization_url(provider, ctx, state, plugin_config = {}, body = {}, code_verifier: nil)
+    def sso_oidc_authorization_url(provider, ctx, plugin_config, body)
       config = sso_provider_config_hash(provider["oidcConfig"])
       endpoint = config[:authorization_endpoint] || config[:authorization_url]
       raise APIError.new("BAD_REQUEST", message: "Invalid OIDC configuration. Authorization URL not found.") if endpoint.to_s.empty?
 
+      code_verifier = BetterAuth::Crypto.random_string(128)
+      state_data = {
+        callbackURL: body[:callback_url].to_s.empty? ? ctx.context.options.base_url : body[:callback_url],
+        codeVerifier: code_verifier,
+        errorURL: body[:error_callback_url],
+        newUserURL: body[:new_user_callback_url],
+        requestSignUp: body[:request_sign_up],
+        expiresAt: Time.now.to_i + 600
+      }
+      state_data[:ssoProviderId] = provider.fetch("providerId") unless plugin_config[:redirect_uri].to_s.strip.empty?
       scopes = Array(body[:scopes] || config[:scopes] || config[:scope] || ["openid", "email", "profile", "offline_access"])
       query = {
         client_id: config[:client_id],
         response_type: "code",
         redirect_uri: sso_oidc_redirect_uri(ctx.context, provider.fetch("providerId")),
         scope: scopes.join(" "),
-        state: state
+        state: BetterAuth::OAuthState.generate(ctx, state_data.compact)
       }.compact
       login_hint = body[:login_hint] || body[:email]
       query[:login_hint] = login_hint if login_hint
-      if config[:pkce] && code_verifier
-        query[:code_challenge] = sso_base64_urlsafe(OpenSSL::Digest::SHA256.digest(code_verifier))
+      if config[:pkce]
+        query[:code_challenge] = BetterAuth::SocialProviders::Base.pkce_challenge(code_verifier)
         query[:code_challenge_method] = "S256"
       end
       "#{endpoint}?#{URI.encode_www_form(query)}"
@@ -232,7 +242,7 @@ module BetterAuth
       normalize_hash(JSON.parse(response.body))
     end
 
-    def sso_oidc_user_info(ctx, oidc_config, tokens, plugin_config, expected_nonce: nil)
+    def sso_oidc_user_info(ctx, oidc_config, tokens, plugin_config)
       user_callback = oidc_config[:get_user_info]
       raw = if user_callback.respond_to?(:call)
         user_callback.call(tokens)
@@ -253,7 +263,6 @@ module BetterAuth
           audience: oidc_config[:client_id],
           issuer: oidc_config[:issuer],
           fetch: plugin_config[:oidc_jwks_fetch],
-          expected_nonce: expected_nonce,
           trusted_origin: sso_oidc_trusted_origin_check(ctx)
         ) || {_sso_error: "token_not_verified"}
       else
@@ -294,7 +303,7 @@ module BetterAuth
       {}
     end
 
-    def sso_validate_oidc_id_token(token, jwks_endpoint:, audience:, issuer:, fetch: nil, expected_nonce: nil, trusted_origin: nil)
+    def sso_validate_oidc_id_token(token, jwks_endpoint:, audience:, issuer:, fetch: nil, trusted_origin: nil)
       jwks = sso_fetch_oidc_jwks(jwks_endpoint, fetch: fetch, trusted_origin: trusted_origin)
       payload, = ::JWT.decode(
         token.to_s,
@@ -307,11 +316,6 @@ module BetterAuth
         iss: issuer,
         verify_iss: true
       )
-      if expected_nonce && !expected_nonce.to_s.empty?
-        token_nonce = payload["nonce"] || payload[:nonce]
-        return nil if token_nonce.to_s.empty?
-        return nil unless BetterAuth::Crypto.constant_time_compare(token_nonce.to_s, expected_nonce.to_s)
-      end
       payload
     rescue
       nil
@@ -385,10 +389,6 @@ module BetterAuth
     def sso_oidc_http_max_body_size(value)
       size = value || SSO_DEFAULT_OIDC_HTTP_MAX_BODY_SIZE
       size.to_i.positive? ? size.to_i : SSO_DEFAULT_OIDC_HTTP_MAX_BODY_SIZE
-    end
-
-    def sso_base64_urlsafe(value)
-      Base64.strict_encode64(value).tr("+/", "-_").delete("=")
     end
 
     def sso_storage_config(config)

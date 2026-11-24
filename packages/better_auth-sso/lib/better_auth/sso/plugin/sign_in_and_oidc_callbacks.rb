@@ -21,18 +21,7 @@ module BetterAuth
 
         if provider["oidcConfig"] && provider_type != "saml"
           provider = sso_ensure_runtime_oidc_provider(ctx, provider, config)
-          code_verifier = BetterAuth::Crypto.random_string(128)
-          state_data = {
-            callbackURL: body[:callback_url] || ctx.context.base_url,
-            codeVerifier: code_verifier,
-            errorURL: body[:error_callback_url],
-            newUserURL: body[:new_user_callback_url],
-            requestSignUp: body[:request_sign_up],
-            expiresAt: Time.now.to_i + 600
-          }
-          state_data[:ssoProviderId] = provider.fetch("providerId") unless config[:redirect_uri].to_s.strip.empty?
-          state = BetterAuth::OAuthState.generate(ctx, state_data.compact)
-          url = sso_oidc_authorization_url(provider, ctx, state, config, body, code_verifier: code_verifier)
+          url = sso_oidc_authorization_url(provider, ctx, config, body)
         elsif provider["samlConfig"]
           BetterAuth::SSO.load_saml!
           state_data = {
@@ -60,31 +49,28 @@ module BetterAuth
 
     def sso_oidc_shared_callback_endpoint(config = {})
       Endpoint.new(path: "/sso/callback", method: "GET") do |ctx|
-        state = begin
-          sso_parse_oidc_state(ctx)
-        rescue BetterAuth::OAuthState::Error => error
-          next sso_oidc_state_error_response(ctx, error)
-        end
-
-        provider_id = state["ssoProviderId"] || state[:ssoProviderId]
-        unless provider_id
-          error_url = sso_safe_oidc_redirect_url(ctx, state["errorURL"] || state["callbackURL"] || ctx.context.base_url)
-          next sso_redirect(ctx, sso_append_error(error_url, "invalid_state", "missing_provider_id"))
-        end
-
-        sso_handle_oidc_callback(ctx, config, provider_id, state: state)
+        sso_handle_oidc_callback(ctx, config)
       end
     end
 
-    def sso_handle_oidc_callback(ctx, config, provider_id, state: nil)
-      state ||= begin
-        sso_parse_oidc_state(ctx)
+    def sso_handle_oidc_callback(ctx, config, provider_id = nil)
+      default_error_url = ctx.context.options.on_api_error[:error_url] || "#{ctx.context.base_url}/error"
+      state = begin
+        BetterAuth::OAuthState.parse_stored(ctx, ctx.query[:state] || ctx.query["state"])
       rescue BetterAuth::OAuthState::Error => error
-        return sso_oidc_state_error_response(ctx, error)
+        target = error.error_url ? sso_safe_oidc_redirect_url(ctx, error.error_url) : default_error_url
+        return sso_redirect(ctx, sso_append_error(target, error.code))
+      rescue => error
+        Routes.social_log(ctx.context, :error, "Failed to parse state: #{error.class}")
+        return sso_redirect(ctx, sso_append_error(default_error_url, "internal_server_error"))
       end
 
       callback_url = sso_safe_oidc_redirect_url(ctx, state["callbackURL"] || "/")
-      error_url = sso_safe_oidc_redirect_url(ctx, state["errorURL"] || callback_url)
+      error_url = state["errorURL"].to_s.empty? ? default_error_url : sso_safe_oidc_redirect_url(ctx, state["errorURL"])
+      provider_id ||= state["ssoProviderId"]
+      if provider_id.to_s.empty?
+        return sso_redirect(ctx, sso_append_error(error_url, "invalid_state", "missing_provider_id"))
+      end
       if ctx.query[:error] || ctx.query["error"]
         error = ctx.query[:error] || ctx.query["error"]
         description = ctx.query[:error_description] || ctx.query["error_description"]
@@ -139,17 +125,6 @@ module BetterAuth
       raise unless error_url
 
       sso_redirect(ctx, sso_append_error(error_url, error.code, error.message))
-    end
-
-    def sso_parse_oidc_state(ctx)
-      state = BetterAuth::OAuthState.parse(ctx, ctx.query[:state] || ctx.query["state"], allow_legacy: false)
-      state["errorURL"] ||= ctx.context.options.on_api_error[:error_url] || "#{ctx.context.base_url}/error"
-      state
-    end
-
-    def sso_oidc_state_error_response(ctx, error)
-      error_url = error.error_url || ctx.context.options.on_api_error[:error_url] || "#{ctx.context.base_url}/error"
-      sso_redirect(ctx, sso_append_error(error_url, error.code))
     end
   end
 end

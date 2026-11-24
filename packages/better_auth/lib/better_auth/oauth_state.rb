@@ -49,17 +49,19 @@ module BetterAuth
       state
     end
 
-    def parse(ctx, state, allow_legacy: true)
-      raise Error, "state_not_found" if state.to_s.empty?
+    def parse(ctx, state)
+      legacy = Crypto.verify_jwt(state.to_s, ctx.context.secret)
+      return parse_legacy(ctx, state, legacy) if legacy
 
-      if allow_legacy
-        legacy = Crypto.verify_jwt(state.to_s, ctx.context.secret)
-        return parse_legacy(ctx, state, legacy) if legacy
-      end
-
-      cookie_strategy?(ctx) ? parse_cookie_state(ctx, state) : parse_database_state(ctx, state)
+      parse_stored(ctx, state)
     rescue JSON::ParserError
       raise Error, "state_invalid"
+    end
+
+    def parse_stored(ctx, state)
+      raise Error, "state_not_found" if state.to_s.empty?
+
+      cookie_strategy?(ctx) ? parse_cookie_state(ctx, state) : parse_database_state(ctx, state)
     end
 
     def parse_legacy(ctx, state, data)
@@ -108,8 +110,8 @@ module BetterAuth
       valid = ctx.request ? stored == state : (stored.nil? || stored == state)
       raise Error.new("state_mismatch", error_url: error_url) unless valid
 
-      ctx.context.internal_adapter.delete_verification_by_identifier(state)
       Cookies.expire_cookie(ctx, cookie) if ctx.request || stored
+      ctx.context.internal_adapter.delete_verification_by_identifier(state)
 
       validate_expiration!(data)
       data

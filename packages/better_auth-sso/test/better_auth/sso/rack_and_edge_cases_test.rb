@@ -63,7 +63,7 @@ class BetterAuthSSORackAndEdgeCasesTest < Minitest::Test
       auth,
       "POST",
       "/api/auth/sign-in/sso",
-      body: {providerId: "shared-state-non-pkce", callbackURL: "/dashboard"}
+      body: {providerId: "shared-state-non-pkce", callbackURL: ""}
     )
     state = Rack::Utils.parse_query(URI.parse(response_json(sign_in_body).fetch("url")).query).fetch("state")
     state_cookie = cookie_header(sign_in_headers.fetch("set-cookie"))
@@ -73,14 +73,7 @@ class BetterAuthSSORackAndEdgeCasesTest < Minitest::Test
     assert_equal 32, state.length
     refute BetterAuth::Crypto.verify_jwt(state, SECRET)
     assert_includes state_cookie, "better-auth.state="
-    assert_equal(
-      {
-        "callbackURL" => "/dashboard",
-        "codeVerifier" => stored_state_data(stored_state).fetch("codeVerifier"),
-        "oauthState" => state
-      },
-      stored_state_data(stored_state).slice("callbackURL", "codeVerifier", "oauthState")
-    )
+    assert_equal state, stored_state_data(stored_state).fetch("oauthState")
     assert_equal 128, stored_state_data(stored_state).fetch("codeVerifier").length
     assert_nil auth.context.internal_adapter.find_verification_value("oidc-pkce-verifier:#{state}")
 
@@ -102,7 +95,7 @@ class BetterAuthSSORackAndEdgeCasesTest < Minitest::Test
     )
 
     assert_equal 302, callback_status
-    assert_equal "/dashboard", callback_headers.fetch("location")
+    assert_equal "http://localhost:3000", callback_headers.fetch("location")
     assert_equal [nil], token_requests.map { |request| request[:codeVerifier] }
     assert_nil auth.context.internal_adapter.find_verification_value(state)
 
@@ -143,7 +136,7 @@ class BetterAuthSSORackAndEdgeCasesTest < Minitest::Test
 
     assert_equal 32, state.length
     assert_equal "S256", authorization_params.fetch("code_challenge_method")
-    assert authorization_params.fetch("code_challenge")
+    assert_equal Base64.urlsafe_encode64(Digest::SHA256.digest(verifier), padding: false), authorization_params.fetch("code_challenge")
     assert_equal 128, verifier.length
     assert_nil auth.context.internal_adapter.find_verification_value("oidc-pkce-verifier:#{state}")
 
@@ -525,6 +518,19 @@ class BetterAuthSSORackAndEdgeCasesTest < Minitest::Test
     assert_equal "http://localhost:3000/global-error?error=access_denied&error_description=cancelled", headers.fetch("location")
   end
 
+  def test_rack_oidc_state_store_failure_redirects_to_the_configured_error_page
+    storage = SecondaryStorage.new
+    def storage.get(_key)
+      raise IOError, "State storage unavailable"
+    end
+    auth = build_sso_auth(secondary_storage: storage, on_api_error: {error_url: "/auth-error?source=oidc"})
+
+    status, headers, = rack_json_request(auth, "GET", "/api/auth/sso/callback?state=opaque&code=good")
+
+    assert_equal 302, status
+    assert_equal "/auth-error?source=oidc&error=internal_server_error", headers.fetch("location")
+  end
+
   def test_rack_oidc_idp_error_preserves_per_flow_error_url_over_global_error_url
     auth = build_sso_auth(on_api_error: {error_url: "http://localhost:3000/global-error"})
     cookie = sign_up_cookie(auth)
@@ -569,9 +575,7 @@ class BetterAuthSSORackAndEdgeCasesTest < Minitest::Test
     sign_in = auth.api.sign_in_sso(body: {email: "ada@duplicate.example.com", callbackURL: "/dashboard"})
     params = Rack::Utils.parse_query(URI.parse(sign_in.fetch(:url)).query)
 
-    assert_equal 32, params.fetch("state").length
-    refute BetterAuth::Crypto.verify_jwt(params.fetch("state"), SECRET)
-    assert_equal "client-id", params.fetch("client_id")
+    assert_equal "http://localhost:3000/api/auth/sso/callback/first-domain", params.fetch("redirect_uri")
   end
 
   private
