@@ -24,7 +24,7 @@ module BetterAuth
 
     module_function
 
-    def generate(ctx, state_data, cookie_name: nil)
+    def generate(ctx, state_data, cookie_name = nil)
       state = Crypto.random_string(32)
       payload = stringify_keys(state_data).merge("oauthState" => state)
 

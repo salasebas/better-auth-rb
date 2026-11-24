@@ -20,7 +20,7 @@ module BetterAuth
         payload["callbackURL"] = callback_url
         payload["codeVerifier"] = BetterAuth::Crypto.random_string(128)
         payload["expiresAt"] = (Time.now.to_r * 1000).floor + 600_000
-        BetterAuth::OAuthState.generate(ctx, payload, cookie_name: "relay_state")
+        BetterAuth::OAuthState.generate(ctx, payload, "relay_state")
       end
 
       def parse_relay_state(ctx)
