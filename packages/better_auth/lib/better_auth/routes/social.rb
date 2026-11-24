@@ -402,16 +402,7 @@ module BetterAuth
         "link" => link,
         "expiresAt" => (Time.now.to_f * 1000).to_i + 600_000
       }.compact)
-      state = begin
-        OAuthState.generate(ctx, state_data)
-      rescue APIError
-        raise
-      rescue
-        raise unless ctx.request
-
-        social_log(ctx.context, :error, "Failed to create verification")
-        return [500, {}, []]
-      end
+      state = OAuthState.generate(ctx, state_data)
 
       redirect_uri = "#{ctx.context.canonical_base_url}/callback/#{provider_id}"
       url = call_provider(provider, :create_authorization_url, {

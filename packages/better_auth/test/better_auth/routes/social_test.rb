@@ -34,14 +34,21 @@ class BetterAuthRoutesSocialTest < Minitest::Test
   end
 
   class FailingVerificationStorage < SecondaryStorage
+    attr_reader :error
+
+    def initialize
+      super
+      @error = RuntimeError.new("verification storage unavailable")
+    end
+
     def get(key)
-      raise "verification storage unavailable" if key.start_with?("verification:")
+      raise error if key.start_with?("verification:")
 
       super
     end
 
     def set(key, value, ttl = nil)
-      raise "verification storage unavailable" if key.start_with?("verification:")
+      raise error if key.start_with?("verification:")
 
       super
     end
@@ -786,7 +793,7 @@ class BetterAuthRoutesSocialTest < Minitest::Test
     assert_nil storage.get("verification:#{state}")
   end
 
-  def test_rack_social_state_storage_failure_returns_an_empty_server_error
+  def test_social_api_rethrows_the_original_state_storage_error
     storage = FailingVerificationStorage.new
     auth = build_auth(
       secondary_storage: storage,
@@ -799,17 +806,13 @@ class BetterAuthRoutesSocialTest < Minitest::Test
     )
     session_cookie = sign_up_cookie(auth, email: "state-failure@example.com")
 
-    assert_social_state_generation_failure(
-      auth,
-      "/api/auth/sign-in/social",
-      {provider: "github", callbackURL: "/app", disableRedirect: true}
-    )
-    assert_social_state_generation_failure(
-      auth,
-      "/api/auth/link-social",
-      {provider: "github", callbackURL: "/app", disableRedirect: true},
-      cookie: session_cookie
-    )
+    body = {provider: "github", callbackURL: "/app"}
+    request = Rack::Request.new(rack_env("POST", "/api/auth/sign-in/social", body: body))
+    sign_in_error = assert_raises(RuntimeError) { auth.api.sign_in_social(body: body, request: request) }
+    link_error = assert_raises(RuntimeError) { auth.api.link_social(body: body, headers: {"cookie" => session_cookie}) }
+
+    assert_same storage.error, sign_in_error
+    assert_same storage.error, link_error
   end
 
   def test_callback_redirects_to_the_configured_error_page_when_state_storage_is_unavailable
@@ -2332,13 +2335,6 @@ class BetterAuthRoutesSocialTest < Minitest::Test
     encoded_header = Base64.urlsafe_encode64(JSON.generate({"alg" => "none"}), padding: false)
     encoded_payload = Base64.urlsafe_encode64(JSON.generate(payload), padding: false)
     "#{encoded_header}.#{encoded_payload}."
-  end
-
-  def assert_social_state_generation_failure(auth, path, body, cookie: nil)
-    status, _headers, response_body = auth.call(rack_env("POST", path, body: body, cookie: cookie))
-
-    assert_equal 500, status
-    assert_empty response_body.join
   end
 
   def rack_env(method, path, body: nil, cookie: nil)
