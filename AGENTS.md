@@ -25,6 +25,11 @@ between upstream tags. Behavior from a newer release waits until the pin moves
 to it. Reviews judge fidelity to the pinned source: when upstream looks wrong,
 keep the port faithful and file the concern as an issue.
 
+End the PR title and every commit subject that ports upstream behavior with the
+upstream version it ports, for example
+`fix(sso): align OIDC state and PKCE flow (v1.6.23)`. Squash merges turn the PR
+title into the commit on `main`.
+
 Keep shared auth behavior in `packages/better_auth`; adapter and plugin
 packages only integrate it.
 
