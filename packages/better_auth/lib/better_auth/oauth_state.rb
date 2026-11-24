@@ -4,8 +4,8 @@ require "json"
 
 module BetterAuth
   # Shared OAuth state storage matching upstream's opaque-state adaptation.
-  # State data is encrypted client-side for the cookie strategy or consumed
-  # from verification storage for the database strategy. Signed JWT state is
+  # State data is encrypted client-side for the cookie strategy or retrieved
+  # and deleted from verification storage for the database strategy. Signed JWT state is
   # still accepted so in-flight legacy sign-in and link flows keep working.
   module OAuthState
     INTERNAL_KEYS = %w[
@@ -50,14 +50,18 @@ module BetterAuth
     end
 
     def parse(ctx, state)
-      raise Error, "state_not_found" if state.to_s.empty?
-
       legacy = Crypto.verify_jwt(state.to_s, ctx.context.secret)
       return parse_legacy(ctx, state, legacy) if legacy
 
-      cookie_strategy?(ctx) ? parse_cookie_state(ctx, state) : parse_database_state(ctx, state)
+      parse_stored(ctx, state)
     rescue JSON::ParserError
       raise Error, "state_invalid"
+    end
+
+    def parse_stored(ctx, state)
+      raise Error, "state_not_found" if state.to_s.empty?
+
+      cookie_strategy?(ctx) ? parse_cookie_state(ctx, state) : parse_database_state(ctx, state)
     end
 
     def parse_legacy(ctx, state, data)
@@ -106,20 +110,11 @@ module BetterAuth
       valid = ctx.request ? stored == state : (stored.nil? || stored == state)
       raise Error.new("state_mismatch", error_url: error_url) unless valid
 
-      consumed = ctx.context.internal_adapter.consume_verification_value(state)
       Cookies.expire_cookie(ctx, cookie) if ctx.request || stored
-      raise Error.new("state_mismatch", error_url: error_url) unless consumed
+      ctx.context.internal_adapter.delete_verification_by_identifier(state)
 
-      consumed_data = JSON.parse(consumed.fetch("value"))
-      consumed_expected = consumed_data["oauthState"] || consumed_data["state"]
-      same_payload = consumed.fetch("value") == preview.fetch("value")
-      expected_matches = !consumed_expected || consumed_expected == state
-      unless same_payload && expected_matches
-        raise Error.new("state_mismatch", error_url: recovered_error_url(consumed_data) || error_url)
-      end
-
-      validate_expiration!(consumed_data)
-      consumed_data
+      validate_expiration!(data)
+      data
     end
 
     def validate_expiration!(data)

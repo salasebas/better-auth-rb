@@ -19,26 +19,18 @@ module BetterAuth
           raise APIError.new("UNAUTHORIZED", message: "Provider domain has not been verified")
         end
 
-        state_data = {
-          providerId: provider.fetch("providerId"),
-          callbackURL: body[:callback_url] || "/",
-          errorURL: body[:error_callback_url],
-          newUserURL: body[:new_user_callback_url],
-          requestSignUp: body[:request_sign_up]
-        }
-
         if provider["oidcConfig"] && provider_type != "saml"
           provider = sso_ensure_runtime_oidc_provider(ctx, provider, config)
-          pkce = sso_oidc_pkce_state(provider)
-          state = BetterAuth::Crypto.sign_jwt(
-            state_data.merge({nonce: BetterAuth::Crypto.random_string(32)}).merge(pkce.except(:codeVerifier)),
-            ctx.context.secret,
-            expires_in: 600
-          )
-          sso_store_oidc_pkce_verifier(ctx, state, pkce[:codeVerifier]) if pkce[:codeVerifier]
-          url = sso_oidc_authorization_url(provider, ctx, state, config, body)
+          url = sso_oidc_authorization_url(provider, ctx, config, body)
         elsif provider["samlConfig"]
           BetterAuth::SSO.load_saml!
+          state_data = {
+            providerId: provider.fetch("providerId"),
+            callbackURL: body[:callback_url] || "/",
+            errorURL: body[:error_callback_url],
+            newUserURL: body[:new_user_callback_url],
+            requestSignUp: body[:request_sign_up]
+          }
           relay_state = sso_generate_saml_relay_state(ctx, state_data)
           url = sso_saml_authorization_url(provider, relay_state, ctx, config)
           sso_store_saml_authn_request(ctx, provider, url, config)
@@ -57,29 +49,33 @@ module BetterAuth
 
     def sso_oidc_shared_callback_endpoint(config = {})
       Endpoint.new(path: "/sso/callback", method: "GET") do |ctx|
-        state = sso_verify_state(ctx.query[:state] || ctx.query["state"], ctx.context.secret)
-        next ctx.redirect("#{ctx.context.base_url}/error?error=invalid_state") unless state
-
-        sso_handle_oidc_callback(ctx, config, state["providerId"], state: state)
+        sso_handle_oidc_callback(ctx, config)
       end
     end
 
-    def sso_handle_oidc_callback(ctx, config, provider_id, state: nil)
-      state ||= sso_verify_state(ctx.query[:state] || ctx.query["state"], ctx.context.secret)
-      return ctx.redirect("#{ctx.context.base_url}/error?error=invalid_state") unless state
+    def sso_handle_oidc_callback(ctx, config, provider_id = nil)
+      default_error_url = ctx.context.options.on_api_error[:error_url] || "#{ctx.context.base_url}/error"
+      state = begin
+        BetterAuth::OAuthState.parse_stored(ctx, ctx.query[:state] || ctx.query["state"])
+      rescue BetterAuth::OAuthState::Error => error
+        target = error.error_url ? sso_safe_oidc_redirect_url(ctx, error.error_url) : default_error_url
+        return sso_redirect(ctx, sso_append_error(target, error.code))
+      rescue => error
+        Routes.social_log(ctx.context, :error, "Failed to parse state: #{error.class}")
+        return sso_redirect(ctx, sso_append_error(default_error_url, "internal_server_error"))
+      end
 
       callback_url = sso_safe_oidc_redirect_url(ctx, state["callbackURL"] || "/")
-      error_url = sso_safe_oidc_redirect_url(ctx, state["errorURL"] || callback_url)
+      error_url = state["errorURL"].to_s.empty? ? default_error_url : sso_safe_oidc_redirect_url(ctx, state["errorURL"])
+      provider_id ||= state["ssoProviderId"]
+      if provider_id.to_s.empty?
+        return sso_redirect(ctx, sso_append_error(error_url, "invalid_state", "missing_provider_id"))
+      end
       if ctx.query[:error] || ctx.query["error"]
         error = ctx.query[:error] || ctx.query["error"]
         description = ctx.query[:error_description] || ctx.query["error_description"]
         return sso_redirect(ctx, sso_append_error(error_url, error, description))
       end
-      state_provider_id = state["providerId"] || state[:providerId]
-      if state_provider_id.to_s != provider_id.to_s
-        return sso_redirect(ctx, sso_append_error(error_url, "invalid_state", "provider mismatch"))
-      end
-
       provider = sso_callback_provider(ctx, config, provider_id)
       return sso_redirect(ctx, sso_append_error(error_url, "invalid_provider", "provider not found")) unless provider
       if config.dig(:domain_verification, :enabled) && !(provider.key?("domainVerified") && provider["domainVerified"])
@@ -91,8 +87,7 @@ module BetterAuth
       oidc_config[:issuer] ||= provider["issuer"]
       return sso_redirect(ctx, sso_append_error(error_url, "invalid_provider", "provider not found")) if oidc_config.empty?
 
-      raw_state = ctx.query[:state] || ctx.query["state"]
-      tokens = sso_oidc_tokens(ctx, provider, oidc_config, state, config, raw_state: raw_state)
+      tokens = sso_oidc_tokens(ctx, provider, oidc_config, state, config)
       unless tokens
         return sso_redirect(ctx, sso_append_error(error_url, "invalid_provider", "token_response_not_found"))
       end
@@ -105,7 +100,7 @@ module BetterAuth
           # Fall through to the upstream callback error when JWKS is still unavailable.
         end
       end
-      user_info = sso_oidc_user_info(ctx, oidc_config, tokens, config, expected_nonce: state["nonce"] || state[:nonce])
+      user_info = sso_oidc_user_info(ctx, oidc_config, tokens, config)
       if user_info[:_sso_error]
         return sso_redirect(ctx, sso_append_error(error_url, "invalid_provider", user_info[:_sso_error]))
       end
