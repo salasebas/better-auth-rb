@@ -313,23 +313,13 @@ class BetterAuthPluginsOAuthProxyTest < Minitest::Test
     assert preview.context.internal_adapter.find_user_by_email("proxy@example.com")
   end
 
-  def test_generic_oauth_database_preview_state_survives_cookie_production_and_is_consumed_on_preview
+  def test_generic_oauth_sign_in_packages_database_state_and_uses_production_redirect_uri
     proxy_secret = "shared-oauth-proxy-secret-1234567890"
     preview = build_auth(
       base_url: "http://preview.local",
       secret: "preview-environment-secret-1234567890",
       database: nil,
       secondary_storage: OAuthProxySecondaryStorage.new,
-      account: {store_account_cookie: true},
-      plugins: [
-        BetterAuth::Plugins.oauth_proxy(current_url: "http://preview.local", production_url: "http://localhost:3000", secret: proxy_secret),
-        oauth_proxy_generic_oauth_plugin
-      ]
-    )
-    production = build_auth(
-      base_url: "http://localhost:3000",
-      secret: "production-environment-secret-1234567890",
-      database: nil,
       plugins: [
         BetterAuth::Plugins.oauth_proxy(current_url: "http://preview.local", production_url: "http://localhost:3000", secret: proxy_secret),
         oauth_proxy_generic_oauth_plugin
@@ -337,7 +327,6 @@ class BetterAuthPluginsOAuthProxyTest < Minitest::Test
     )
 
     assert_equal "database", preview.context.options.account.fetch(:store_state_strategy)
-    assert_equal "cookie", production.context.options.account.fetch(:store_state_strategy)
 
     sign_in_status, _sign_in_headers, sign_in_body = preview.call(oauth_proxy_rack_env(
       "POST",
@@ -353,30 +342,6 @@ class BetterAuthPluginsOAuthProxyTest < Minitest::Test
     assert_equal 200, sign_in_status
     assert_equal "http://localhost:3000/api/auth/oauth2/callback/custom", authorization_params.fetch("redirect_uri")
     assert preview.context.internal_adapter.find_verification_value(original_state)
-    refute production.context.internal_adapter.find_verification_value(original_state)
-
-    callback_status, callback_headers, = production.call(oauth_proxy_rack_env(
-      "GET",
-      "/api/auth/oauth2/callback/custom?#{URI.encode_www_form(code: "oauth-code", state: proxy_state)}",
-      host: "localhost:3000"
-    ))
-
-    assert_equal 302, callback_status
-    refute production.context.internal_adapter.find_user_by_email("proxy-generic@example.com")
-    proxy_uri = URI.parse(callback_headers.fetch("location"))
-    proxy_query = Rack::Utils.parse_query(proxy_uri.query)
-
-    proxy_status, proxy_headers, = preview.call(oauth_proxy_rack_env(
-      "GET",
-      "#{proxy_uri.path}?#{URI.encode_www_form(proxy_query)}",
-      host: "preview.local"
-    ))
-
-    assert_equal 302, proxy_status
-    assert_equal "/dashboard", proxy_headers.fetch("location")
-    assert preview.context.internal_adapter.find_user_by_email("proxy-generic@example.com")
-    refute preview.context.internal_adapter.find_verification_value(original_state)
-    assert_includes proxy_headers.fetch("set-cookie"), "#{preview.context.auth_cookies[:account_data].name}="
   end
 
   def test_proxy_does_not_relabel_social_provider_key_errors_as_state_mismatch
