@@ -172,6 +172,27 @@ class BetterAuthAPIKeyAdapterTest < Minitest::Test
     assert_equal object_record, BetterAuth::APIKey::Adapter.migrate_legacy_metadata(auth, object_record, storage: "database")
   end
 
+  def test_migrate_legacy_metadata_logs_database_write_failure_and_returns_parsed_value
+    auth = build_api_key_auth(enable_metadata: true, default_key_length: 12)
+    warnings = []
+    logger = Object.new
+    logger.define_singleton_method(:warn) { |message, *| warnings << message }
+    auth.context.define_singleton_method(:logger) { logger }
+    record = {
+      "id" => "legacy-metadata-key",
+      "metadata" => JSON.generate(JSON.generate({plan: "legacy"}))
+    }
+    auth.context.adapter.define_singleton_method(:update) do |**|
+      raise StandardError, "simulated migration failure"
+    end
+
+    migrated = BetterAuth::APIKey::Adapter.migrate_legacy_metadata(auth, record, storage: "database")
+
+    assert_equal JSON.generate({"plan" => "legacy"}), migrated.fetch("metadata")
+    assert_equal 1, warnings.length
+    assert_match(/legacy-metadata-key/, warnings.first)
+  end
+
   def test_custom_storage_takes_precedence_over_context_secondary_storage
     custom_storage = APIKeyTestSupport::MemoryStorage.new
     context_storage = APIKeyTestSupport::MemoryStorage.new

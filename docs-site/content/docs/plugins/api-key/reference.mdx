@@ -197,12 +197,12 @@ BetterAuth::Plugins.api_key(
 
 `deferUpdates` <span className="opacity-70">`boolean`</span>
 
-Defer non-critical updates (rate limiting counters, timestamps, remaining count) to run after the response is sent using the global `backgroundTasks` handler. This can significantly improve response times on serverless platforms. Default is `false`. In Ruby configuration hashes, use `defer_updates`.
+Defer pure secondary-storage counter writes, expired or exhausted key deletion, and successful-verification cleanup using the global `backgroundTasks` handler. Database-backed verification counter claims remain synchronous. Default is `false`. In Ruby configuration hashes, use `defer_updates`.
 
 Requires `backgroundTasks.handler` to be configured in the main auth options.
 
 <Callout type="warn">
-  Enabling this introduces eventual consistency where the response returns optimistic data before the database is updated. Only enable if your application can tolerate this trade-off for improved latency.
+  In pure secondary-storage mode, the response returns optimistic counter data before the secondary record is updated. Only enable if your application can tolerate this eventual consistency.
 </Callout>
 
 `permissions` <span className="opacity-70">`{ defaultPermissions?: Statements | callable }`</span>

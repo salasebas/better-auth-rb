@@ -149,8 +149,16 @@ module BetterAuth
       BetterAuth::APIKey::Session.hook(ctx, config)
     end
 
-    def api_key_validate!(ctx, key, config, permissions: nil)
-      BetterAuth::APIKey::Validation.validate_api_key!(ctx, key, config, permissions: permissions)
+    def api_key_validate!(ctx, key, config, permissions: nil, configurations: nil, expected_config_id: config[:config_id], run_custom_validator: false)
+      BetterAuth::APIKey::Validation.validate_api_key!(
+        ctx,
+        key,
+        config,
+        permissions: permissions,
+        configurations: configurations,
+        expected_config_id: expected_config_id,
+        run_custom_validator: run_custom_validator
+      )
     end
 
     def api_key_usage_update(record, config)
