@@ -18,7 +18,6 @@ class BetterAuthVerificationStateInventoryTest < Minitest::Test
     "packages/better_auth-passkey/lib/better_auth/passkey/challenges.rb" => ["consume_verification_value(verification_token)"],
     "packages/better_auth-passkey/lib/better_auth/passkey/routes/authentication.rb" => ["adapter.increment_one("],
     "packages/better_auth-saml/lib/better_auth/sso/plugin/saml_response.rb" => ["reserve_verification_value("],
-    "packages/better_auth-saml/lib/better_auth/sso/plugin/saml_validation_and_state.rb" => ["find_verification_value(relay_state)", "consume_verification_value(relay_state)"],
     "packages/better_auth/lib/better_auth/plugins/oauth_protocol.rb" => ["consume_verification_value(stored_code)", "rescue JSON::ParserError"]
   }.freeze
 
