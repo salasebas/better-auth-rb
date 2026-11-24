@@ -53,9 +53,18 @@ module BetterAuth
       request = Rack::Request.new(env)
       context.prepare_for_request!(request) if context.respond_to?(:prepare_for_request!)
 
-      route_path = route_path_for(request.path_info)
-      return not_found unless route_path
+      original_path = normalize_path(request.path_info)
+      request_path = path_under_base(original_path) || original_path
+      return [404, {"content-type" => "text/plain;charset=UTF-8"}, ["Not Found"]] if disabled_path?(request_path)
 
+      response = rate_limiter.call(request, context, request_path)
+      return response if response
+
+      request = run_on_request_chain(request)
+      return request if rack_response?(request)
+
+      route_path = route_path_for(request.path_info)
+      return run_on_response_chain(not_found) unless route_path
       query = parse_query(request)
       endpoint, params, allowed_methods = find_endpoint(route_path, request.request_method)
       return run_on_response_chain(not_found) unless endpoint
@@ -73,15 +82,6 @@ module BetterAuth
       response = run_plugin_middlewares(endpoint_context)
       return run_on_response_chain(response) if response
 
-      return run_on_response_chain(not_found) if disabled_path?(route_path)
-
-      response = rate_limiter.call(request, context, route_path)
-      return run_on_response_chain(response) if response
-
-      request = run_on_request_chain(request)
-      return run_on_response_chain(request) if rack_response?(request)
-
-      endpoint_context = rebuild_endpoint_context(endpoint_context, request, route_path, params, endpoint)
       result = API.new(context, endpoints).execute(endpoint, endpoint_context)
       response = result.response.is_a?(APIError) ? error_response(result.response, headers: result.headers) : result.to_rack_response
       run_on_response_chain(response)
@@ -120,25 +120,15 @@ module BetterAuth
 
     private
 
-    def route_path_for(path_info)
+    def path_under_base(path)
       base_path = context.options.base_path
-      decoded = normalize_path(path_info, trim: false)
+      return "/" if path == base_path
 
-      path = if base_path.empty?
-        decoded
-      elsif decoded == base_path
-        "/"
-      elsif decoded.start_with?("#{base_path}/")
-        decoded.delete_prefix(base_path)
-      else
-        return nil
-      end
+      path.delete_prefix(base_path) if path.start_with?("#{base_path}/")
+    end
 
-      if context.options.advanced[:skip_trailing_slashes]
-        trim_trailing_slashes(path)
-      else
-        path
-      end
+    def route_path_for(path_info)
+      path_under_base(normalize_path(path_info, trim: context.options.advanced[:skip_trailing_slashes]))
     end
 
     def normalize_path(path, trim: true)
@@ -223,27 +213,6 @@ module BetterAuth
         request: request,
         raw_body: raw_body
       )
-    end
-
-    def rebuild_endpoint_context(previous_context, request, route_path, params, endpoint)
-      raw_body = read_raw_body(request)
-      fresh_context = build_endpoint_context(request, route_path, parse_query(request), parse_body(request, raw_body: raw_body, disable_body: endpoint.disable_body), params, raw_body)
-      fresh_context.headers = merge_hashes(previous_context.headers, fresh_context.headers)
-      fresh_context.query = merge_hashes(previous_context.query, fresh_context.query)
-      fresh_context.body = merge_hashes(previous_context.body, fresh_context.body)
-      fresh_context
-    end
-
-    def merge_hashes(base, override)
-      return override unless base.is_a?(Hash) && override.is_a?(Hash)
-
-      base.merge(override) do |_key, old_value, new_value|
-        if old_value.is_a?(Hash) && new_value.is_a?(Hash)
-          merge_hashes(old_value, new_value)
-        else
-          new_value
-        end
-      end
     end
 
     def headers_from(env)
