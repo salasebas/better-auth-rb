@@ -178,7 +178,7 @@ class RedisStorageIntegrationTest < Minitest::Test
     end
 
     BetterAuth::SocialProviders::Base.stub(:post_form, token_exchange) do
-      status, _headers, body = auth.api.sign_in_social(
+      status, sign_in_headers, body = auth.api.sign_in_social(
         body: {provider: "google", callbackURL: "/callback"},
         as_response: true
       )
@@ -188,6 +188,7 @@ class RedisStorageIntegrationTest < Minitest::Test
       callback_status, callback_headers, _callback_body = auth.api.callback_oauth(
         params: {providerId: "google"},
         query: {state: state, code: "test-authorization-code"},
+        headers: {"cookie" => sign_in_headers.fetch("set-cookie").lines.map { |line| line.split(";", 2).first }.join("; ")},
         as_response: true
       )
 

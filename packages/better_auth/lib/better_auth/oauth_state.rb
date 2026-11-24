@@ -119,7 +119,7 @@ module BetterAuth
 
     def validate_expiration!(data)
       expires_at = data["expiresAt"].to_i
-      return data unless expires_at.positive? && expires_at < Time.now.to_i
+      return data unless expires_at.positive? && Session.normalize_time(expires_at) < Time.now
 
       raise Error.new("state_mismatch", error_url: recovered_error_url(data))
     end
