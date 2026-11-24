@@ -295,10 +295,7 @@ module BetterAuth
         else
           account_cookie(ctx, provider_id, nil, user_id)
         end
-        matches_session_user = account && (
-          !StoreCapabilities.should_bind_account_cookie_to_session_user?(ctx.context.options) || account["userId"] == user_id
-        )
-        raise APIError.new("BAD_REQUEST", message: BASE_ERROR_CODES["ACCOUNT_NOT_FOUND"]) unless matches_session_user
+        raise APIError.new("BAD_REQUEST", message: BASE_ERROR_CODES["ACCOUNT_NOT_FOUND"]) unless account && Cookies.account_matches_session_user?(ctx, account, user_id)
 
         provider = social_provider(ctx.context, account["providerId"])
         unless provider && provider_callable(provider, :get_user_info)
@@ -313,7 +310,7 @@ module BetterAuth
           ctx,
           user_id: user_id,
           provider_id: account["providerId"],
-          account_id: account["accountId"],
+          account: account,
           provider: provider
         )
         raise APIError.new("BAD_REQUEST", message: "Access token not found") if tokens[:accessToken].to_s.empty?
@@ -323,11 +320,11 @@ module BetterAuth
       end
     end
 
-    def self.access_token_response(ctx, user_id:, provider_id:, account_id: nil, provider: nil)
+    def self.access_token_response(ctx, user_id:, provider_id:, account_id: nil, provider: nil, account: nil)
       provider ||= social_provider(ctx.context, provider_id)
       raise APIError.new("BAD_REQUEST", message: "Provider #{provider_id} is not supported.") unless provider
 
-      account = account_cookie(ctx, provider_id, account_id, user_id) || find_provider_account(ctx, user_id, provider_id, account_id)
+      account ||= account_cookie(ctx, provider_id, account_id, user_id) || find_provider_account(ctx, user_id, provider_id, account_id)
       raise APIError.new("BAD_REQUEST", message: "Account not found") unless account
 
       if account["refreshToken"] && access_token_expired?(account) && provider_callable(provider, :refresh_access_token)
@@ -371,10 +368,8 @@ module BetterAuth
       account = Cookies.get_account_cookie(ctx)
       return nil unless account
       return nil if provider_id && account["providerId"] != provider_id
-      return nil unless account_id.to_s.empty? || account["id"] == account_id || account["accountId"] == account_id
-      if StoreCapabilities.should_bind_account_cookie_to_session_user?(ctx.context.options)
-        return nil unless user_id.to_s.empty? || account["userId"].to_s.empty? || account["userId"] == user_id
-      end
+      return nil unless account_id.to_s.empty? || account["accountId"] == account_id
+      return nil unless Cookies.account_matches_session_user?(ctx, account, user_id)
 
       account
     end

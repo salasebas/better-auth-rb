@@ -206,13 +206,17 @@ module BetterAuth
       account_data = get_account_cookie(ctx)
       return unless account_data
 
-      if !StoreCapabilities.should_bind_account_cookie_to_session_user?(ctx.context.options) || account_data["userId"] == session.fetch(:user).fetch("id")
+      if account_matches_session_user?(ctx, account_data, session.fetch(:user).fetch("id"))
         set_account_cookie(ctx, account_data)
       else
         expire_cookie(ctx, cookie)
         store = SessionStore.new(cookie.name, cookie.attributes, ctx)
         store.set_cookies(store.clean)
       end
+    end
+
+    def account_matches_session_user?(ctx, account, user_id)
+      !ctx.context.options.database || account["userId"] == user_id
     end
 
     def get_cookie_cache(request_or_cookie_header, secret:, strategy: "compact", version: nil, cookie_prefix: "better-auth", cookie_name: "session_data", is_secure: nil, cookie_full_name: nil, include_expiry: false)
