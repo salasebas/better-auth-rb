@@ -2090,8 +2090,7 @@ class BetterAuthPluginsAPIKeyTest < Minitest::Test
         rateLimitEnabled: false,
         requestCount: 0,
         permissions: nil
-      },
-      force_allow_id: true
+      }
     )
   end
 
