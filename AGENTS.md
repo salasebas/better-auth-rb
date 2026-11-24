@@ -1,92 +1,50 @@
 # Repository Guide
 
-Ruby port of Better Auth. Match upstream behavior unless a Ruby-specific
-adaptation is documented.
+Ruby port of Better Auth. Match upstream behavior. Document each Ruby-specific
+adaptation you add or change in the package README and the matching
+`docs-site/` page, and record it in `docs/adr/` when it is an architectural
+decision.
 
 Read the package-level `AGENTS.md` when one exists for the package you are
 editing.
 
-When a referenced document is not given by path, look for it from the workspace
-root first, then the local package.
-
 ## Upstream
 
-Reference target: Better Auth `v1.6.23` at commit
-`9dfceee14021fc15a2fb93023f39635f25b0b5ba` (see
-`reference/upstream-better-auth/VERSION.md`).
+`reference/upstream-better-auth/VERSION.md` pins the upstream release.
+`./scripts/fetch-upstream-better-auth.sh` clones it to
+`reference/upstream-src/<version>/repository/`.
 
-Fetch sources and tests when needed:
+Before changing upstream-backed behavior, read the matching upstream source and
+tests, then port them idiomatically to Ruby.
 
-```bash
-./scripts/fetch-upstream-better-auth.sh
-```
-
-Clone path: `reference/upstream-src/1.6.23/repository/`. Do not commit files
-under `reference/upstream-src/<version>/`.
-
-Before changing upstream-backed behavior: read the matching source and tests,
-port idiomatically to Ruby, and document meaningful adaptations.
-
-Keep shared auth behavior in `packages/better_auth`. Adapter and plugin
-packages provide integration—do not duplicate core logic there.
+Keep shared auth behavior in `packages/better_auth`; adapter and plugin
+packages only integrate it.
 
 ## Development
 
 - Use English for all repository content and collaboration.
 - StandardRB, `# frozen_string_literal: true`, idiomatic Ruby naming.
-- Core uses Minitest (`packages/better_auth`); adapters/plugins use RSpec.
-- Prefer real, observable tests over mocks. Check upstream tests for parity work.
+- Prefer real, observable tests over mocks.
 - Ask before adding new dependencies.
+- Update the relevant package README and `docs-site/` when users need to know.
+- Release Please owns versions, changelogs, and tags; read `RELEASING.md`
+  before changing any of them.
+- Commit only when the user asks or the task is about CI, release, or
+  repository automation.
 
 ### Testing
 
-Database and Redis services are shared across worktrees. Before running tests
-that use them, start or verify the shared stack from the workspace root. The
-fixed project name prevents worktrees from creating conflicting containers;
-`--wait` returns only after services are running and healthy:
-
-```bash
-docker compose -p better-auth up -d --wait
-```
-
-Run database-backed suites through `scripts/with_test_databases.rb`. It gives
-this worktree its own databases on the shared stack (`better_auth_<id>`, with
-`<id>` a hash of the worktree path) and creates them if needed. Worktrees can
-then run suites in parallel without resetting each other's tables:
+Run database-backed suites through `scripts/with_test_databases.rb`. It starts
+the Docker stack that every worktree shares and gives this worktree its own
+databases on it:
 
 ```bash
 cd packages/better_auth && ../../scripts/with_test_databases.rb bundle exec rake test:integration
-scripts/with_test_databases.rb bundle exec rake test:integration   # workspace MySQL smoke
 ```
 
-Tests read connection settings from `test/support/test_databases.rb`. Explicit
-`BETTER_AUTH_*_URL` variables override it, as in CI, so the wrapper refuses to
-run while they are set. Redis tests already isolate their keys with random
-prefixes. Do not stop the shared stack while another worktree may be using it.
-
-`scripts/with_test_databases.rb --prune` drops the databases of this clone's
-deleted worktrees; add `--dry-run` to list them first. The wrapper records each
-id it generates in a registry in the clone's shared git directory
-(`git rev-parse --git-common-dir`), keyed by that directory's path, and prune
-only drops those ids. Other clones, copies, preset ids, and unsuffixed names are
-never touched.
-
-```bash
-bundle exec rake ci          # workspace
-bundle exec rake test        # core only
-bundle exec standardrb       # lint
-```
-
-## Releasing
-
-Before publishing gems or bumping versions, read and follow `RELEASING.md`.
-
-## Public changes
-
-Update the relevant package README and `docs-site/` when users need to know.
-
-Do not commit unless the user asks for it or the task is explicitly about CI,
-release, or repository automation.
+Leave the shared stack running, since other worktrees may be using it.
+`scripts/with_test_databases.rb --prune` drops the databases of deleted
+worktrees.
 
 ## Agent skills
 
@@ -99,7 +57,7 @@ privacy rules.
 
 ### Triage labels
 
-Triage uses the canonical `needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, and `wontfix` labels. See `docs/agents/triage-labels.md`.
+See `docs/agents/triage-labels.md`.
 
 ### Domain docs
 

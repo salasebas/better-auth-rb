@@ -1,9 +1,9 @@
 #!/usr/bin/env ruby
 # frozen_string_literal: true
 
-# Runs a command against this worktree's own databases on the shared
-# `docker compose -p better-auth` stack, or drops the databases left behind
-# by deleted worktrees.
+# Starts the shared `docker compose -p better-auth` stack and runs a command
+# against this worktree's own databases on it, or drops the databases left
+# behind by deleted worktrees.
 #
 #   scripts/with_test_databases.rb bundle exec rake test:integration
 #   scripts/with_test_databases.rb --prune [--dry-run]
@@ -42,6 +42,11 @@ def compose_exec(service, script, input)
   end
   abort "Command failed on #{service}. Is the shared stack running?" unless $?.success?
   output
+end
+
+def start_shared_stack
+  started = system("docker", "compose", "--progress", "quiet", "-f", File.join(ROOT, "docker-compose.yml"), "-p", "better-auth", "up", "--wait")
+  abort "Could not start the shared stack. Is Docker running?" unless started
 end
 
 def git(*args)
@@ -116,6 +121,7 @@ else
 end
 database = TestDatabases.sql_database
 
+start_shared_stack
 compose_exec("postgres", POSTGRES, <<~SQL)
   SELECT 'CREATE DATABASE #{database}' WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = '#{database}')\\gexec
 SQL
