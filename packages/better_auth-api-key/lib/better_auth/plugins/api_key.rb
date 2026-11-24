@@ -173,10 +173,6 @@ module BetterAuth
       BetterAuth::APIKey::Validation.validate_create_update!(body, config, create: create, client: client)
     end
 
-    def api_key_validate_server_only!(body, create:, client:)
-      BetterAuth::APIKey::Validation.validate_server_only!(body, create: create, client: client)
-    end
-
     def api_key_update_payload(body, config)
       BetterAuth::APIKey::Validation.update_payload(body, config)
     end
