@@ -486,21 +486,26 @@ class BetterAuthInternalAdapterTest < Minitest::Test
 
   def test_dual_write_session_uses_the_database_id_and_ignores_override_id
     storage = MemoryStorage.new
+    hook_ids = []
     internal = internal_adapter(
       secondary_storage: storage,
       session: {store_session_in_database: true},
-      advanced: {database: {generate_id: "serial"}}
+      advanced: {database: {generate_id: "serial"}},
+      database_hooks: {
+        session: {create: {after: ->(session, _context) { hook_ids << session["id"] }}}
+      }
     )
     user = internal.create_user(name: "Ada", email: "session-serial-id@example.com")
     token = "session-serial-id-token"
 
-    session = internal.create_session(user["id"], false, {id: "override-id", token: token})
+    session = internal.create_session(user["id"], false, {id: "override-id", token: token}, true)
     cached = JSON.parse(storage.get(token))
     stored = internal.adapter.find_one(model: "session", where: [{field: "token", value: token}])
 
     assert_equal 1, session["id"]
     assert_equal 1, stored["id"]
     assert_equal 1, cached.dig("session", "id")
+    assert_equal [1], hook_ids
   end
 
   def test_find_session_fails_closed_when_secondary_storage_contains_corrupt_json
