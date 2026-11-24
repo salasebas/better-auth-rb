@@ -173,6 +173,10 @@ module BetterAuth
       BetterAuth::APIKey::Validation.validate_create_update!(body, config, create: create, client: client)
     end
 
+    def api_key_validate_server_only!(body, create:, client:)
+      BetterAuth::APIKey::Validation.validate_server_only!(body, create: create, client: client)
+    end
+
     def api_key_update_payload(body, config)
       BetterAuth::APIKey::Validation.update_payload(body, config)
     end
@@ -227,6 +231,10 @@ module BetterAuth
 
     def api_key_schedule_cleanup(ctx, config)
       BetterAuth::APIKey::Routes.schedule_cleanup(ctx, config)
+    end
+
+    def api_key_schedule_unawaited_cleanup(ctx, config)
+      BetterAuth::APIKey::Routes.schedule_unawaited_cleanup(ctx, config)
     end
 
     def api_key_delete_expired(context, config, bypass_last_check: false)

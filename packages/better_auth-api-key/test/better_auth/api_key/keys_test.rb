@@ -35,21 +35,30 @@ class BetterAuthAPIKeyKeysTest < Minitest::Test
       BetterAuth::APIKey::Keys.hash("raw-key", {disable_key_hashing: false})
   end
 
-  def test_expires_at_uses_body_then_default_then_nil
+  def test_expires_at_uses_body_then_default_including_explicit_nil
     before = Time.now
     body_expiration = BetterAuth::APIKey::Keys.expires_at({expires_in: 60}, {key_expiration: {default_expires_in: 120}})
     default_expiration = BetterAuth::APIKey::Keys.expires_at({}, {key_expiration: {default_expires_in: 120}})
-    no_expiration = BetterAuth::APIKey::Keys.expires_at({expires_in: nil}, {key_expiration: {default_expires_in: 120}})
+    nil_expiration = BetterAuth::APIKey::Keys.expires_at({expires_in: nil}, {key_expiration: {default_expires_in: 120}})
+    no_expiration = BetterAuth::APIKey::Keys.expires_at({expires_in: nil}, {key_expiration: {default_expires_in: nil}})
 
     assert_operator body_expiration, :>=, before + 59
     assert_operator body_expiration, :<, before + 62
     assert_operator default_expiration, :>=, before + 119
     assert_operator default_expiration, :<, before + 122
+    assert_operator nil_expiration, :>=, before + 119
+    assert_operator nil_expiration, :<, before + 122
     assert_nil no_expiration
   end
 
   def test_from_headers_checks_configured_headers_in_order
     ctx = Context.new({"x-api-key" => nil, "x-secondary-key" => "secret"})
+
+    assert_equal "secret", BetterAuth::APIKey::Keys.from_headers(ctx, api_key_headers: ["x-api-key", "x-secondary-key"])
+  end
+
+  def test_from_headers_skips_empty_configured_headers
+    ctx = Context.new({"x-api-key" => "", "x-secondary-key" => "secret"})
 
     assert_equal "secret", BetterAuth::APIKey::Keys.from_headers(ctx, api_key_headers: ["x-api-key", "x-secondary-key"])
   end

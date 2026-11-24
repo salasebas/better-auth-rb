@@ -24,8 +24,12 @@ module BetterAuth
             record_config = BetterAuth::Plugins.api_key_resolve_config(ctx.context, config, BetterAuth::Plugins.api_key_record_config_id(record))
             BetterAuth::Plugins.api_key_authorize_reference!(ctx, record_config, session[:user]["id"], BetterAuth::Plugins.api_key_record_reference_id(record), "delete")
 
-            BetterAuth::Plugins.api_key_delete_record(ctx, record, record_config)
-            BetterAuth::Plugins.api_key_delete_expired(ctx.context, record_config)
+            begin
+              BetterAuth::Plugins.api_key_delete_record(ctx, record, record_config)
+            rescue => error
+              raise BetterAuth::APIError.new("INTERNAL_SERVER_ERROR", message: error.message)
+            end
+            BetterAuth::Plugins.api_key_schedule_unawaited_cleanup(ctx, record_config)
             ctx.json({success: true})
           end
         end
