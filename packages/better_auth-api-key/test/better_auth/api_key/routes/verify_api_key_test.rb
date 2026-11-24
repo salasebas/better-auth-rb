@@ -24,16 +24,30 @@ class BetterAuthAPIKeyVerifyRouteTest < Minitest::Test
     assert_equal "Not Found", body.fetch("error")
   end
 
+  def test_verify_route_rejects_missing_or_non_string_key_during_request_validation
+    auth = build_api_key_auth(default_key_length: 12)
+
+    [{}, {key: nil}, {key: 123}].each do |request_body|
+      error = assert_raises(BetterAuth::APIError) do
+        auth.api.verify_api_key(body: request_body)
+      end
+
+      assert_equal 400, error.status_code
+      assert_equal BetterAuth::BASE_ERROR_CODES["VALIDATION_ERROR"], error.message
+    end
+  end
+
   def test_verify_route_requires_key_in_body_and_ignores_headers
     auth = build_api_key_auth(default_key_length: 12)
     cookie = sign_up_cookie(auth, email: "verify-route-header-key@example.com")
     created = auth.api.create_api_key(headers: {"cookie" => cookie}, body: {})
 
-    result = auth.api.verify_api_key(headers: {"x-api-key" => created[:key]}, body: {})
+    error = assert_raises(BetterAuth::APIError) do
+      auth.api.verify_api_key(headers: {"x-api-key" => created[:key]}, body: {})
+    end
 
-    assert_equal false, result[:valid]
-    assert_equal "INVALID_API_KEY", result[:error][:code]
-    assert_nil result[:key]
+    assert_equal 400, error.status_code
+    assert_equal BetterAuth::BASE_ERROR_CODES["VALIDATION_ERROR"], error.message
   end
 
   def test_verify_route_includes_rate_limit_retry_details
@@ -77,6 +91,66 @@ class BetterAuthAPIKeyVerifyRouteTest < Minitest::Test
     assert_equal "KEY_NOT_FOUND", invalid[:error][:code]
   end
 
+  def test_verify_route_rejects_empty_permissions_when_key_has_no_permissions
+    auth = build_api_key_auth(default_key_length: 12, rate_limit: {enabled: false})
+    cookie = sign_up_cookie(auth, email: "verify-route-empty-permissions@example.com")
+    created = auth.api.create_api_key(headers: {"cookie" => cookie}, body: {})
+
+    result = auth.api.verify_api_key(body: {key: created[:key], permissions: {}})
+
+    assert_equal false, result[:valid]
+    assert_equal "KEY_NOT_FOUND", result[:error][:code]
+  end
+
+  def test_scoped_verify_runs_custom_validator_before_missing_key_lookup
+    calls = []
+    auth = build_api_key_auth(
+      default_key_length: 12,
+      custom_api_key_validator: ->(input) {
+        calls << input[:key]
+        true
+      }
+    )
+
+    result = auth.api.verify_api_key(body: {key: "missing-key", configId: "default"})
+
+    assert_equal false, result[:valid]
+    assert_equal ["missing-key"], calls
+  end
+
+  def test_unscoped_verify_does_not_run_custom_validator_for_missing_key
+    calls = []
+    auth = build_api_key_auth(
+      default_key_length: 12,
+      custom_api_key_validator: ->(input) {
+        calls << input[:key]
+        true
+      }
+    )
+
+    result = auth.api.verify_api_key(body: {key: "missing-key"})
+
+    assert_equal false, result[:valid]
+    assert_equal 0, calls.length
+  end
+
+  def test_scoped_verify_runs_custom_validator_for_empty_string_key
+    calls = []
+    auth = build_api_key_auth(
+      default_key_length: 12,
+      custom_api_key_validator: ->(input) {
+        calls << input[:key]
+        false
+      }
+    )
+
+    result = auth.api.verify_api_key(body: {key: "", configId: "default"})
+
+    assert_equal false, result[:valid]
+    assert_equal "KEY_NOT_FOUND", result[:error][:code]
+    assert_equal [""], calls
+  end
+
   def test_verify_route_accepts_non_default_config_key_without_config_id
     auth = build_api_key_auth([
       {config_id: "default", default_prefix: "def_", default_key_length: 12, rate_limit: {enabled: false}},
@@ -92,6 +166,43 @@ class BetterAuthAPIKeyVerifyRouteTest < Minitest::Test
     assert_equal "service", result[:key][:configId]
     assert_equal "service-key", result[:key][:name]
     refute result[:key].key?(:key)
+  end
+
+  def test_unscoped_verify_does_not_scan_configurations_with_different_hashing
+    auth = build_api_key_auth([
+      {config_id: "default", default_prefix: "def_", default_key_length: 12, rate_limit: {enabled: false}},
+      {config_id: "service", default_prefix: "svc_", default_key_length: 12, disable_key_hashing: true, rate_limit: {enabled: false}}
+    ])
+    cookie = sign_up_cookie(auth, email: "verify-route-no-config-scan@example.com")
+    user_id = auth.api.get_session(headers: {"cookie" => cookie})[:user]["id"]
+    created = auth.api.create_api_key(body: {userId: user_id, configId: "service"})
+
+    result = auth.api.verify_api_key(body: {key: created[:key]})
+
+    assert_equal false, result[:valid]
+    assert_equal "INVALID_API_KEY", result[:error][:code]
+  end
+
+  def test_successful_verify_schedules_cleanup_only_when_updates_are_deferred
+    calls = []
+    original = BetterAuth::Plugins.method(:api_key_schedule_cleanup)
+    BetterAuth::Plugins.define_singleton_method(:api_key_schedule_cleanup) do |ctx, config|
+      calls << [ctx, config]
+    end
+
+    immediate_auth = build_api_key_auth(default_key_length: 12, defer_updates: false, rate_limit: {enabled: false})
+    immediate_cookie = sign_up_cookie(immediate_auth, email: "verify-route-immediate-cleanup@example.com")
+    immediate_key = immediate_auth.api.create_api_key(headers: {"cookie" => immediate_cookie}, body: {})
+    assert immediate_auth.api.verify_api_key(body: {key: immediate_key[:key]})[:valid]
+    assert_equal 0, calls.length
+
+    deferred_auth = build_api_key_auth(default_key_length: 12, defer_updates: true, rate_limit: {enabled: false})
+    deferred_cookie = sign_up_cookie(deferred_auth, email: "verify-route-deferred-cleanup@example.com")
+    deferred_key = deferred_auth.api.create_api_key(headers: {"cookie" => deferred_cookie}, body: {})
+    assert deferred_auth.api.verify_api_key(body: {key: deferred_key[:key]})[:valid]
+    assert_equal 1, calls.length
+  ensure
+    BetterAuth::Plugins.define_singleton_method(:api_key_schedule_cleanup, original) if original
   end
 
   def test_verify_route_rejects_explicit_wrong_config_id

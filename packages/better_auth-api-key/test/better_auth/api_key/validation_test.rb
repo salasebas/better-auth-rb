@@ -137,7 +137,7 @@ class BetterAuthAPIKeyValidationTest < Minitest::Test
     assert_equal 0, record.fetch("remaining")
   end
 
-  def test_exhausted_non_refillable_key_is_rejected_without_negative_remaining
+  def test_exhausted_non_refillable_key_is_deleted_and_rejected
     auth = build_api_key_auth(default_key_length: 12, rate_limit: {enabled: false})
     cookie = sign_up_cookie(auth, email: "validation-exhausted-delete@example.com")
     user_id = auth.api.get_session(headers: {"cookie" => cookie})[:user]["id"]
@@ -149,7 +149,43 @@ class BetterAuthAPIKeyValidationTest < Minitest::Test
     assert_equal false, result[:valid]
     assert_equal "USAGE_EXCEEDED", result[:error][:code]
     stored = auth.context.adapter.find_one(model: "apikey", where: [{field: "id", value: created[:id]}])
-    assert_equal 0, stored.fetch("remaining")
+    assert_nil stored
+  end
+
+  def test_exhausted_non_refillable_key_deletion_is_deferred
+    deferred = []
+    auth = build_api_key_auth(
+      default_key_length: 12,
+      defer_updates: true,
+      rate_limit: {enabled: false},
+      advanced: {background_tasks: {handler: ->(task) { deferred << task }}}
+    )
+    cookie = sign_up_cookie(auth, email: "validation-exhausted-deferred-delete@example.com")
+    user_id = auth.api.get_session(headers: {"cookie" => cookie})[:user]["id"]
+    created = auth.api.create_api_key(body: {userId: user_id, remaining: 1})
+    auth.api.verify_api_key(body: {key: created[:key]})
+    deferred.clear
+
+    result = auth.api.verify_api_key(body: {key: created[:key]})
+
+    assert_equal false, result[:valid]
+    assert_equal "USAGE_EXCEEDED", result[:error][:code]
+    assert auth.context.adapter.find_one(model: "apikey", where: [{field: "id", value: created[:id]}])
+    deferred.each(&:call)
+    assert_nil auth.context.adapter.find_one(model: "apikey", where: [{field: "id", value: created[:id]}])
+  end
+
+  def test_empty_permission_requirement_precedes_exhausted_key_deletion
+    auth = build_api_key_auth(default_key_length: 12, rate_limit: {enabled: false})
+    cookie = sign_up_cookie(auth, email: "validation-exhausted-permissions@example.com")
+    user_id = auth.api.get_session(headers: {"cookie" => cookie})[:user]["id"]
+    created = auth.api.create_api_key(body: {userId: user_id, remaining: 0})
+
+    result = auth.api.verify_api_key(body: {key: created[:key], permissions: {}})
+
+    assert_equal false, result[:valid]
+    assert_equal "KEY_NOT_FOUND", result[:error][:code]
+    assert auth.context.adapter.find_one(model: "apikey", where: [{field: "id", value: created[:id]}])
   end
 
   def test_check_permissions_matches_upstream_key_not_found_failure
@@ -185,7 +221,109 @@ class BetterAuthAPIKeyValidationTest < Minitest::Test
     assert_equal "USAGE_EXCEEDED", second[:error][:code]
   end
 
-  def test_validate_api_key_serializes_quota_updates_in_process
+  def test_pure_secondary_verification_defers_counter_write
+    deferred = []
+    storage = MemoryStorage.new
+    auth = build_api_key_auth(
+      storage: "secondary-storage",
+      secondary_storage: storage,
+      default_key_length: 12,
+      defer_updates: true,
+      rate_limit: {enabled: false},
+      advanced: {background_tasks: {handler: ->(task) { deferred << task }}}
+    )
+    cookie = sign_up_cookie(auth, email: "validation-secondary-deferred-counter@example.com")
+    user_id = auth.api.get_session(headers: {"cookie" => cookie})[:user]["id"]
+    created = auth.api.create_api_key(body: {userId: user_id, remaining: 2})
+    stored_key = "api-key:by-id:#{created[:id]}"
+
+    result = auth.api.verify_api_key(body: {key: created[:key]})
+
+    assert_equal true, result[:valid]
+    assert_equal 1, result[:key][:remaining]
+    assert_equal 2, JSON.parse(storage.get(stored_key)).fetch("remaining")
+    deferred.each(&:call)
+    assert_equal 1, JSON.parse(storage.get(stored_key)).fetch("remaining")
+  end
+
+  def test_pure_secondary_missing_synchronous_persistence_maps_to_failed_update
+    storage = MemoryStorage.new
+    armed = false
+    created = nil
+    hashed = nil
+    auth = build_api_key_auth(
+      storage: "secondary-storage",
+      secondary_storage: storage,
+      default_key_length: 12,
+      rate_limit: {enabled: false},
+      custom_api_key_validator: ->(*) {
+        if armed
+          storage.delete("api-key:#{hashed}")
+          storage.delete("api-key:by-id:#{created[:id]}")
+        end
+        true
+      }
+    )
+    cookie = sign_up_cookie(auth, email: "validation-secondary-missing-update@example.com")
+    created = auth.api.create_api_key(headers: {"cookie" => cookie}, body: {})
+    hashed = BetterAuth::APIKey::Keys.hash(created[:key], BetterAuth::APIKey::Configuration.normalize(default_key_length: 12))
+    armed = true
+
+    result = auth.api.verify_api_key(body: {key: created[:key]})
+
+    assert_equal false, result[:valid]
+    assert_equal "FAILED_TO_UPDATE_API_KEY", result[:error][:code]
+  end
+
+  def test_metadata_migration_write_failure_does_not_invalidate_claimed_key
+    auth = build_api_key_auth(enable_metadata: true, default_key_length: 12, rate_limit: {enabled: false})
+    cookie = sign_up_cookie(auth, email: "validation-metadata-migration-failure@example.com")
+    created = auth.api.create_api_key(headers: {"cookie" => cookie}, body: {metadata: {plan: "current"}})
+    original_update = auth.context.adapter.method(:update)
+    original_update.call(
+      model: "apikey",
+      where: [{field: "id", value: created[:id]}],
+      update: {metadata: JSON.generate(JSON.generate({plan: "legacy"}))}
+    )
+    warnings = []
+    logger = Object.new
+    logger.define_singleton_method(:warn) { |message, *| warnings << message }
+    logger.define_singleton_method(:error) { |*| }
+    auth.context.define_singleton_method(:logger) { logger }
+    auth.context.adapter.define_singleton_method(:update) do |**kwargs|
+      if kwargs.fetch(:update).key?(:metadata)
+        raise StandardError, "simulated migration failure"
+      end
+
+      original_update.call(**kwargs)
+    end
+
+    result = auth.api.verify_api_key(body: {key: created[:key]})
+
+    assert_equal true, result[:valid]
+    assert_equal({"plan" => "legacy"}, result[:key][:metadata])
+    assert_equal 1, warnings.length
+  end
+
+  def test_expiration_at_exact_current_time_is_not_expired
+    now = Time.at(Time.now.to_i)
+    auth = build_api_key_auth(default_key_length: 12, rate_limit: {enabled: false})
+    cookie = sign_up_cookie(auth, email: "validation-expiration-equality@example.com")
+    created = auth.api.create_api_key(headers: {"cookie" => cookie}, body: {})
+    auth.context.adapter.update(
+      model: "apikey",
+      where: [{field: "id", value: created[:id]}],
+      update: {expiresAt: now}
+    )
+
+    result = Time.stub(:now, now) do
+      auth.api.verify_api_key(body: {key: created[:key]})
+    end
+
+    assert_equal true, result[:valid]
+  end
+
+  def test_staggered_quota_updates_never_accept_more_than_the_available_uses
     auth = build_api_key_auth(default_key_length: 12, rate_limit: {enabled: false})
     cookie = sign_up_cookie(auth, email: "validation-quota-thread-key@example.com")
     user_id = auth.api.get_session(headers: {"cookie" => cookie})[:user]["id"]
@@ -206,9 +344,10 @@ class BetterAuthAPIKeyValidationTest < Minitest::Test
     2.times { start << true }
     responses = results.map(&:value)
 
-    assert_equal 1, responses.count { |response| response[:valid] == true }
-    assert_equal 1, responses.count { |response| response[:valid] == false }
-    assert_equal ["USAGE_EXCEEDED"], responses.filter_map { |response| response.dig(:error, :code) }
+    assert_operator responses.count { |response| response[:valid] == true }, :<=, 1
+    assert responses.filter_map { |response| response.dig(:error, :code) }.all? { |code| ["USAGE_EXCEEDED", "INVALID_API_KEY"].include?(code) }
+    stored = auth.context.adapter.find_one(model: "apikey", where: [{field: "id", value: created[:id]}])
+    assert(stored.nil? || stored.fetch("remaining") >= 0)
   end
 
   def test_concurrent_database_verification_accepts_exactly_available_remaining_uses
@@ -325,7 +464,7 @@ class BetterAuthAPIKeyValidationTest < Minitest::Test
     BetterAuth::APIKey::Adapter.define_singleton_method(:find_by_hash, original_find) if original_find
   end
 
-  def test_fallback_verification_does_not_recreate_cache_after_authoritative_delete
+  def test_fallback_verification_does_not_evict_cached_ghost_after_authoritative_delete
     storage = MemoryStorage.new
     auth = build_api_key_auth(
       storage: "secondary-storage",
@@ -349,10 +488,9 @@ class BetterAuthAPIKeyValidationTest < Minitest::Test
 
     result = auth.api.verify_api_key(body: {key: created[:key]})
 
-    assert_equal false, result[:valid]
-    assert_equal "INVALID_API_KEY", result[:error][:code]
-    assert_nil storage.get("api-key:#{BetterAuth::APIKey::Keys.hash(created[:key], BetterAuth::APIKey::Configuration.normalize(default_key_length: 12))}")
-    assert_nil storage.get("api-key:by-id:#{created[:id]}")
+    assert_equal true, result[:valid]
+    assert storage.get("api-key:#{BetterAuth::APIKey::Keys.hash(created[:key], BetterAuth::APIKey::Configuration.normalize(default_key_length: 12))}")
+    assert storage.get("api-key:by-id:#{created[:id]}")
   ensure
     BetterAuth::APIKey::Adapter.define_singleton_method(:set, original_set) if original_set
   end
@@ -382,7 +520,26 @@ class BetterAuthAPIKeyValidationTest < Minitest::Test
     result = auth.api.verify_api_key(body: {key: created[:key]})
 
     assert_equal false, result[:valid]
-    assert_equal "FAILED_TO_UPDATE_API_KEY", result[:error][:code]
+    assert_equal "INVALID_API_KEY", result[:error][:code]
+  end
+
+  def test_validate_api_key_maps_final_persistence_exception_to_invalid_key
+    auth = build_api_key_auth(default_key_length: 12, rate_limit: {enabled: false})
+    cookie = sign_up_cookie(auth, email: "validation-update-failure-key@example.com")
+    created = auth.api.create_api_key(headers: {"cookie" => cookie}, body: {})
+    original_update = auth.context.adapter.method(:update)
+    auth.context.adapter.define_singleton_method(:update) do |**kwargs|
+      if kwargs.fetch(:update).key?(:updatedAt)
+        raise StandardError, "simulated final update failure"
+      end
+
+      original_update.call(**kwargs)
+    end
+
+    result = auth.api.verify_api_key(body: {key: created[:key]})
+
+    assert_equal false, result[:valid]
+    assert_equal "INVALID_API_KEY", result[:error][:code]
   end
 
   private

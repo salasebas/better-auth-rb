@@ -6,8 +6,9 @@
   values now fall through, `/get-session` returns the synthesized session
   directly, and `session["token"]` contains the presented API key. This removes
   the earlier Ruby-only `tokenFingerprint` hardening for exact compatibility.
-- Hardened API-key verification and counter updates where authoritative adapter
-  operations are available, with regression coverage for stale-write cases.
+- Matched Better Auth v1.7.1 API-key verification order, permission checks,
+  deferred writes and cleanup, expiration and exhaustion boundaries, metadata
+  migration failures, persistence errors, and fallback-cache behavior.
 - Added a checked upstream test inventory for this plugin's pinned reference
   files.
 
