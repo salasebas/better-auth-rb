@@ -117,8 +117,8 @@ class BetterAuthPluginsAPIKeyTest < Minitest::Test
 
     assert_equal "storage-key@example.com", session[:user]["email"]
     assert_equal created[:id], session[:session]["id"]
-    assert_equal created[:key], session[:session]["token"]
-    refute session[:session].key?("tokenFingerprint")
+    refute session[:session].key?("token")
+    assert_equal BetterAuth::Plugins.default_api_key_hasher(created[:key]), session[:session]["tokenFingerprint"]
 
     assert_equal({success: true}, auth.api.delete_api_key(headers: {"cookie" => cookie}, body: {keyId: created[:id]}))
     assert_nil storage.get("api-key:by-ref:#{user_id}")
@@ -178,6 +178,34 @@ class BetterAuthPluginsAPIKeyTest < Minitest::Test
     end
     assert_equal "TOO_MANY_REQUESTS", usage_error.status
     assert_equal BetterAuth::Plugins::API_KEY_ERROR_CODES["USAGE_EXCEEDED"], usage_error.message
+  end
+
+  def test_secondary_storage_reads_legacy_key_layout_but_writes_new_layout
+    storage = MemoryStorage.new
+    auth = build_auth(storage: "secondary-storage", secondary_storage: storage, default_key_length: 12)
+    cookie = sign_up_cookie(auth, email: "legacy-key@example.com")
+    user_id = auth.api.get_session(headers: {"cookie" => cookie})[:user]["id"]
+    created = auth.api.create_api_key(body: {userId: user_id})
+
+    hashed = BetterAuth::Plugins.default_api_key_hasher(created[:key])
+    legacy_payload = storage.values.fetch("api-key:by-id:#{created[:id]}")
+
+    storage.values["api-key:key:#{hashed}"] = legacy_payload
+    storage.values["api-key:id:#{created[:id]}"] = legacy_payload
+    storage.values["api-key:user:#{user_id}"] = JSON.generate([created[:id]])
+    storage.values.delete("api-key:#{hashed}")
+    storage.values.delete("api-key:by-id:#{created[:id]}")
+    storage.values.delete("api-key:by-ref:#{user_id}")
+
+    result = auth.api.verify_api_key(body: {key: created[:key]})
+    assert_equal true, result[:valid], "expected legacy api-key:key:* read fallback to validate"
+
+    fetched = auth.api.get_api_key(headers: {"cookie" => cookie}, query: {id: created[:id]})
+    assert_equal created[:id], fetched[:id], "expected legacy api-key:id:* read fallback to resolve"
+
+    listed = auth.api.list_api_keys(headers: {"cookie" => cookie})
+    assert_equal [created[:id]], listed.fetch(:apiKeys).map { |entry| entry[:id] },
+      "expected legacy api-key:user:* ref list fallback to populate listing"
   end
 
   def test_secondary_storage_write_set_does_not_serialize_independent_keys
@@ -1198,7 +1226,6 @@ class BetterAuthPluginsAPIKeyTest < Minitest::Test
       where: [{field: "id", value: expired[:id]}],
       update: {expiresAt: Time.now - 60}
     )
-    background.clear
 
     auth.api.verify_api_key(body: {key: expired[:key]})
 
@@ -1221,7 +1248,6 @@ class BetterAuthPluginsAPIKeyTest < Minitest::Test
     cookie = sign_up_cookie(auth, email: "defer-key@example.com")
     user_id = auth.api.get_session(headers: {"cookie" => cookie})[:user]["id"]
     created = auth.api.create_api_key(body: {userId: user_id, remaining: 2})
-    deferred.clear
 
     result = auth.api.verify_api_key(body: {key: created[:key]})
 
@@ -2064,8 +2090,7 @@ class BetterAuthPluginsAPIKeyTest < Minitest::Test
         rateLimitEnabled: false,
         requestCount: 0,
         permissions: nil
-      },
-      force_allow_id: true
+      }
     )
   end
 

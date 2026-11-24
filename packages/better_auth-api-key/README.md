@@ -66,12 +66,6 @@ purge secondary-only keys.
 The scheduled expired-key cleanup throttle is per Ruby process. It is not
 coordinated across web workers, hosts, or background job runners.
 
-When `enable_session_for_api_keys` is enabled, `/get-session` follows upstream
-v1.7.1 and returns a synthesized session whose `session["token"]` is the
-presented API key. Treat that response as sensitive. This API-key hook returns
-before the native session route, so it also bypasses native session-refresh
-behavior and does not add the native route's cache-control headers.
-
 `defer_updates` can defer explicit API-key updates and cleanup when a background
 task handler is configured. Verification counter claims remain synchronous;
 database-backed claims use guarded atomic operations, while pure secondary-only
@@ -145,13 +139,19 @@ is required.
 
 ## Storage layout
 
-The Ruby gem reads and writes the upstream layout:
+The Ruby gem writes only to the upstream layout; legacy prefixes are read for
+backward compatibility but never produced by new writes:
 
-| Purpose                          | Storage key                  |
-|----------------------------------|------------------------------|
-| Lookup by hashed key             | `api-key:<hash>`             |
-| Lookup by id                     | `api-key:by-id:<id>`         |
-| Reference -> [id] list           | `api-key:by-ref:<refId>`     |
+| Purpose                          | Upstream key (read + write) | Ruby legacy key (read only) |
+|----------------------------------|------------------------------|------------------------------|
+| Lookup by hashed key             | `api-key:<hash>`             | `api-key:key:<hash>`         |
+| Lookup by id                     | `api-key:by-id:<id>`         | `api-key:id:<id>`            |
+| Reference -> [id] list           | `api-key:by-ref:<refId>`     | `api-key:user:<userId>`      |
+
+When upgrading from older Ruby releases the new server transparently keeps
+serving cached entries from the legacy keys while populating the upstream layout
+on the next mutation. Once a key is rewritten, the legacy entry is also deleted
+on `delete-api-key` to keep the layout converging on a single source of truth.
 
 ## Plugin metadata
 
@@ -243,3 +243,7 @@ The following decisions are explicit and locked behind tests:
   `/api-key/update`, and `/api-key/delete` directly via JSON. API-key
   verification and expired-key cleanup remain server-only Ruby API methods.
 - **`apikey` table name** mirrors the upstream package (no `_` separator).
+- **Legacy secondary-storage prefixes** (`api-key:key:*`, `api-key:id:*`,
+  `api-key:user:*`) are still honored on read so existing deployments do not
+  lose data when upgrading. New writes always use the upstream layout
+  documented above.

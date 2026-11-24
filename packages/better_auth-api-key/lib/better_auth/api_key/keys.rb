@@ -33,9 +33,9 @@ module BetterAuth
       end
 
       def expires_at(body, config)
-        if BetterAuth::APIKey::Utils.javascript_truthy?(body[:expires_in])
-          Time.now + body[:expires_in].to_i
-        elsif BetterAuth::APIKey::Utils.javascript_truthy?(config[:key_expiration][:default_expires_in])
+        if body.key?(:expires_in)
+          Time.now + body[:expires_in].to_i unless body[:expires_in].nil?
+        elsif config[:key_expiration][:default_expires_in]
           Time.now + config[:key_expiration][:default_expires_in].to_i
         end
       end
@@ -44,21 +44,11 @@ module BetterAuth
         getter = config[:custom_api_key_getter]
         return getter.call(ctx) if getter.respond_to?(:call)
 
-        headers = config[:api_key_headers]
-        return ctx.headers[headers.to_s.downcase] unless headers.is_a?(Array)
-
-        headers.each do |header|
+        Array(config[:api_key_headers]).each do |header|
           value = ctx.headers[header.to_s.downcase]
-          return value if truthy?(value)
+          return value if value
         end
         nil
-      end
-
-      def truthy?(value)
-        return false if value.nil? || value == false || value == "" || value == 0
-        return false if value.respond_to?(:nan?) && value.nan?
-
-        true
       end
     end
   end

@@ -12,26 +12,26 @@ module BetterAuth
         list_api_keys
         delete_all_expired_api_keys
       ].freeze
-      NO_DEFAULT_CONFIGURATION_LOG_MESSAGE = "No default api-key configuration found. Either provide an api-key configuration with configId 'default' or provide a configuration with no `configId` set."
 
       module_function
 
       def resolve_config(context, config, config_id = nil)
         configurations = config.fetch(:configurations, [config])
-        unless default_config_id?(config_id)
-          selected = configurations.find { |entry| entry[:config_id].to_s == config_id.to_s }
-          return selected if selected
-        end
+        return configurations.find { |entry| default_config_id?(entry[:config_id]) } || configurations.first if config_id.to_s.empty?
 
-        default = configurations.find { |entry| default_config_id?(entry[:config_id]) }
-        return default.merge(config_id: "default") if default
-
-        context.logger.error(NO_DEFAULT_CONFIGURATION_LOG_MESSAGE) if context.respond_to?(:logger) && context.logger.respond_to?(:error)
-        raise BetterAuth::APIError.new("BAD_REQUEST", message: BetterAuth::Plugins::API_KEY_ERROR_CODES["NO_DEFAULT_API_KEY_CONFIGURATION_FOUND"])
+        configurations.find { |entry| entry[:config_id].to_s == config_id.to_s } ||
+          begin
+            default = configurations.find { |entry| default_config_id?(entry[:config_id]) }
+            unless default
+              context.logger.error(BetterAuth::Plugins::API_KEY_ERROR_CODES["NO_DEFAULT_API_KEY_CONFIGURATION_FOUND"]) if context.respond_to?(:logger) && context.logger.respond_to?(:error)
+              raise BetterAuth::APIError.new("BAD_REQUEST", message: BetterAuth::Plugins::API_KEY_ERROR_CODES["NO_DEFAULT_API_KEY_CONFIGURATION_FOUND"])
+            end
+            default
+          end
       end
 
       def default_config_id?(value)
-        value.nil? || value == false || value == 0 || value == "" || value.to_s == "default" || (value.respond_to?(:nan?) && value.nan?)
+        value.nil? || value.to_s.empty? || value.to_s == "default"
       end
 
       def config_id_matches?(record_config_id, expected_config_id)
@@ -42,12 +42,14 @@ module BetterAuth
 
       @last_expired_check = nil
 
-      def delete_expired(context, _config, bypass_last_check: false)
-        now = Time.now
+      def delete_expired(context, config, bypass_last_check: false, raise_on_error: false)
+        return unless config[:storage] == "database" || config[:fallback_to_database]
         unless bypass_last_check
+          now = Time.now
           return if @last_expired_check && ((now - @last_expired_check) * 1000) < 10_000
+
+          @last_expired_check = now
         end
-        @last_expired_check = now
 
         now = Time.now
         context.adapter.delete_many(
@@ -58,11 +60,8 @@ module BetterAuth
           ]
         )
       rescue => error
-        context.logger.error("Failed to delete expired API keys:", error) if context.respond_to?(:logger) && context.logger.respond_to?(:error)
-      end
-
-      def schedule_unawaited_cleanup(ctx, config)
-        ctx.context.run_in_background(-> { delete_expired(ctx.context, config) })
+        context.logger.error("[API KEY PLUGIN] Failed to delete expired API keys: #{error.message}") if context.respond_to?(:logger) && context.logger.respond_to?(:error)
+        raise if raise_on_error
       end
 
       def schedule_cleanup(ctx, config)
