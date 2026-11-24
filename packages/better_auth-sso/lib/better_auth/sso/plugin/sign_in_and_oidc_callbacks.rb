@@ -24,14 +24,7 @@ module BetterAuth
           url = sso_oidc_authorization_url(provider, ctx, config, body)
         elsif provider["samlConfig"]
           BetterAuth::SSO.load_saml!
-          state_data = {
-            providerId: provider.fetch("providerId"),
-            callbackURL: body[:callback_url] || "/",
-            errorURL: body[:error_callback_url],
-            newUserURL: body[:new_user_callback_url],
-            requestSignUp: body[:request_sign_up]
-          }
-          relay_state = sso_generate_saml_relay_state(ctx, state_data)
+          relay_state = BetterAuth::SSO::SAMLState.generate_relay_state(ctx)
           url = sso_saml_authorization_url(provider, relay_state, ctx, config)
           sso_store_saml_authn_request(ctx, provider, url, config)
         else

@@ -7,7 +7,6 @@ module BetterAuth
     def sso_handle_saml_response(ctx, config = {})
       provider = sso_find_saml_provider!(ctx, sso_fetch(ctx.params, :provider_id), config)
       relay_state = sso_fetch(ctx.body, :relay_state) || sso_fetch(ctx.query, :relay_state)
-      state = sso_parse_saml_relay_state(ctx, relay_state) || {}
       raw_response = sso_fetch(ctx.body, :saml_response) || sso_fetch(ctx.query, :saml_response)
       if ctx.method == "GET" && raw_response.to_s.empty?
         session = Routes.current_session(ctx, allow_nil: true)
@@ -20,6 +19,11 @@ module BetterAuth
       max_response_size = config.dig(:saml, :max_response_size) || SSO_DEFAULT_MAX_SAML_RESPONSE_SIZE
       if raw_response.to_s.bytesize > max_response_size
         raise APIError.new("BAD_REQUEST", message: "SAML response exceeds maximum allowed size (#{max_response_size} bytes)")
+      end
+      state = begin
+        relay_state ? BetterAuth::SSO::SAMLState.parse_relay_state(ctx) : {}
+      rescue APIError
+        {}
       end
       assertion = sso_parse_saml_response(raw_response, config, provider, ctx)
       assertion[:email_verified] = false unless config[:trust_email_verified]
@@ -38,17 +42,17 @@ module BetterAuth
           expiresAt: sso_saml_assertion_replay_expires_at(assertion, config)
         )
         unless reserved
-          return sso_redirect(ctx, sso_append_error(error_url, "replay_detected", "SAML assertion has already been used"))
+          return sso_redirect(ctx, sso_append_error(callback_url, "replay_detected", "SAML assertion has already been used"))
         end
       end
 
       email = (assertion[:email] || assertion["email"]).to_s.downcase
       if config[:disable_implicit_sign_up] && !state["requestSignUp"] && !ctx.context.internal_adapter.find_user_by_email(email)
-        return sso_redirect(ctx, sso_append_error(error_url, "signup disabled"))
+        return sso_redirect(ctx, sso_append_error(callback_url, "signup disabled"))
       end
 
       result = sso_find_or_create_user_result(ctx, provider, assertion, config)
-      return sso_redirect(ctx, sso_append_error(error_url, result.fetch(:error))) if result[:error]
+      return sso_redirect(ctx, sso_append_error(callback_url, result.fetch(:error))) if result[:error]
 
       user = result.fetch(:user)
       if config[:provision_user].respond_to?(:call) && (result.fetch(:created) || config[:provision_user_on_every_login])

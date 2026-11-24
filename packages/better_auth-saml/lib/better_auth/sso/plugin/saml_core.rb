@@ -39,7 +39,6 @@ module BetterAuth
     ].freeze
     SSO_DEFAULT_MAX_SAML_RESPONSE_SIZE = 256 * 1024
     SSO_DEFAULT_MAX_SAML_METADATA_SIZE = 100 * 1024
-    SSO_SAML_RELAY_STATE_KEY_PREFIX = "saml-relay-state:"
     SSO_SAML_AUTHN_REQUEST_KEY_PREFIX = "saml-authn-request:"
     SSO_DEFAULT_AUTHN_REQUEST_TTL_MS = 5 * 60 * 1000
     SSO_SAML_USED_ASSERTION_KEY_PREFIX = "saml-used-assertion:"

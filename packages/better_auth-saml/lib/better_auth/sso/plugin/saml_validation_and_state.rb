@@ -144,38 +144,5 @@ module BetterAuth
         raise APIError.new("BAD_REQUEST", message: "SAML #{label} algorithm not recognized: #{algorithm}")
       end
     end
-
-    def sso_generate_saml_relay_state(ctx, state_data)
-      ttl_ms = 10 * 60 * 1000
-      relay_state = BetterAuth::Crypto.random_string(32)
-      now_ms = (Time.now.to_f * 1000).to_i
-      stored = state_data.each_with_object({}) { |(key, value), result| result[key.to_s] = value }.merge(
-        "codeVerifier" => BetterAuth::Crypto.random_string(128),
-        "expiresAt" => now_ms + ttl_ms
-      )
-      ctx.context.internal_adapter.create_verification_value(
-        identifier: "#{SSO_SAML_RELAY_STATE_KEY_PREFIX}#{relay_state}",
-        value: JSON.generate(stored),
-        expiresAt: Time.at((now_ms + ttl_ms) / 1000.0)
-      )
-      ctx.set_signed_cookie("relay_state", relay_state, ctx.context.secret, path: "/", max_age: ttl_ms / 1000, http_only: true, same_site: "lax")
-      relay_state
-    end
-
-    def sso_parse_saml_relay_state(ctx, relay_state)
-      state = sso_verify_state(relay_state, ctx.context.secret)
-      return state if state
-
-      verification = ctx.context.internal_adapter.find_verification_value("#{SSO_SAML_RELAY_STATE_KEY_PREFIX}#{relay_state}")
-      return nil unless verification
-      return nil unless sso_future_time?(verification.fetch("expiresAt"))
-
-      parsed = JSON.parse(verification.fetch("value"))
-      return nil if parsed["expiresAt"].to_i <= (Time.now.to_f * 1000).to_i
-
-      parsed
-    rescue
-      nil
-    end
   end
 end

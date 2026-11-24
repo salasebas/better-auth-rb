@@ -33,7 +33,6 @@ class BetterAuthVerificationStateInventoryTest < Minitest::Test
     "packages/better_auth/lib/better_auth/plugins/email_otp.rb" => ["find_verification_value(email_otp_identifier(email, type))"],
     "packages/better_auth/lib/better_auth/plugins/phone_number.rb" => ["existing = ctx.context.internal_adapter.find_verification_value(identifier)"],
     "packages/better_auth/lib/better_auth/plugins/two_factor.rb" => ["find_verification_value(identifier)"],
-    "packages/better_auth-saml/lib/better_auth/sso/plugin/saml_validation_and_state.rb" => ["find_verification_value(\"\#{SSO_SAML_RELAY_STATE_KEY_PREFIX}\#{relay_state}\")"],
     "packages/better_auth-saml/lib/better_auth/sso/plugin/saml_metadata_and_logout.rb" => ["find_verification_value(session_identifier)"]
   }.freeze
 
