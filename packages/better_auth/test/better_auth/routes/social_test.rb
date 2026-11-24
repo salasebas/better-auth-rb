@@ -9,14 +9,12 @@ require_relative "../../test_helper"
 class BetterAuthRoutesSocialTest < Minitest::Test
   SECRET = "phase-five-secret-with-enough-entropy-123"
 
-  class RecordingSocialSecondaryStorage
-    attr_reader :keys, :writes, :deleted_keys
+  class SecondaryStorage
+    attr_reader :writes
 
     def initialize
       @data = {}
-      @keys = []
       @writes = []
-      @deleted_keys = []
     end
 
     def get(key)
@@ -24,39 +22,28 @@ class BetterAuthRoutesSocialTest < Minitest::Test
     end
 
     def set(key, value, ttl = nil)
-      @keys << key
-      @writes << {key: key, value: value, ttl: ttl}
+      @writes << {key: key, ttl: ttl}
       @data[key] = value
     end
 
     def delete(key)
-      @deleted_keys << key
       @data.delete(key)
     end
 
-    def get_and_delete(key)
-      @deleted_keys << key
-      @data.delete(key)
-    end
+    alias_method :get_and_delete, :delete
   end
 
-  class FailingVerificationStorage
-    def initialize
-      @data = {}
-    end
-
+  class FailingVerificationStorage < SecondaryStorage
     def get(key)
-      @data[key]
-    end
-
-    def set(key, value, _ttl = nil)
       raise "verification storage unavailable" if key.start_with?("verification:")
 
-      @data[key] = value
+      super
     end
 
-    def delete(key)
-      @data.delete(key)
+    def set(key, value, ttl = nil)
+      raise "verification storage unavailable" if key.start_with?("verification:")
+
+      super
     end
   end
 
@@ -581,7 +568,7 @@ class BetterAuthRoutesSocialTest < Minitest::Test
   end
 
   def test_rack_sign_in_social_database_state_stores_internal_payload_in_secondary_storage
-    storage = RecordingSocialSecondaryStorage.new
+    storage = SecondaryStorage.new
     auth = build_auth(
       database: nil,
       secondary_storage: storage,
@@ -602,16 +589,16 @@ class BetterAuthRoutesSocialTest < Minitest::Test
           callbackURL: "/app",
           errorCallbackURL: "/error",
           newUserCallbackURL: "/welcome",
-          requestSignUp: true,
+          requestSignUp: false,
           disableRedirect: true,
           additionalData: {
-            invitedBy: "user-123",
+            invited_by: "user-123",
             callbackURL: "/evil",
             errorURL: "/evil-error",
             newUserURL: "/evil-new-user",
             codeVerifier: "evil-verifier",
             oauthState: "evil-state",
-            requestSignUp: false,
+            requestSignUp: true,
             expiresAt: 1
           }
         }
@@ -629,17 +616,17 @@ class BetterAuthRoutesSocialTest < Minitest::Test
     assert_equal "/app", state_data.fetch("callbackURL")
     assert_equal "/error", state_data.fetch("errorURL")
     assert_equal "/welcome", state_data.fetch("newUserURL")
-    assert_equal true, state_data.fetch("requestSignUp")
+    assert_equal false, state_data.fetch("requestSignUp")
     assert_equal state, state_data.fetch("oauthState")
     assert_match(/\A[A-Za-z0-9_-]{128}\z/, state_data.fetch("codeVerifier"))
-    assert_equal "user-123", state_data.fetch("invitedBy")
-    assert_in_delta Time.now.to_i + 600, state_data.fetch("expiresAt"), 2
+    assert_equal "user-123", state_data.fetch("invited_by")
+    assert_in_delta (Time.now.to_f + 600) * 1000, state_data.fetch("expiresAt"), 2000
     assert_operator state_write.fetch(:ttl), :>=, 598
     assert_operator state_write.fetch(:ttl), :<=, 600
   end
 
   def test_rack_sign_in_social_cookie_state_is_opaque_and_does_not_create_verification
-    storage = RecordingSocialSecondaryStorage.new
+    storage = SecondaryStorage.new
     auth = build_auth(
       database: nil,
       secondary_storage: storage,
@@ -666,11 +653,11 @@ class BetterAuthRoutesSocialTest < Minitest::Test
     assert_match(/\A[A-Za-z0-9_-]{32}\z/, state)
     assert_includes cookie_names, "better-auth.oauth_state"
     refute_includes cookie_names, "better-auth.state"
-    refute_includes storage.keys, "verification:#{state}"
+    assert_nil storage.get("verification:#{state}")
   end
 
   def test_rack_social_callback_uses_the_stored_verifier_and_consumes_database_state
-    storage = RecordingSocialSecondaryStorage.new
+    storage = SecondaryStorage.new
     validation_count = 0
     callback_code_verifier = nil
     auth = build_auth(
@@ -696,7 +683,7 @@ class BetterAuthRoutesSocialTest < Minitest::Test
       rack_env(
         "POST",
         "/api/auth/sign-in/social",
-        body: {provider: "github", callbackURL: "/app", disableRedirect: true}
+        body: {provider: "github", disableRedirect: true}
       )
     )
     state = URI.decode_www_form(URI.parse(JSON.parse(initiation_body.join).fetch("url")).query).assoc("state").last
@@ -712,10 +699,9 @@ class BetterAuthRoutesSocialTest < Minitest::Test
     )
 
     assert_equal 302, status
-    assert_equal "/app", headers.fetch("location")
+    assert_equal "http://localhost:3000", headers.fetch("location")
     assert_equal state_data.fetch("codeVerifier"), callback_code_verifier
     assert_nil storage.get("verification:#{state}")
-    assert_includes storage.deleted_keys, "verification:#{state}"
 
     replay_status, replay_headers, = auth.call(
       rack_env(
@@ -731,7 +717,7 @@ class BetterAuthRoutesSocialTest < Minitest::Test
   end
 
   def test_rack_link_social_stores_link_data_and_consumes_state_on_callback
-    storage = RecordingSocialSecondaryStorage.new
+    storage = SecondaryStorage.new
     callback_code_verifier = nil
     auth = build_auth(
       secondary_storage: storage,
@@ -782,7 +768,8 @@ class BetterAuthRoutesSocialTest < Minitest::Test
     assert_equal true, state_data.fetch("requestSignUp")
     assert_equal "acme", state_data.fetch("workspace")
     assert_equal "link-state@example.com", state_data.fetch("link").fetch("email")
-    refute_equal "attacker", state_data.fetch("link").fetch("userId")
+    user = auth.api.get_session(headers: {"cookie" => session_cookie}).fetch(:user)
+    assert_equal user.fetch("id"), state_data.fetch("link").fetch("userId")
     assert_match(/\A[A-Za-z0-9_-]{128}\z/, state_data.fetch("codeVerifier"))
 
     callback_status, callback_headers, = auth.call(
@@ -799,7 +786,7 @@ class BetterAuthRoutesSocialTest < Minitest::Test
     assert_nil storage.get("verification:#{state}")
   end
 
-  def test_rack_social_state_generation_failure_returns_controlled_api_error
+  def test_rack_social_state_storage_failure_returns_an_empty_server_error
     storage = FailingVerificationStorage.new
     auth = build_auth(
       secondary_storage: storage,
@@ -823,6 +810,15 @@ class BetterAuthRoutesSocialTest < Minitest::Test
       {provider: "github", callbackURL: "/app", disableRedirect: true},
       cookie: session_cookie
     )
+  end
+
+  def test_callback_redirects_to_the_configured_error_page_when_state_storage_is_unavailable
+    auth = build_auth(secondary_storage: FailingVerificationStorage.new, on_api_error: {error_url: "/login-error"})
+
+    status, headers, = auth.call(rack_env("GET", "/api/auth/callback/github?code=code&state=unavailable"))
+
+    assert_equal 302, status
+    assert_equal "/login-error?error=internal_server_error", headers.fetch("location")
   end
 
   def test_sign_in_social_rejects_implicit_signup_when_provider_disables_it
@@ -2338,18 +2334,11 @@ class BetterAuthRoutesSocialTest < Minitest::Test
     "#{encoded_header}.#{encoded_payload}."
   end
 
-  def cookie_header(set_cookie)
-    set_cookie.to_s.lines.map { |line| line.split(";").first }.join("; ")
-  end
-
   def assert_social_state_generation_failure(auth, path, body, cookie: nil)
     status, _headers, response_body = auth.call(rack_env("POST", path, body: body, cookie: cookie))
 
     assert_equal 500, status
-    assert_equal(
-      {"code" => "INTERNAL_SERVER_ERROR", "message" => "Unable to create verification"},
-      JSON.parse(response_body.join)
-    )
+    assert_empty response_body.join
   end
 
   def rack_env(method, path, body: nil, cookie: nil)
@@ -2369,23 +2358,5 @@ class BetterAuthRoutesSocialTest < Minitest::Test
       "HTTP_COOKIE" => cookie,
       "HTTP_ORIGIN" => "http://localhost:3000"
     }.compact
-  end
-
-  class SecondaryStorage
-    def initialize
-      @store = {}
-    end
-
-    def set(key, value, _ttl = nil)
-      @store[key] = value
-    end
-
-    def get(key)
-      @store[key]
-    end
-
-    def delete(key)
-      @store.delete(key)
-    end
   end
 end

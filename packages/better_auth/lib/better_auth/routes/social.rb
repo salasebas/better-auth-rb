@@ -80,29 +80,7 @@ module BetterAuth
           })
         end
 
-        code_verifier = Crypto.random_string(128)
-        state = generate_social_oauth_state!(
-          ctx,
-          safe_additional_state(body).merge(
-            "callbackURL" => body["callbackURL"] || body["callbackUrl"] || body["callback_url"] || "/",
-            "errorURL" => body["errorCallbackURL"] || body["errorCallbackUrl"] || body["error_callback_url"],
-            "newUserURL" => body["newUserCallbackURL"] || body["newUserCallbackUrl"] || body["new_user_callback_url"],
-            "requestSignUp" => body.key?("requestSignUp") ? body["requestSignUp"] : body["request_sign_up"],
-            "codeVerifier" => code_verifier,
-            "expiresAt" => Time.now.to_i + 600
-          )
-        )
-        url = call_provider(provider, :create_authorization_url, {
-          state: state,
-          codeVerifier: code_verifier,
-          code_verifier: code_verifier,
-          redirectURI: "#{ctx.context.canonical_base_url}/callback/#{provider_id}",
-          redirect_uri: "#{ctx.context.canonical_base_url}/callback/#{provider_id}",
-          scopes: body["scopes"],
-          loginHint: body["loginHint"] || body["login_hint"]
-        })
-        ctx.set_header("location", url.to_s) unless body["disableRedirect"] || body["disable_redirect"]
-        ctx.json({url: url.to_s, redirect: !(body["disableRedirect"] || body["disable_redirect"])})
+        social_authorization_redirect(ctx, provider, provider_id, body)
       end
     end
 
@@ -145,7 +123,11 @@ module BetterAuth
         state_data = begin
           OAuthState.parse(ctx, state)
         rescue OAuthState::Error => error
+          social_log(ctx.context, :error, "Failed to parse state")
           raise ctx.redirect(oauth_error_url(error.error_url || default_error_url, error.code))
+        rescue
+          social_log(ctx.context, :error, "Failed to parse state")
+          raise ctx.redirect(oauth_error_url(default_error_url, "internal_server_error"))
         end
         error_url = state_data["errorURL"] || state_data["errorCallbackURL"] || default_error_url
 
@@ -282,32 +264,8 @@ module BetterAuth
           next ctx.json({url: "", status: true, redirect: false})
         end
 
-        code_verifier = Crypto.random_string(128)
-        state = generate_social_oauth_state!(
-          ctx,
-          safe_additional_state(body).merge(
-            "callbackURL" => body["callbackURL"] || body["callbackUrl"] || body["callback_url"] || ctx.context.base_url,
-            "errorURL" => body["errorCallbackURL"] || body["errorCallbackUrl"] || body["error_callback_url"],
-            "requestSignUp" => body.key?("requestSignUp") ? body["requestSignUp"] : body["request_sign_up"],
-            "codeVerifier" => code_verifier,
-            "link" => {
-              "userId" => session[:user]["id"],
-              "email" => session[:user]["email"]
-            },
-            "expiresAt" => Time.now.to_i + 600
-          )
-        )
-        url = call_provider(provider, :create_authorization_url, {
-          state: state,
-          codeVerifier: code_verifier,
-          code_verifier: code_verifier,
-          redirectURI: "#{ctx.context.canonical_base_url}/callback/#{provider_id}",
-          redirect_uri: "#{ctx.context.canonical_base_url}/callback/#{provider_id}",
-          scopes: body["scopes"],
-          loginHint: body["loginHint"] || body["login_hint"]
-        })
-        ctx.set_header("location", url.to_s) unless body["disableRedirect"] || body["disable_redirect"]
-        ctx.json({url: url.to_s, redirect: !(body["disableRedirect"] || body["disable_redirect"])})
+        link = {"userId" => session[:user]["id"], "email" => session[:user]["email"]}
+        social_authorization_redirect(ctx, provider, provider_id, body, link: link)
       end
     end
 
@@ -432,11 +390,42 @@ module BetterAuth
       {session: session, user: user, new_user: new_user}
     end
 
-    def self.generate_social_oauth_state!(ctx, state_data)
-      OAuthState.generate(ctx, state_data)
-    rescue
-      social_log(ctx.context, :error, "Failed to create verification")
-      raise APIError.new("INTERNAL_SERVER_ERROR", message: BASE_ERROR_CODES["FAILED_TO_CREATE_VERIFICATION"])
+    def self.social_authorization_redirect(ctx, provider, provider_id, body, link: nil)
+      code_verifier = Crypto.random_string(128)
+      callback_url = body["callbackUrl"].to_s
+      state_data = safe_additional_state(body).merge({
+        "callbackURL" => callback_url.empty? ? ctx.context.options.base_url : callback_url,
+        "errorURL" => body["errorCallbackUrl"],
+        "newUserURL" => link ? nil : body["newUserCallbackUrl"],
+        "requestSignUp" => body["requestSignUp"],
+        "codeVerifier" => code_verifier,
+        "link" => link,
+        "expiresAt" => (Time.now.to_f * 1000).to_i + 600_000
+      }.compact)
+      state = begin
+        OAuthState.generate(ctx, state_data)
+      rescue APIError
+        raise
+      rescue
+        raise unless ctx.request
+
+        social_log(ctx.context, :error, "Failed to create verification")
+        return [500, {}, []]
+      end
+
+      redirect_uri = "#{ctx.context.canonical_base_url}/callback/#{provider_id}"
+      url = call_provider(provider, :create_authorization_url, {
+        state: state,
+        codeVerifier: code_verifier,
+        code_verifier: code_verifier,
+        redirectURI: redirect_uri,
+        redirect_uri: redirect_uri,
+        scopes: body["scopes"],
+        loginHint: body["loginHint"]
+      }).to_s
+      redirect = !body["disableRedirect"]
+      ctx.set_header("location", url) if redirect
+      ctx.json({url: url, redirect: redirect})
     end
 
     def self.oauth_error_url(base_url, error, description = nil)
@@ -563,7 +552,7 @@ module BetterAuth
       return {} unless additional.is_a?(Hash)
 
       reserved = %w[callbackURL callbackUrl callback_url errorCallbackURL errorCallbackUrl error_callback_url errorURL error_url newUserCallbackURL newUserCallbackUrl new_user_callback_url newUserURL new_user_url requestSignUp request_sign_up codeVerifier code_verifier link expiresAt expires_at]
-      normalize_hash(additional).reject { |key, _value| reserved.include?(key.to_s) }
+      additional.transform_keys(&:to_s).except(*reserved)
     end
 
     def self.validate_social_callback_url!(context, callback_url, error_code)
