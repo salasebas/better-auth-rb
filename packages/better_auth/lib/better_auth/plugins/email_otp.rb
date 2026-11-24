@@ -124,9 +124,7 @@ module BetterAuth
         type = body[:type].to_s
         validate_email_otp_type!(type)
 
-        otp = email_otp_generate(config, email: email, type: type, ctx: ctx)
-        email_otp_store(ctx, config, email: email, type: type, otp: otp)
-        otp
+        email_otp_issue(ctx, config, email: email, type: type)
       end
     end
 
@@ -376,9 +374,10 @@ module BetterAuth
           email_otp_verify!(ctx, config, email: current_email, type: "email-verification", otp: body[:otp])
         end
 
-        otp = email_otp_resolve(ctx, config, email: new_email, type: "change-email", identifier_email: "#{current_email}-#{new_email}")
+        identifier = email_otp_identifier("#{current_email}-#{new_email}", "change-email")
+        otp = email_otp_issue(ctx, config, email: new_email, type: "change-email", identifier: identifier)
         if ctx.context.internal_adapter.find_user_by_email(new_email)
-          ctx.context.internal_adapter.delete_verification_by_identifier(email_otp_identifier("#{current_email}-#{new_email}", "change-email"))
+          ctx.context.internal_adapter.delete_verification_by_identifier(identifier)
           next ctx.json({success: true})
         end
 
@@ -514,8 +513,7 @@ module BetterAuth
       email = fetch_value(user, :email).to_s.downcase
       return unless Routes::EMAIL_PATTERN.match?(email)
 
-      otp = email_otp_generate(config, email: email, type: "email-verification", ctx: ctx)
-      email_otp_store(ctx, config, email: email, type: "email-verification", otp: otp)
+      otp = email_otp_issue(ctx, config, email: email, type: "email-verification")
       email_otp_deliver(config, {email: email, otp: otp, type: "email-verification"}, ctx)
       nil
     end
@@ -551,29 +549,36 @@ module BetterAuth
       email_otp_deliver(config, {email: email, otp: otp, type: type}, ctx)
     end
 
-    def email_otp_store(ctx, config, email:, type:, otp:)
+    def email_otp_issue(ctx, config, email:, type:, identifier: email_otp_identifier(email, type))
+      otp = email_otp_generate(config, email: email, type: type, ctx: ctx)
       stored = email_otp_stored_value(ctx, config, otp)
-      identifier = email_otp_identifier(email, type)
-      verification = {
-        identifier: identifier,
-        value: "#{stored}:0"
-      }
-      begin
-        ctx.context.internal_adapter.create_verification_value(verification.merge(expiresAt: Time.now + config[:expires_in].to_i))
-      rescue
-        ctx.context.internal_adapter.delete_verification_by_identifier(identifier)
-        ctx.context.internal_adapter.create_verification_value(verification.merge(expiresAt: Time.now + config[:expires_in].to_i))
-      end
+      email_otp_write(ctx, config, identifier, stored)
+      otp
     end
 
-    def email_otp_resolve(ctx, config, email:, type:, identifier_email: email)
+    def email_otp_write(ctx, config, identifier, stored)
+      ctx.context.internal_adapter.create_verification_value(
+        identifier: identifier,
+        value: "#{stored}:0",
+        expiresAt: Time.now + config[:expires_in].to_i
+      )
+    end
+
+    def email_otp_resolve(ctx, config, email:, type:)
       if config[:resend_strategy].to_s == "reuse"
-        reused = email_otp_reuse(ctx, config, email: identifier_email, type: type)
+        reused = email_otp_reuse(ctx, config, email: email, type: type)
         return reused if reused
       end
 
       otp = email_otp_generate(config, email: email, type: type, ctx: ctx)
-      email_otp_store(ctx, config, email: identifier_email, type: type, otp: otp)
+      identifier = email_otp_identifier(email, type)
+      stored = email_otp_stored_value(ctx, config, otp)
+      begin
+        email_otp_write(ctx, config, identifier, stored)
+      rescue
+        ctx.context.internal_adapter.delete_verification_by_identifier(identifier)
+        email_otp_write(ctx, config, identifier, stored)
+      end
       otp
     end
 
