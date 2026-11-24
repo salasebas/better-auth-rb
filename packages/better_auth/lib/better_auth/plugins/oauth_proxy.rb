@@ -116,7 +116,6 @@ module BetterAuth
       raise oauth_proxy_redirect_error(ctx, error_url, "invalid_code") unless tokens
 
       token_data = Routes.token_hash(tokens)
-      token_data["user"] = Routes.parse_json_hash(callback[:user]) if callback[:user]
       user_info = Routes.call_provider(provider, :get_user_info, token_data)
       user = user_info[:user] || user_info["user"] if user_info
       raise oauth_proxy_redirect_error(ctx, error_url, "unable_to_get_user_info") unless user
