@@ -4,52 +4,8 @@ require_relative "../../test_helper"
 require "better_auth/sso"
 
 class BetterAuthSSOSAMLStateTest < Minitest::Test
-  ContextWrapper = Struct.new(:body, :context) do
-    def set_signed_cookie(*args)
-      context.cookies << args
-    end
-
-    def set_cookie(name, value, options = {})
-      context.cookies << [name, value, options]
-      if options.key?(:max_age) && options[:max_age].to_i.zero?
-        context.cookie_values.delete(name)
-      else
-        context.cookie_values[name] = value
-      end
-    end
-
-    def get_signed_cookie(name, _secret)
-      get_cookie(name)
-    end
-
-    def get_cookie(name)
-      context.cookie_values[name]
-    end
-
-    def response_headers
-      @response_headers ||= {}
-    end
-  end
-  ContextOptions = Struct.new(:account, :on_api_error)
-  Context = Struct.new(:secret, :internal_adapter, :cookies, :cookie_values, :store_state_strategy, :auth_cookie_name, :auth_cookie_attributes) do
-    def base_url
-      "http://localhost:3000/api/auth"
-    end
-
-    def secret_config
-      secret
-    end
-
-    def options
-      ContextOptions.new({store_state_strategy: store_state_strategy}, {})
-    end
-
-    def create_auth_cookie(cookie_name, override_attributes = {})
-      BetterAuth::Cookies::Cookie.new(
-        name: auth_cookie_name || cookie_name,
-        attributes: auth_cookie_attributes.merge(override_attributes)
-      )
-    end
+  def setup
+    @context = auth_context
   end
 
   def test_generate_relay_state_requires_callback_url
@@ -95,9 +51,9 @@ class BetterAuthSSOSAMLStateTest < Minitest::Test
     assert_equal relay_state, payload.fetch("oauthState")
     assert_operator payload.fetch("expiresAt"), :>, (Time.now.to_f * 1000).to_i
     assert_in_delta 600, stored.fetch("expiresAt") - Time.now, 2
-    cookie = ctx.context.cookies.first
-    assert_equal "relay_state", cookie.first
-    assert_equal 300, cookie.last.fetch(:max_age)
+    cookie = ctx.response_headers.fetch("set-cookie")
+    assert_match(/\Abetter-auth\.relay_state=/, cookie)
+    assert_includes cookie, "Max-Age=300"
   end
 
   def test_generate_relay_state_omits_false_additional_data_but_keeps_link
@@ -137,57 +93,44 @@ class BetterAuthSSOSAMLStateTest < Minitest::Test
   def test_parse_relay_state_reads_body_relay_state_without_requiring_cookie_and_consumes_it
     ctx = build_context(body: {callbackURL: "/dashboard"})
     relay_state = BetterAuth::SSO::SAMLState.generate_relay_state(ctx, nil, false)
-    parse_ctx = build_context(body: {RelayState: relay_state}, adapter: ctx.context.internal_adapter)
+    parse_ctx = build_context(body: {RelayState: relay_state})
 
     parsed = BetterAuth::SSO::SAMLState.parse_relay_state(parse_ctx)
 
     assert_equal "/dashboard", parsed.fetch("callbackURL")
     assert_equal "http://localhost:3000/api/auth/error", parsed.fetch("errorURL")
     assert_nil ctx.context.internal_adapter.find_verification_value(relay_state)
-    assert_equal 0, parse_ctx.context.cookies.last.fetch(2).fetch(:max_age)
+    assert_includes parse_ctx.response_headers.fetch("set-cookie"), "Max-Age=0"
     assert_invalid_relay_state(parse_ctx)
   end
 
   def test_cookie_state_strategy_encrypts_relay_state_without_a_verification_and_consumes_cookie
-    adapter = FakeVerificationAdapter.new
-    cookie_attributes = {path: "/", http_only: true, same_site: "strict", domain: ".example.com"}
-    ctx = build_context(
-      body: {callbackURL: "/dashboard"},
-      adapter: adapter,
-      store_state_strategy: "cookie",
-      auth_cookie_name: "custom.relay_state",
-      auth_cookie_attributes: cookie_attributes
+    context = auth_context(
+      account: {store_state_strategy: "cookie"},
+      advanced: {cookies: {relay_state: {name: "custom.relay_state", attributes: {same_site: "strict", domain: ".example.com"}}}}
     )
-
+    ctx = build_context(body: {callbackURL: "/dashboard"}, context: context)
     relay_state = BetterAuth::SSO::SAMLState.generate_relay_state(ctx, nil, {additionalData: nil})
-    cookie = ctx.context.cookies.fetch(0)
-    encrypted_payload = cookie.fetch(1)
-    payload = JSON.parse(BetterAuth::Crypto.symmetric_decrypt(key: ctx.context.secret_config, data: encrypted_payload))
-    parse_ctx = build_context(
-      body: {RelayState: relay_state},
-      adapter: adapter,
-      cookie_values: ctx.context.cookie_values,
-      store_state_strategy: "cookie",
-      auth_cookie_name: "custom.relay_state",
-      auth_cookie_attributes: cookie_attributes
-    )
+    cookie = ctx.response_headers.fetch("set-cookie")
 
-    assert_equal "custom.relay_state", cookie.fetch(0)
-    assert_equal 600, cookie.last.fetch(:max_age)
-    assert_equal "strict", cookie.last.fetch(:same_site)
-    assert_equal ".example.com", cookie.last.fetch(:domain)
+    assert_match(/\Acustom\.relay_state=/, cookie)
+    assert_includes cookie, "Max-Age=600"
+    assert_includes cookie, "SameSite=Strict"
+    assert_includes cookie, "Domain=.example.com"
+    assert_nil context.internal_adapter.find_verification_value(relay_state)
+
+    parse_ctx = build_context(body: {RelayState: relay_state}, context: context, cookie: cookie.split(";").first)
+    encrypted = parse_ctx.get_cookie("custom.relay_state")
+    payload = JSON.parse(BetterAuth::Crypto.symmetric_decrypt(key: context.secret_config, data: encrypted))
     assert_equal relay_state, payload.fetch("oauthState")
-    assert payload.key?("additionalData")
     assert_nil payload.fetch("additionalData")
-    assert_nil adapter.find_verification_value(relay_state)
     assert_equal "/dashboard", BetterAuth::SSO::SAMLState.parse_relay_state(parse_ctx).fetch("callbackURL")
-    assert_nil parse_ctx.get_cookie("custom.relay_state")
-    assert_equal 0, parse_ctx.context.cookies.last.fetch(2).fetch(:max_age)
-    assert_invalid_relay_state(parse_ctx)
+    assert_includes parse_ctx.response_headers.fetch("set-cookie"), "Max-Age=0"
+    assert_invalid_relay_state(build_context(body: {RelayState: relay_state}, context: context))
   end
 
   def test_parse_relay_state_keeps_malformed_and_mismatched_records_for_validation_failures
-    adapter = FakeVerificationAdapter.new
+    adapter = @context.internal_adapter
     malformed_state = "malformed-relay-state"
     mismatched_state = "mismatched-relay-state"
     expires_at = Time.now + 600
@@ -198,14 +141,14 @@ class BetterAuthSSOSAMLStateTest < Minitest::Test
       expiresAt: expires_at
     )
 
-    assert_invalid_relay_state(build_context(body: {RelayState: malformed_state}, adapter: adapter))
+    assert_invalid_relay_state(build_context(body: {RelayState: malformed_state}))
     assert adapter.find_verification_value(malformed_state)
-    assert_invalid_relay_state(build_context(body: {RelayState: mismatched_state}, adapter: adapter))
+    assert_invalid_relay_state(build_context(body: {RelayState: mismatched_state}))
     assert adapter.find_verification_value(mismatched_state)
   end
 
   def test_parse_relay_state_accepts_legacy_missing_oauth_state_and_coerces_link_user_id
-    adapter = FakeVerificationAdapter.new
+    adapter = @context.internal_adapter
     relay_state = "legacy-relay-state"
     expires_at = Time.now + 600
     payload = relay_state_payload(relay_state, expires_at: expires_at).tap { |data| data.delete(:oauthState) }
@@ -213,7 +156,7 @@ class BetterAuthSSOSAMLStateTest < Minitest::Test
     payload[:additionalData] = nil
     adapter.create_verification_value(identifier: relay_state, value: JSON.generate(payload), expiresAt: expires_at)
 
-    parsed = BetterAuth::SSO::SAMLState.parse_relay_state(build_context(body: {RelayState: relay_state}, adapter: adapter))
+    parsed = BetterAuth::SSO::SAMLState.parse_relay_state(build_context(body: {RelayState: relay_state}))
 
     assert_equal "/dashboard", parsed.fetch("callbackURL")
     assert_equal({"email" => "alice@example.com", "userId" => "42"}, parsed.fetch("link"))
@@ -245,7 +188,7 @@ class BetterAuthSSOSAMLStateTest < Minitest::Test
   end
 
   def test_parse_relay_state_keeps_schema_invalid_records_unconsumed
-    adapter = FakeVerificationAdapter.new
+    adapter = @context.internal_adapter
     expires_at = Time.now + 600
     invalid_payloads = {
       "invalid-callback-url" => {callbackURL: 42},
@@ -265,13 +208,13 @@ class BetterAuthSSOSAMLStateTest < Minitest::Test
         expiresAt: expires_at
       )
 
-      assert_invalid_relay_state(build_context(body: {RelayState: relay_state}, adapter: adapter))
+      assert_invalid_relay_state(build_context(body: {RelayState: relay_state}))
       assert adapter.find_verification_value(relay_state), "#{relay_state} was consumed before schema validation"
     end
   end
 
   def test_parse_relay_state_rejects_and_consumes_expired_records_and_payloads
-    adapter = FakeVerificationAdapter.new
+    adapter = @context.internal_adapter
     expired_record_state = "expired-record-relay-state"
     expired_payload_state = "expired-payload-relay-state"
     adapter.create_verification_value(
@@ -285,31 +228,19 @@ class BetterAuthSSOSAMLStateTest < Minitest::Test
       expiresAt: Time.now + 600
     )
 
-    assert_invalid_relay_state(build_context(body: {RelayState: expired_record_state}, adapter: adapter))
+    assert_invalid_relay_state(build_context(body: {RelayState: expired_record_state}))
     assert_nil adapter.find_verification_value(expired_record_state)
-    assert_invalid_relay_state(build_context(body: {RelayState: expired_payload_state}, adapter: adapter))
+    assert_invalid_relay_state(build_context(body: {RelayState: expired_payload_state}))
     assert_nil adapter.find_verification_value(expired_payload_state)
-  end
-
-  def test_parse_relay_state_is_single_use_with_database_verifications
-    adapter = internal_adapter
-    ctx = build_context(body: {callbackURL: "/dashboard"}, adapter: adapter)
-    relay_state = BetterAuth::SSO::SAMLState.generate_relay_state(ctx, nil, false)
-    parse_ctx = build_context(body: {RelayState: relay_state}, adapter: adapter)
-
-    assert adapter.find_verification_value(relay_state)
-    assert_equal "/dashboard", BetterAuth::SSO::SAMLState.parse_relay_state(parse_ctx).fetch("callbackURL")
-    assert_nil adapter.find_verification_value(relay_state)
-    assert_invalid_relay_state(parse_ctx)
   end
 
   def test_parse_relay_state_is_single_use_with_secondary_storage
     storage = MemoryStorage.new
-    adapter = internal_adapter(secondary_storage: storage)
-    ctx = build_context(body: {callbackURL: "/dashboard"}, adapter: adapter)
+    context = auth_context(secondary_storage: storage)
+    ctx = build_context(body: {callbackURL: "/dashboard"}, context: context)
     relay_state = BetterAuth::SSO::SAMLState.generate_relay_state(ctx, nil, false)
     key = "verification:#{relay_state}"
-    parse_ctx = build_context(body: {RelayState: relay_state}, adapter: adapter)
+    parse_ctx = build_context(body: {RelayState: relay_state}, context: context)
 
     assert storage.store.key?(key)
     refute storage.store.key?("verification:saml-relay-state:#{relay_state}")
@@ -328,25 +259,16 @@ class BetterAuthSSOSAMLStateTest < Minitest::Test
     assert_equal "State error: failed to validate relay state", error.message
   end
 
-  def build_context(body:, adapter: FakeVerificationAdapter.new, cookie_values: nil, store_state_strategy: "database", auth_cookie_name: nil, auth_cookie_attributes: {})
-    ContextWrapper.new(
-      body,
-      Context.new(
-        "saml-state-test-secret",
-        adapter,
-        [],
-        cookie_values || {},
-        store_state_strategy,
-        auth_cookie_name,
-        {path: "/", http_only: true, same_site: "lax"}.merge(auth_cookie_attributes)
-      )
+  def build_context(body:, context: @context, cookie: nil)
+    BetterAuth::Endpoint::Context.new(
+      path: "/", method: "POST", query: {}, body: body, params: {}, headers: {"cookie" => cookie}, context: context
     )
   end
 
-  def internal_adapter(options = {})
-    config = BetterAuth::Configuration.new({base_url: "http://localhost:3000", secret: "saml-state-test-secret", database: :memory}.merge(options))
-    adapter = BetterAuth::Adapters::Memory.new(config)
-    BetterAuth::Adapters::InternalAdapter.new(adapter, config)
+  def auth_context(**options)
+    BetterAuth.auth({
+      base_url: "http://localhost:3000", secret: "saml-state-test-secret-0123456789", database: :memory
+    }.merge(options)).context
   end
 
   def relay_state_payload(relay_state, expires_at: Time.now + 600)
@@ -356,29 +278,6 @@ class BetterAuthSSOSAMLStateTest < Minitest::Test
       expiresAt: (expires_at.to_f * 1000).to_i,
       oauthState: relay_state
     }
-  end
-
-  class FakeVerificationAdapter
-    def initialize
-      @values = {}
-    end
-
-    def create_verification_value(identifier:, value:, **options)
-      expires_at = options.fetch(:expiresAt)
-      @values[identifier] = {
-        "identifier" => identifier,
-        "value" => value,
-        "expiresAt" => expires_at
-      }
-    end
-
-    def find_verification_value(identifier)
-      @values[identifier]
-    end
-
-    def delete_verification_by_identifier(identifier)
-      @values.delete(identifier)
-    end
   end
 
   class MemoryStorage
