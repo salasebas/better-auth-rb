@@ -561,10 +561,13 @@ class BetterAuthPluginsEmailOTPTest < Minitest::Test
 
   def test_email_otp_change_email_flow
     sent = []
+    codes = %w[123456 654321]
     auth = build_auth(
       plugins: [
         BetterAuth::Plugins.email_otp(
           change_email: {enabled: true},
+          resend_strategy: "reuse",
+          generate_otp: ->(_data, _ctx) { codes.shift },
           send_verification_otp: ->(data, _ctx = nil) { sent << data }
         )
       ]
@@ -574,6 +577,9 @@ class BetterAuthPluginsEmailOTPTest < Minitest::Test
     assert_equal({success: true}, auth.api.request_email_change_email_otp(headers: {"cookie" => cookie}, body: {newEmail: "new-email-otp@example.com"}))
     assert_equal "change-email", sent.last[:type]
     assert_equal "new-email-otp@example.com", sent.last[:email]
+
+    auth.api.request_email_change_email_otp(headers: {"cookie" => cookie}, body: {newEmail: "new-email-otp@example.com"})
+    assert_equal %w[123456 654321], sent.map { |data| data[:otp] }
 
     assert_equal({success: true}, auth.api.change_email_email_otp(headers: {"cookie" => cookie}, body: {newEmail: "new-email-otp@example.com", otp: sent.last[:otp]}))
     session = auth.api.get_session(headers: {"cookie" => cookie}, query: {disableCookieCache: true})
