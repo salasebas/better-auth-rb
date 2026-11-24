@@ -42,12 +42,14 @@ module BetterAuth
 
       @last_expired_check = nil
 
-      def delete_expired(context, _config, bypass_last_check: false)
-        now = Time.now
+      def delete_expired(context, config, bypass_last_check: false, raise_on_error: false)
+        return unless config[:storage] == "database" || config[:fallback_to_database]
         unless bypass_last_check
+          now = Time.now
           return if @last_expired_check && ((now - @last_expired_check) * 1000) < 10_000
+
+          @last_expired_check = now
         end
-        @last_expired_check = now
 
         now = Time.now
         context.adapter.delete_many(
@@ -58,11 +60,8 @@ module BetterAuth
           ]
         )
       rescue => error
-        context.logger.error("Failed to delete expired API keys:", error) if context.respond_to?(:logger) && context.logger.respond_to?(:error)
-      end
-
-      def schedule_unawaited_cleanup(ctx, config)
-        ctx.context.run_in_background(-> { delete_expired(ctx.context, config) })
+        context.logger.error("[API KEY PLUGIN] Failed to delete expired API keys: #{error.message}") if context.respond_to?(:logger) && context.logger.respond_to?(:error)
+        raise if raise_on_error
       end
 
       def schedule_cleanup(ctx, config)
