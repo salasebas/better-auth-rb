@@ -9,12 +9,12 @@ class BetterAuthPluginsOAuthProxyTest < Minitest::Test
   SECRET = "phase-eight-secret-with-enough-entropy-123"
 
   def test_oauth_proxy_callback_requires_profile
-    auth = build_auth(plugins: [BetterAuth::Plugins.oauth_proxy])
+    auth = build_auth(base_path: "/auth", plugins: [BetterAuth::Plugins.oauth_proxy])
 
     status, headers, = auth.api.oauth_proxy(query: {callbackURL: "/dashboard"}, as_response: true)
 
     assert_equal 302, status
-    assert_equal "missing_profile", Rack::Utils.parse_query(URI.parse(headers.fetch("location")).query).fetch("error")
+    assert_equal "http://localhost:3000/api/auth/error?error=missing_profile", headers.fetch("location")
   end
 
   def test_oauth_proxy_callback_rejects_invalid_encrypted_profiles
@@ -64,7 +64,7 @@ class BetterAuthPluginsOAuthProxyTest < Minitest::Test
     refute_includes headers.fetch("set-cookie", ""), "better-auth.session_token="
   end
 
-  def test_oauth_proxy_callback_normalizes_failed_oauth_user_lookup_code
+  def test_oauth_proxy_callback_redirects_lookup_failures_to_the_api_error_url
     auth = build_auth(
       database: nil,
       secondary_storage: OAuthProxySecondaryStorage.new,
@@ -93,12 +93,7 @@ class BetterAuthPluginsOAuthProxyTest < Minitest::Test
     end
 
     assert_equal 302, status
-    error_uri = URI.parse(headers.fetch("location"))
-    assert_equal "/profile-error", error_uri.path
-    assert_equal(
-      {"source" => "lookup", "error" => "internal_server_error", "error_description" => "internal server error"},
-      Rack::Utils.parse_query(error_uri.query)
-    )
+    assert_equal "http://localhost:3000/api/auth/error?error=internal_server_error", headers.fetch("location")
     refute auth.context.internal_adapter.find_user_by_email("lookup@example.com")
   end
 
@@ -255,6 +250,7 @@ class BetterAuthPluginsOAuthProxyTest < Minitest::Test
     preview = build_auth(
       base_url: "http://preview.local",
       secret: "preview-environment-secret-1234567890",
+      social_providers: oauth_proxy_social_providers(overrideUserInfoOnSignIn: true),
       database: nil,
       plugins: [BetterAuth::Plugins.oauth_proxy(current_url: "http://preview.local", production_url: "http://localhost:3000", secret: proxy_secret)]
     )
@@ -301,6 +297,10 @@ class BetterAuthPluginsOAuthProxyTest < Minitest::Test
     assert_equal "state_mismatch", Rack::Utils.parse_query(URI.parse(missing_cookie_headers.fetch("location")).query).fetch("error")
     refute preview.context.internal_adapter.find_user_by_email("proxy@example.com")
 
+    preview.context.internal_adapter.create_oauth_user(
+      {email: "proxy@example.com", name: "Preview Name", emailVerified: true},
+      {providerId: "google", accountId: "google-sub"}
+    )
     proxy_status, proxy_headers, = preview.call(oauth_proxy_rack_env(
       "GET",
       "#{proxy_uri.path}?#{URI.encode_www_form(proxy_query)}",
@@ -310,7 +310,34 @@ class BetterAuthPluginsOAuthProxyTest < Minitest::Test
 
     assert_equal 302, proxy_status
     assert_equal "/dashboard", proxy_headers.fetch("location")
-    assert preview.context.internal_adapter.find_user_by_email("proxy@example.com")
+    assert_equal "Preview Name", preview.context.internal_adapter.find_user_by_email("proxy@example.com").fetch(:user).fetch("name")
+  end
+
+  def test_form_post_callback_carries_the_production_signup_policy_to_preview
+    proxy = BetterAuth::Plugins.oauth_proxy(current_url: "http://preview.local", production_url: "http://localhost:3000")
+    preview = build_auth(base_url: "http://preview.local", plugins: [proxy])
+    production = build_auth(social_providers: oauth_proxy_social_providers(disableSignUp: true), plugins: [proxy])
+
+    sign_in = Rack::MockRequest.new(preview).post(
+      "http://preview.local/api/auth/sign-in/social",
+      "CONTENT_TYPE" => "application/json",
+      :input => JSON.generate(provider: "google", callbackURL: "/dashboard")
+    )
+    state = Rack::Utils.parse_query(URI.parse(JSON.parse(sign_in.body).fetch("url")).query).fetch("state")
+    callback = Rack::MockRequest.new(production).post(
+      "http://localhost:3000/api/auth/callback/google",
+      "CONTENT_TYPE" => "application/x-www-form-urlencoded",
+      :input => URI.encode_www_form(code: "code", state: state)
+    )
+
+    assert_equal 302, callback.status
+    location = URI.parse(callback["location"])
+    assert_equal "/api/auth/oauth-proxy-callback", location.path
+    assert Rack::Utils.parse_query(location.query)["profile"]
+    completion = Rack::MockRequest.new(preview).get(location.to_s)
+    assert_equal 302, completion.status
+    assert_equal "signup_disabled", Rack::Utils.parse_query(URI.parse(completion["location"]).query).fetch("error")
+    refute preview.context.internal_adapter.find_user_by_email("proxy@example.com")
   end
 
   def test_generic_oauth_sign_in_packages_database_state_and_uses_production_redirect_uri
@@ -409,13 +436,13 @@ class BetterAuthPluginsOAuthProxyTest < Minitest::Test
     }.merge(options))
   end
 
-  def oauth_proxy_social_providers(get_user_info: ->(_tokens) { {user: {id: "google-sub", email: "proxy@example.com", name: "Proxy User", emailVerified: true}} })
+  def oauth_proxy_social_providers(**options)
     {
       google: {
         create_authorization_url: ->(data) { "https://accounts.google.com/o/oauth2/v2/auth?#{URI.encode_www_form(state: data[:state], redirect_uri: data[:redirect_uri])}" },
         validate_authorization_code: ->(_data) { {accessToken: "access-token", idToken: "id-token"} },
-        get_user_info: get_user_info
-      }
+        get_user_info: ->(_tokens) { {user: {id: "google-sub", email: "proxy@example.com", name: "Proxy User", emailVerified: true}} }
+      }.merge(options)
     }
   end
 

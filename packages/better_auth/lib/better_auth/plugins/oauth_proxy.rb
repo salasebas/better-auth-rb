@@ -63,12 +63,13 @@ module BetterAuth
         query = normalize_hash(ctx.query)
         callback_url = query[:callback_url] || "/"
         oauth_proxy_validate_callback!(ctx, callback_url)
+        default_error_url = ctx.context.options.on_api_error[:error_url] || "#{ctx.context.options.base_url}/api/auth/error"
         encrypted_profile = query[:profile]
         if encrypted_profile.to_s.empty?
-          raise oauth_proxy_redirect_error(ctx, oauth_proxy_default_error_url(ctx), "missing_profile")
+          raise oauth_proxy_redirect_error(ctx, default_error_url, "missing_profile")
         end
 
-        oauth_proxy_complete_profile(ctx, config, encrypted_profile)
+        oauth_proxy_complete_profile(ctx, config, encrypted_profile, default_error_url)
       end
     end
 
@@ -115,7 +116,6 @@ module BetterAuth
       user = user_info[:user] || user_info["user"] if user_info
       raise oauth_proxy_redirect_error(ctx, error_url, "unable_to_get_user_info") unless user
       raise oauth_proxy_redirect_error(ctx, error_url, "email_not_found") if fetch_value(user, "email").to_s.empty?
-      raise oauth_proxy_redirect_error(ctx, error_url, "unable_to_get_user_info") if Routes.blank_remote_id?(fetch_value(user, "id"))
 
       oauth_proxy_redirect_profile(
         ctx,
@@ -149,20 +149,22 @@ module BetterAuth
       callback_params["profile"] = encrypted_profile
       proxy_callback.query = URI.encode_www_form(callback_params)
       raise ctx.redirect(proxy_callback.to_s)
-    rescue URI::InvalidURIError, KeyError
-      raise oauth_proxy_redirect_error(ctx, oauth_proxy_default_error_url(ctx), "state_mismatch")
     end
 
-    def oauth_proxy_complete_profile(ctx, config, encrypted_profile)
+    def oauth_proxy_complete_profile(ctx, config, encrypted_profile, default_error_url)
       decrypted = Crypto.symmetric_decrypt(key: oauth_proxy_secret(ctx, config), data: encrypted_profile.to_s)
-      raise oauth_proxy_redirect_error(ctx, oauth_proxy_default_error_url(ctx), "invalid_profile") unless decrypted
+      raise oauth_proxy_redirect_error(ctx, default_error_url, "invalid_profile") unless decrypted
 
-      payload = JSON.parse(decrypted)
+      payload = begin
+        JSON.parse(decrypted)
+      rescue JSON::ParserError
+        nil
+      end
       unless oauth_proxy_profile_payload?(payload)
-        raise oauth_proxy_redirect_error(ctx, oauth_proxy_default_error_url(ctx), "invalid_payload")
+        raise oauth_proxy_redirect_error(ctx, default_error_url, "invalid_payload")
       end
 
-      error_url = payload["errorURL"] || oauth_proxy_default_error_url(ctx)
+      error_url = payload["errorURL"] || default_error_url
       age = ((Time.now.to_f * 1000) - payload["timestamp"].to_f) / 1000
       if age > config[:max_age].to_i || age < -10
         raise oauth_proxy_redirect_error(ctx, error_url, "payload_expired")
@@ -177,10 +179,6 @@ module BetterAuth
       user = payload.fetch("userInfo")
       provider_id = fetch_value(account, "providerId").to_s
       account_id = fetch_value(account, "accountId").to_s
-      if provider_id.empty? || account_id.empty?
-        raise oauth_proxy_redirect_error(ctx, error_url, "invalid_payload")
-      end
-
       session_data = begin
         Routes.persist_social_user(
           ctx,
@@ -188,13 +186,15 @@ module BetterAuth
           user,
           Routes.token_hash_for_storage(ctx, account).merge("accountId" => account_id),
           callback_url: payload["callbackURL"],
-          disable_sign_up: !!payload["disableSignUp"]
+          disable_sign_up: !!payload["disableSignUp"],
+          override_user_info: false
         )
+      rescue Routes::OAuthUserLookupError
+        raise oauth_proxy_redirect_error(ctx, oauth_proxy_default_error_url(ctx), "internal_server_error")
       rescue APIError => error
-        raise if error.code.to_s.empty?
+        raise if error.status == "FOUND" || error.code.to_s.empty?
 
-        code = (error.code == "INTERNAL_SERVER_ERROR") ? "internal_server_error" : error.code
-        raise oauth_proxy_redirect_error(ctx, error_url, code, error.message)
+        raise oauth_proxy_redirect_error(ctx, error_url, error.code, error.message)
       end
       if session_data[:error]
         raise oauth_proxy_redirect_error(ctx, error_url, session_data[:error].tr(" ", "_"))
@@ -207,8 +207,6 @@ module BetterAuth
         payload["callbackURL"]
       end
       raise ctx.redirect(final_url)
-    rescue JSON::ParserError, TypeError
-      raise oauth_proxy_redirect_error(ctx, oauth_proxy_default_error_url(ctx), "invalid_payload")
     end
 
     def oauth_proxy_after_sign_in(ctx, config)
@@ -297,8 +295,7 @@ module BetterAuth
       return unless state_data
 
       error_url = oauth_proxy_state_error_url(ctx, state_data)
-      expected_state = state_data["oauthState"] || state_data["state"]
-      if expected_state && expected_state != package["state"]
+      if state_data.key?("oauthState") && state_data["oauthState"] != package["state"]
         raise oauth_proxy_redirect_error(ctx, error_url, "state_mismatch")
       end
 

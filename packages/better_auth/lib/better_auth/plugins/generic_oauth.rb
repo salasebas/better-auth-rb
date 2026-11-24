@@ -360,7 +360,7 @@ module BetterAuth
             provider_id,
             mapped_user.merge("email" => email, "name" => name, "id" => account_id),
             generic_oauth_account_info(ctx, provider_id, account_id, tokens),
-            override_user_info: provider[:override_user_info]
+            override_user_info: provider[:override_user_info] || Routes.provider_override_user_info_on_sign_in?(provider_id, ctx.context)
           )
         rescue APIError => error
           raise if error.code.to_s.empty?
