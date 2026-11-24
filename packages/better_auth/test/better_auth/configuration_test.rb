@@ -73,10 +73,10 @@ class BetterAuthConfigurationTest < Minitest::Test
       secret: SECRET,
       database: nil,
       secondary_storage: Object.new,
-      session: {cookie_cache: {enabled: true, strategy: "jwe", max_age: 300}}
+      session: {cookie_cache: {enabled: true}}
     )
 
-    assert_equal true, config.session.dig(:cookie_cache, :enabled)
+    assert_equal({enabled: true}, config.session[:cookie_cache])
   end
 
   def test_secondary_storage_defaults_oauth_state_to_verification_storage
