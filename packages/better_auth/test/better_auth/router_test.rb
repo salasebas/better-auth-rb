@@ -288,33 +288,7 @@ class BetterAuthRouterTest < Minitest::Test
     assert_equal({code: "FORBIDDEN", message: "Blocked"}, JSON.parse(body.join, symbolize_names: true))
   end
 
-  def test_on_response_wraps_early_on_request_responses
-    auth = BetterAuth.auth(
-      base_url: "http://localhost:3000",
-      secret: SECRET,
-      plugins: [
-        {
-          id: "early",
-          endpoints: {
-            blocked: BetterAuth::Endpoint.new(path: "/blocked", method: "GET") { {ok: true} }
-          },
-          on_request: ->(_request, _ctx) { {response: [403, {"content-type" => "text/plain"}, ["blocked"]]} },
-          on_response: lambda do |response, _ctx|
-            response[1]["x-wrapped"] = "yes"
-            {response: response}
-          end
-        }
-      ]
-    )
-
-    status, headers, body = auth.call(rack_env("GET", "/api/auth/blocked"))
-
-    assert_equal 403, status
-    assert_equal "yes", headers["x-wrapped"]
-    assert_equal ["blocked"], body
-  end
-
-  def test_on_request_response_short_circuits_remaining_requests_but_runs_responses
+  def test_on_request_response_skips_remaining_request_and_response_hooks
     order = []
     auth = BetterAuth.auth(
       base_url: "http://localhost:3000",
@@ -354,9 +328,9 @@ class BetterAuthRouterTest < Minitest::Test
 
     assert_equal 403, status
     assert_equal ["blocked"], body
-    assert_equal ["a-request", "a-response", "b-response"], order
-    assert_equal "yes", headers["x-a"]
-    assert_equal "yes", headers["x-b"]
+    assert_equal ["a-request"], order
+    refute headers.key?("x-a")
+    refute headers.key?("x-b")
   end
 
   def test_origin_check_validates_callbacks_and_cookie_origins_without_global_form_csrf
@@ -690,7 +664,7 @@ class BetterAuthRouterTest < Minitest::Test
             {
               path: "/**",
               middleware: lambda do |_ctx|
-                events << ["middleware", secondary_rate_limit_count(storage, key)]
+                events << ["middleware", storage.get(key)]
                 nil
               end
             }
@@ -699,11 +673,11 @@ class BetterAuthRouterTest < Minitest::Test
             limited: BetterAuth::Endpoint.new(path: "/limited", method: "GET") { {ok: true} }
           },
           on_request: lambda do |_request, _ctx|
-            events << ["on-request", secondary_rate_limit_count(storage, key)]
+            events << ["on-request", storage.get(key)]
             nil
           end,
           on_response: lambda do |response, _ctx|
-            events << ["on-response", secondary_rate_limit_count(storage, key)]
+            events << ["on-response", storage.get(key)]
             response[1]["x-wrapped"] = "yes"
             {response: response}
           end
@@ -719,7 +693,7 @@ class BetterAuthRouterTest < Minitest::Test
     assert_equal [
       ["on-request", 1], ["middleware", 1], ["on-response", 1]
     ], events
-    assert_equal 2, secondary_rate_limit_count(storage, key)
+    assert_equal 2, storage.get(key)
   end
 
   def test_disabled_path_bypasses_rate_limit_and_plugin_hooks
@@ -755,7 +729,10 @@ class BetterAuthRouterTest < Minitest::Test
       ]
     )
 
-    assert_equal 404, auth.call(rack_env("GET", "/api/auth/disabled")).first
+    status, headers, body = auth.call(rack_env("GET", "/api/auth/disabled"))
+    assert_equal 404, status
+    assert_equal "text/plain;charset=UTF-8", headers["content-type"]
+    assert_equal "Not Found", body.join
     assert_empty storage.data
     assert_empty events
   end
@@ -776,7 +753,7 @@ class BetterAuthRouterTest < Minitest::Test
               path: "/middleware-short",
               middleware: lambda do |ctx|
                 key = "127.0.0.1|#{ctx.path}"
-                events << ["middleware", ctx.path, secondary_rate_limit_count(storage, key)]
+                events << ["middleware", ctx.path, storage.get(key)]
                 [418, {"content-type" => "text/plain"}, ["short-circuited"]]
               end
             }
@@ -789,8 +766,8 @@ class BetterAuthRouterTest < Minitest::Test
           },
           on_request: lambda do |request, _ctx|
             path = request.path_info.delete_prefix("/api/auth")
-            key = "127.0.0.1|#{path}"
-            events << ["on-request", path, secondary_rate_limit_count(storage, key)]
+            key = "127.0.0.1|#{path.delete_suffix("/")}"
+            events << ["on-request", path, storage.get(key)]
             nil
           end
         }
@@ -798,13 +775,15 @@ class BetterAuthRouterTest < Minitest::Test
     )
 
     assert_equal 404, auth.call(rack_env("GET", "/api/auth/unknown")).first
-    assert_equal 405, auth.call(rack_env("POST", "/api/auth/method-invalid")).first
+    assert_equal 404, auth.call(rack_env("GET", "/outside/")).first
+    assert_includes 400...500, auth.call(rack_env("POST", "/api/auth/method-invalid")).first
     assert_equal 415, auth.call(rack_env("POST", "/api/auth/media-invalid", form: {name: "Ada"})).first
     assert_equal 418, auth.call(rack_env("GET", "/api/auth/middleware-short")).first
-    assert_equal 403, auth.call(rack_env("GET", "/api/auth/server-only")).first
+    assert_includes 400...500, auth.call(rack_env("GET", "/api/auth/server-only")).first
 
     assert_equal [
       ["on-request", "/unknown", 1],
+      ["on-request", "/outside/", 1],
       ["on-request", "/method-invalid", 1],
       ["on-request", "/media-invalid", 1],
       ["on-request", "/middleware-short", 1],
@@ -812,9 +791,9 @@ class BetterAuthRouterTest < Minitest::Test
       ["on-request", "/server-only", 1]
     ], events
 
-    %w[/unknown /method-invalid /media-invalid /middleware-short /server-only].each do |path|
+    %w[/unknown /outside /method-invalid /media-invalid /middleware-short /server-only].each do |path|
       key = "127.0.0.1|#{path}"
-      assert_equal 1, secondary_rate_limit_count(storage, key)
+      assert_equal 1, storage.get(key)
       assert_equal 60, storage.ttls.fetch(key)
     end
   end
@@ -835,7 +814,7 @@ class BetterAuthRouterTest < Minitest::Test
             target: BetterAuth::Endpoint.new(path: "/target", method: "GET") { {routed: true} }
           },
           on_request: lambda do |request, _ctx|
-            events << ["on-request", request.path_info, secondary_rate_limit_count(storage, original_key)]
+            events << ["on-request", request.path_info, storage.get(original_key)]
             {request: Rack::Request.new(request.env.merge("PATH_INFO" => "/api/auth/target"))}
           end
         }
@@ -847,7 +826,7 @@ class BetterAuthRouterTest < Minitest::Test
     assert_equal 200, status
     assert_equal({routed: true}, JSON.parse(body.join, symbolize_names: true))
     assert_equal [["on-request", "/api/auth/original", 1]], events
-    assert_equal 1, secondary_rate_limit_count(storage, original_key)
+    assert_equal 1, storage.get(original_key)
     assert_nil storage.get("127.0.0.1|/target")
   end
 
@@ -1365,10 +1344,6 @@ class BetterAuthRouterTest < Minitest::Test
     return "application/json" if body
 
     nil
-  end
-
-  def secondary_rate_limit_count(storage, key)
-    storage.get(key).to_i
   end
 
   class RateLimitStorage

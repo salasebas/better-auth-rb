@@ -197,7 +197,9 @@ auth = BetterAuth.auth(
 
 ## Handling Rate Limit Errors
 
-For routed Rack requests, rate limiting runs after origin checks, plugin router middleware, and disabled-path checks, but before plugin `on_request`. A rejected request skips `on_request`; plugin `on_response` still wraps the `429`. Direct API calls do not pass through the Rack router and retain their existing caveat.
+The Rack router checks disabled paths first, then applies the rate limit to the original request path. A request over quota returns `429` before any plugin hooks run. For an allowed request, plugin `on_request` runs before route lookup, origin checks, and router middleware. Direct `auth.api` calls bypass the Rack rate limiter.
+
+Upstream uses the URL pathname for the rate-limit key. Ruby decodes the Rack path as it does for route lookup, so equivalent paths share one quota.
 
 When a request exceeds the limit, Better Auth returns `429` and the `x-retry-after` header. The header value is the number of seconds until the client can retry.
 

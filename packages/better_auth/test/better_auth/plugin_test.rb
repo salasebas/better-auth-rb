@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require "json"
+require "rack/mock_request"
 require_relative "../test_helper"
 
 class BetterAuthPluginTest < Minitest::Test
@@ -144,8 +145,8 @@ class BetterAuthPluginTest < Minitest::Test
         BetterAuth::Plugin.new(
           id: "chain",
           endpoints: {
-            chain: BetterAuth::Endpoint.new(path: "/chain", method: "GET") do |ctx|
-              {middleware: ctx.headers["x-plugin-middleware"], request: ctx.headers["x-plugin-request"]}
+            chain: BetterAuth::Endpoint.new(path: "/chain", method: "POST") do |ctx|
+              {middleware: ctx.headers["x-plugin-middleware"], request: ctx.headers["x-plugin-request"], name: ctx.body["name"]}
             end
           },
           middlewares: [
@@ -154,6 +155,7 @@ class BetterAuthPluginTest < Minitest::Test
               middleware: lambda do |ctx|
                 order << "middleware"
                 ctx.headers["x-plugin-middleware"] = "yes"
+                ctx.body["name"] = ctx.body.fetch("name").strip
                 nil
               end
             }
@@ -172,27 +174,13 @@ class BetterAuthPluginTest < Minitest::Test
       ]
     )
 
-    status, headers, body = auth.call(rack_env("GET", "/api/auth/chain"))
+    env = Rack::MockRequest.env_for("http://localhost:3000/api/auth/chain",
+      method: "POST", input: JSON.generate(name: " Ada "), "CONTENT_TYPE" => "application/json")
+    status, headers, body = auth.call(env)
 
     assert_equal 200, status
     assert_equal ["request", "middleware", "response"], order
     assert_equal "yes", headers["x-plugin-response"]
-    assert_equal({"middleware" => "yes", "request" => "yes"}, JSON.parse(body.join))
-  end
-
-  private
-
-  def rack_env(method, path)
-    {
-      "REQUEST_METHOD" => method,
-      "PATH_INFO" => path,
-      "QUERY_STRING" => "",
-      "SERVER_NAME" => "localhost",
-      "SERVER_PORT" => "3000",
-      "REMOTE_ADDR" => "127.0.0.1",
-      "rack.url_scheme" => "http",
-      "rack.input" => StringIO.new(""),
-      "CONTENT_LENGTH" => "0"
-    }
+    assert_equal({"middleware" => "yes", "request" => "yes", "name" => "Ada"}, JSON.parse(body.join))
   end
 end

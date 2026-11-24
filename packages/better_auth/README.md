@@ -75,6 +75,17 @@ Legacy deployments can opt out with
 allows request headers to select the origin used in security-token links and is
 not recommended.
 
+### Rate limiting
+
+The Rack router checks disabled paths, then applies the rate limit to the
+original request path. An over-quota request returns `429` before any plugin
+hooks run. If a plugin replaces an allowed request in `on_request`, the router
+uses the replacement to select the endpoint.
+
+The Ruby router decodes Rack paths before route lookup. It uses the same
+normalization for disabled paths and rate-limit keys so equivalent paths
+share one quota. Upstream uses the URL pathname for these checks.
+
 ### Secret Rotation
 
 Better Auth Ruby supports upstream-style non-destructive rotation for encrypted data through versioned secrets. The first entry is used for new encrypted payloads; older entries remain available for decrypting existing data.
