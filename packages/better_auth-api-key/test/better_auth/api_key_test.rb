@@ -227,7 +227,7 @@ class BetterAuthPluginsAPIKeyTest < Minitest::Test
     cookie = sign_up_cookie(auth, email: "fallback-get-warm-key@example.com")
     created = auth.api.create_api_key(headers: {"cookie" => cookie}, body: {name: "warm"})
 
-    storage.clear
+    storage.keys.grep(/\Aapi-key:/).each { |key| storage.delete(key) }
     assert_nil storage.get("api-key:by-id:#{created[:id]}")
 
     fetched = auth.api.get_api_key(headers: {"cookie" => cookie}, query: {id: created[:id]})

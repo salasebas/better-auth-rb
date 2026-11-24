@@ -640,6 +640,16 @@ class BetterAuthRoutesSessionTest < Minitest::Test
     assert_nil auth.api.get_session(headers: {"cookie" => cookie})
   end
 
+  def test_secondary_storage_without_database_does_not_use_default_cookie_cache_after_revocation
+    storage = StringStorage.new
+    auth = build_auth(database: nil, secondary_storage: storage)
+    cookie = sign_up_cookie(auth, email: "secondary-stateless-revocation@example.com")
+    token = auth.api.get_session(headers: {"cookie" => cookie}).fetch(:session).fetch("token")
+
+    assert_equal({status: true}, auth.api.revoke_session(headers: {"cookie" => cookie}, body: {token: token}))
+    assert_nil auth.api.get_session(headers: {"cookie" => cookie})
+  end
+
   def test_secondary_storage_can_return_already_parsed_objects
     storage = ObjectStorage.new
     auth = build_auth(secondary_storage: storage)
