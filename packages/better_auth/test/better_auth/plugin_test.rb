@@ -175,7 +175,7 @@ class BetterAuthPluginTest < Minitest::Test
     )
 
     env = Rack::MockRequest.env_for("http://localhost:3000/api/auth/chain",
-      method: "POST", input: JSON.generate(name: " Ada "), "CONTENT_TYPE" => "application/json")
+      :method => "POST", :input => JSON.generate(name: " Ada "), "CONTENT_TYPE" => "application/json")
     status, headers, body = auth.call(env)
 
     assert_equal 200, status

@@ -667,7 +667,7 @@
       "ruby_source": "packages/better_auth/test/better_auth/rate_limiter_test.rb",
       "local_exists": true,
       "upstream_exists": true,
-      "current_local_lines": 226,
+      "current_local_lines": 228,
       "upstream_lines": 353,
       "status": "thin"
     },
