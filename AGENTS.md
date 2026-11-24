@@ -18,6 +18,13 @@ editing.
 Before changing upstream-backed behavior, read the matching upstream source and
 tests, then port them idiomatically to Ruby.
 
+Port the pinned release as it is, including the decisions that look wrong:
+validation order, error codes and messages, response shapes, misspelled public
+names, and known bugs. A faithful port keeps every later upgrade a plain diff
+between upstream tags. Behavior from a newer release waits until the pin moves
+to it. Reviews judge fidelity to the pinned source: when upstream looks wrong,
+keep the port faithful and file the concern as an issue.
+
 Keep shared auth behavior in `packages/better_auth`; adapter and plugin
 packages only integrate it.
 
