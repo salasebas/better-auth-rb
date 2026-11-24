@@ -1,9 +1,10 @@
 # Repository Guide
 
-Ruby port of Better Auth. Match upstream behavior. Document each Ruby-specific
-adaptation you add or change in the package README and the matching
-`docs-site/` page, and record it in `docs/adr/` when it is an architectural
-decision.
+Ruby port of Better Auth. Match upstream behavior unless a documented
+Ruby-specific adaptation says otherwise. When you add or change an adaptation,
+document what differs from upstream and why in the package README and the
+matching `docs-site/` page, and record it in `docs/adr/` when it is an
+architectural decision.
 
 Read the package-level `AGENTS.md` when one exists for the package you are
 editing.
@@ -27,10 +28,8 @@ packages only integrate it.
 - Prefer real, observable tests over mocks.
 - Ask before adding new dependencies.
 - Update the relevant package README and `docs-site/` when users need to know.
-- Release Please owns versions, changelogs, and tags; read `RELEASING.md`
-  before changing any of them.
-- Commit only when the user asks or the task is about CI, release, or
-  repository automation.
+- Do not edit `CHANGELOG.md` files or gem versions: Release Please owns
+  versions, changelogs, and tags. Releases follow `RELEASING.md`.
 
 ### Testing
 
