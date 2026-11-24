@@ -360,7 +360,7 @@ module BetterAuth
             provider_id,
             mapped_user.merge("email" => email, "name" => name, "id" => account_id),
             generic_oauth_account_info(ctx, provider_id, account_id, tokens),
-            override_user_info: provider[:override_user_info]
+            override_user_info: provider[:override_user_info] || Routes.provider_override_user_info_on_sign_in?(provider_id, ctx.context)
           )
         rescue APIError => error
           raise if error.code.to_s.empty?
@@ -608,7 +608,7 @@ module BetterAuth
     end
 
     def generic_oauth_redirect_uri(ctx, provider)
-      provider[:redirect_uri] || provider[:redirectURI] || "#{ctx.context.canonical_base_url}/oauth2/callback/#{provider[:provider_id]}"
+      provider[:redirect_uri] || provider[:redirectURI] || "#{ctx.oauth_redirect_base_url}/oauth2/callback/#{provider[:provider_id]}"
     end
 
     def generic_oauth_validate_issuer!(ctx, provider, query, redirect_error)

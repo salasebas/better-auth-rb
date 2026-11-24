@@ -6,6 +6,8 @@ require "net/http"
 
 module BetterAuth
   module Routes
+    class OAuthUserLookupError < APIError; end
+
     def self.sign_in_social
       Endpoint.new(
         path: "/sign-in/social",
@@ -306,7 +308,7 @@ module BetterAuth
       }
     end
 
-    def self.persist_social_user(ctx, provider_id, user_info, account_info, callback_url: nil, disable_sign_up: false, override_user_info: false)
+    def self.persist_social_user(ctx, provider_id, user_info, account_info, callback_url: nil, disable_sign_up: false, override_user_info: provider_override_user_info_on_sign_in?(provider_id, ctx.context))
       email = fetch_value(user_info, "email").to_s.downcase
       account_id = (account_info["accountId"] || account_info[:accountId] || account_info[:account_id] || fetch_value(user_info, "id")).to_s
       return {error: "unable to get user info"} if blank_remote_id?(account_id)
@@ -315,7 +317,7 @@ module BetterAuth
         ctx.context.internal_adapter.find_oauth_user(email, account_id, provider_id)
       rescue
         social_log(ctx.context, :error, "Unable to query social user")
-        raise APIError.new("INTERNAL_SERVER_ERROR", message: "internal server error")
+        raise OAuthUserLookupError.new("INTERNAL_SERVER_ERROR", message: "internal server error")
       end
 
       if existing && existing[:linked_account]
@@ -381,7 +383,7 @@ module BetterAuth
         user = created[:user]
         new_user = true
       end
-      if existing && (override_user_info || provider_override_user_info_on_sign_in?(provider_id, ctx.context))
+      if existing && override_user_info
         user = override_social_user_info(ctx, user, user_info)
       end
       return {error: "unable to create user"} unless user
@@ -404,7 +406,7 @@ module BetterAuth
       }.compact)
       state = OAuthState.generate(ctx, state_data)
 
-      redirect_uri = "#{ctx.context.canonical_base_url}/callback/#{provider_id}"
+      redirect_uri = "#{ctx.oauth_redirect_base_url}/callback/#{provider_id}"
       url = call_provider(provider, :create_authorization_url, {
         state: state,
         codeVerifier: code_verifier,
@@ -499,6 +501,8 @@ module BetterAuth
 
     def self.provider_override_user_info_on_sign_in?(provider_id, context)
       provider = social_provider(context, provider_id)
+      return false unless provider
+
       !!(fetch_value(provider, "overrideUserInfoOnSignIn") || fetch_value(fetch_value(provider, "options") || {}, "overrideUserInfoOnSignIn"))
     end
 

@@ -329,6 +329,8 @@ module BetterAuth
     end
 
     class Context
+      attr_writer :oauth_redirect_base_url
+
       attr_accessor :path,
         :method,
         :query,
@@ -359,6 +361,10 @@ module BetterAuth
 
       def set_status(value)
         @status = value
+      end
+
+      def oauth_redirect_base_url
+        @oauth_redirect_base_url || context.canonical_base_url
       end
 
       def set_header(key, value)

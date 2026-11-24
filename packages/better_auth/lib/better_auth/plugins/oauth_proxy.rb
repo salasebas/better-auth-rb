@@ -23,8 +23,8 @@ module BetterAuth
               handler: ->(ctx) { oauth_proxy_before_sign_in(ctx, config) }
             },
             {
-              matcher: ->(ctx) { oauth_proxy_callback_path?(ctx.path) },
-              handler: ->(ctx) { oauth_proxy_restore_state_package(ctx, config) }
+              matcher: ->(ctx) { oauth_proxy_social_callback_path?(ctx.path) },
+              handler: ->(ctx) { oauth_proxy_intercept_social_callback(ctx, config) }
             }
           ],
           after: [
@@ -33,7 +33,7 @@ module BetterAuth
               handler: ->(ctx) { oauth_proxy_after_sign_in(ctx, config) }
             },
             {
-              matcher: ->(ctx) { oauth_proxy_callback_path?(ctx.path) },
+              matcher: ->(ctx) { oauth_proxy_social_callback_path?(ctx.path) },
               handler: ->(ctx) { oauth_proxy_after_callback(ctx, config) }
             }
           ]
@@ -52,7 +52,7 @@ module BetterAuth
             description: "OAuth Proxy Callback",
             parameters: [
               {in: "query", name: "callbackURL", required: true, schema: {type: "string", format: "uri"}},
-              {in: "query", name: "cookies", required: true, schema: {type: "string"}}
+              {in: "query", name: "profile", required: false, schema: {type: "string"}}
             ],
             responses: {
               "302" => {description: "Redirects to the callback URL"}
@@ -63,28 +63,13 @@ module BetterAuth
         query = normalize_hash(ctx.query)
         callback_url = query[:callback_url] || "/"
         oauth_proxy_validate_callback!(ctx, callback_url)
-
-        decrypted = Crypto.symmetric_decrypt(key: oauth_proxy_secret(ctx, config), data: query[:cookies].to_s)
-        raise ctx.redirect(oauth_proxy_error_url(ctx, "OAuthProxy - Invalid cookies or secret")) unless decrypted
-
-        payload = JSON.parse(decrypted)
-        cookies = payload["cookies"]
-        timestamp = payload["timestamp"]
-        unless cookies.is_a?(String) && timestamp.is_a?(Numeric)
-          raise ctx.redirect(oauth_proxy_error_url(ctx, "OAuthProxy - Invalid payload structure"))
+        default_error_url = ctx.context.options.on_api_error[:error_url] || "#{ctx.context.options.base_url}/api/auth/error"
+        encrypted_profile = query[:profile]
+        if encrypted_profile.to_s.empty?
+          raise oauth_proxy_redirect_error(ctx, default_error_url, "missing_profile")
         end
 
-        age = ((Time.now.to_f * 1000) - timestamp.to_f) / 1000
-        if age > config[:max_age].to_i || age < -10
-          raise ctx.redirect(oauth_proxy_error_url(ctx, "OAuthProxy - Payload expired or invalid"))
-        end
-
-        oauth_proxy_parse_set_cookie(cookies).each do |cookie|
-          ctx.set_cookie(cookie[:name], cookie[:value], cookie[:options])
-        end
-        raise ctx.redirect(callback_url)
-      rescue JSON::ParserError
-        raise ctx.redirect(oauth_proxy_error_url(ctx, "OAuthProxy - Invalid payload format"))
+        oauth_proxy_complete_profile(ctx, config, encrypted_profile, default_error_url)
       end
     end
 
@@ -92,6 +77,7 @@ module BetterAuth
       return if oauth_proxy_skip?(ctx, config)
       return unless ctx.body.is_a?(Hash)
 
+      ctx.oauth_redirect_base_url = "#{oauth_proxy_strip_trailing(config[:production_url])}#{ctx.context.options.base_path}" if config[:production_url]
       original_callback = ctx.body["callbackURL"] || ctx.body["callbackUrl"] || ctx.body["callback_url"] || ctx.body[:callbackURL] || ctx.body[:callback_url] || ctx.context.base_url
       current = oauth_proxy_current_uri(ctx, config)
       callback = "#{oauth_proxy_strip_trailing(current.origin)}#{ctx.context.options.base_path}/oauth-proxy-callback?callbackURL=#{URI.encode_www_form_component(original_callback)}"
@@ -99,30 +85,132 @@ module BetterAuth
       nil
     end
 
-    def oauth_proxy_restore_state_package(ctx, config)
-      state = fetch_value(ctx.query, "state") || fetch_value(ctx.body, "state")
-      return if state.to_s.empty?
+    def oauth_proxy_intercept_social_callback(ctx, config)
+      callback, package, state_data, error_url = oauth_proxy_callback_state(ctx, config)
+      return unless package
 
-      decrypted = Crypto.symmetric_decrypt(key: oauth_proxy_secret(ctx, config), data: state.to_s)
-      return unless decrypted
+      error = callback[:error]
+      raise oauth_proxy_redirect_error(ctx, error_url, error) unless error.to_s.empty?
 
-      package = JSON.parse(decrypted)
-      return unless package["isOAuthProxy"] && package["state"] && package["stateCookie"]
+      code = callback[:code].to_s
+      raise oauth_proxy_redirect_error(ctx, error_url, "no_code") if code.empty?
 
-      cookie = ctx.context.create_auth_cookie("oauth_state")
-      current_cookie = ctx.headers["cookie"].to_s
-      restored_cookie = "#{cookie.name}=#{package["stateCookie"]}"
-      ctx.headers["cookie"] = current_cookie.empty? ? restored_cookie : "#{current_cookie}; #{restored_cookie}"
-      ctx.query = ctx.query.merge(:state => package["state"], "state" => package["state"])
-      ctx.body = ctx.body.merge(:state => package["state"], "state" => package["state"]) if ctx.body.is_a?(Hash)
-      nil
-    rescue JSON::ParserError
-      nil
+      provider_id = (fetch_value(ctx.params, "id") || fetch_value(ctx.params, "providerId")).to_s
+      provider = Routes.social_provider(ctx.context, provider_id)
+      raise oauth_proxy_redirect_error(ctx, error_url, "oauth_provider_not_found") unless provider
+
+      tokens = begin
+        Routes.call_provider(provider, :validate_authorization_code, {
+          code: code,
+          codeVerifier: state_data["codeVerifier"],
+          code_verifier: state_data["codeVerifier"],
+          redirectURI: "#{ctx.context.canonical_base_url}/callback/#{provider_id}",
+          redirect_uri: "#{ctx.context.canonical_base_url}/callback/#{provider_id}"
+        })
+      rescue
+        nil
+      end
+      raise oauth_proxy_redirect_error(ctx, error_url, "invalid_code") unless tokens
+
+      user_info = Routes.call_provider(provider, :get_user_info, tokens)
+      user = user_info[:user] || user_info["user"] if user_info
+      raise oauth_proxy_redirect_error(ctx, error_url, "unable_to_get_user_info") unless user
+      raise oauth_proxy_redirect_error(ctx, error_url, "email_not_found") if fetch_value(user, "email").to_s.empty?
+
+      oauth_proxy_redirect_profile(
+        ctx,
+        config,
+        state_data,
+        package,
+        user: oauth_proxy_social_user(user),
+        account: oauth_proxy_social_account(provider_id, fetch_value(user, "id").to_s, Routes.token_hash(tokens)),
+        disable_sign_up: Routes.provider_disable_sign_up?(provider) || (Routes.provider_disable_implicit_sign_up?(provider) && !state_data["requestSignUp"])
+      )
+    end
+
+    def oauth_proxy_redirect_profile(ctx, config, state_data, package, user:, account:, disable_sign_up:)
+      proxy_callback = URI.parse(state_data.fetch("callbackURL"))
+      final_callback = Rack::Utils.parse_query(proxy_callback.query).fetch("callbackURL", state_data.fetch("callbackURL"))
+      payload = {
+        userInfo: user,
+        account: account,
+        state: package.fetch("state"),
+        callbackURL: final_callback,
+        newUserURL: state_data["newUserURL"] || state_data["newUserCallbackURL"],
+        errorURL: state_data["errorURL"] || state_data["errorCallbackURL"],
+        disableSignUp: disable_sign_up,
+        timestamp: (Time.now.to_f * 1000).to_i
+      }.compact
+      encrypted_profile = Crypto.symmetric_encrypt(
+        key: oauth_proxy_secret(ctx, config),
+        data: JSON.generate(payload)
+      )
+      callback_params = Rack::Utils.parse_query(proxy_callback.query)
+      callback_params["profile"] = encrypted_profile
+      proxy_callback.query = URI.encode_www_form(callback_params)
+      raise ctx.redirect(proxy_callback.to_s)
+    end
+
+    def oauth_proxy_complete_profile(ctx, config, encrypted_profile, default_error_url)
+      decrypted = Crypto.symmetric_decrypt(key: oauth_proxy_secret(ctx, config), data: encrypted_profile.to_s)
+      raise oauth_proxy_redirect_error(ctx, default_error_url, "invalid_profile") unless decrypted
+
+      payload = begin
+        JSON.parse(decrypted)
+      rescue JSON::ParserError
+        nil
+      end
+      unless oauth_proxy_profile_payload?(payload)
+        raise oauth_proxy_redirect_error(ctx, default_error_url, "invalid_payload")
+      end
+
+      error_url = payload["errorURL"] || default_error_url
+      age = ((Time.now.to_f * 1000) - payload["timestamp"].to_f) / 1000
+      if age > config[:max_age].to_i || age < -10
+        raise oauth_proxy_redirect_error(ctx, error_url, "payload_expired")
+      end
+      begin
+        OAuthState.parse_generic(ctx, payload["state"], cookie_name: nil, skip_state_cookie_check: true)
+      rescue
+        raise oauth_proxy_redirect_error(ctx, error_url, "state_mismatch")
+      end
+
+      account = payload.fetch("account")
+      user = payload.fetch("userInfo")
+      provider_id = fetch_value(account, "providerId").to_s
+      account_id = fetch_value(account, "accountId").to_s
+      session_data = begin
+        Routes.persist_social_user(
+          ctx,
+          provider_id,
+          user,
+          Routes.token_hash_for_storage(ctx, account).merge("accountId" => account_id),
+          callback_url: payload["callbackURL"],
+          disable_sign_up: !!payload["disableSignUp"],
+          override_user_info: false
+        )
+      rescue Routes::OAuthUserLookupError
+        raise oauth_proxy_redirect_error(ctx, oauth_proxy_default_error_url(ctx), "internal_server_error")
+      rescue APIError => error
+        raise if error.status == "FOUND" || error.code.to_s.empty?
+
+        raise oauth_proxy_redirect_error(ctx, error_url, error.code, error.message)
+      end
+      if session_data[:error]
+        raise oauth_proxy_redirect_error(ctx, error_url, session_data[:error].tr(" ", "_"))
+      end
+
+      Cookies.set_session_cookie(ctx, session_data)
+      final_url = if session_data[:new_user]
+        payload["newUserURL"] || payload["callbackURL"]
+      else
+        payload["callbackURL"]
+      end
+      raise ctx.redirect(final_url)
     end
 
     def oauth_proxy_after_sign_in(ctx, config)
       return if oauth_proxy_skip?(ctx, config)
-      return unless ctx.context.options.account[:store_state_strategy].to_s == "cookie"
       return unless ctx.returned.is_a?(Hash)
 
       provider_url = fetch_value(ctx.returned, "url").to_s
@@ -133,67 +221,139 @@ module BetterAuth
       original_state = params["state"]
       return if original_state.to_s.empty?
 
-      state_cookie = oauth_proxy_state_cookie_value(ctx)
-      return if state_cookie.to_s.empty?
+      encrypted_state = begin
+        plaintext_state = oauth_proxy_plaintext_state(ctx, original_state)
+        unless plaintext_state.to_s.empty?
+          state_cookie = Crypto.symmetric_encrypt(
+            key: oauth_proxy_secret(ctx, config),
+            data: plaintext_state
+          )
+          Crypto.symmetric_encrypt(
+            key: oauth_proxy_secret(ctx, config),
+            data: JSON.generate({
+              state: original_state,
+              stateCookie: state_cookie,
+              isOAuthProxy: true
+            })
+          )
+        end
+      rescue
+        nil
+      end
+      return unless encrypted_state
 
-      encrypted_package = Crypto.symmetric_encrypt(
-        key: oauth_proxy_secret(ctx, config),
-        data: JSON.generate({
-          state: original_state,
-          stateCookie: state_cookie,
-          isOAuthProxy: true
-        })
-      )
-      params["state"] = encrypted_package
+      params["state"] = encrypted_state
       uri.query = URI.encode_www_form(params)
 
       response = ctx.returned.dup
-      if response.key?(:url)
-        response[:url] = uri.to_s
-      else
-        response["url"] = uri.to_s
-      end
+      response[response.key?(:url) ? :url : "url"] = uri.to_s
       ctx.returned = response
       ctx.json(response)
     rescue URI::InvalidURIError
       nil
     end
 
-    def oauth_proxy_after_callback(ctx, config)
-      location = ctx.response_headers["location"]
-      return unless location.to_s.include?("/oauth-proxy-callback?callbackURL")
-      return unless location.to_s.start_with?("http")
+    def oauth_proxy_state_cookie_value(ctx)
+      cookie = ctx.context.create_auth_cookie("oauth_state")
+      entry = Cookies.split_set_cookie_header(ctx.response_headers["set-cookie"]).filter_map { |line| Cookies.parse_set_cookie(line) }.find { |parsed| parsed[:name] == cookie.name }
+      Cookies.decode_cookie_value(entry[:value]) if entry
+    end
 
-      location_uri = URI.parse(location)
-      production = oauth_proxy_production_uri(ctx, config)
-      if location_uri.origin == production.origin
-        original = Rack::Utils.parse_query(location_uri.query).fetch("callbackURL", nil)
-        oauth_proxy_set_location(ctx, original) if original
-        return nil
+    def oauth_proxy_plaintext_state(ctx, state)
+      if OAuthState.cookie_strategy?(ctx)
+        encrypted_state = oauth_proxy_state_cookie_value(ctx)
+        return if encrypted_state.to_s.empty?
+
+        Crypto.symmetric_decrypt(key: ctx.context.secret_config, data: encrypted_state)
+      else
+        verification = ctx.context.internal_adapter.find_verification_value(state)
+        verification && verification["value"]
       end
+    end
 
-      set_cookie = ctx.response_headers["set-cookie"]
-      return if set_cookie.to_s.empty?
+    def oauth_proxy_state_package(ctx, config, state)
+      return if state.to_s.empty?
 
-      encrypted = Crypto.symmetric_encrypt(
-        key: oauth_proxy_secret(ctx, config),
-        data: JSON.generate({
-          cookies: set_cookie,
-          timestamp: (Time.now.to_f * 1000).to_i
-        })
-      )
-      separator = location.include?("?") ? "&" : "?"
-      oauth_proxy_set_location(ctx, "#{location}#{separator}cookies=#{URI.encode_www_form_component(encrypted)}")
-      nil
-    rescue URI::InvalidURIError
+      decrypted = Crypto.symmetric_decrypt(key: oauth_proxy_secret(ctx, config), data: state.to_s)
+      return unless decrypted
+
+      package = JSON.parse(decrypted)
+      return unless package.is_a?(Hash)
+      return unless package["isOAuthProxy"] && package["state"] && package["stateCookie"]
+
+      package
+    rescue JSON::ParserError
       nil
     end
 
-    def oauth_proxy_state_cookie_value(ctx)
-      cookie = ctx.context.create_auth_cookie("oauth_state")
-      parsed = oauth_proxy_parse_set_cookie(ctx.response_headers["set-cookie"])
-      exact = parsed.find { |entry| entry[:name] == cookie.name || entry[:name] == Cookies.strip_secure_cookie_prefix(cookie.name) }
-      exact && exact[:value]
+    def oauth_proxy_callback_state(ctx, config)
+      callback = normalize_hash(ctx.body).merge(normalize_hash(ctx.query))
+      package = oauth_proxy_state_package(ctx, config, callback[:state])
+      return unless package
+
+      state_data = oauth_proxy_decrypt_state_data(ctx, config, package)
+      return unless state_data
+
+      error_url = oauth_proxy_state_error_url(ctx, state_data)
+      if state_data.key?("oauthState") && state_data["oauthState"] != package["state"]
+        raise oauth_proxy_redirect_error(ctx, error_url, "state_mismatch")
+      end
+
+      [callback, package, state_data, error_url]
+    end
+
+    def oauth_proxy_social_user(user)
+      {
+        "id" => fetch_value(user, "id").to_s,
+        "email" => fetch_value(user, "email"),
+        "name" => fetch_value(user, "name").to_s,
+        "image" => fetch_value(user, "image"),
+        "emailVerified" => fetch_value(user, "emailVerified")
+      }.compact
+    end
+
+    def oauth_proxy_social_account(provider_id, account_id, token_data)
+      {
+        "providerId" => provider_id,
+        "accountId" => account_id,
+        "accessToken" => fetch_value(token_data, "accessToken"),
+        "refreshToken" => fetch_value(token_data, "refreshToken"),
+        "idToken" => fetch_value(token_data, "idToken"),
+        "accessTokenExpiresAt" => fetch_value(token_data, "accessTokenExpiresAt"),
+        "refreshTokenExpiresAt" => fetch_value(token_data, "refreshTokenExpiresAt"),
+        "scope" => fetch_value(token_data, "scope")
+      }.compact
+    end
+
+    def oauth_proxy_decrypt_state_data(ctx, config, package)
+      decrypted = Crypto.symmetric_decrypt(key: oauth_proxy_secret(ctx, config), data: package.fetch("stateCookie"))
+      return unless decrypted
+
+      data = JSON.parse(decrypted)
+      data.is_a?(Hash) ? data : nil
+    rescue JSON::ParserError, KeyError
+      nil
+    end
+
+    def oauth_proxy_profile_payload?(payload)
+      payload.is_a?(Hash) &&
+        payload["timestamp"].is_a?(Numeric) &&
+        payload["userInfo"].is_a?(Hash) &&
+        payload["account"].is_a?(Hash) &&
+        !payload["state"].to_s.empty? &&
+        !payload["callbackURL"].to_s.empty?
+    end
+
+    def oauth_proxy_default_error_url(ctx)
+      ctx.context.options.on_api_error[:error_url] || "#{oauth_proxy_strip_trailing(ctx.context.base_url)}/error"
+    end
+
+    def oauth_proxy_state_error_url(ctx, state_data)
+      state_data["errorURL"] || state_data["errorCallbackURL"] || oauth_proxy_default_error_url(ctx)
+    end
+
+    def oauth_proxy_redirect_error(ctx, base_url, error, description = nil)
+      ctx.redirect(Routes.oauth_error_url(base_url, error, description))
     end
 
     def oauth_proxy_secret(ctx, config)
@@ -204,8 +364,8 @@ module BetterAuth
       path.to_s.start_with?("/sign-in/social", "/sign-in/oauth2")
     end
 
-    def oauth_proxy_callback_path?(path)
-      path.to_s.start_with?("/callback", "/oauth2/callback")
+    def oauth_proxy_social_callback_path?(path)
+      %r{\A/callback/[^/]+\z}.match?(path)
     end
 
     def oauth_proxy_skip?(ctx, config)
@@ -235,43 +395,15 @@ module BetterAuth
       raise APIError.new("FORBIDDEN", message: "Invalid callbackURL")
     end
 
-    def oauth_proxy_error_url(ctx, message)
-      base = ctx.context.options.on_api_error[:error_url] || "#{oauth_proxy_strip_trailing(ctx.context.base_url)}/error"
-      uri = URI.parse(base)
-      params = URI.decode_www_form(uri.query.to_s)
-      params << ["error", message]
-      uri.query = URI.encode_www_form(params)
-      uri.to_s
-    end
+    def oauth_proxy_after_callback(ctx, config)
+      location = ctx.response_headers["location"].to_s
+      return unless location.start_with?("http") && location.include?("/oauth-proxy-callback?callbackURL")
 
-    def oauth_proxy_set_location(ctx, location)
-      ctx.set_header("location", location)
-      return unless ctx.returned.is_a?(APIError)
+      uri = URI.parse(location)
+      return unless uri.origin == oauth_proxy_production_uri(ctx, config).origin
 
-      headers = ctx.returned.headers.merge("location" => location)
-      ctx.returned.instance_variable_set(:@headers, headers)
-    end
-
-    def oauth_proxy_parse_set_cookie(header)
-      header.to_s.split(/\n|,(?=\s*[^;,]+=)/).filter_map do |line|
-        parts = line.strip.split(/;\s*/)
-        name, value = parts.shift.to_s.split("=", 2)
-        next if name.to_s.empty?
-
-        options = {}
-        parts.each do |part|
-          key, option_value = part.split("=", 2)
-          case key.to_s.downcase
-          when "path" then options[:path] = option_value
-          when "expires" then options[:expires] = option_value
-          when "samesite" then options[:same_site] = option_value
-          when "httponly" then options[:http_only] = true
-          when "secure" then options[:secure] = true
-          when "max-age" then options[:max_age] = option_value
-          end
-        end
-        {name: Cookies.strip_secure_cookie_prefix(name), value: URI.decode_www_form_component(value.to_s), options: options}
-      end
+      destination = Rack::Utils.parse_query(uri.query)["callbackURL"]
+      raise ctx.redirect(destination) unless destination.to_s.empty?
     end
   end
 end
