@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+## [0.12.0](https://github.com/salasebas/better-auth-rb/compare/better_auth-roda/v0.11.0...better_auth-roda/v0.12.0) (2026-11-25)
+
+
+### Bug Fixes
+
+* **core:** match Rack error handling to upstream (v1.6.35) ([#305](https://github.com/salasebas/better-auth-rb/issues/305)) ([1c3bb72](https://github.com/salasebas/better-auth-rb/commit/1c3bb729fcf650c0ab9d1ea8ab23604a5c9b6c28))
+
 ## [0.11.0](https://github.com/salasebas/better-auth-rb/compare/better_auth-roda-v0.10.0...better_auth-roda/v0.11.0) (2026-07-23)
 
 

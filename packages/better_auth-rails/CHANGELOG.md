@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.12.0](https://github.com/salasebas/better-auth-rb/compare/better_auth-rails/v0.11.0...better_auth-rails/v0.12.0) (2026-11-25)
+
+
+### Bug Fixes
+
+* **auth:** resolve dynamic base URLs per request (v1.6.35) ([#306](https://github.com/salasebas/better-auth-rb/issues/306)) ([b7f37d9](https://github.com/salasebas/better-auth-rb/commit/b7f37d9c5b600ea48df34cd63d77f1061c18e601))
+* **core:** match Rack error handling to upstream (v1.6.35) ([#305](https://github.com/salasebas/better-auth-rb/issues/305)) ([1c3bb72](https://github.com/salasebas/better-auth-rb/commit/1c3bb729fcf650c0ab9d1ea8ab23604a5c9b6c28))
+* **core:** route server-scoped endpoints over HTTP ([#63](https://github.com/salasebas/better-auth-rb/issues/63)) ([f0fc50c](https://github.com/salasebas/better-auth-rb/commit/f0fc50c03a7b3d2813daf1bb669ee73e8a9592f8))
+* **schema:** enforce request and output field rules (v1.6.35) ([#308](https://github.com/salasebas/better-auth-rb/issues/308)) ([78e2461](https://github.com/salasebas/better-auth-rb/commit/78e2461277e4a4c285e1514f756a6a42385d7038))
+
 ## [0.11.0](https://github.com/salasebas/better-auth-rb/compare/better_auth-rails-v0.10.0...better_auth-rails/v0.11.0) (2026-07-23)
 
 

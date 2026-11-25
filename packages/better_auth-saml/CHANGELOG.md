@@ -7,6 +7,16 @@
 - Documented and tested the Ruby SAML integration boundary for the hardened SSO
   lifecycle work.
 
+## [0.12.0](https://github.com/salasebas/better-auth-rb/compare/better_auth-saml/v0.11.0...better_auth-saml/v0.12.0) (2026-11-25)
+
+
+### Bug Fixes
+
+* **last-login-method:** persist tracking through database hooks ([#74](https://github.com/salasebas/better-auth-rb/issues/74)) ([663600d](https://github.com/salasebas/better-auth-rb/commit/663600dc3a05856bf0e1697bb04f9f0a9d264476))
+* **saml:** align SLO session lookup layout ([#132](https://github.com/salasebas/better-auth-rb/issues/132)) ([04a6a02](https://github.com/salasebas/better-auth-rb/commit/04a6a02fc5f37816a119b71406ec9977fed0a6c4))
+* **saml:** enforce single-use relay state ([#130](https://github.com/salasebas/better-auth-rb/issues/130)) ([2febb12](https://github.com/salasebas/better-auth-rb/commit/2febb1238c0423dd15b0d3fb9a9afc83caacbffb))
+* **saml:** preserve SLO state without session index ([#128](https://github.com/salasebas/better-auth-rb/issues/128)) ([45f891f](https://github.com/salasebas/better-auth-rb/commit/45f891fa97b2132a027dbf667063e427d20b8f8f))
+
 ## [0.11.0](https://github.com/salasebas/better-auth-rb/compare/better_auth-saml-v0.10.0...better_auth-saml/v0.11.0) (2026-07-23)
 
 

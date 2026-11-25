@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.12.0](https://github.com/salasebas/better-auth-rb/compare/better_auth-telemetry/v0.11.0...better_auth-telemetry/v0.12.0) (2026-11-25)
+
+
+### Miscellaneous Chores
+
+* **better_auth-telemetry:** Synchronize better-auth-release versions
+
 ## [0.11.0](https://github.com/salasebas/better-auth-rb/compare/better_auth-telemetry-v0.10.0...better_auth-telemetry/v0.11.0) (2026-07-23)
 
 

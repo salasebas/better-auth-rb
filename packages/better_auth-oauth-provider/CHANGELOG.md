@@ -6,6 +6,28 @@
   paths, with explicit Ruby adaptations documented in tests where applicable.
 - Added a checked upstream test inventory for OAuth Provider server behavior.
 
+## [0.12.0](https://github.com/salasebas/better-auth-rb/compare/better_auth-oauth-provider/v0.11.0...better_auth-oauth-provider/v0.12.0) (2026-11-25)
+
+
+### ⚠ BREAKING CHANGES
+
+* **oauth-provider:** better_auth-oauth-provider 0.11.0 and earlier fail to load on this better_auth release, because the OAuthProtocol helpers they call moved into the provider gem. Upgrade better_auth and better_auth-oauth-provider together.
+* **oauth-provider:** remove the MCP handler ([#262](https://github.com/salasebas/better-auth-rb/issues/262))
+
+### Bug Fixes
+
+* **oauth-provider:** align default scopes ([6b075a4](https://github.com/salasebas/better-auth-rb/commit/6b075a46298a17b86c046a1a059b94e25f4e1d66))
+* **oauth-provider:** align default scopes ([c3e6205](https://github.com/salasebas/better-auth-rb/commit/c3e620522a4cfcec656647dcd1139392961cd4d0))
+* **oauth-provider:** complete default scope parity ([5afcf2c](https://github.com/salasebas/better-auth-rb/commit/5afcf2cff2deb2adda2a960f32422a6cd031904f))
+* **oauth-provider:** encrypt JWT-disabled client secrets ([#104](https://github.com/salasebas/better-auth-rb/issues/104)) ([aa04489](https://github.com/salasebas/better-auth-rb/commit/aa04489aa71161b09be2d615d2361161f3371b9b))
+* **oauth-provider:** honor custom schema mappings ([#70](https://github.com/salasebas/better-auth-rb/issues/70)) ([4537d34](https://github.com/salasebas/better-auth-rb/commit/4537d34d4ca065ef0ba7b774fc4efe5d39aa94ba))
+
+
+### Code Refactoring
+
+* **oauth-provider:** remove the MCP handler ([#262](https://github.com/salasebas/better-auth-rb/issues/262)) ([c74fce0](https://github.com/salasebas/better-auth-rb/commit/c74fce00e63d2a48c661a2109a348048e785a5c9))
+* **oauth-provider:** split OAuthProtocol by the upstream modules it ports ([#267](https://github.com/salasebas/better-auth-rb/issues/267)) ([edacf8d](https://github.com/salasebas/better-auth-rb/commit/edacf8d31c8a7c104e1f418c152465a22f4c3a0f)), closes [#264](https://github.com/salasebas/better-auth-rb/issues/264)
+
 ## [0.11.0](https://github.com/salasebas/better-auth-rb/compare/better_auth-oauth-provider-v0.10.0...better_auth-oauth-provider/v0.11.0) (2026-07-23)
 
 

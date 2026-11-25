@@ -5,6 +5,13 @@
 - Honored plugin migration controls in MongoDB schema/index generation and
   added regression coverage for the supported generator path.
 
+## [0.12.0](https://github.com/salasebas/better-auth-rb/compare/better_auth-mongodb/v0.11.0...better_auth-mongodb/v0.12.0) (2026-11-25)
+
+
+### Bug Fixes
+
+* **schema:** enforce request and output field rules (v1.6.35) ([#308](https://github.com/salasebas/better-auth-rb/issues/308)) ([78e2461](https://github.com/salasebas/better-auth-rb/commit/78e2461277e4a4c285e1514f756a6a42385d7038))
+
 ## [0.11.0](https://github.com/salasebas/better-auth-rb/compare/better_auth-mongodb-v0.10.0...better_auth-mongodb/v0.11.0) (2026-07-23)
 
 
