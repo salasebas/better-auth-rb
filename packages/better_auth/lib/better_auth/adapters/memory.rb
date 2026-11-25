@@ -201,9 +201,12 @@ module BetterAuth
         seen[pair] = true
         case before
         when Hash
-          after.is_a?(Hash) && before.size == after.size && before.default_proc.equal?(after.default_proc) &&
-            transaction_values_equal?(before.default, after.default, seen) &&
-            before.all? { |key, value| after.key?(key) && transaction_values_equal?(value, after[key], seen) }
+          return false unless after.is_a?(Hash) && before.size == after.size && before.compare_by_identity? == after.compare_by_identity?
+          return false unless before.default_proc.equal?(after.default_proc) && transaction_values_equal?(before.default, after.default, seen)
+
+          before.each_pair.zip(after.each_pair).all? do |(key, value), (after_key, after_value)|
+            key.eql?(after_key) && transaction_values_equal?(key, after_key, seen) && transaction_values_equal?(value, after_value, seen)
+          end
         when Array
           after.is_a?(Array) && before.size == after.size &&
             before.each_with_index.all? { |value, index| transaction_values_equal?(value, after[index], seen) }

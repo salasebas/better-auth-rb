@@ -192,6 +192,7 @@ class BetterAuthMemoryAdapterTest < Minitest::Test
     settings = Hash.new(+"fallback")
     settings["labels"] = [shared_label, shared_label]
     settings["dynamic"] = Hash.new(&callback_default)
+    settings["indexed"] = {["key"] => "value"}
     leaf = SnapshotLeaf.new([+"leaf"], shared_value, nil, callback)
     config = {
       "callback" => callback,
@@ -258,6 +259,13 @@ class BetterAuthMemoryAdapterTest < Minitest::Test
     end
     committed = adapter.find_one(model: "callbackStore", where: [{field: "name", value: "oidc"}]).fetch("config")
     assert_predicate committed.fetch("settings").default, :frozen?
+
+    adapter.transaction do |transaction_adapter|
+      stored = transaction_adapter.db.fetch("callbackStore").first.fetch("config")
+      stored.fetch("settings").fetch("indexed").keys.first.freeze
+    end
+    committed = adapter.find_one(model: "callbackStore", where: [{field: "name", value: "oidc"}]).fetch("config")
+    assert_predicate committed.fetch("settings").fetch("indexed").keys.first, :frozen?
   end
 
   def test_transaction_rejects_unknown_mutable_leaves_before_running_body
