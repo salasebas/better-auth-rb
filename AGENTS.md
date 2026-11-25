@@ -16,7 +16,9 @@ editing.
 `reference/upstream-src/<version>/repository/`.
 
 Before changing upstream-backed behavior, read the matching upstream source and
-tests, then port them idiomatically to Ruby.
+tests, then port them idiomatically to Ruby. Record each upstream test file you
+port in the package's parity ledger,
+`packages/<package>/test/support/upstream_*_parity.rb`.
 
 Port the pinned release as it is, including the decisions that look wrong:
 validation order, error codes and messages, response shapes, misspelled public
@@ -57,6 +59,28 @@ packages only integrate it.
   versions, changelogs, and tags. Releases follow `RELEASING.md`.
 
 ### Testing
+
+Run a package's unit suite and StandardRB from the package directory:
+
+```bash
+cd packages/better_auth
+export BETTER_AUTH_URL=http://localhost:3000
+bundle _2.6.9_ install
+bundle _2.6.9_ exec rake test
+bundle _2.6.9_ exec standardrb
+```
+
+- The gemspecs require Bundler 2 (`bundler ~> 2.5`) and most packages commit no
+  `Gemfile.lock`. When the default `bundle` is Bundler 4, it cannot resolve the
+  Gemfile, so name an installed 2.x version as above.
+- A change under `packages/better_auth/` can break any plugin or adapter package,
+  and CI runs every package for it. Search `packages/*/` for the methods, error
+  codes, and response fields you changed, and run the suites of the packages
+  that use them.
+- In an agent sandbox, run these outside the sandbox from the first attempt:
+  dependency installs, `./scripts/fetch-upstream-better-auth.sh`, Docker-backed
+  suites, and the full unit suite, which has tests that listen on `127.0.0.1`.
+  When StandardRB cannot write its cache under `~/.cache`, pass `--cache false`.
 
 Run database-backed suites through `scripts/with_test_databases.rb`. It starts
 the Docker stack that every worktree shares and gives this worktree its own
