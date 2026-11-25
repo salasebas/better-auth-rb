@@ -389,6 +389,7 @@ class BetterAuthPluginsOAuthProxyTest < Minitest::Test
     production = build_auth(
       base_url: "http://localhost:3000",
       database: nil,
+      on_api_error: {throw: true},
       social_providers: oauth_proxy_social_providers(get_user_info: ->(_tokens) { raise KeyError, "provider failure" }),
       plugins: [BetterAuth::Plugins.oauth_proxy(current_url: "http://preview.local", production_url: "http://localhost:3000", secret: proxy_secret)]
     )

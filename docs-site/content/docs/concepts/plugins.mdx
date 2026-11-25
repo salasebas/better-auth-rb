@@ -380,12 +380,7 @@ end
 
 #### On Response
 
-The `onResponse` function is executed immediately after a response is returned. It takes two parameters: the `response` and the `context` object.
-
-Here's how to use it:
-
-* **Modify the Response**: You can return a modified response object to change the response before it is sent to the client.
-* **Continue Normally**: If you don't return anything, the response will be sent as is.
+The router calls `on_response` with the Rack response and auth context. Return `nil` or `false` to let the next plugin run. The first truthy return ends the chain. Return `{ response: rack_response }` to replace the response.
 
 ```ruby title="my_plugin.rb"
 require "better_auth"

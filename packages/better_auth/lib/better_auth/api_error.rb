@@ -10,6 +10,7 @@ module BetterAuth
       "CONFLICT" => 409,
       "NOT_FOUND" => 404,
       "METHOD_NOT_ALLOWED" => 405,
+      "UNSUPPORTED_MEDIA_TYPE" => 415,
       "UNPROCESSABLE_ENTITY" => 422,
       "TOO_MANY_REQUESTS" => 429,
       "BAD_GATEWAY" => 502,
@@ -20,10 +21,10 @@ module BetterAuth
 
     attr_reader :status, :status_code, :headers, :code, :body
 
-    def initialize(status, message: nil, headers: {}, code: nil, body: nil)
+    def initialize(status, message: nil, headers: {}, code: nil, body: nil, response_headers: nil)
       @status = status.to_s.upcase
       @status_code = STATUS_CODES.fetch(@status, 500)
-      @headers = normalize_headers(headers)
+      @headers = response_headers || normalize_headers(headers)
       @code = code || @status
       @body = body
       super(message || default_message)

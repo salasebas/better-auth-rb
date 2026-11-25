@@ -15,7 +15,7 @@ To check one entry against an upstream version, use the prompts in
 
 | Feature | Ruby | Upstream |
 | --- | --- | --- |
-| Router, endpoints and API errors | `router.rb`, `endpoint.rb`, `api.rb`, `api_error.rb`, `error.rb`, `response.rb`, `request_state.rb`, `path_matcher.rb`, `routes/ok.rb`, `routes/error.rb` | `better-auth/src/api/`, `core/src/api/`, `core/src/error/` |
+| Router, endpoints and API errors | `router.rb`, `endpoint.rb`, `endpoint_dispatcher.rb`, `api.rb`, `api_error.rb`, `error.rb`, `response.rb`, `request_state.rb`, `path_matcher.rb`, `routes/ok.rb`, `routes/error.rb` | `better-auth/src/api/`, `core/src/api/`, `core/src/error/` |
 | Origin check and trusted origins | `middleware/origin_check.rb`, `host.rb` | `better-auth/src/api/middlewares/` |
 | Client IP | `request_ip.rb` | `core/src/utils/` |
 | Rate limiting | `rate_limiter.rb` | `better-auth/src/api/rate-limiter/` |

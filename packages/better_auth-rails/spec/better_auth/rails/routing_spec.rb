@@ -150,7 +150,7 @@ RSpec.describe BetterAuth::Rails::Routing do
     )
 
     expect(response.status).to eq(403)
-    expect(JSON.parse(response.body)).to eq("code" => "FORBIDDEN", "message" => "Missing or null Origin")
+    expect(JSON.parse(response.body)).to eq("code" => "MISSING_OR_NULL_ORIGIN", "message" => "Missing or null Origin")
   end
 
   it "rejects malicious callback URLs through the Rails mount" do
@@ -172,7 +172,7 @@ RSpec.describe BetterAuth::Rails::Routing do
     )
 
     expect(response.status).to eq(403)
-    expect(JSON.parse(response.body)).to eq("code" => "FORBIDDEN", "message" => "Invalid callbackURL")
+    expect(JSON.parse(response.body)).to eq("code" => "INVALID_CALLBACK_URL", "message" => "Invalid callbackURL")
   end
 
   it "dispatches correctly when Rails is mounted below an outer script name" do
@@ -191,7 +191,7 @@ RSpec.describe BetterAuth::Rails::Routing do
     expect(JSON.parse(body.join)).to eq("ok" => true)
   end
 
-  it "converts unexpected mounted endpoint errors into Better Auth JSON errors" do
+  it "returns the core router's empty 500 for unexpected mounted endpoint errors" do
     plugin = BetterAuth::Plugin.new(
       id: "raising",
       endpoints: {
@@ -208,7 +208,7 @@ RSpec.describe BetterAuth::Rails::Routing do
     response = Rack::MockRequest.new(app).get("/api/auth/boom")
 
     expect(response.status).to eq(500)
-    expect(JSON.parse(response.body)).to eq("code" => "INTERNAL_SERVER_ERROR", "message" => "Internal Server Error")
+    expect(response.body).to be_empty
   end
 
   it "converts unexpected errors for dynamic mounted auth apps without masking the cause" do
@@ -241,7 +241,7 @@ RSpec.describe BetterAuth::Rails::Routing do
     auth = BetterAuth.auth(
       secret: secret,
       plugins: [plugin],
-      on_api_error: {on_error: ->(error, ctx) { captured << [error.message, ctx.path] }}
+      on_api_error: {on_error: ->(error, ctx) { captured << [error.message, ctx] }}
     )
     app = build_route_set do
       better_auth auth: auth
@@ -250,7 +250,7 @@ RSpec.describe BetterAuth::Rails::Routing do
     response = Rack::MockRequest.new(app).get("/api/auth/boom")
 
     expect(response.status).to eq(500)
-    expect(captured).to eq([["boom", "/boom"]])
+    expect(captured).to eq([["boom", auth.context]])
   end
 
   it "re-raises unexpected mounted endpoint errors when on_api_error throw is enabled" do

@@ -48,6 +48,16 @@ module BetterAuth
       defined?(@skip_origin_check) ? @skip_origin_check : options.advanced[:disable_origin_check]
     end
 
+    def log_error(message, fallback: nil)
+      if logger.respond_to?(:call)
+        logger.call(:error, message)
+      elsif logger.respond_to?(:error)
+        logger.error(message)
+      else
+        fallback&.puts(message)
+      end
+    end
+
     def base_url
       runtime_fetch(:base_url, @base_url)
     end

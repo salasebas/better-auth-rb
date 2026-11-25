@@ -518,7 +518,7 @@ class BetterAuthAPITest < Minitest::Test
     assert_equal "yes", data[:headers]["x-result"]
   end
 
-  def test_direct_api_before_hook_can_short_circuit_with_api_error_response
+  def test_direct_api_before_hook_api_error_raises_even_with_as_response
     auth = BetterAuth.auth(
       base_url: "http://localhost:3000",
       secret: SECRET,
@@ -541,10 +541,9 @@ class BetterAuthAPITest < Minitest::Test
     assert_equal "FORBIDDEN", error.status
     assert_equal "before", error.headers.fetch("x-error")
 
-    status, headers, body = auth.api.echo(as_response: true)
-    assert_equal 403, status
-    assert_equal "before", headers.fetch("x-error")
-    assert_equal({code: "FORBIDDEN", message: "short-circuit"}, JSON.parse(body.join, symbolize_names: true))
+    response_error = assert_raises(BetterAuth::APIError) { auth.api.echo(as_response: true) }
+    assert_equal error.to_h, response_error.to_h
+    assert_equal error.headers, response_error.headers
   end
 
   def test_disabled_paths_return_not_found_for_rack_but_remain_callable_via_direct_api

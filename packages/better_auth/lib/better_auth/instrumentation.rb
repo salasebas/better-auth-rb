@@ -61,14 +61,27 @@ module BetterAuth
       @trace ||= Trace.new
     end
 
-    def with_span(name, attributes: {}, &block)
-      trace.get_tracer("better-auth").start_active_span(name, attributes: attributes) do |span|
+    def with_span(name, attributes: {}, options: nil, &block)
+      if !defined?(::OpenTelemetry::Trace::Status) || options&.experimental&.dig(:instrumentation, :enabled) == false
+        return block.call(NoopSpan.new)
+      end
+
+      tracer = ::OpenTelemetry.tracer_provider.tracer("better-auth", BetterAuth::VERSION)
+      span = tracer.start_span(name, attributes: attributes)
+      ::OpenTelemetry::Trace.with_span(span) do
         block.call(span)
       rescue => error
-        span.record_exception(error)
-        span.set_status(SpanStatusCode::ERROR)
+        if error.is_a?(APIError) && (300...400).cover?(error.status_code)
+          span.set_attribute("http.response.status_code", error.status_code)
+          span.status = ::OpenTelemetry::Trace::Status.ok
+        else
+          span.record_exception(error)
+          span.status = ::OpenTelemetry::Trace::Status.error(error.message)
+        end
         raise
       end
+    ensure
+      span&.finish
     end
   end
 end

@@ -12,6 +12,7 @@ module BetterAuth
       :params_schema,
       :headers_schema,
       :metadata,
+      :operation_id,
       :options,
       :use,
       :disable_body,
@@ -25,6 +26,8 @@ module BetterAuth
       @params_schema = params_schema
       @headers_schema = headers_schema
       @metadata = metadata || {}
+      @operation_id = fetch_key(@metadata, :operation_id) || fetch_key(@metadata, :operationId) ||
+        fetch_key(fetch_key(@metadata, :openapi), :operationId)
       apply_default_open_api_metadata!
       apply_open_api_defaults!
       apply_open_api_schemas!
@@ -257,29 +260,22 @@ module BetterAuth
 
       def initialize(response:, status: 200, headers: {}, raw_response: nil)
         @response = response
-        @status = status
+        @status = response.is_a?(APIError) ? response.status_code : status
         @headers = normalize_headers(headers)
+        if response.is_a?(APIError) && !headers.equal?(response.headers)
+          @headers = self.class.merge_headers(@headers, response.headers)
+        end
         @raw_response = raw_response
       end
 
       def self.from_value(value, context)
         return value if value.is_a?(self)
 
-        if value.is_a?(APIError)
-          return new(response: value, status: value.status_code, headers: merge_headers(context.response_headers, value.headers))
-        end
-
         if rack_response?(value)
           return new(response: nil, status: value[0], headers: value[1], raw_response: value)
         end
 
-        headers = context.response_headers.dup
-        if value.is_a?(self)
-          headers = merge_headers(headers, value.headers)
-          return new(response: value.response, status: value.status, headers: headers)
-        end
-
-        new(response: value, status: context.status, headers: headers)
+        new(response: value, status: context.status, headers: context.response_headers)
       end
 
       def self.rack_response?(value)
@@ -308,13 +304,8 @@ module BetterAuth
       def to_response
         return Response.from_rack([@raw_response[0], rack_headers(@raw_response[1]), @raw_response[2]]) if raw_response?
 
-        body = if response.nil?
-          [JSON.generate(nil)]
-        elsif response.is_a?(String)
-          [response]
-        else
-          [JSON.generate(response)]
-        end
+        payload = response.is_a?(APIError) ? response.to_h : response
+        body = [payload.is_a?(String) ? payload : JSON.generate(payload)]
         response_headers = rack_headers({"content-type" => "application/json"}.merge(headers))
         Response.new(status: status, headers: response_headers, body: body)
       end
@@ -444,9 +435,9 @@ module BetterAuth
         APIError.new(status, message: message, headers: headers)
       end
 
-      def redirect(location, status: 302)
-        code = (status == 302) ? "FOUND" : status
-        APIError.new(code, message: "Redirect", headers: {"location" => location})
+      def redirect(location)
+        set_header("location", location)
+        APIError.new("FOUND", message: "Redirect", response_headers: response_headers)
       end
 
       def merge_context!(data)

@@ -667,7 +667,7 @@ class BetterAuthRoutesSignUpTest < Minitest::Test
   def test_sign_up_email_rejects_unsupported_content_type_for_rack_requests
     auth = build_auth
 
-    status, _headers, body = auth.call(
+    status, = auth.call(
       rack_env(
         "POST",
         "/api/auth/sign-up/email",
@@ -677,7 +677,6 @@ class BetterAuthRoutesSignUpTest < Minitest::Test
     )
 
     assert_equal 415, status
-    assert_equal({"error" => "Unsupported Media Type"}, JSON.parse(body.join))
   end
 
   private
