@@ -15,6 +15,8 @@ Check RubyAuth parity for one feature.
 Feature: <an entry or group from docs/supported-features.md>
 Target version: <TO, for example 1.6.35>
 Previous version: <FROM, for example 1.6.23, or "none" for a full check>
+Parent issue: <number of "Parity with Better Auth v<TO>">
+Earlier parity issues: <numbers, for example #165, or "none">
 
 1. Fetch the versions: ./scripts/fetch-upstream-better-auth.sh <TO>, and
    ./scripts/fetch-upstream-better-auth.sh <FROM> unless FROM is "none".
@@ -32,12 +34,10 @@ Previous version: <FROM, for example 1.6.23, or "none" for a full check>
 4. Record a difference only with a quote of both sides: Ruby path:line and the
    upstream link https://github.com/better-auth/better-auth/blob/v<TO>/<path>#L<n>.
 5. File each difference:
-   - Search open issues first (gh issue list --search). If a sub-issue of
-     "Parity with Better Auth v<TO>" or its predecessor covers it, add a comment
-     to that sub-issue.
-   - Otherwise open an issue titled "<what to port> (v<TO>)", and add it as a
-     sub-issue of "Parity with Better Auth v<TO>". Create that parent issue if
-     it does not exist. A parent holds at most 100 sub-issues.
+   - If a sub-issue of the parent issue or of an earlier parity issue already
+     covers it, add a comment to that sub-issue.
+   - Otherwise open an issue titled "<what to port> (v<TO>)" and add it as a
+     sub-issue of the parent issue.
    - If upstream now behaves like Ruby, comment that the existing finding is
      resolved.
 
@@ -59,13 +59,17 @@ Reply with these four sections, each one empty or a list with issue links:
 Run RubyAuth parity checks from <FROM> to <TO>.
 
 1. Fetch both versions with ./scripts/fetch-upstream-better-auth.sh.
-2. For each entry in docs/supported-features.md, check whether its upstream
+2. Find the open issue "Parity with Better Auth v<TO>", or create it. Note its
+   number and the numbers of earlier open parity issues, such as #165. Each
+   parent holds at most 100 sub-issues.
+3. For each entry in docs/supported-features.md, check whether its upstream
    paths changed: git diff --no-index --quiet on the two
    reference/upstream-src/<version>/repository/packages/<path> directories.
    For a full check (FROM "none"), take every entry.
-3. For each selected entry, start a new thread in parallel with the "Check one
-   feature" prompt from docs/agents/parity-check.md, filled in for that entry.
-4. When every thread finishes, reply with the four sections merged across
+4. For each selected entry, start a new thread in parallel with the "Check one
+   feature" prompt from docs/agents/parity-check.md, filled in for that entry
+   with both issue numbers.
+5. When every thread finishes, reply with the four sections merged across
    features. Add each "Upstream features still pending" item to the Planned
    section of docs/supported-features.md in one PR.
 ```
