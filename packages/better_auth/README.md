@@ -20,6 +20,9 @@
 [![GitHub stars](https://img.shields.io/github/stars/sebasxsala/better-auth?style=flat&colorA=000000&colorB=000000)](https://github.com/sebasxsala/better-auth-rb/stargazers)
 </p>
 
+> **Better Auth Ruby is deprecated.** Development and security support ended on
+> November 25, 2026. Published gems remain available on RubyGems.
+
 ## About the Project
 
 Better Auth Ruby is a comprehensive authentication and authorization library for Ruby. It provides a complete set of features out of the box and includes a plugin ecosystem that simplifies adding advanced functionalities with minimal code.
@@ -478,10 +481,6 @@ test/                       # Core tests (Minitest)
 **Conventions:**
 - Core: Framework-agnostic, uses Minitest
 - All code goes through StandardRB (Ruby style guide)
-
-## Contributing
-
-Bug reports and pull requests are welcome on GitHub at https://github.com/sebasxsala/better-auth-rb. This project is intended to be a safe, welcoming space for collaboration, and contributors are expected to adhere to the [code of conduct](https://github.com/sebasxsala/better-auth-rb/blob/main/CODE_OF_CONDUCT.md).
 
 ## License
 
