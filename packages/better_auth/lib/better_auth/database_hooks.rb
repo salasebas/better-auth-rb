@@ -2,14 +2,55 @@
 
 module BetterAuth
   class DatabaseHooks
-    attr_reader :adapter, :options
+    Scope = Data.define(:adapter, :transaction_adapter, :pending_hooks)
+    SCOPE_KEY = :better_auth_database_hook_scope
+    private_constant :Scope, :SCOPE_KEY
+
+    attr_reader :options
+
+    def self.with_adapter_scope
+      pending_hooks = []
+      with_scope(Scope.new(nil, nil, pending_hooks)) { yield }
+    ensure
+      pending_hooks.each(&:call)
+    end
+
+    def self.transaction(adapter)
+      scope = Thread.current[SCOPE_KEY]
+      return yield scope.transaction_adapter if scope&.adapter.equal?(adapter)
+
+      pending_hooks = []
+      begin
+        adapter.transaction do |transaction_adapter|
+          transaction_adapter ||= adapter
+          with_scope(Scope.new(adapter, transaction_adapter, pending_hooks)) { yield transaction_adapter }
+        end
+      ensure
+        pending_hooks.each(&:call)
+      end
+    end
+
+    def self.with_scope(scope)
+      previous = Thread.current[SCOPE_KEY]
+      Thread.current[SCOPE_KEY] = scope
+      yield
+    ensure
+      Thread.current[SCOPE_KEY] = previous
+    end
+    private_class_method :with_scope
 
     def initialize(adapter, options)
       @adapter = adapter
       @options = options
     end
 
+    def adapter
+      scope = Thread.current[SCOPE_KEY]
+      scope&.adapter.equal?(@adapter) ? scope.transaction_adapter : @adapter
+    end
+
     def create(data, model, custom: nil, context: nil)
+      context ||= Endpoint::Context.current
       run_before(model, :create, data, context) do |actual_data|
         created = custom ? custom.call(actual_data) : adapter.create(model: model, data: actual_data, force_allow_id: true)
         run_after(model, :create, created, context)
@@ -17,49 +58,78 @@ module BetterAuth
       end
     end
 
-    def update(data, where, model, custom: nil, context: nil)
+    def update(data, where, model, custom: nil, context: Endpoint::Context.current)
       run_before(model, :update, data, context) do |actual_data|
         updated = custom ? custom.call(actual_data) : adapter.update(model: model, where: where, update: actual_data)
-        run_after(model, :update, updated, context) if updated
+        run_after(model, :update, updated, context)
         updated
       end
     end
 
-    def update_many(data, where, model, custom: nil, context: nil)
+    def update_many(data, where, model, custom: nil, context: Endpoint::Context.current)
       run_before(model, :update, data, context) do |actual_data|
         updated = custom ? custom.call(actual_data) : adapter.update_many(model: model, where: where, update: actual_data)
-        run_after(model, :update, updated, context) if updated
+        run_after(model, :update, updated, context)
         updated
       end
     end
 
-    def delete(where, model, custom: nil, context: nil)
-      entity = adapter.find_one(model: model, where: where)
-      return nil unless entity
+    def delete(where, model, custom: nil, context: Endpoint::Context.current, veto_error: nil)
+      entity = delete_snapshots(where, model, limit: 1, strict: !!veto_error).first
+      if entity && delete_vetoed?(model, entity, context)
+        raise Error, veto_error if veto_error
+        return nil
+      end
 
-      return false if before_hooks(model, :delete).any? { |hook| hook.call(entity, context) == false }
-
-      deleted = custom ? custom.call(where) : adapter.delete(model: model, where: where)
-      after_hooks(model, :delete).each { |hook| hook.call(entity, context) }
+      deleted = if custom
+        custom.call(where)
+      elsif entity
+        adapter.delete(model: model, where: where)
+      end
+      raise Error, veto_error if veto_error && deleted == false
+      run_after(model, :delete, entity, context) if entity
       deleted
     end
 
-    def delete_many(where, model, custom: nil, context: nil)
-      entities = adapter.find_many(model: model, where: where)
-      entities.each do |entity|
-        return false if before_hooks(model, :delete).any? { |hook| hook.call(entity, context) == false }
+    def delete_many(where, model, custom: nil, context: Endpoint::Context.current, veto_error: nil)
+      entities = delete_snapshots(where, model, strict: !!veto_error)
+      if entities.any? { |entity| delete_vetoed?(model, entity, context) }
+        raise Error, veto_error if veto_error
+        return nil
       end
+
       deleted = custom ? custom.call(where) : adapter.delete_many(model: model, where: where)
-      entities.each { |entity| after_hooks(model, :delete).each { |hook| hook.call(entity, context) } }
+      raise Error, veto_error if veto_error && deleted == false
+      entities.each { |entity| run_after(model, :delete, entity, context) }
       deleted
+    end
+
+    def consume_one(model, snapshot, context: Endpoint::Context.current)
+      return nil if delete_vetoed?(model, snapshot, context)
+
+      consumed = yield
+      run_after(model, :delete, consumed, context) if consumed
+      consumed
     end
 
     private
 
+    def delete_vetoed?(model, entity, context)
+      hooks_for(model, :delete, :before).any? { |hook| hook.call(entity, context) == false }
+    end
+
+    def delete_snapshots(where, model, strict:, limit: nil)
+      adapter.find_many(model: model, where: where, limit: limit)
+    rescue
+      raise if strict
+      []
+    end
+
     def run_before(model, action, data, context)
-      actual_data = stringify_keys(data)
-      before_hooks(model, action).each do |hook|
-        result = hook.call(actual_data, context)
+      data = stringify_keys(data)
+      actual_data = data
+      hooks_for(model, action, :before).each do |hook|
+        result = hook.call((action == :create) ? actual_data : data, context)
         return nil if result == false
 
         hook_data = result.is_a?(Hash) ? (result[:data] || result["data"]) : nil
@@ -69,15 +139,21 @@ module BetterAuth
     end
 
     def run_after(model, action, data, context)
-      after_hooks(model, action).each { |hook| hook.call(data, context) }
+      scope = Thread.current[SCOPE_KEY]
+      hooks_for(model, action, :after).each do |hook|
+        if scope
+          scope.pending_hooks << -> { hook.call(data, context) }
+        else
+          run_inline_after(hook, data, context)
+        end
+      end
     end
 
-    def before_hooks(model, action)
-      hooks_for(model, action, :before)
-    end
-
-    def after_hooks(model, action)
-      hooks_for(model, action, :after)
+    def run_inline_after(hook, data, context)
+      hook.call(data, context)
+    rescue
+      # The upstream async-storage fallback also retries a rejected inline hook.
+      hook.call(data, context)
     end
 
     def hooks_for(model, action, phase)
@@ -100,7 +176,7 @@ module BetterAuth
         init_options = plugin.dig(:options, :database_hooks) || plugin.dig("options", "databaseHooks")
         plugin[:database_hooks] || plugin["databaseHooks"] || init_options
       end
-      direct + plugin_hooks
+      plugin_hooks + direct
     end
 
     def stringify_keys(data)

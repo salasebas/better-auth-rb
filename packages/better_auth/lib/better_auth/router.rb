@@ -50,7 +50,11 @@ module BetterAuth
     end
 
     def call(env)
-      RequestState.with_current { dispatch(env) }
+      DatabaseHooks.with_adapter_scope do
+        RequestState.with_current { dispatch(env) }
+      end
+    ensure
+      context.clear_runtime! if context.respond_to?(:clear_runtime!)
     end
 
     def dispatch(env)
@@ -93,8 +97,6 @@ module BetterAuth
       error_response(error)
     rescue JSON::ParserError
       error_response(APIError.new("BAD_REQUEST", message: "Invalid JSON body"))
-    ensure
-      context.clear_runtime! if context.respond_to?(:clear_runtime!)
     end
     private :dispatch
 

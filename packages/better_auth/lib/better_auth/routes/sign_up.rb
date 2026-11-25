@@ -74,7 +74,7 @@ module BetterAuth
         reserved = %w[email password name image callbackURL callbackUrl callback_url rememberMe remember_me]
         additional_user_fields = parse_sign_up_additional_user_fields(ctx, body.except(*reserved))
 
-        ctx.context.adapter.transaction do
+        DatabaseHooks.transaction(ctx.context.adapter) do
           existing = ctx.context.internal_adapter.find_user_by_email(email)
           if existing
             if email_config[:require_email_verification] || email_config[:auto_sign_in] == false

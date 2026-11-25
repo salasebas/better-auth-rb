@@ -32,7 +32,7 @@ module BetterAuth
         @lock.synchronize do
           model = model.to_s
           table_for(model) << transform_input(model, data, "create", force_allow_id)
-          table_for(model).last
+          table_for(model).last.dup
         end
       end
 
@@ -78,7 +78,7 @@ module BetterAuth
           data = transform_input(model, update, "update", true)
           ensure_update_data!(data)
           records.each { |record| record.merge!(data) }
-          records.first
+          records.first&.dup
         end
       end
 

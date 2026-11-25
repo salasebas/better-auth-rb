@@ -223,10 +223,14 @@ module BetterAuth
           notes: "Secret rotation covered in crypto_test"
         },
         "db/db.test.ts" => {
-          owner: "better_auth/adapters/internal_adapter_test.rb",
+          owner: ["better_auth/adapters/internal_adapter_test.rb", "better_auth/routes/user_routes_test.rb"],
           status: :covered,
           plan: "006",
-          notes: "Core DB adapter behavior covered in internal_adapter_test"
+          evidence: {
+            "better_auth/adapters/internal_adapter_test.rb" => "test_user_create_hook_preserves_forced_uuid_when_generate_id_is_uuid",
+            "better_auth/routes/user_routes_test.rb" => "test_delete_user_database_hooks_can_abort_user_row_delete"
+          },
+          notes: "Create hooks can supply an ID. Delete hooks can veto the write and receive the endpoint context."
         },
         "db/get-migration-schema.test.ts" => {
           owner: "better_auth/migration/sql_test.rb",
@@ -235,10 +239,14 @@ module BetterAuth
           notes: "Migration schema introspection covered in migration/sql_test"
         },
         "db/internal-adapter.test.ts" => {
-          owner: "better_auth/adapters/internal_adapter_test.rb",
+          owner: ["better_auth/adapters/internal_adapter_test.rb", "better_auth/database_hooks_test.rb"],
           status: :covered,
           plan: "006",
-          notes: "Internal adapter behavior covered in internal_adapter_test"
+          evidence: {
+            "better_auth/adapters/internal_adapter_test.rb" => "test_create_oauth_user_uses_custom_generate_id_and_plugin_hooks",
+            "better_auth/database_hooks_test.rb" => "test_nested_transaction_runs_after_hooks_when_outer_transaction_finishes"
+          },
+          notes: "Internal adapter tests cover OAuth creation, hook ordering, verification consumption, and the nested after-hook case from core's context/transaction.test.ts."
         },
         "db/secondary-storage.test.ts" => {
           owner: "better_auth/adapters/internal_adapter_test.rb",

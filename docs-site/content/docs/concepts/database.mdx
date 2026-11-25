@@ -790,12 +790,18 @@ There are two types of hooks you can define:
 #### 1. Before Hook
 
 * **Purpose**: This hook is called before the respective entity (user, session, or account) is created, updated, or deleted.
-* **Behavior**: If the hook returns `false`, the operation will be aborted. And If it returns a data object, it'll replace the original payload.
+* **Behavior**: Return `false` to abort the write. Return `{data: {...}}` to merge fields into the write payload. Return `nil` to leave the data as-is.
+
+Plugin hooks run in registration order, followed by application hooks. A `create.before` hook receives the data from the preceding hook. Each `update.before` hook receives the original update data, and the adapter writes the merged result.
 
 #### 2. After Hook
 
-* **Purpose**: This hook is called after the respective entity is created or updated.
-* **Behavior**: You can perform additional actions or modifications after the entity has been successfully created or updated.
+* **Purpose**: This hook runs after a create, update, or delete. If a single-row update matches no row, the update hook receives `nil`.
+* **Timing**: A RubyAuth transaction queues these hooks until the outer transaction finishes, including after rollback. A hook that raises after commit leaves the committed writes in place.
+
+A Rack request defers after-hooks outside a transaction until request dispatch finishes. Outside both scopes, RubyAuth runs the hook immediately and retries it once if it raises.
+
+Magic-link and email-OTP sign-in raise an error if a delete hook vetoes revocation of a credential or session created before the user's email was verified. RubyAuth requires revocation to succeed before verifying the user.
 
 **Example Usage**
 
@@ -877,7 +883,7 @@ auth = BetterAuth.auth(
 
 #### Using the Context Object
 
-The context object (`ctx`), passed as the second argument to the hook, contains useful information. For `update` hooks, this includes the current `session`, which you can use to access the logged-in user's details.
+During an endpoint call, RubyAuth passes the endpoint context (`ctx`) as the second hook argument. Use `ctx.context.current_session` to read the current session when the endpoint has loaded one. Outside an endpoint call, the hook typically receives `nil`.
 
 ```ruby title="config/better_auth.rb"
 require "better_auth"
@@ -888,8 +894,8 @@ auth = BetterAuth.auth(
       update: {
         before: ->(data, ctx) {
           # You can access the session from the context object when present.
-          if ctx.respond_to?(:context) && ctx.context.respond_to?(:session)
-            Rails.logger.info("User update initiated by: #{ctx.context.session[:user_id]}")
+          if (user_id = ctx&.context&.current_session&.dig(:user, "id"))
+            Rails.logger.info("User update initiated by #{user_id}")
           end
 
           {data: data}
