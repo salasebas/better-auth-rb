@@ -39,7 +39,40 @@ module BetterAuth
         return false unless reference
 
         reference_model = reference[:model] || reference["model"]
-        reference_model.to_s == model.to_s || reference_model.to_s == table_for(model)
+        reference_model.to_s == model.to_s || reference_model.to_s == schema_for(model).fetch(:model_name)
+      end
+
+      def inferred_join_config(model, join_model)
+        foreign_keys = schema_for(join_model).fetch(:fields).select do |_field, attributes|
+          reference_model_matches?(attributes, model)
+        end
+        forward_join = !foreign_keys.empty?
+
+        unless forward_join
+          foreign_keys = schema_for(model).fetch(:fields).select do |_field, attributes|
+            reference_model_matches?(attributes, join_model)
+          end
+        end
+
+        raise Error, "No foreign key found for model #{join_model} and base model #{model} while performing join operation." if foreign_keys.empty?
+        raise Error, "Multiple foreign keys found for model #{join_model} and base model #{model} while performing join operation. Only one foreign key is supported." if foreign_keys.length > 1
+
+        foreign_key, attributes = foreign_keys.first
+        referenced_field = attributes.fetch(:references).fetch(:field).to_s
+        from, to = forward_join ? [referenced_field, foreign_key] : [foreign_key, referenced_field]
+        target_column = schema_for(join_model).fetch(:fields).fetch(to, {}).fetch(:field_name, to)
+        unique = target_column == "id" || attributes[:unique] == true
+        {from: from, to: to, relation: unique ? "one-to-one" : "one-to-many", unique: unique}
+      end
+
+      def projected_join_fields(select, join)
+        return [] unless select
+
+        Array(select).map { |field| storage_key(field) } | join.values.map { |config| config.fetch(:from) }
+      end
+
+      def one_to_one_join?(config)
+        config[:relation] == "one-to-one" || config[:unique] == true
       end
 
       def unique_join_field?(model, field)

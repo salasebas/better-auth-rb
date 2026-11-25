@@ -8,7 +8,7 @@ require "monitor"
 module BetterAuth
   module Adapters
     class InternalAdapter
-      attr_reader :adapter, :options, :hooks
+      attr_reader :options, :hooks
 
       def initialize(adapter, options)
         @adapter = adapter
@@ -16,6 +16,10 @@ module BetterAuth
         @hooks = DatabaseHooks.new(adapter, options)
         @verification_locks_guard = Mutex.new
         @verification_locks = {}
+      end
+
+      def adapter
+        DatabaseHooks.current_adapter(@adapter)
       end
 
       def create_oauth_user(user, account, context: nil)

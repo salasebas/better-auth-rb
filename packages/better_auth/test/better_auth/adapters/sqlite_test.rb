@@ -228,6 +228,43 @@ class BetterAuthSQLiteAdapterTest < Minitest::Test
     skip "sqlite3 gem is not installed"
   end
 
+  def test_sql_filter_uses_like_wildcards_and_rejects_an_unknown_operator
+    with_contract_adapter(contract_config) do |adapter|
+      first = adapter.create(model: "user", data: {name: "AXB", email: "first-pattern@example.com"})
+      second = adapter.create(model: "user", data: {name: "a-long-b", email: "second-pattern@example.com"})
+
+      {
+        "contains" => ["a_b", [first.fetch("id")]],
+        "starts_with" => ["a%b", [first.fetch("id"), second.fetch("id")]],
+        "ends_with" => ["_xb", [first.fetch("id")]]
+      }.each do |operator, (value, expected)|
+        records = adapter.find_many(model: "user", where: [{field: "name", operator: operator, value: value, mode: "insensitive"}])
+        assert_equal expected.sort, records.map { |record| record.fetch("id") }.sort, operator
+      end
+
+      assert_raises(BetterAuth::Error) do
+        adapter.find_many(model: "user", where: [{field: "name", operator: "unknown", value: "AXB"}])
+      end
+
+      assert_equal 1, adapter.count(model: "user", where: [{field: "name", operator: "not_in", value: "AXB"}])
+    end
+  end
+
+  def test_sql_collection_join_skips_rows_when_projection_omits_the_base_id
+    plugin = BetterAuth::Plugin.new(
+      id: "receipt",
+      schema: {receipt: {fields: {ownerEmail: {type: "string", required: true, references: {model: "user", field: "email"}}}}}
+    )
+    with_contract_adapter(contract_config(plugins: [plugin])) do |adapter|
+      user = adapter.create(model: "user", data: {name: "Ada", email: "receipt@example.com"})
+      receipt = adapter.create(model: "receipt", data: {ownerEmail: user.fetch("email")})
+      join = {user: true}
+
+      assert_empty adapter.find_many(model: "receipt", select: ["ownerEmail"], join: join)
+      assert_equal [receipt.merge("user" => [user])], adapter.find_many(model: "receipt", select: ["id"], join: join)
+    end
+  end
+
   def test_sqlite_adapter_matches_binary_encoded_string_where_values
     require "sqlite3"
 

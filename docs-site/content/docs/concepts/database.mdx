@@ -15,6 +15,14 @@ You can pass a database connection to RubyAuth by passing a supported database a
   RubyAuth also works without any database. For more details, see [Stateless Session Management](/docs/concepts/session-management#stateless-session-management).
 </Callout>
 
+### Adapter transactions and filters
+
+Ruby's built-in SQL adapters always use database transactions. This preserves rollback for authentication writes and migrations. The upstream SQL adapter's transaction option defaults to `false`.
+
+The Memory adapter yields a separate adapter for each transaction. Use the yielded adapter to read and write uncommitted data. A failed nested transaction discards its own writes. Commit merges changes by row and preserves changes made outside the transaction to other rows.
+
+SQL filters treat `%` and `_` as wildcards in `contains`, `starts_with`, and `ends_with`. Memory matches them as ordinary characters.
+
 ## CLI
 
 RubyAuth comes with a CLI tool to manage database migrations and generate schema.

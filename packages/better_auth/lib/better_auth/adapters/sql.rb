@@ -9,6 +9,15 @@ module BetterAuth
   module Adapters
     class SQL < Base
       include JoinSupport
+      include WhereValues
+
+      SQL_COMPARISON_OPERATORS = {
+        "eq" => "=", "ne" => "<>", "gt" => ">", "gte" => ">=", "lt" => "<", "lte" => "<="
+      }.freeze
+      SQL_BINARY_OPERATORS = %w[
+        = == != <> > >= < <= like match ilike @> <@ ^@ && ? ?& ?| !< !> <=> !~ ~ ~* !~* @@ @@@ !! <-> regexp
+        + - * / % ^ & | # << >> ||
+      ].concat(["in", "not in", "is", "is not", "not like", "not ilike", "is distinct from", "is not distinct from"]).freeze
 
       attr_reader :connection, :dialect
 
@@ -447,17 +456,19 @@ module BetterAuth
       end
 
       def select_sql(model, select, join)
-        fields = Array(select).empty? ? schema_for(model).fetch(:fields).keys : Array(select).map { |field| storage_key(field) }
+        join = normalized_join(model, join)
+        fields = projected_join_fields(select, join)
+        fields = schema_for(model).fetch(:fields).keys if fields.empty?
         columns = fields.map do |field|
           column = storage_field(model, field)
           "#{quote(table_for(model))}.#{quote(column)} AS #{quote(column)}"
         end
-        columns.concat(join_select_sql(model, join)) if join
+        columns.concat(join_select_sql(join))
         columns.join(", ")
       end
 
-      def join_select_sql(model, join)
-        normalized_join(model, join).flat_map do |join_model, _config|
+      def join_select_sql(join)
+        join.each_key.flat_map do |join_model|
           schema_for(join_model).fetch(:fields).map do |field, attributes|
             column = attributes[:field_name] || physical_name(field)
             "#{quote(join_model)}.#{quote(column)} AS #{quote("#{join_model}__#{column}")}"
@@ -475,32 +486,6 @@ module BetterAuth
         end.join
       end
 
-      def inferred_join_config(model, join_model)
-        foreign_keys = schema_for(join_model).fetch(:fields).select do |_field, attributes|
-          reference_model_matches?(attributes, model)
-        end
-        forward_join = true
-
-        if foreign_keys.empty?
-          foreign_keys = schema_for(model).fetch(:fields).select do |_field, attributes|
-            reference_model_matches?(attributes, join_model)
-          end
-          forward_join = false
-        end
-
-        raise Error, "No foreign key found for model #{join_model} and base model #{model} while performing join operation." if foreign_keys.empty?
-        raise Error, "Multiple foreign keys found for model #{join_model} and base model #{model} while performing join operation. Only one foreign key is supported." if foreign_keys.length > 1
-
-        foreign_key, attributes = foreign_keys.first
-        reference = attributes.fetch(:references)
-        if forward_join
-          unique = attributes[:unique] == true
-          {from: reference.fetch(:field).to_s, to: foreign_key, relation: unique ? "one-to-one" : "one-to-many", unique: unique}
-        else
-          {from: foreign_key, to: reference.fetch(:field).to_s, relation: "one-to-one", unique: true}
-        end
-      end
-
       def build_where(model, where, params)
         and_clauses, or_clauses = grouped_where_clauses(where)
         and_sql = and_clauses.map { |clause| build_where_clause(model, clause, params) }
@@ -512,12 +497,17 @@ module BetterAuth
       end
 
       def build_where_clause(model, clause, params)
-        field = storage_key(fetch_key(clause, :field))
-        column = "#{quote(table_for(model))}.#{quote(storage_field(model, field))}"
         operator = (fetch_key(clause, :operator) || "eq").to_s
         value = fetch_key(clause, :value)
+        require_where_array!(value) if operator == "in"
+        operator = operator.downcase if %w[in not_in].include?(operator.downcase)
+
+        field = storage_key(fetch_key(clause, :field))
+        column = "#{quote(table_for(model))}.#{quote(storage_field(model, field))}"
         attributes = schema_for(model).fetch(:fields).fetch(field)
-        insensitive = insensitive_string_predicate?(clause, attributes)
+        value = normalize_where_value(value, attributes)
+        insensitive = insensitive_string_predicate?(clause, attributes) &&
+          (value.is_a?(String) || (value.is_a?(Array) && value.all?(String)))
         predicate_column = insensitive ? "LOWER(#{column})" : column
 
         if value.nil? && %w[eq ne].include?(operator)
@@ -525,26 +515,32 @@ module BetterAuth
           "#{column} #{null_operator}"
         else
           case operator
-          when "in", "not_in"
-            values = Array(value).map { |entry| insensitive ? entry.to_s.downcase : coerce_where_value(entry, attributes) }
+          when "in", "not_in", "not in"
+            values = value.is_a?(Array) ? value : [value]
             placeholders = values.map do |entry|
-              params << entry
+              params << (insensitive ? entry.downcase : coerce_where_binding(entry, attributes))
               placeholder(params.length)
             end.join(", ")
-            sql_operator = (operator == "not_in") ? "NOT IN" : "IN"
+            sql_operator = (operator == "in") ? "IN" : "NOT IN"
             "#{predicate_column} #{sql_operator} (#{placeholders})"
           when "contains", "starts_with", "ends_with"
-            escaped = escape_like(insensitive ? value.to_s.downcase : value)
+            needle = insensitive ? value.to_s.downcase : value.to_s
             pattern = case operator
-            when "starts_with" then "#{escaped}%"
-            when "ends_with" then "%#{escaped}"
-            else "%#{escaped}%"
+            when "starts_with" then "#{needle}%"
+            when "ends_with" then "%#{needle}"
+            else "%#{needle}%"
             end
             params << pattern
-            "#{predicate_column} LIKE #{placeholder(params.length)} ESCAPE #{escape_literal}"
+            "#{predicate_column} LIKE #{placeholder(params.length)}"
           else
-            params << (insensitive ? value.to_s.downcase : coerce_where_value(value, attributes))
-            "#{predicate_column} #{sql_operator(operator)} #{placeholder(params.length)}"
+            comparison = sql_operator(operator)
+            binding = (insensitive && value.is_a?(String)) ? value.downcase : coerce_where_binding(value, attributes)
+            if comparison == "is" || comparison == "is not"
+              literal = {nil => "NULL", true => "TRUE", false => "FALSE"}[binding]
+              return "#{predicate_column} #{comparison} #{literal}" if literal
+            end
+            params << binding
+            "#{predicate_column} #{comparison} #{placeholder(params.length)}"
           end
         end
       end
@@ -586,13 +582,9 @@ module BetterAuth
       end
 
       def sql_operator(operator)
-        {
-          "ne" => "!=",
-          "gt" => ">",
-          "gte" => ">=",
-          "lt" => "<",
-          "lte" => "<="
-        }.fetch(operator, "=")
+        return operator if SQL_BINARY_OPERATORS.include?(operator)
+
+        SQL_COMPARISON_OPERATORS.fetch(operator) { raise Error, "Invalid where operator #{operator.inspect}" }
       end
 
       def insensitive_string_predicate?(clause, attributes)
@@ -685,11 +677,13 @@ module BetterAuth
         join_config = normalized_join(model, join)
         grouped = {}
         records.each do |record|
-          key = record.fetch("id")
+          key = record["id"]
+          next if !key || key == 0 || key == ""
+
           grouped[key] ||= begin
             base = record.reject { |field, _value| join_config.key?(field) }
             join_defaults = join_config.each_with_object({}) do |(join_model, config), defaults|
-              defaults[join_model] = (config[:relation] == "one-to-one" || config[:unique] == true) ? nil : []
+              defaults[join_model] = one_to_one_join?(config) ? nil : []
             end
             base.merge(join_defaults)
           end
@@ -698,7 +692,7 @@ module BetterAuth
             joined = record[join_model]
             next unless joined&.values&.any?
 
-            if config[:relation] == "one-to-one" || config[:unique] == true
+            if one_to_one_join?(config)
               grouped[key][join_model] = joined
             else
               next if grouped[key][join_model].length >= join_limit(config)
@@ -748,14 +742,6 @@ module BetterAuth
         SecureRandom.hex(16)
       end
 
-      def escape_like(value)
-        value.to_s.gsub(/[!%_]/) { |match| "!#{match}" }
-      end
-
-      def escape_literal
-        "'!'"
-      end
-
       def resolve_default(default)
         default.respond_to?(:call) ? default.call : default
       end
@@ -774,18 +760,9 @@ module BetterAuth
         value
       end
 
-      def coerce_where_value(value, attributes)
-        return value if value.nil?
-
-        case attributes[:type]
-        when "boolean"
-          return coerce_value(false, attributes) if value == false || value == 0 || value.to_s.downcase == "false" || value.to_s == "0"
-          return coerce_value(true, attributes) if value == true || value == 1 || value.to_s.downcase == "true" || value.to_s == "1"
-        when "number"
-          return coerce_number(value)
-        when "date"
-          return Time.parse(value) if value.is_a?(String)
-        end
+      def coerce_where_binding(value, attributes)
+        return value if attributes[:type] == "boolean" && value != true && value != false
+        return Time.parse(value) if attributes[:type] == "date" && value.is_a?(String)
 
         coerce_value(value, attributes)
       end

@@ -17,7 +17,9 @@ module BetterAuth
 
     def self.transaction(adapter)
       scope = Thread.current[SCOPE_KEY]
-      return yield scope.transaction_adapter if scope&.adapter.equal?(adapter)
+      if scope&.transaction_adapter && (scope.adapter.equal?(adapter) || scope.transaction_adapter.equal?(adapter))
+        return yield scope.transaction_adapter
+      end
 
       pending_hooks = []
       begin
@@ -39,14 +41,21 @@ module BetterAuth
     end
     private_class_method :with_scope
 
+    def self.current_adapter(adapter)
+      current = Adapters::Base.current(adapter)
+      return current unless current.equal?(adapter)
+
+      scope = Thread.current[SCOPE_KEY]
+      (scope&.transaction_adapter && scope.adapter.equal?(adapter)) ? scope.transaction_adapter : adapter
+    end
+
     def initialize(adapter, options)
       @adapter = adapter
       @options = options
     end
 
     def adapter
-      scope = Thread.current[SCOPE_KEY]
-      scope&.adapter.equal?(@adapter) ? scope.transaction_adapter : @adapter
+      self.class.current_adapter(@adapter)
     end
 
     def create(data, model, custom: nil, context: nil)

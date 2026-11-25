@@ -31,15 +31,15 @@ class BetterAuthSQLAdapterTest < Minitest::Test
     assert_equal [["ada@example.com"], ["%@example.com%"]], connection.params.drop(1)
   end
 
-  def test_sql_adapter_escapes_like_wildcards
+  def test_sql_adapter_preserves_like_wildcards_in_bound_parameters
     config = BetterAuth::Configuration.new(secret: SECRET, database: :memory)
     connection = RecordingConnection.new([])
     adapter = BetterAuth::Adapters::SQL.new(config, connection: connection, dialect: :postgres)
 
     adapter.find_many(model: "user", where: [{field: "email", operator: "contains", value: "a%_b"}])
 
-    assert_includes connection.sql.first, "LIKE $1 ESCAPE"
-    assert_equal [["%a!%!_b%"]], connection.params
+    assert_includes connection.sql.first, "LIKE $1"
+    assert_equal [["%a%_b%"]], connection.params
   end
 
   def test_sql_adapter_builds_join_queries_for_session_user_lookup

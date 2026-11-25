@@ -7,7 +7,6 @@ module BetterAuth
     attr_reader :app_name,
       :version,
       :social_providers,
-      :adapter,
       :internal_adapter,
       :logger,
       :session_config,
@@ -55,6 +54,10 @@ module BetterAuth
       else
         fallback&.puts(message)
       end
+    end
+
+    def adapter
+      DatabaseHooks.current_adapter(@adapter)
     end
 
     def base_url

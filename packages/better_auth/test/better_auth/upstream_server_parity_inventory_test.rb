@@ -2,12 +2,14 @@
 
 require_relative "../test_helper"
 require_relative "../support/upstream_server_parity"
+require_relative "../support/upstream_test_parity"
 
 class BetterAuthUpstreamServerParityInventoryTest < Minitest::Test
   PARITY = BetterAuth::TestSupport::UpstreamServerParity
 
   def test_real_inventory_is_valid
     assert_empty PARITY.validation_errors
+    assert_empty BetterAuth::TestSupport::UpstreamTestParity.validation_errors
 
     popup = PARITY::SERVER_UPSTREAM_TEST_OWNERS.fetch("plugins/oauth-popup/oauth-popup.test.ts")
     assert_equal "better_auth/plugins/oauth_popup_test.rb", popup.fetch(:owner)

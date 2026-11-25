@@ -245,13 +245,12 @@ module BetterAuthAdapterContract
     end
   end
 
-  def test_adapter_contract_nested_transactions_reuse_the_active_transaction
+  def test_adapter_contract_nested_transactions_commit_and_roll_back_with_the_outer_transaction
     config = contract_config
 
     with_contract_adapter(config) do |adapter|
       adapter.transaction do |outer|
         outer.transaction do |inner|
-          assert_same outer, inner
           inner.create(model: "user", data: {name: "Nested", email: "nested-transaction@example.com"})
         end
       end
@@ -268,6 +267,37 @@ module BetterAuthAdapterContract
       end
 
       assert_nil adapter.find_one(model: "user", where: [{field: "email", value: "nested-rollback@example.com"}])
+    end
+  end
+
+  def test_adapter_contract_rejects_non_array_in_values_on_empty_tables
+    with_contract_adapter(contract_config) do |adapter|
+      ["missing", nil].each do |value|
+        error = assert_raises(BetterAuth::Error) do
+          adapter.find_many(model: "user", where: [{field: "id", operator: "in", value: value}])
+        end
+        assert_equal "Value must be an array", error.message
+      end
+    end
+  end
+
+  def test_adapter_contract_coerces_boolean_and_numeric_filters_before_querying
+    config = contract_config(user: {additional_fields: {age: {type: "number", required: false}}})
+
+    with_contract_adapter(config) do |adapter|
+      unverified = adapter.create(model: "user", data: {name: "Unverified", email: "unverified@example.com", age: 25})
+      verified = adapter.create(model: "user", data: {name: "Verified", email: "verified@example.com", age: 30, emailVerified: true}, force_allow_id: true)
+
+      {"true" => verified, "false" => unverified, "TRUE" => unverified, "1" => unverified, "yes" => unverified}.each do |value, expected|
+        records = adapter.find_many(model: "user", where: [{field: "emailVerified", value: value}])
+        assert_equal [expected.fetch("id")], records.map { |record| record.fetch("id") }, value
+      end
+
+      by_number = adapter.find_many(model: "user", where: [{field: "age", value: " 2.5e1 "}])
+      assert_equal [unverified.fetch("id")], by_number.map { |record| record.fetch("id") }
+
+      by_list = adapter.find_many(model: "user", where: [{field: "age", operator: "in", value: ["0x19", "3e1"]}])
+      assert_equal [unverified.fetch("id"), verified.fetch("id")].sort, by_list.map { |record| record.fetch("id") }.sort
     end
   end
 
@@ -516,11 +546,19 @@ module BetterAuthAdapterContract
         force_allow_id: true
       )
 
-      found = adapter.find_one(model: "session", where: [{field: "token", value: session.fetch("token")}], join: {user: true})
+      found = adapter.find_one(model: "session", where: [{field: "token", value: session.fetch("token")}], select: ["token"], join: {user: true})
 
       assert_equal "join-token", found.fetch("token")
+      assert_equal user.fetch("id"), found.fetch("userId")
       assert_equal user.fetch("id"), found.fetch("user").fetch("id")
       assert_equal "join@example.com", found.fetch("user").fetch("email")
+      assert_equal %w[token user userId], found.keys.sort
+
+      projection = ["name"].freeze
+      expected = {"id" => user.fetch("id"), "name" => "Join User", "session" => [session]}
+      where = [{field: "id", value: user.fetch("id")}]
+      assert_equal expected, adapter.find_one(model: "user", where: where, select: projection, join: {session: true})
+      assert_equal [expected], adapter.find_many(model: "user", where: where, select: projection, join: {session: true})
     end
   end
 

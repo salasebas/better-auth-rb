@@ -9,6 +9,10 @@ module BetterAuth
 
       TRANSACTION_CONTEXT_KEY = :better_auth_adapter_transaction_context
 
+      def self.current(adapter)
+        adapter.is_a?(Base) ? adapter.current_transaction_adapter : adapter
+      end
+
       def initialize(options, transaction_context_key: nil)
         @options = options
         @transaction_context_key = transaction_context_key || Object.new
@@ -69,6 +73,10 @@ module BetterAuth
 
       def transaction
         yield self
+      end
+
+      def current_transaction_adapter
+        active_transaction_adapter || self
       end
 
       # The base yield preserves compatibility for non-atomic batch work. It

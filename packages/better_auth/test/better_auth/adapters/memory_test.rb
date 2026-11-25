@@ -88,6 +88,24 @@ class BetterAuthMemoryAdapterTest < Minitest::Test
     assert_equal [unverified.fetch("id")], matches.map { |user| user.fetch("id") }
   end
 
+  def test_numeric_filter_lists_keep_all_values_when_any_entry_is_not_a_numeric_string
+    config = contract_config(user: {additional_fields: {age: {type: "number", required: false}}})
+    adapter = BetterAuth::Adapters::Memory.new(config)
+    adapter.create(model: "user", data: {name: "Ada", email: "numeric-list@example.com", age: 25})
+
+    assert_empty adapter.find_many(model: "user", where: [{field: "age", operator: "in", value: ["25", "invalid"]}])
+    assert_empty adapter.find_many(model: "user", where: [{field: "age", operator: "in", value: ["25", 30]}])
+  end
+
+  def test_memory_adapter_rejects_scalar_not_in_values
+    @adapter.create(model: "user", data: {name: "Ada", email: "not-in@example.com"})
+
+    error = assert_raises(BetterAuth::Error) do
+      @adapter.find_many(model: "user", where: [{field: "id", operator: "not_in", value: "missing"}])
+    end
+    assert_equal "Value must be an array", error.message
+  end
+
   def test_comparison_operators_do_not_match_nil_record_values
     expired = @adapter.create(model: "verification", data: {identifier: "expired", value: "value", expiresAt: Time.now - 60})
     future = @adapter.create(model: "verification", data: {identifier: "future", value: "value", expiresAt: Time.now + 60})
@@ -374,12 +392,24 @@ class BetterAuthMemoryAdapterTest < Minitest::Test
     assert_equal profile, found["profile"]
   end
 
+  def test_memory_collection_join_uses_a_projected_non_id_reference
+    plugin = BetterAuth::Plugin.new(
+      id: "receipt",
+      schema: {receipt: {fields: {ownerEmail: {type: "string", required: true, references: {model: "user", field: "email"}}}}}
+    )
+    with_contract_adapter(contract_config(plugins: [plugin])) do |adapter|
+      user = adapter.create(model: "user", data: {name: "Ada", email: "receipt@example.com"})
+      adapter.create(model: "receipt", data: {ownerEmail: user.fetch("email")})
+
+      assert_equal({"ownerEmail" => user.fetch("email"), "user" => [user]}, adapter.find_one(model: "receipt", select: [], join: {user: true}))
+    end
+  end
+
   def test_failed_transaction_does_not_erase_an_unrelated_concurrent_write
     adapter = BetterAuth::Adapters::Memory.new(BetterAuth::Configuration.new(secret: SECRET, database: :memory))
     original = adapter.create(model: "user", data: {name: "Original", email: "original-transaction@example.com"})
     transaction_entered = Queue.new
     release_transaction = Queue.new
-    writer_started = Queue.new
 
     transaction_thread = Thread.new do
       assert_raises(RuntimeError) do
@@ -393,17 +423,60 @@ class BetterAuthMemoryAdapterTest < Minitest::Test
     end
     writer_thread = Thread.new do
       transaction_entered.pop
-      writer_started << true
       adapter.create(model: "user", data: {name: "Concurrent", email: "concurrent-transaction@example.com"})
     end
 
-    writer_started.pop
-    release_transaction << true
-    transaction_thread.value
-    writer_thread.value
+    begin
+      assert writer_thread.join(5), "The outside write must finish before the transaction rolls back"
+    ensure
+      release_transaction << true
+      transaction_thread.value
+      writer_thread.value
+    end
 
     assert_equal "Original", adapter.find_one(model: "user", where: [{field: "id", value: original.fetch("id")}]).fetch("name")
     assert adapter.find_one(model: "user", where: [{field: "email", value: "concurrent-transaction@example.com"}])
+  end
+
+  def test_transaction_hides_uncommitted_writes_and_merges_only_changed_rows
+    live_db = @adapter.db
+    first = @adapter.create(model: "user", data: {name: "First", email: "first@example.com"})
+    second = @adapter.create(model: "user", data: {name: "Second", email: "second@example.com"})
+    @adapter.create(model: "user", data: {name: "Deleted", email: "delete-in-transaction@example.com"})
+    first_where = [{field: "id", value: first.fetch("id")}]
+    second_where = [{field: "id", value: second.fetch("id")}]
+
+    result = @adapter.transaction do |transaction|
+      transaction.update(model: "user", where: first_where, update: {name: "Changed in transaction"})
+      transaction.delete(model: "user", where: [{field: "email", value: "delete-in-transaction@example.com"}])
+      transaction.create(model: "user", data: {name: "Inside", email: "inside@example.com"})
+      refute @adapter.find_one(model: "user", where: [{field: "email", value: "inside@example.com"}])
+      assert_equal "First", @adapter.find_one(model: "user", where: first_where).fetch("name")
+      @adapter.update(model: "user", where: second_where, update: {name: "Changed outside"})
+      @adapter.create(model: "user", data: {name: "Outside", email: "outside@example.com"})
+      :committed
+    end
+
+    assert_equal :committed, result
+    assert_same live_db, @adapter.db
+    assert_equal ["Changed in transaction", "Changed outside", "Inside", "Outside"], live_db.fetch("user").map { |user| user.fetch("name") }.sort
+  end
+
+  def test_transaction_discards_writes_from_a_failed_nested_transaction
+    @adapter.transaction do |outer|
+      outer.create(model: "user", data: {name: "Outer", email: "outer@example.com"})
+
+      assert_raises(RuntimeError) do
+        outer.transaction do |inner|
+          assert_equal 1, inner.count(model: "user")
+          inner.create(model: "user", data: {name: "Inner", email: "inner@example.com"})
+          raise "rollback inner transaction"
+        end
+      end
+      assert_equal 1, outer.count(model: "user")
+    end
+
+    assert_equal ["outer@example.com"], @adapter.find_many(model: "user").map { |user| user.fetch("email") }
   end
 
   private

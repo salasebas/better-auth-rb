@@ -236,6 +236,19 @@ Only mutable schema fields declared with `type: "number"` may be incremented;
 IDs and string, boolean, date, array, immutable, or unknown fields are rejected.
 The base adapter intentionally has no check-then-create fallback.
 
+Ruby's built-in SQL adapters always use database transactions. This preserves
+rollback for authentication writes and migrations. The upstream SQL adapter's
+transaction option defaults to `false`.
+
+Memory transactions keep writes on the adapter yielded to the block until commit.
+Use that adapter for reads and writes in the transaction. A failed nested
+transaction discards its own writes. Concurrent changes to different rows survive
+the commit. For writes to the same row, the transaction's change wins if the row
+still exists.
+
+SQL filters treat `%` and `_` as wildcards in `contains`, `starts_with`, and
+`ends_with`. Memory matches them as ordinary characters.
+
 ### Database Hooks
 
 Plugin database hooks run in registration order, followed by application

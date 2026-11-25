@@ -8,6 +8,7 @@ module BetterAuth
   module Adapters
     class Memory < Base
       include JoinSupport
+      include WhereValues
 
       LOCK_REGISTRY_GUARD = Mutex.new
       LOCKS_BY_DATABASE = {}
@@ -58,12 +59,14 @@ module BetterAuth
         @lock.synchronize do
           model = model.to_s
           limit = find_many_limit(limit)
-          records = table_for(model).select { |record| matches_where?(record, where || []) }.map(&:dup)
-          records = records.map { |record| apply_join(model, record, join) } if join
+          records = table_for(model).select(&where_predicate(model, where)).map(&:dup)
+          join = normalized_join(model, join)
+          records = records.map { |record| apply_join(record, join) } unless join.empty?
           records = sort_records(model, records, sort_by) if sort_by
           records = records.drop(offset.to_i) if offset
           records = records.first(limit.to_i) if limit
-          records = records.map { |record| select_fields(model, record, select, join: join) } if select && !select.empty?
+          fields = projected_join_fields(select, join)
+          records = records.map { |record| record.slice(*fields, *join.keys) } unless fields.empty?
           records
         end
       end
@@ -74,7 +77,7 @@ module BetterAuth
           next nil if Array(where).empty?
 
           ensure_update_input_has_fields!(model, update)
-          records = table_for(model).select { |record| matches_where?(record, where) }
+          records = table_for(model).select(&where_predicate(model, where))
           data = transform_input(model, update, "update", true)
           ensure_update_data!(data)
           records.each { |record| record.merge!(data) }
@@ -86,7 +89,7 @@ module BetterAuth
         @lock.synchronize do
           model = model.to_s
           ensure_update_input_has_fields!(model, update)
-          records = table_for(model).select { |record| matches_where?(record, where || []) }
+          records = table_for(model).select(&where_predicate(model, where))
           data = transform_input(model, update, "update", true)
           ensure_update_data!(data)
           records.each { |record| record.merge!(data) }
@@ -104,7 +107,7 @@ module BetterAuth
       def delete_many(model:, where:)
         @lock.synchronize do
           table = table_for(model)
-          matches = table.select { |record| matches_where?(record, where || []) }
+          matches = table.select(&where_predicate(model, where))
           @db[model.to_s] = table.reject { |record| matches.include?(record) }
           matches.length
         end
@@ -112,14 +115,14 @@ module BetterAuth
 
       def count(model:, where: nil)
         @lock.synchronize do
-          table_for(model).count { |record| matches_where?(record, where || []) }
+          table_for(model).count(&where_predicate(model, where))
         end
       end
 
       def consume_one(model:, where:)
         @lock.synchronize do
           table = table_for(model)
-          index = table.index { |record| matches_where?(record, where || []) }
+          index = table.index(&where_predicate(model, where))
           index ? table.delete_at(index) : nil
         end
       end
@@ -131,7 +134,7 @@ module BetterAuth
           assignments = normalized_increment_set(model, set)
           raise APIError.new("BAD_REQUEST", message: "increment_one requires a non-empty increment or set") if increments.empty? && assignments.empty?
 
-          target = table_for(model).find { |record| matches_where?(record, where || []) }
+          target = table_for(model).find(&where_predicate(model, where))
           next nil unless target
 
           increments.each do |field, delta|
@@ -144,20 +147,44 @@ module BetterAuth
       end
 
       def transaction
-        return yield active_transaction_adapter if active_transaction_adapter
-
-        @lock.synchronize do
-          snapshot = transaction_snapshot(db)
-          begin
-            with_transaction_context(self) { yield self }
-          rescue
-            db.replace(snapshot)
-            raise
-          end
-        end
+        base = @lock.synchronize { transaction_snapshot(db) }
+        transaction_adapter = dup
+        transaction_adapter.db = transaction_snapshot(base)
+        result = with_transaction_context(transaction_adapter) { yield transaction_adapter }
+        @lock.synchronize { merge_transaction(base, transaction_adapter.db) }
+        result
       end
 
+      protected attr_writer :db
+
       private
+
+      def merge_transaction(base, working)
+        merged = db.dup
+        (base.keys | working.keys).each do |model|
+          if working.key?(model)
+            merged[model] = merge_transaction_rows(base.fetch(model, []), working.fetch(model), db.fetch(model, []))
+          else
+            merged.delete(model)
+          end
+        end
+        db.replace(merged)
+      end
+
+      def merge_transaction_rows(base_rows, working_rows, live_rows)
+        base_by_id = base_rows.to_h { |row| [row["id"], row] }
+        working_by_id = working_rows.to_h { |row| [row["id"], row] }
+        live_ids = live_rows.map { |row| row["id"] }.to_set
+
+        merged = live_rows.filter_map do |row|
+          id = row["id"]
+          next if base_by_id.key?(id) && !working_by_id.key?(id)
+
+          working_row = working_by_id[id]
+          (working_row && working_row != base_by_id[id]) ? working_row : row
+        end
+        merged.concat(working_rows.reject { |row| base_by_id.key?(row["id"]) || live_ids.include?(row["id"]) })
+      end
 
       def transaction_snapshot(value, copies = {})
         object_id = value.object_id
@@ -315,29 +342,36 @@ module BetterAuth
         value
       end
 
-      def matches_where?(record, where)
-        clauses = Array(where)
-        return true if clauses.empty?
+      def where_predicate(model, where)
+        return ->(_record) { true } if Array(where).empty?
 
-        and_clauses, or_clauses = grouped_where_clauses(clauses)
-        and_clauses.all? { |clause| evaluate_clause(record, clause) } &&
-          (or_clauses.empty? || or_clauses.any? { |clause| evaluate_clause(record, clause) })
+        fields = schema_for(model).fetch(:fields)
+        and_clauses, or_clauses = grouped_where_clauses(where).map do |clauses|
+          clauses.map do |clause|
+            field = Schema.storage_key(fetch_key(clause, :field))
+            operator = (fetch_key(clause, :operator) || "eq").to_s
+            value = fetch_key(clause, :value)
+            require_where_array!(value) if operator == "in"
+            mode = fetch_key(clause, :mode).to_s
+            [field, operator, mode, coerce_where_value(value, field, fields.fetch(field, {}), operator)]
+          end
+        end
+        lambda do |record|
+          and_clauses.all? { |clause| evaluate_clause(record, *clause) } &&
+            (or_clauses.empty? || or_clauses.any? { |clause| evaluate_clause(record, *clause) })
+        end
       end
 
-      def evaluate_clause(record, clause)
-        field = Schema.storage_key(fetch_key(clause, :field))
-        value = fetch_key(clause, :value)
-        operator = (fetch_key(clause, :operator) || "eq").to_s
-        mode = (fetch_key(clause, :mode) || "sensitive").to_s
+      def evaluate_clause(record, field, operator, mode, comparable)
         current = record[field]
-        comparable = coerce_where_value(record, field, value, operator)
         current, comparable = insensitive_values(current, comparable) if insensitive_comparison?(mode, current, comparable)
 
         case operator
         when "in"
-          Array(comparable).include?(current)
+          comparable.include?(current)
         when "not_in"
-          !Array(comparable).include?(current)
+          require_where_array!(comparable)
+          !comparable.include?(current)
         when "contains"
           current.to_s.include?(comparable.to_s)
         when "starts_with"
@@ -359,21 +393,14 @@ module BetterAuth
         end
       end
 
-      def coerce_where_value(record, field, value, operator)
-        attributes = schema_for_record_field(record, field)
-        return value unless attributes
-        return Array(value).map { |entry| coerce_scalar_where_value(entry, field, attributes) } if %w[in not_in].include?(operator)
+      def coerce_where_value(value, field, attributes, operator)
+        type = attributes[:type]
+        return normalize_where_value(value, attributes) if %w[boolean number].include?(type)
+        if value.is_a?(Array) && %w[in not_in].include?(operator)
+          return value.map { |entry| coerce_scalar_where_value(entry, field, attributes) }
+        end
 
         coerce_scalar_where_value(value, field, attributes)
-      end
-
-      def schema_for_record_field(record, field)
-        db.each_key do |model|
-          fields = Schema.auth_tables(options)[model]&.fetch(:fields, nil)
-          next unless fields&.key?(field)
-          return fields[field] if table_for(model).include?(record)
-        end
-        nil
       end
 
       def coerce_scalar_where_value(value, field, attributes)
@@ -381,11 +408,6 @@ module BetterAuth
         return coerce_number(value) if serial_id_field?(field, attributes)
 
         case attributes[:type]
-        when "boolean"
-          return false if value == false || value == 0 || value.to_s.downcase == "false" || value.to_s == "0"
-          return true if value == true || value == 1 || value.to_s.downcase == "true" || value.to_s == "1"
-        when "number"
-          return coerce_number(value)
         when "date"
           return Time.parse(value) if value.is_a?(String)
         when "number[]"
@@ -447,18 +469,9 @@ module BetterAuth
         value.nil? ? "" : value
       end
 
-      def select_fields(model, record, select, join: nil)
-        fields = Array(select).map { |field| Schema.storage_key(field) }
-        selected = record.slice(*fields)
-        normalized_join(model, join).each_key do |join_model|
-          selected[join_model] = record[join_model] if record.key?(join_model)
-        end
-        selected
-      end
-
-      def apply_join(model, record, join)
+      def apply_join(record, join)
         joined = record.dup
-        normalized_join(model, join).each do |join_model, config|
+        join.each do |join_model, config|
           matches = table_for(join_model).select do |join_record|
             join_record[config.fetch(:to)] == record[config.fetch(:from)]
           end.map(&:dup)
@@ -472,46 +485,8 @@ module BetterAuth
         joined
       end
 
-      def one_to_one_join?(config)
-        config[:relation] == "one-to-one" || config[:unique] == true
-      end
-
-      def inferred_join_config(model, join_model)
-        foreign_keys = schema_for(join_model).fetch(:fields).select do |_field, attributes|
-          reference_model_matches?(attributes, model)
-        end
-        forward_join = true
-
-        if foreign_keys.empty?
-          foreign_keys = schema_for(model).fetch(:fields).select do |_field, attributes|
-            reference_model_matches?(attributes, join_model)
-          end
-          forward_join = false
-        end
-
-        raise Error, "No foreign key found for model #{join_model} and base model #{model} while performing join operation." if foreign_keys.empty?
-        raise Error, "Multiple foreign keys found for model #{join_model} and base model #{model} while performing join operation. Only one foreign key is supported." if foreign_keys.length > 1
-
-        foreign_key, attributes = foreign_keys.first
-        reference = attributes.fetch(:references)
-        if forward_join
-          unique = attributes[:unique] == true
-          {from: reference.fetch(:field).to_s, to: foreign_key, relation: unique ? "one-to-one" : "one-to-many", unique: unique}
-        else
-          {from: foreign_key, to: reference.fetch(:field).to_s, relation: "one-to-one", unique: true}
-        end
-      end
-
       def schema_for(model)
         Schema.auth_tables(options).fetch(model.to_s)
-      end
-
-      def reference_model_matches?(attributes, model)
-        reference = attributes[:references]
-        return false unless reference
-
-        reference_model = reference[:model] || reference["model"]
-        reference_model.to_s == model.to_s || reference_model.to_s == schema_for(model).fetch(:model_name)
       end
 
       def storage_key(field)
