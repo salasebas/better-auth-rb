@@ -8,16 +8,8 @@ port.
 Paths: Ruby paths are relative to the package's `lib/better_auth/`. Upstream
 paths are relative to `packages/` in the upstream repository.
 
-## Check a feature against an upstream version
-
-Give an agent one entry and the target version, and ask it to:
-
-1. Fetch the version with `./scripts/fetch-upstream-better-auth.sh <version>`.
-2. Read the entry's upstream source and tests, then the Ruby code.
-3. Report every observable difference: status, error code and message,
-   response shape, cookies, stored data, side effects, validation order, and
-   missing options or endpoints. Quote the Ruby file and line and the upstream
-   file and line for each one. Skip anything listed in ADR 0002.
+To check one entry against an upstream version, use the prompts in
+`docs/agents/parity-check.md`.
 
 ## Core (`better_auth`)
 
