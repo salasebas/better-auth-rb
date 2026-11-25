@@ -3,6 +3,9 @@
 module BetterAuth
   module Adapters
     module WhereValues
+      STRING_OPERATORS = %w[contains starts_with ends_with].freeze
+      FILTER_OPERATORS = (%w[eq ne lt lte gt gte in not_in] + STRING_OPERATORS).freeze
+
       private
 
       def require_where_array!(value)

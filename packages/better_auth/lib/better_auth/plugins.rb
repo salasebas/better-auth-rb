@@ -14,6 +14,20 @@ module BetterAuth
       end
     end
 
+    def list_filter_query_schema(search: false)
+      lambda do |query|
+        filters = Adapters::WhereValues::FILTER_OPERATORS
+        data = normalize_hash(query)
+        return false if data.key?(:filter_operator) && !filters.include?(data[:filter_operator])
+
+        filter = data[:filter]
+        return false if filter.is_a?(Hash) && filter.key?(:operator) && !filters.include?(filter[:operator])
+        return false if search && data.key?(:search_operator) && !Adapters::WhereValues::STRING_OPERATORS.include?(data[:search_operator])
+
+        data
+      end
+    end
+
     def normalize_key(key)
       key.to_s
         .gsub(/([a-z\d])([A-Z])/, "\\1_\\2")

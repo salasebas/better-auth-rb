@@ -647,6 +647,14 @@ class BetterAuthPluginsAdminTest < Minitest::Test
     non_users = auth.api.list_users(headers: {"cookie" => admin_cookie}, query: {sortBy: "createdAt", sortDirection: "desc", filterField: "role", filterOperator: "ne", filterValue: "user"})
     assert non_users.fetch(:users).length >= 1
     refute_includes non_users.fetch(:users).map { |user| user.fetch("role") }, "user"
+
+    [
+      {searchValue: "Beta", searchOperator: "eq"},
+      {filterField: "name", filterValue: "Beta", filterOperator: "like"}
+    ].each do |query|
+      error = assert_raises(BetterAuth::APIError) { auth.api.list_users(headers: {"cookie" => admin_cookie}, query: query) }
+      assert_equal 400, error.status_code
+    end
   end
 
   def test_admin_sessions_and_destructive_endpoints_match_upstream_shapes

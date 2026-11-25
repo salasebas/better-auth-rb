@@ -229,9 +229,9 @@ delete-and-return of at most one row, and
 `increment_one(model:, where:, increment:, set: nil)` as an atomic guarded
 numeric update returning the resulting row or `nil`. Concurrent consumers of
 one row must have exactly one winner; increments must apply every signed delta
-without lost updates. `transaction` must open a real transaction and reuse its
-active adapter for nested calls. The base class's compatibility yield is
-explicitly non-atomic and must not back either primitive.
+without lost updates. `transaction` must open a real transaction. Writes in
+nested calls commit or roll back with the outer transaction. The base class's
+compatibility yield is non-atomic.
 Only mutable schema fields declared with `type: "number"` may be incremented;
 IDs and string, boolean, date, array, immutable, or unknown fields are rejected.
 The base adapter intentionally has no check-then-create fallback.
@@ -245,6 +245,11 @@ Use that adapter for reads and writes in the transaction. A failed nested
 transaction discards its own writes. Concurrent changes to different rows survive
 the commit. For writes to the same row, the transaction's change wins if the row
 still exists.
+
+Inside a transaction, RubyAuth resolves `ctx.context.adapter` and internal
+adapter operations to the active transaction adapter. This lets plugin code and
+database hooks share the transaction. Organization mutations serialize their
+Memory transactions to enforce capacity and ownership checks.
 
 SQL filters treat `%` and `_` as wildcards in `contains`, `starts_with`, and
 `ends_with`. Memory matches them as ordinary characters.

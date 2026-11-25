@@ -220,23 +220,21 @@ class BetterAuthPluginsScimUsersTest < Minitest::Test
     team = auth.api.create_team(headers: {"cookie" => owner_cookie}, body: {organizationId: organization.fetch("id"), name: "Rollback Team"})
     auth.api.add_team_member(headers: {"cookie" => owner_cookie}, body: {teamId: team.fetch("id"), userId: created.fetch(:id)})
     adapter = auth.context.adapter
-    original_delete = adapter.method(:delete)
     adapter.define_singleton_method(:delete) do |model:, where:|
       raise "forced account deletion failure" if model == "account"
 
-      original_delete.call(model: model, where: where)
+      super(model: model, where: where)
     end
 
-    assert_raises(RuntimeError) do
+    failure = assert_raises(RuntimeError) do
       auth.api.delete_scim_user(headers: bearer(token), params: {userId: created.fetch(:id)})
     end
 
+    assert_equal "forced account deletion failure", failure.message
     assert_equal [:before], calls
     assert adapter.find_one(model: "member", where: [{field: "organizationId", value: organization.fetch("id")}, {field: "userId", value: created.fetch(:id)}])
     assert adapter.find_one(model: "teamMember", where: [{field: "teamId", value: team.fetch("id")}, {field: "userId", value: created.fetch(:id)}])
     assert adapter.find_one(model: "account", where: [{field: "providerId", value: "rollback-provider"}, {field: "userId", value: created.fetch(:id)}])
-  ensure
-    adapter&.singleton_class&.send(:remove_method, :delete) if original_delete
   end
 
   def test_scim_organization_delete_fails_closed_without_real_transaction_support

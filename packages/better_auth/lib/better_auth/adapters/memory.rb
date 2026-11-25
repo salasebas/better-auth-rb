@@ -148,11 +148,15 @@ module BetterAuth
 
       def transaction
         base = @lock.synchronize { transaction_snapshot(db) }
-        transaction_adapter = dup
+        transaction_adapter = clone(freeze: false)
         transaction_adapter.db = transaction_snapshot(base)
         result = with_transaction_context(transaction_adapter) { yield transaction_adapter }
         @lock.synchronize { merge_transaction(base, transaction_adapter.db) }
         result
+      end
+
+      def serialized_transaction(&block)
+        @lock.synchronize { transaction(&block) }
       end
 
       protected attr_writer :db

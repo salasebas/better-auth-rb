@@ -172,28 +172,38 @@ class BetterAuthPluginsOrganizationMembersTest < Minitest::Test
   end
 
   def test_concurrent_member_adds_cannot_exceed_membership_limit
-    auth = build_organization_auth(plugins: [BetterAuth::Plugins.organization(membership_limit: 2)])
+    first_check = Queue.new
+    release_first = Queue.new
+    membership_limit = ->(user, _organization) do
+      if user.fetch("email") == "capacity-first@example.com"
+        first_check << true
+        release_first.pop
+      end
+      2
+    end
+    auth = build_organization_auth(plugins: [BetterAuth::Plugins.organization(membership_limit: membership_limit)])
     owner_cookie = sign_up_cookie(auth, email: "capacity-owner@example.com")
     first_cookie = sign_up_cookie(auth, email: "capacity-first@example.com")
     second_cookie = sign_up_cookie(auth, email: "capacity-second@example.com")
     users = [first_cookie, second_cookie].map { |cookie| auth.api.get_session(headers: {"cookie" => cookie}).fetch(:user) }
     organization = auth.api.create_organization(headers: {"cookie" => owner_cookie}, body: {name: "Capacity", slug: "capacity"})
-    ready = Queue.new
-    start = Queue.new
     results = Queue.new
 
-    threads = users.map do |user|
-      Thread.new do
-        ready << true
-        start.pop
-        results << [:success, auth.api.add_member(headers: {"cookie" => owner_cookie}, body: {organizationId: organization.fetch("id"), userId: user.fetch("id"), role: "member"})]
-      rescue BetterAuth::APIError => error
-        results << [:error, error]
-      end
+    add_member = lambda do |user|
+      results << [:success, auth.api.add_member(headers: {"cookie" => owner_cookie}, body: {organizationId: organization.fetch("id"), userId: user.fetch("id"), role: "member"})]
+    rescue BetterAuth::APIError => error
+      results << [:error, error]
     end
-    users.length.times { ready.pop }
-    users.length.times { start << true }
-    threads.each(&:join)
+    first = Thread.new { add_member.call(users.first) }
+    begin
+      Timeout.timeout(5) { first_check.pop }
+      second = Thread.new { add_member.call(users.last) }
+      second.join(1)
+    ensure
+      release_first << true
+      first.value
+      second&.value
+    end
 
     outcomes = users.length.times.map { results.pop }
     assert_equal 1, outcomes.count { |kind, _| kind == :success }
@@ -705,6 +715,11 @@ class BetterAuthPluginsOrganizationMembersTest < Minitest::Test
     )
     assert_equal 1, filtered.fetch(:total)
     assert_equal "owner", filtered.fetch(:members).first.fetch("role")
+
+    error = assert_raises(BetterAuth::APIError) do
+      auth.api.list_members(headers: {"cookie" => owner_cookie}, query: {organizationId: organization.fetch("id"), filter: {field: "role", value: "owner", operator: "like"}})
+    end
+    assert_equal 400, error.status_code
   end
 
   def test_get_active_member_returns_current_membership

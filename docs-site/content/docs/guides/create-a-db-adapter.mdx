@@ -481,9 +481,9 @@ RubyAuth custom adapters must also implement these concurrency primitives:
   returns `true` only for the inserting caller and `false` only for that
   targeted conflict; unrelated constraint errors must raise. A losing call
   must not poison an open outer transaction.
-* `transaction` must be a real transaction and nested calls must reuse the
-  active transaction adapter. The base class's compatibility yield is
-  non-atomic and cannot make check-then-act operations safe.
+* `transaction` must be a real transaction. Writes in nested calls commit or
+  roll back with the outer transaction. The base class's compatibility yield is
+  non-atomic.
 
 When a database lacks `DELETE ... RETURNING` or `UPDATE ... RETURNING`, use a
 row lock plus an affected-row compare-and-swap inside a real transaction.

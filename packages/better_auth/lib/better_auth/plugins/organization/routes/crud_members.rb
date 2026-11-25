@@ -180,9 +180,14 @@ module BetterAuth
     end
 
     def organization_list_members_endpoint(config)
-      Endpoint.new(path: "/organization/list-members", method: "GET", metadata: organization_openapi("listOrganizationMembers", "List organization members", response: organization_members_response_schema)) do |ctx|
+      Endpoint.new(
+        path: "/organization/list-members",
+        method: "GET",
+        query_schema: list_filter_query_schema,
+        metadata: organization_openapi("listOrganizationMembers", "List organization members", response: organization_members_response_schema)
+      ) do |ctx|
         session = Routes.current_session(ctx)
-        query = normalize_hash(ctx.query)
+        query = ctx.query
         organization_id = query[:organization_id] || organization_by_slug(ctx, query[:organization_slug])&.fetch("id") || session[:session]["activeOrganizationId"]
         raise APIError.new("BAD_REQUEST", message: ORGANIZATION_ERROR_CODES.fetch("NO_ACTIVE_ORGANIZATION")) unless organization_id
         require_member!(ctx, session[:user]["id"], organization_id)

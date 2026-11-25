@@ -233,7 +233,11 @@ module BetterAuth
         raise BetterAuth::Error, "Organization mutations require an adapter with real transaction support"
       end
 
-      adapter.transaction { |transaction_adapter| yield(transaction_adapter || adapter) }
+      if adapter.is_a?(Adapters::Memory)
+        adapter.serialized_transaction { |transaction_adapter| yield transaction_adapter }
+      else
+        adapter.transaction { |transaction_adapter| yield(transaction_adapter || adapter) }
+      end
     end
 
     def lock_organization_capacity!(adapter, organization)

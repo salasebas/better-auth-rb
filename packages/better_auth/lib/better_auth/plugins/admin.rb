@@ -342,6 +342,7 @@ module BetterAuth
       Endpoint.new(
         path: "/admin/list-users",
         method: "GET",
+        query_schema: list_filter_query_schema(search: true),
         metadata: {
           openapi: {
             operationId: "listUsers",
@@ -365,7 +366,7 @@ module BetterAuth
         }
       ) do |ctx|
         admin_require_permission!(ctx, config, {user: ["list"]}, ADMIN_ERROR_CODES.fetch("YOU_ARE_NOT_ALLOWED_TO_LIST_USERS"))
-        query = normalize_hash(ctx.query)
+        query = ctx.query
         where = admin_user_where(query)
         sort_by = admin_user_sort(query)
         limit = query.key?(:limit) ? query[:limit].to_i : nil
@@ -783,14 +784,14 @@ module BetterAuth
       [
         {name: "searchValue", in: "query", required: false, schema: {type: "string"}},
         {name: "searchField", in: "query", required: false, schema: {type: "string"}},
-        {name: "searchOperator", in: "query", required: false, schema: {type: "string"}},
+        {name: "searchOperator", in: "query", required: false, schema: {type: "string", enum: Adapters::WhereValues::STRING_OPERATORS}},
         {name: "limit", in: "query", required: false, schema: {type: "number"}},
         {name: "offset", in: "query", required: false, schema: {type: "number"}},
         {name: "sortBy", in: "query", required: false, schema: {type: "string"}},
         {name: "sortDirection", in: "query", required: false, schema: {type: "string"}},
         {name: "filterField", in: "query", required: false, schema: {type: "string"}},
         {name: "filterValue", in: "query", required: false, schema: {type: "string"}},
-        {name: "filterOperator", in: "query", required: false, schema: {type: "string"}}
+        {name: "filterOperator", in: "query", required: false, schema: {type: "string", enum: Adapters::WhereValues::FILTER_OPERATORS}}
       ]
     end
 
