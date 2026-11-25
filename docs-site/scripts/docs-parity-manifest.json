@@ -2169,7 +2169,7 @@
       "reason": "Ruby-supported feature matrix",
       "local_exists": true,
       "upstream_exists": false,
-      "current_local_lines": 96,
+      "current_local_lines": 101,
       "upstream_lines": 0,
       "status": "keep_local"
     }

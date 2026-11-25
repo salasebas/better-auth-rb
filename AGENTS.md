@@ -30,6 +30,13 @@ upstream version it ports, for example
 `fix(sso): align OIDC state and PKCE flow (v1.6.23)`. Squash merges turn the PR
 title into the commit on `main`.
 
+Port only Ruby server behavior. `docs/adr/0002-unsupported-upstream-features.md`
+lists what RubyAuth never ports: AI agents and MCP, anything outside the Ruby
+ecosystem (JavaScript clients, JavaScript ORMs, Electron), payment providers
+other than Stripe, and deprecated upstream APIs. Parity audits skip those
+features. When an upgrade brings a new one, add it to that ADR instead of
+porting it.
+
 Keep shared auth behavior in `packages/better_auth`; adapter and plugin
 packages only integrate it.
 
