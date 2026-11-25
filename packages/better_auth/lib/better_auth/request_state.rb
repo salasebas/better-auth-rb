@@ -29,6 +29,10 @@ module BetterAuth
       !stack.empty?
     end
 
+    def with_current(&block)
+      present? ? block.call : run(&block)
+    end
+
     def current_store
       stack.last || raise("No request state found. Please make sure you are calling this function within a `run` callback.")
     end

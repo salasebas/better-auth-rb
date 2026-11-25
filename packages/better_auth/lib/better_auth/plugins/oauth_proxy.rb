@@ -256,7 +256,7 @@ module BetterAuth
     def oauth_proxy_state_cookie_value(ctx)
       cookie = ctx.context.create_auth_cookie("oauth_state")
       entry = Cookies.split_set_cookie_header(ctx.response_headers["set-cookie"]).filter_map { |line| Cookies.parse_set_cookie(line) }.find { |parsed| parsed[:name] == cookie.name }
-      Cookies.decode_cookie_value(entry[:value]) if entry
+      entry&.fetch(:value)
     end
 
     def oauth_proxy_plaintext_state(ctx, state)

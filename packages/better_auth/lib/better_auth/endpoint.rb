@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require "json"
+require "time"
 require "uri"
 
 module BetterAuth
@@ -378,9 +379,11 @@ module BetterAuth
       end
 
       def set_cookie(name, value, options = {})
-        attributes = cookie_attributes(options)
-        cookie = (["#{name}=#{URI.encode_uri_component(value.to_s)}"] + attributes).join("; ")
-        set_header("set-cookie", cookie)
+        set_header("set-cookie", serialize_cookie(name, value, options))
+      end
+
+      def serialize_cookie(name, value, options = {})
+        (["#{name}=#{URI.encode_uri_component(value.to_s)}"] + cookie_attributes(options)).join("; ")
       end
 
       def get_cookie(name)
@@ -496,11 +499,11 @@ module BetterAuth
       end
 
       def cookie_attribute_value(key, value)
-        if [:same_site, :samesite].include?(key.to_sym)
-          return value.to_s.capitalize
+        case key.to_sym
+        when :same_site, :samesite then value.to_s.capitalize
+        when :expires then value.is_a?(Time) ? value.httpdate : value
+        else value
         end
-
-        value
       end
     end
   end

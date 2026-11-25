@@ -678,7 +678,7 @@
       "ruby_source": "packages/better_auth/test/better_auth/session_test.rb",
       "local_exists": true,
       "upstream_exists": true,
-      "current_local_lines": 590,
+      "current_local_lines": 598,
       "upstream_lines": 580,
       "status": "needs_manual_review"
     },

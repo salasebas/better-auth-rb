@@ -86,11 +86,6 @@ module BetterAuth
       token.to_s
     end
 
-    def expired_bearer_cookie?(cookie)
-      max_age = cookie[:attributes]["max-age"]
-      max_age.to_s.strip.match?(/\A[+-]?\d+\z/) && max_age.to_i == 0
-    end
-
     def expose_auth_token(ctx)
       token_name = ctx.context.auth_cookies[:session_token].name
       session_cookie = Cookies.split_set_cookie_header(ctx.response_headers["set-cookie"]).reverse_each.filter_map do |line|
@@ -100,7 +95,7 @@ module BetterAuth
         cookie
       end.first
       return unless session_cookie
-      return if session_cookie[:value].empty? || expired_bearer_cookie?(session_cookie)
+      return if session_cookie[:value].empty? || session_cookie.dig(:attributes, "max-age") == 0
 
       token = session_cookie[:value]
 

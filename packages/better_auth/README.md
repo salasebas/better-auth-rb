@@ -75,6 +75,17 @@ Legacy deployments can opt out with
 allows request headers to select the origin used in security-token links and is
 not recommended.
 
+### Session cookies
+
+Stateless cache refresh renews the `session_token` cookie for `session.expires_in`
+and `session_data` for `session.cookie_cache.max_age`. The session expiration
+inside the cache stays fixed. If `remember_me` is `false`, the refreshed
+`session_token` still expires when the browser session ends.
+
+RubyAuth also checks that a cached session's token matches the signed
+`session_token` before it uses the cache. This check keeps the two cookies tied
+to the same session.
+
 ### Rate limiting
 
 The Rack router checks disabled paths, then applies the rate limit to the

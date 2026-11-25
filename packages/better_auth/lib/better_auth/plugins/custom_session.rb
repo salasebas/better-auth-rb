@@ -36,14 +36,9 @@ module BetterAuth
               }
             }
           ) do |ctx|
-            session = Session.find_current(
-              ctx,
-              disable_cookie_cache: truthy_value?(fetch_value(ctx.query, "disableCookieCache")),
-              disable_refresh: truthy_value?(fetch_value(ctx.query, "disableRefresh"))
-            )
+            session = Routes.get_session_data(ctx)
             next ctx.json(nil) unless session
 
-            Cookies.set_session_cookie(ctx, session, false) if ctx.response_headers["set-cookie"].to_s.empty?
             ctx.json(resolver.call(Routes.parsed_session_response(ctx, session), ctx))
           end
         },
@@ -60,10 +55,6 @@ module BetterAuth
         },
         options: config
       )
-    end
-
-    def truthy_value?(value)
-      value == true || value.to_s == "true"
     end
 
     def symbolize_session(entry)

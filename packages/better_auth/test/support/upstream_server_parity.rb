@@ -121,10 +121,10 @@ module BetterAuth
           notes: "Password reset enumeration safety, callback redirects, credential creation, session revocation, verify-password scope, and length errors covered in password_test"
         },
         "api/routes/session-api.test.ts" => {
-          owner: ["better_auth/routes/session_routes_test.rb", "better_auth/session_test.rb"],
+          owner: ["better_auth/routes/session_routes_test.rb", "better_auth/session_test.rb", "better_auth/session_remember_me_test.rb"],
           status: :covered,
           plan: "008",
-          notes: "Session routes, cookie cache strategies, deferred refresh, secondary storage, date fields, and update-session guards covered in session_routes_test and session_test"
+          notes: "Session refresh deadlines, deferred response shape, request-scoped refresh, invalid cache expiry, and stateless cookie renewal covered alongside existing route, cache strategy, secondary storage, and update-session cases"
         },
         "api/routes/sign-in.test.ts" => {
           owner: "better_auth/routes/sign_in_test.rb",
@@ -208,7 +208,7 @@ module BetterAuth
           owner: "better_auth/cookies_test.rb",
           status: :covered,
           plan: "008",
-          notes: "Cookie defaults, production env, cross-subdomain, parsing, cache strategies, chunking, rotation, and Endpoint set-cookie helpers covered in cookies_test; Ruby uses Endpoint helpers instead of a standalone parseSetCookieHeader utility"
+          notes: "Cookie parsing and merge helpers, environment secret, serialized chunk budgets, and oversized cache fallback covered alongside existing cookie defaults, cross-subdomain, cache strategy, and rotation cases"
         },
         "crypto/password.test.ts" => {
           owner: "better_auth/password_test.rb",
@@ -330,7 +330,7 @@ module BetterAuth
           owner: "better_auth/plugins/custom_session_test.rb",
           status: :covered,
           plan: "012",
-          notes: "Custom-session plugin covered in custom_session_test"
+          notes: "Custom session fields, per-cookie refresh attributes, and disableRefresh covered in custom_session_test"
         },
         "plugins/device-authorization/device-authorization.test.ts" => {
           owner: "better_auth/plugins/device_authorization_test.rb",
