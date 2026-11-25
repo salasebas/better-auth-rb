@@ -23,6 +23,11 @@ class BetterAuthUpstreamServerParityInventoryTest < Minitest::Test
     errors = PARITY.validation_errors(entries: entries)
     assert_includes errors, "Missing current plan for partial #{path}"
 
+    issue_entries = PARITY::SERVER_UPSTREAM_TEST_OWNERS.merge(
+      path => {owner: "better_auth/api_test.rb", status: :partial, issue: 165, notes: "fixture gap"}
+    )
+    assert_empty PARITY.validation_errors(entries: issue_entries)
+
     done_entries = PARITY::SERVER_UPSTREAM_TEST_OWNERS.merge(
       path => {owner: "better_auth/api_test.rb", status: :partial, plan: "019", notes: "fixture gap"}
     )

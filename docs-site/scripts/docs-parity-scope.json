@@ -1,6 +1,6 @@
 {
-  "upstream_tag": "v1.6.23",
-  "upstream_commit": "9dfceee14021fc15a2fb93023f39635f25b0b5ba",
+  "upstream_tag": "v1.6.35",
+  "upstream_commit": "d31c352ac65b4619d428295659bbf60f0be6ae0c",
   "pages": [
     {
       "slug": "adapters/community-adapters.mdx",

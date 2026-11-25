@@ -1,7 +1,7 @@
 {
-  "upstream_tag": "v1.6.23",
-  "upstream_commit": "9dfceee14021fc15a2fb93023f39635f25b0b5ba",
-  "generated_from": "reference/upstream-src/1.6.23/repository/docs/content/docs",
+  "upstream_tag": "v1.6.35",
+  "upstream_commit": "d31c352ac65b4619d428295659bbf60f0be6ae0c",
+  "generated_from": "reference/upstream-src/1.6.35/repository/docs/content/docs",
   "pages": [
     {
       "slug": "adapters/community-adapters.mdx",
@@ -10,7 +10,7 @@
       "local_exists": false,
       "upstream_exists": true,
       "current_local_lines": 0,
-      "upstream_lines": 16,
+      "upstream_lines": 17,
       "status": "missing"
     },
     {
@@ -22,7 +22,7 @@
       "local_exists": false,
       "upstream_exists": true,
       "current_local_lines": 0,
-      "upstream_lines": 179,
+      "upstream_lines": 214,
       "status": "excluded"
     },
     {
@@ -32,8 +32,8 @@
       "ruby_source": "packages/better_auth-mongodb/test/better_auth/adapters/mongodb_upstream_parity_test.rb",
       "local_exists": true,
       "upstream_exists": true,
-      "current_local_lines": 208,
-      "upstream_lines": 61,
+      "current_local_lines": 206,
+      "upstream_lines": 63,
       "status": "needs_manual_review"
     },
     {
@@ -43,8 +43,8 @@
       "ruby_source": "packages/better_auth/test/better_auth/adapters/mssql_test.rb",
       "local_exists": true,
       "upstream_exists": true,
-      "current_local_lines": 171,
-      "upstream_lines": 131,
+      "current_local_lines": 169,
+      "upstream_lines": 132,
       "status": "needs_manual_review"
     },
     {
@@ -54,8 +54,8 @@
       "ruby_source": "packages/better_auth/test/better_auth/adapters/mysql_test.rb",
       "local_exists": true,
       "upstream_exists": true,
-      "current_local_lines": 251,
-      "upstream_lines": 110,
+      "current_local_lines": 249,
+      "upstream_lines": 111,
       "status": "needs_manual_review"
     },
     {
@@ -66,7 +66,7 @@
       "local_exists": true,
       "upstream_exists": true,
       "current_local_lines": 255,
-      "upstream_lines": 45,
+      "upstream_lines": 46,
       "status": "needs_manual_review"
     },
     {
@@ -76,8 +76,8 @@
       "ruby_source": "packages/better_auth/test/better_auth/adapters/postgres_test.rb",
       "local_exists": true,
       "upstream_exists": true,
-      "current_local_lines": 293,
-      "upstream_lines": 189,
+      "current_local_lines": 291,
+      "upstream_lines": 190,
       "status": "needs_manual_review"
     },
     {
@@ -89,7 +89,7 @@
       "local_exists": false,
       "upstream_exists": true,
       "current_local_lines": 0,
-      "upstream_lines": 96,
+      "upstream_lines": 97,
       "status": "excluded"
     },
     {
@@ -99,8 +99,8 @@
       "ruby_source": "packages/better_auth/test/better_auth/adapters/sqlite_test.rb",
       "local_exists": true,
       "upstream_exists": true,
-      "current_local_lines": 181,
-      "upstream_lines": 134,
+      "current_local_lines": 179,
+      "upstream_lines": 135,
       "status": "needs_manual_review"
     },
     {
@@ -122,7 +122,7 @@
       "local_exists": false,
       "upstream_exists": true,
       "current_local_lines": 0,
-      "upstream_lines": 70,
+      "upstream_lines": 71,
       "status": "excluded"
     },
     {
@@ -133,7 +133,7 @@
       "local_exists": false,
       "upstream_exists": true,
       "current_local_lines": 0,
-      "upstream_lines": 14,
+      "upstream_lines": 15,
       "status": "excluded"
     },
     {
@@ -144,7 +144,7 @@
       "local_exists": true,
       "upstream_exists": true,
       "current_local_lines": 196,
-      "upstream_lines": 188,
+      "upstream_lines": 191,
       "status": "needs_manual_review"
     },
     {
@@ -155,7 +155,7 @@
       "local_exists": true,
       "upstream_exists": true,
       "current_local_lines": 68,
-      "upstream_lines": 64,
+      "upstream_lines": 65,
       "status": "needs_manual_review"
     },
     {
@@ -166,7 +166,7 @@
       "local_exists": true,
       "upstream_exists": true,
       "current_local_lines": 85,
-      "upstream_lines": 93,
+      "upstream_lines": 94,
       "status": "thin"
     },
     {
@@ -177,7 +177,7 @@
       "local_exists": true,
       "upstream_exists": true,
       "current_local_lines": 85,
-      "upstream_lines": 81,
+      "upstream_lines": 82,
       "status": "needs_manual_review"
     },
     {
@@ -188,7 +188,7 @@
       "local_exists": true,
       "upstream_exists": true,
       "current_local_lines": 58,
-      "upstream_lines": 54,
+      "upstream_lines": 55,
       "status": "needs_manual_review"
     },
     {
@@ -199,7 +199,7 @@
       "local_exists": true,
       "upstream_exists": true,
       "current_local_lines": 496,
-      "upstream_lines": 549,
+      "upstream_lines": 550,
       "status": "thin"
     },
     {
@@ -210,7 +210,7 @@
       "local_exists": true,
       "upstream_exists": true,
       "current_local_lines": 138,
-      "upstream_lines": 120,
+      "upstream_lines": 121,
       "status": "needs_manual_review"
     },
     {
@@ -221,7 +221,7 @@
       "local_exists": true,
       "upstream_exists": true,
       "current_local_lines": 68,
-      "upstream_lines": 64,
+      "upstream_lines": 65,
       "status": "needs_manual_review"
     },
     {
@@ -232,7 +232,7 @@
       "local_exists": true,
       "upstream_exists": true,
       "current_local_lines": 83,
-      "upstream_lines": 79,
+      "upstream_lines": 80,
       "status": "needs_manual_review"
     },
     {
@@ -243,7 +243,7 @@
       "local_exists": true,
       "upstream_exists": true,
       "current_local_lines": 87,
-      "upstream_lines": 79,
+      "upstream_lines": 80,
       "status": "needs_manual_review"
     },
     {
@@ -254,7 +254,7 @@
       "local_exists": true,
       "upstream_exists": true,
       "current_local_lines": 268,
-      "upstream_lines": 228,
+      "upstream_lines": 237,
       "status": "needs_manual_review"
     },
     {
@@ -265,7 +265,7 @@
       "local_exists": true,
       "upstream_exists": true,
       "current_local_lines": 56,
-      "upstream_lines": 52,
+      "upstream_lines": 53,
       "status": "needs_manual_review"
     },
     {
@@ -276,7 +276,7 @@
       "local_exists": true,
       "upstream_exists": true,
       "current_local_lines": 61,
-      "upstream_lines": 57,
+      "upstream_lines": 58,
       "status": "needs_manual_review"
     },
     {
@@ -287,7 +287,7 @@
       "local_exists": true,
       "upstream_exists": true,
       "current_local_lines": 56,
-      "upstream_lines": 52,
+      "upstream_lines": 53,
       "status": "needs_manual_review"
     },
     {
@@ -298,7 +298,7 @@
       "local_exists": true,
       "upstream_exists": true,
       "current_local_lines": 133,
-      "upstream_lines": 131,
+      "upstream_lines": 132,
       "status": "needs_manual_review"
     },
     {
@@ -309,7 +309,7 @@
       "local_exists": true,
       "upstream_exists": true,
       "current_local_lines": 88,
-      "upstream_lines": 81,
+      "upstream_lines": 82,
       "status": "needs_manual_review"
     },
     {
@@ -320,7 +320,7 @@
       "local_exists": true,
       "upstream_exists": true,
       "current_local_lines": 68,
-      "upstream_lines": 64,
+      "upstream_lines": 65,
       "status": "needs_manual_review"
     },
     {
@@ -331,7 +331,7 @@
       "local_exists": true,
       "upstream_exists": true,
       "current_local_lines": 76,
-      "upstream_lines": 90,
+      "upstream_lines": 91,
       "status": "thin"
     },
     {
@@ -342,7 +342,7 @@
       "local_exists": true,
       "upstream_exists": true,
       "current_local_lines": 56,
-      "upstream_lines": 52,
+      "upstream_lines": 53,
       "status": "needs_manual_review"
     },
     {
@@ -353,7 +353,7 @@
       "local_exists": true,
       "upstream_exists": true,
       "current_local_lines": 91,
-      "upstream_lines": 85,
+      "upstream_lines": 86,
       "status": "needs_manual_review"
     },
     {
@@ -364,7 +364,7 @@
       "local_exists": true,
       "upstream_exists": true,
       "current_local_lines": 182,
-      "upstream_lines": 184,
+      "upstream_lines": 185,
       "status": "thin"
     },
     {
@@ -375,7 +375,7 @@
       "local_exists": true,
       "upstream_exists": true,
       "current_local_lines": 98,
-      "upstream_lines": 90,
+      "upstream_lines": 91,
       "status": "needs_manual_review"
     },
     {
@@ -386,7 +386,7 @@
       "local_exists": true,
       "upstream_exists": true,
       "current_local_lines": 135,
-      "upstream_lines": 118,
+      "upstream_lines": 119,
       "status": "needs_manual_review"
     },
     {
@@ -397,7 +397,7 @@
       "local_exists": true,
       "upstream_exists": true,
       "current_local_lines": 70,
-      "upstream_lines": 66,
+      "upstream_lines": 67,
       "status": "needs_manual_review"
     },
     {
@@ -408,7 +408,7 @@
       "local_exists": true,
       "upstream_exists": true,
       "current_local_lines": 128,
-      "upstream_lines": 114,
+      "upstream_lines": 115,
       "status": "needs_manual_review"
     },
     {
@@ -419,7 +419,7 @@
       "local_exists": true,
       "upstream_exists": true,
       "current_local_lines": 102,
-      "upstream_lines": 87,
+      "upstream_lines": 88,
       "status": "needs_manual_review"
     },
     {
@@ -430,7 +430,7 @@
       "local_exists": true,
       "upstream_exists": true,
       "current_local_lines": 60,
-      "upstream_lines": 56,
+      "upstream_lines": 57,
       "status": "needs_manual_review"
     },
     {
@@ -441,7 +441,7 @@
       "local_exists": true,
       "upstream_exists": true,
       "current_local_lines": 178,
-      "upstream_lines": 162,
+      "upstream_lines": 163,
       "status": "needs_manual_review"
     },
     {
@@ -452,7 +452,7 @@
       "local_exists": true,
       "upstream_exists": true,
       "current_local_lines": 127,
-      "upstream_lines": 106,
+      "upstream_lines": 107,
       "status": "needs_manual_review"
     },
     {
@@ -463,7 +463,7 @@
       "local_exists": true,
       "upstream_exists": true,
       "current_local_lines": 68,
-      "upstream_lines": 65,
+      "upstream_lines": 66,
       "status": "needs_manual_review"
     },
     {
@@ -474,7 +474,7 @@
       "local_exists": true,
       "upstream_exists": true,
       "current_local_lines": 76,
-      "upstream_lines": 71,
+      "upstream_lines": 72,
       "status": "needs_manual_review"
     },
     {
@@ -485,7 +485,7 @@
       "local_exists": true,
       "upstream_exists": true,
       "current_local_lines": 61,
-      "upstream_lines": 57,
+      "upstream_lines": 58,
       "status": "needs_manual_review"
     },
     {
@@ -496,7 +496,7 @@
       "local_exists": true,
       "upstream_exists": true,
       "current_local_lines": 60,
-      "upstream_lines": 56,
+      "upstream_lines": 57,
       "status": "needs_manual_review"
     },
     {
@@ -507,7 +507,7 @@
       "local_exists": true,
       "upstream_exists": true,
       "current_local_lines": 97,
-      "upstream_lines": 91,
+      "upstream_lines": 92,
       "status": "needs_manual_review"
     },
     {
@@ -518,7 +518,7 @@
       "local_exists": true,
       "upstream_exists": true,
       "current_local_lines": 56,
-      "upstream_lines": 52,
+      "upstream_lines": 53,
       "status": "needs_manual_review"
     },
     {
@@ -529,7 +529,7 @@
       "local_exists": true,
       "upstream_exists": true,
       "current_local_lines": 93,
-      "upstream_lines": 79,
+      "upstream_lines": 80,
       "status": "needs_manual_review"
     },
     {
@@ -540,7 +540,7 @@
       "local_exists": true,
       "upstream_exists": true,
       "current_local_lines": 84,
-      "upstream_lines": 80,
+      "upstream_lines": 81,
       "status": "needs_manual_review"
     },
     {
@@ -550,7 +550,7 @@
       "local_exists": true,
       "upstream_exists": true,
       "current_local_lines": 348,
-      "upstream_lines": 508,
+      "upstream_lines": 509,
       "status": "thin"
     },
     {
@@ -560,7 +560,7 @@
       "local_exists": true,
       "upstream_exists": true,
       "current_local_lines": 39,
-      "upstream_lines": 30,
+      "upstream_lines": 31,
       "status": "needs_manual_review"
     },
     {
@@ -570,7 +570,7 @@
       "local_exists": true,
       "upstream_exists": true,
       "current_local_lines": 164,
-      "upstream_lines": 124,
+      "upstream_lines": 125,
       "status": "needs_manual_review"
     },
     {
@@ -581,7 +581,7 @@
       "local_exists": true,
       "upstream_exists": true,
       "current_local_lines": 229,
-      "upstream_lines": 109,
+      "upstream_lines": 123,
       "status": "needs_manual_review"
     },
     {
@@ -592,7 +592,7 @@
       "local_exists": false,
       "upstream_exists": true,
       "current_local_lines": 0,
-      "upstream_lines": 487,
+      "upstream_lines": 488,
       "status": "excluded"
     },
     {
@@ -603,7 +603,7 @@
       "local_exists": true,
       "upstream_exists": true,
       "current_local_lines": 163,
-      "upstream_lines": 197,
+      "upstream_lines": 198,
       "status": "thin"
     },
     {
@@ -614,7 +614,7 @@
       "local_exists": true,
       "upstream_exists": true,
       "current_local_lines": 947,
-      "upstream_lines": 1026,
+      "upstream_lines": 1035,
       "status": "thin"
     },
     {
@@ -624,7 +624,7 @@
       "local_exists": true,
       "upstream_exists": true,
       "current_local_lines": 203,
-      "upstream_lines": 247,
+      "upstream_lines": 258,
       "status": "thin"
     },
     {
@@ -635,7 +635,7 @@
       "local_exists": true,
       "upstream_exists": true,
       "current_local_lines": 467,
-      "upstream_lines": 327,
+      "upstream_lines": 328,
       "status": "needs_manual_review"
     },
     {
@@ -646,7 +646,7 @@
       "local_exists": true,
       "upstream_exists": true,
       "current_local_lines": 430,
-      "upstream_lines": 610,
+      "upstream_lines": 660,
       "status": "thin"
     },
     {
@@ -657,7 +657,7 @@
       "local_exists": true,
       "upstream_exists": true,
       "current_local_lines": 504,
-      "upstream_lines": 674,
+      "upstream_lines": 675,
       "status": "thin"
     },
     {
@@ -668,7 +668,7 @@
       "local_exists": true,
       "upstream_exists": true,
       "current_local_lines": 228,
-      "upstream_lines": 353,
+      "upstream_lines": 354,
       "status": "thin"
     },
     {
@@ -679,7 +679,7 @@
       "local_exists": true,
       "upstream_exists": true,
       "current_local_lines": 590,
-      "upstream_lines": 578,
+      "upstream_lines": 580,
       "status": "needs_manual_review"
     },
     {
@@ -690,7 +690,7 @@
       "local_exists": false,
       "upstream_exists": true,
       "current_local_lines": 0,
-      "upstream_lines": 146,
+      "upstream_lines": 147,
       "status": "excluded"
     },
     {
@@ -701,7 +701,7 @@
       "local_exists": true,
       "upstream_exists": true,
       "current_local_lines": 362,
-      "upstream_lines": 594,
+      "upstream_lines": 596,
       "status": "thin"
     },
     {
@@ -767,7 +767,7 @@
       "local_exists": false,
       "upstream_exists": true,
       "current_local_lines": 0,
-      "upstream_lines": 507,
+      "upstream_lines": 533,
       "status": "excluded"
     },
     {
@@ -777,7 +777,7 @@
       "local_exists": false,
       "upstream_exists": true,
       "current_local_lines": 0,
-      "upstream_lines": 704,
+      "upstream_lines": 720,
       "status": "missing"
     },
     {
@@ -787,7 +787,7 @@
       "local_exists": false,
       "upstream_exists": true,
       "current_local_lines": 0,
-      "upstream_lines": 212,
+      "upstream_lines": 213,
       "status": "missing"
     },
     {
@@ -797,7 +797,7 @@
       "local_exists": false,
       "upstream_exists": true,
       "current_local_lines": 0,
-      "upstream_lines": 521,
+      "upstream_lines": 523,
       "status": "missing"
     },
     {
@@ -808,7 +808,7 @@
       "local_exists": true,
       "upstream_exists": true,
       "current_local_lines": 940,
-      "upstream_lines": 630,
+      "upstream_lines": 631,
       "status": "needs_manual_review"
     },
     {
@@ -818,7 +818,7 @@
       "local_exists": true,
       "upstream_exists": true,
       "current_local_lines": 85,
-      "upstream_lines": 155,
+      "upstream_lines": 156,
       "status": "thin"
     },
     {
@@ -828,7 +828,7 @@
       "local_exists": false,
       "upstream_exists": true,
       "current_local_lines": 0,
-      "upstream_lines": 794,
+      "upstream_lines": 796,
       "status": "missing"
     },
     {
@@ -838,7 +838,7 @@
       "local_exists": true,
       "upstream_exists": true,
       "current_local_lines": 203,
-      "upstream_lines": 238,
+      "upstream_lines": 240,
       "status": "thin"
     },
     {
@@ -848,7 +848,7 @@
       "local_exists": true,
       "upstream_exists": true,
       "current_local_lines": 153,
-      "upstream_lines": 182,
+      "upstream_lines": 183,
       "status": "thin"
     },
     {
@@ -858,7 +858,7 @@
       "local_exists": false,
       "upstream_exists": true,
       "current_local_lines": 0,
-      "upstream_lines": 1510,
+      "upstream_lines": 1512,
       "status": "missing"
     },
     {
@@ -868,7 +868,7 @@
       "local_exists": false,
       "upstream_exists": true,
       "current_local_lines": 0,
-      "upstream_lines": 712,
+      "upstream_lines": 714,
       "status": "missing"
     },
     {
@@ -878,7 +878,7 @@
       "local_exists": true,
       "upstream_exists": true,
       "current_local_lines": 268,
-      "upstream_lines": 246,
+      "upstream_lines": 248,
       "status": "needs_manual_review"
     },
     {
@@ -889,7 +889,7 @@
       "local_exists": false,
       "upstream_exists": true,
       "current_local_lines": 0,
-      "upstream_lines": 136,
+      "upstream_lines": 137,
       "status": "excluded"
     },
     {
@@ -900,7 +900,7 @@
       "local_exists": false,
       "upstream_exists": true,
       "current_local_lines": 0,
-      "upstream_lines": 45,
+      "upstream_lines": 47,
       "status": "excluded"
     },
     {
@@ -911,7 +911,7 @@
       "local_exists": false,
       "upstream_exists": true,
       "current_local_lines": 0,
-      "upstream_lines": 336,
+      "upstream_lines": 337,
       "status": "excluded"
     },
     {
@@ -933,7 +933,7 @@
       "local_exists": false,
       "upstream_exists": true,
       "current_local_lines": 0,
-      "upstream_lines": 101,
+      "upstream_lines": 102,
       "status": "excluded"
     },
     {
@@ -944,7 +944,7 @@
       "local_exists": false,
       "upstream_exists": true,
       "current_local_lines": 0,
-      "upstream_lines": 561,
+      "upstream_lines": 563,
       "status": "excluded"
     },
     {
@@ -955,7 +955,7 @@
       "local_exists": false,
       "upstream_exists": true,
       "current_local_lines": 0,
-      "upstream_lines": 432,
+      "upstream_lines": 434,
       "status": "excluded"
     },
     {
@@ -966,7 +966,7 @@
       "local_exists": false,
       "upstream_exists": true,
       "current_local_lines": 0,
-      "upstream_lines": 295,
+      "upstream_lines": 297,
       "status": "excluded"
     },
     {
@@ -977,7 +977,7 @@
       "local_exists": true,
       "upstream_exists": true,
       "current_local_lines": 249,
-      "upstream_lines": 581,
+      "upstream_lines": 582,
       "status": "thin"
     },
     {
@@ -988,7 +988,7 @@
       "local_exists": false,
       "upstream_exists": true,
       "current_local_lines": 0,
-      "upstream_lines": 141,
+      "upstream_lines": 143,
       "status": "excluded"
     },
     {
@@ -999,7 +999,7 @@
       "local_exists": false,
       "upstream_exists": true,
       "current_local_lines": 0,
-      "upstream_lines": 532,
+      "upstream_lines": 534,
       "status": "excluded"
     },
     {
@@ -1010,7 +1010,7 @@
       "local_exists": false,
       "upstream_exists": true,
       "current_local_lines": 0,
-      "upstream_lines": 834,
+      "upstream_lines": 836,
       "status": "excluded"
     },
     {
@@ -1021,7 +1021,7 @@
       "local_exists": false,
       "upstream_exists": true,
       "current_local_lines": 0,
-      "upstream_lines": 92,
+      "upstream_lines": 94,
       "status": "excluded"
     },
     {
@@ -1032,7 +1032,7 @@
       "local_exists": false,
       "upstream_exists": true,
       "current_local_lines": 0,
-      "upstream_lines": 142,
+      "upstream_lines": 144,
       "status": "excluded"
     },
     {
@@ -1043,7 +1043,7 @@
       "local_exists": false,
       "upstream_exists": true,
       "current_local_lines": 0,
-      "upstream_lines": 580,
+      "upstream_lines": 582,
       "status": "excluded"
     },
     {
@@ -1054,7 +1054,7 @@
       "local_exists": false,
       "upstream_exists": true,
       "current_local_lines": 0,
-      "upstream_lines": 83,
+      "upstream_lines": 85,
       "status": "excluded"
     },
     {
@@ -1065,7 +1065,7 @@
       "local_exists": false,
       "upstream_exists": true,
       "current_local_lines": 0,
-      "upstream_lines": 139,
+      "upstream_lines": 141,
       "status": "excluded"
     },
     {
@@ -1096,7 +1096,7 @@
       "local_exists": false,
       "upstream_exists": true,
       "current_local_lines": 0,
-      "upstream_lines": 187,
+      "upstream_lines": 190,
       "status": "excluded"
     },
     {
@@ -1107,7 +1107,7 @@
       "local_exists": false,
       "upstream_exists": true,
       "current_local_lines": 0,
-      "upstream_lines": 212,
+      "upstream_lines": 214,
       "status": "excluded"
     },
     {
@@ -1118,7 +1118,7 @@
       "local_exists": false,
       "upstream_exists": true,
       "current_local_lines": 0,
-      "upstream_lines": 95,
+      "upstream_lines": 97,
       "status": "excluded"
     },
     {
@@ -1129,7 +1129,7 @@
       "local_exists": false,
       "upstream_exists": true,
       "current_local_lines": 0,
-      "upstream_lines": 386,
+      "upstream_lines": 388,
       "status": "excluded"
     },
     {
@@ -1140,7 +1140,7 @@
       "local_exists": false,
       "upstream_exists": true,
       "current_local_lines": 0,
-      "upstream_lines": 199,
+      "upstream_lines": 201,
       "status": "excluded"
     },
     {
@@ -1151,7 +1151,7 @@
       "local_exists": false,
       "upstream_exists": true,
       "current_local_lines": 0,
-      "upstream_lines": 161,
+      "upstream_lines": 163,
       "status": "excluded"
     },
     {
@@ -1182,7 +1182,7 @@
       "local_exists": false,
       "upstream_exists": true,
       "current_local_lines": 0,
-      "upstream_lines": 379,
+      "upstream_lines": 381,
       "status": "excluded"
     },
     {
@@ -1213,7 +1213,7 @@
       "local_exists": false,
       "upstream_exists": true,
       "current_local_lines": 0,
-      "upstream_lines": 17,
+      "upstream_lines": 19,
       "status": "excluded"
     },
     {
@@ -1224,7 +1224,7 @@
       "local_exists": false,
       "upstream_exists": true,
       "current_local_lines": 0,
-      "upstream_lines": 117,
+      "upstream_lines": 119,
       "status": "excluded"
     },
     {
@@ -1235,7 +1235,7 @@
       "local_exists": false,
       "upstream_exists": true,
       "current_local_lines": 0,
-      "upstream_lines": 210,
+      "upstream_lines": 212,
       "status": "excluded"
     },
     {
@@ -1246,7 +1246,7 @@
       "local_exists": false,
       "upstream_exists": true,
       "current_local_lines": 0,
-      "upstream_lines": 453,
+      "upstream_lines": 455,
       "status": "excluded"
     },
     {
@@ -1256,7 +1256,7 @@
       "local_exists": true,
       "upstream_exists": true,
       "current_local_lines": 29,
-      "upstream_lines": 20,
+      "upstream_lines": 21,
       "status": "needs_manual_review"
     },
     {
@@ -1269,7 +1269,7 @@
       "local_exists": true,
       "upstream_exists": true,
       "current_local_lines": 545,
-      "upstream_lines": 653,
+      "upstream_lines": 655,
       "status": "thin"
     },
     {
@@ -1282,7 +1282,7 @@
       "local_exists": true,
       "upstream_exists": true,
       "current_local_lines": 758,
-      "upstream_lines": 839,
+      "upstream_lines": 840,
       "status": "thin"
     },
     {
@@ -1293,7 +1293,7 @@
       "local_exists": false,
       "upstream_exists": true,
       "current_local_lines": 0,
-      "upstream_lines": 534,
+      "upstream_lines": 535,
       "status": "excluded"
     },
     {
@@ -1306,7 +1306,7 @@
       "local_exists": true,
       "upstream_exists": true,
       "current_local_lines": 193,
-      "upstream_lines": 204,
+      "upstream_lines": 205,
       "status": "thin"
     },
     {
@@ -1320,7 +1320,7 @@
       "local_exists": true,
       "upstream_exists": true,
       "current_local_lines": 580,
-      "upstream_lines": 760,
+      "upstream_lines": 761,
       "status": "thin"
     },
     {
@@ -1334,7 +1334,7 @@
       "local_exists": true,
       "upstream_exists": true,
       "current_local_lines": 272,
-      "upstream_lines": 469,
+      "upstream_lines": 470,
       "status": "thin"
     },
     {
@@ -1348,7 +1348,7 @@
       "local_exists": true,
       "upstream_exists": true,
       "current_local_lines": 502,
-      "upstream_lines": 595,
+      "upstream_lines": 596,
       "status": "thin"
     },
     {
@@ -1359,7 +1359,7 @@
       "local_exists": false,
       "upstream_exists": true,
       "current_local_lines": 0,
-      "upstream_lines": 332,
+      "upstream_lines": 333,
       "status": "excluded"
     },
     {
@@ -1372,7 +1372,7 @@
       "local_exists": true,
       "upstream_exists": true,
       "current_local_lines": 110,
-      "upstream_lines": 149,
+      "upstream_lines": 151,
       "status": "thin"
     },
     {
@@ -1385,8 +1385,8 @@
       "local_exists": true,
       "upstream_exists": true,
       "current_local_lines": 94,
-      "upstream_lines": 94,
-      "status": "needs_manual_review"
+      "upstream_lines": 95,
+      "status": "thin"
     },
     {
       "slug": "plugins/chargebee.mdx",
@@ -1396,7 +1396,7 @@
       "local_exists": false,
       "upstream_exists": true,
       "current_local_lines": 0,
-      "upstream_lines": 1132,
+      "upstream_lines": 1133,
       "status": "excluded"
     },
     {
@@ -1407,7 +1407,7 @@
       "local_exists": false,
       "upstream_exists": true,
       "current_local_lines": 0,
-      "upstream_lines": 301,
+      "upstream_lines": 302,
       "status": "excluded"
     },
     {
@@ -1418,7 +1418,7 @@
       "local_exists": true,
       "upstream_exists": true,
       "current_local_lines": 30,
-      "upstream_lines": 16,
+      "upstream_lines": 21,
       "status": "needs_manual_review"
     },
     {
@@ -1429,7 +1429,7 @@
       "local_exists": false,
       "upstream_exists": true,
       "current_local_lines": 0,
-      "upstream_lines": 854,
+      "upstream_lines": 855,
       "status": "excluded"
     },
     {
@@ -1442,7 +1442,7 @@
       "local_exists": true,
       "upstream_exists": true,
       "current_local_lines": 474,
-      "upstream_lines": 684,
+      "upstream_lines": 685,
       "status": "thin"
     },
     {
@@ -1453,7 +1453,7 @@
       "local_exists": false,
       "upstream_exists": true,
       "current_local_lines": 0,
-      "upstream_lines": 210,
+      "upstream_lines": 211,
       "status": "excluded"
     },
     {
@@ -1466,7 +1466,7 @@
       "local_exists": true,
       "upstream_exists": true,
       "current_local_lines": 153,
-      "upstream_lines": 154,
+      "upstream_lines": 155,
       "status": "thin"
     },
     {
@@ -1479,7 +1479,7 @@
       "local_exists": true,
       "upstream_exists": true,
       "current_local_lines": 424,
-      "upstream_lines": 471,
+      "upstream_lines": 472,
       "status": "thin"
     },
     {
@@ -1492,7 +1492,7 @@
       "local_exists": true,
       "upstream_exists": true,
       "current_local_lines": 379,
-      "upstream_lines": 528,
+      "upstream_lines": 529,
       "status": "thin"
     },
     {
@@ -1505,7 +1505,7 @@
       "local_exists": true,
       "upstream_exists": true,
       "current_local_lines": 85,
-      "upstream_lines": 74,
+      "upstream_lines": 75,
       "status": "needs_manual_review"
     },
     {
@@ -1517,8 +1517,8 @@
       "gem": "better_auth",
       "local_exists": true,
       "upstream_exists": true,
-      "current_local_lines": 101,
-      "upstream_lines": 225,
+      "current_local_lines": 99,
+      "upstream_lines": 226,
       "status": "thin"
     },
     {
@@ -1542,7 +1542,7 @@
       "local_exists": true,
       "upstream_exists": true,
       "current_local_lines": 431,
-      "upstream_lines": 552,
+      "upstream_lines": 553,
       "status": "thin"
     },
     {
@@ -1555,7 +1555,7 @@
       "local_exists": true,
       "upstream_exists": true,
       "current_local_lines": 294,
-      "upstream_lines": 431,
+      "upstream_lines": 512,
       "status": "thin"
     },
     {
@@ -1568,7 +1568,7 @@
       "local_exists": true,
       "upstream_exists": true,
       "current_local_lines": 121,
-      "upstream_lines": 161,
+      "upstream_lines": 163,
       "status": "thin"
     },
     {
@@ -1579,7 +1579,7 @@
       "local_exists": false,
       "upstream_exists": true,
       "current_local_lines": 0,
-      "upstream_lines": 460,
+      "upstream_lines": 461,
       "status": "unsupported_absent"
     },
     {
@@ -1592,7 +1592,7 @@
       "local_exists": true,
       "upstream_exists": true,
       "current_local_lines": 94,
-      "upstream_lines": 108,
+      "upstream_lines": 109,
       "status": "thin"
     },
     {
@@ -1620,7 +1620,7 @@
       "local_exists": true,
       "upstream_exists": true,
       "current_local_lines": 1218,
-      "upstream_lines": 2152,
+      "upstream_lines": 2154,
       "status": "thin"
     },
     {
@@ -1633,7 +1633,7 @@
       "local_exists": true,
       "upstream_exists": true,
       "current_local_lines": 101,
-      "upstream_lines": 152,
+      "upstream_lines": 153,
       "status": "thin"
     },
     {
@@ -1644,7 +1644,7 @@
       "local_exists": false,
       "upstream_exists": true,
       "current_local_lines": 0,
-      "upstream_lines": 655,
+      "upstream_lines": 656,
       "status": "unsupported_absent"
     },
     {
@@ -1657,7 +1657,7 @@
       "local_exists": true,
       "upstream_exists": true,
       "current_local_lines": 190,
-      "upstream_lines": 226,
+      "upstream_lines": 227,
       "status": "thin"
     },
     {
@@ -1670,7 +1670,7 @@
       "local_exists": true,
       "upstream_exists": true,
       "current_local_lines": 124,
-      "upstream_lines": 127,
+      "upstream_lines": 129,
       "status": "thin"
     },
     {
@@ -1683,7 +1683,7 @@
       "local_exists": true,
       "upstream_exists": true,
       "current_local_lines": 100,
-      "upstream_lines": 85,
+      "upstream_lines": 86,
       "status": "needs_manual_review"
     },
     {
@@ -1696,7 +1696,7 @@
       "local_exists": true,
       "upstream_exists": true,
       "current_local_lines": 2000,
-      "upstream_lines": 2527,
+      "upstream_lines": 2529,
       "status": "thin"
     },
     {
@@ -1710,7 +1710,7 @@
       "local_exists": true,
       "upstream_exists": true,
       "current_local_lines": 436,
-      "upstream_lines": 533,
+      "upstream_lines": 534,
       "status": "thin"
     },
     {
@@ -1723,7 +1723,7 @@
       "local_exists": true,
       "upstream_exists": true,
       "current_local_lines": 355,
-      "upstream_lines": 412,
+      "upstream_lines": 413,
       "status": "thin"
     },
     {
@@ -1734,7 +1734,7 @@
       "local_exists": false,
       "upstream_exists": true,
       "current_local_lines": 0,
-      "upstream_lines": 467,
+      "upstream_lines": 468,
       "status": "excluded"
     },
     {
@@ -1748,7 +1748,7 @@
       "local_exists": true,
       "upstream_exists": true,
       "current_local_lines": 196,
-      "upstream_lines": 628,
+      "upstream_lines": 630,
       "status": "thin"
     },
     {
@@ -1761,7 +1761,7 @@
       "local_exists": true,
       "upstream_exists": true,
       "current_local_lines": 220,
-      "upstream_lines": 303,
+      "upstream_lines": 305,
       "status": "thin"
     },
     {
@@ -1775,7 +1775,7 @@
       "local_exists": true,
       "upstream_exists": true,
       "current_local_lines": 1545,
-      "upstream_lines": 1754,
+      "upstream_lines": 1782,
       "status": "thin"
     },
     {
@@ -1789,7 +1789,7 @@
       "local_exists": true,
       "upstream_exists": true,
       "current_local_lines": 941,
-      "upstream_lines": 1129,
+      "upstream_lines": 1130,
       "status": "thin"
     },
     {
@@ -1800,7 +1800,7 @@
       "local_exists": true,
       "upstream_exists": true,
       "current_local_lines": 65,
-      "upstream_lines": 374,
+      "upstream_lines": 375,
       "status": "excluded"
     },
     {
@@ -1813,7 +1813,7 @@
       "local_exists": true,
       "upstream_exists": true,
       "current_local_lines": 300,
-      "upstream_lines": 361,
+      "upstream_lines": 362,
       "status": "thin"
     },
     {
@@ -1823,7 +1823,7 @@
       "local_exists": true,
       "upstream_exists": true,
       "current_local_lines": 178,
-      "upstream_lines": 194,
+      "upstream_lines": 196,
       "status": "thin"
     },
     {
@@ -1895,7 +1895,7 @@
       "local_exists": true,
       "upstream_exists": true,
       "current_local_lines": 48,
-      "upstream_lines": 27,
+      "upstream_lines": 28,
       "status": "needs_manual_review"
     },
     {
@@ -2087,7 +2087,7 @@
       "local_exists": true,
       "upstream_exists": true,
       "current_local_lines": 154,
-      "upstream_lines": 256,
+      "upstream_lines": 257,
       "status": "thin"
     },
     {
@@ -2097,8 +2097,8 @@
       "local_exists": true,
       "upstream_exists": true,
       "current_local_lines": 90,
-      "upstream_lines": 88,
-      "status": "needs_manual_review"
+      "upstream_lines": 108,
+      "status": "thin"
     },
     {
       "slug": "reference/options.mdx",
@@ -2107,7 +2107,7 @@
       "local_exists": true,
       "upstream_exists": true,
       "current_local_lines": 792,
-      "upstream_lines": 959,
+      "upstream_lines": 956,
       "status": "thin"
     },
     {
@@ -2128,7 +2128,7 @@
       "local_exists": true,
       "upstream_exists": true,
       "current_local_lines": 338,
-      "upstream_lines": 134,
+      "upstream_lines": 135,
       "status": "needs_manual_review"
     },
     {
@@ -2149,7 +2149,7 @@
       "local_exists": true,
       "upstream_exists": true,
       "current_local_lines": 355,
-      "upstream_lines": 313,
+      "upstream_lines": 314,
       "status": "needs_manual_review"
     },
     {
@@ -2159,7 +2159,7 @@
       "local_exists": true,
       "upstream_exists": true,
       "current_local_lines": 89,
-      "upstream_lines": 83,
+      "upstream_lines": 84,
       "status": "needs_manual_review"
     },
     {

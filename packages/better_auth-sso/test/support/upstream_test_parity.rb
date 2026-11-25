@@ -16,6 +16,18 @@ module BetterAuthSSOUpstreamParity
         evidence: {"better_auth/sso/domain_verification_test.rb" => "test_verify_domain_requires_proof_for_every_listed_domain_and_accepts_raw_token"},
         notes: "Domain request/verification ownership, DNS proof, token lifetime, and storage"
       },
+      "src/domain-verification-concurrency.test.ts" => {
+        owner: "better_auth/sso/domain_verification_test.rb",
+        status: :partial,
+        issue: 165,
+        notes: "New in v1.6.35: DNS proofs bound to the provider and domain at request time, concurrent verification; not ported yet"
+      },
+      "src/linking/org-assignment.security.test.ts" => {
+        owner: "better_auth/sso/linking/org_assignment_test.rb",
+        status: :partial,
+        issue: 165,
+        notes: "New in v1.6.35: no auto-join through unverified domains or unverified social emails; not ported yet"
+      },
       "src/linking/org-assignment.test.ts" => {
         owner: "better_auth/sso/linking/org_assignment_test.rb",
         status: :covered,

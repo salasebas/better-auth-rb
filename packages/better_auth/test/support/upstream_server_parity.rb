@@ -561,6 +561,10 @@ module BetterAuth
           plan: "006",
           notes: "Social sign-in routes covered in social_test"
         },
+        "utils/request.test.ts" => {
+          status: :ruby_not_applicable,
+          notes: "safeCloneRequest guards Fetch Request#clone; Rack requests are never cloned"
+        },
         "utils/url.test.ts" => {
           owner: "better_auth/host_test.rb",
           status: :covered,

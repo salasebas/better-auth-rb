@@ -175,7 +175,7 @@ module BetterAuth
       return unless sender.respond_to?(:call)
 
       token = create_email_verification_token(ctx, user["email"], update_to: update_to, extra: {"requestType" => "change-email-verification"})
-      register_change_email_token!(ctx, token)
+      record_single_use_change_email_token!(ctx, token)
       callback = URI.encode_www_form_component(callback_url || "/")
       url = "#{ctx.context.token_link_base_url}/verify-email?token=#{URI.encode_www_form_component(token)}&callbackURL=#{callback}"
       sender.call({user: user.merge("email" => update_to), url: url, token: token}, ctx.request)
@@ -204,10 +204,7 @@ module BetterAuth
       redirect_or_error(ctx, callback_url, BASE_ERROR_CODES["INVALID_TOKEN"], code: "INVALID_TOKEN")
     end
 
-    # Ruby hardening adaptation of upstream PR #9519. This is intentionally
-    # stricter than the pinned Better Auth v1.6.23 behavior, and hashes the JWT
-    # before storage so the verification table never contains the bearer token.
-    def self.register_change_email_token!(ctx, token)
+    def self.record_single_use_change_email_token!(ctx, token)
       ctx.context.internal_adapter.create_verification_value(
         identifier: change_email_token_identifier(token),
         value: "issued",

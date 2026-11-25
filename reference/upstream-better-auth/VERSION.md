@@ -6,13 +6,13 @@ not by itself mean that every Ruby behavior has reached parity with this release
 | Field | Value |
 | --- | --- |
 | Package | `better-auth` |
-| Version | `1.6.23` |
-| npm dist-tag checked | `latest` |
-| Checked on | `2026-07-11` |
+| Version | `1.6.35` |
+| npm dist-tag checked | `release-1.6` |
+| Checked on | `2026-11-24` |
 | Source registry | https://registry.npmjs.org/better-auth |
 | Repository | https://github.com/better-auth/better-auth |
-| Repository tag | `v1.6.23` |
-| Repository commit | `9dfceee14021fc15a2fb93023f39635f25b0b5ba` |
+| Repository tag | `v1.6.35` |
+| Repository commit | `d31c352ac65b4619d428295659bbf60f0be6ae0c` |
 
 ## Local source tree
 
@@ -25,7 +25,7 @@ Clone the monorepo for behavioral reference (not committed to git):
 Expected path:
 
 ```text
-reference/upstream-src/1.6.23/repository/
+reference/upstream-src/1.6.35/repository/
 ```
 
 Package sources live under `packages/` (for example `packages/better-auth/`,
