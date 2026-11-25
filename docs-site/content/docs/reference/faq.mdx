@@ -41,13 +41,12 @@ When the app runs behind a proxy, make sure the proxy preserves `Host`,
 
 ## Can I use preview deployments or multiple domains?
 
-Yes. Keep one canonical `base_url` and list full request-facing origin patterns
-in `serving_origins`. See the [multiple serving origins guide](/docs/guides/dynamic-base-url)
-for deployment patterns.
+Yes. Set a dynamic `base_url` with `allowed_hosts`, or use a static `base_url`
+with `serving_origins` to keep issuer metadata and provider callbacks fixed.
+See [Dynamic base URL](/docs/guides/dynamic-base-url) for deployment examples.
 
 ```ruby
-base_url: "https://app.example.com",
-serving_origins: ["https://app.example.com", "https://*.preview.example.com"]
+base_url: {allowed_hosts: ["app.example.com", "*.preview.example.com"], protocol: "https"}
 ```
 
 ## How do I diagnose duplicate gem or version issues?

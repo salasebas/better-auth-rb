@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require "uri"
+require "rack/request"
 
 module BetterAuth
   module URLHelpers
@@ -29,7 +30,7 @@ module BetterAuth
           /\A\[[0-9a-fA-F:]+\](:[0-9]{1,5})?\z/,
           /\Alocalhost(:[0-9]{1,5})?\z/i
         ]
-        patterns.any? { |pattern| value.match?(pattern) } && valid_port?(value)
+        patterns.any? { |pattern| value.match?(pattern) }
       else
         false
       end
@@ -40,10 +41,7 @@ module BetterAuth
 
       normalized_host = normalize_host_pattern_value(host)
       normalized_pattern = normalize_host_pattern_value(pattern)
-      regex = Regexp.escape(normalized_pattern)
-        .gsub("\\*", ".*")
-        .gsub("\\?", ".")
-      !!normalized_host.match?(/\A#{regex}\z/i)
+      Configuration.wildcard_match?(normalized_pattern, normalized_host)
     end
 
     def host_from_source(source, trusted_proxy_headers: false)
@@ -55,6 +53,12 @@ module BetterAuth
 
       host = header_value(headers, "host")
       return host if host && valid_proxy_header?(host, :host)
+
+      if source.is_a?(Rack::Request::Helpers)
+        authority = source.server_authority
+        return uri_host("#{rack_scheme(source)}://#{authority}") if valid_proxy_header?(authority, :host)
+        return
+      end
 
       uri_host(source_url(source))
     end
@@ -68,7 +72,11 @@ module BetterAuth
         return forwarded_proto if forwarded_proto && valid_proxy_header?(forwarded_proto, :proto)
       end
 
-      protocol = uri_scheme(source_url(source))
+      protocol = if source.is_a?(Rack::Request::Helpers)
+        rack_scheme(source)
+      else
+        uri_scheme(source_url(source))
+      end
       return protocol if ["http", "https"].include?(protocol)
 
       host = host_from_source(source, trusted_proxy_headers: trusted_proxy_headers)
@@ -80,37 +88,37 @@ module BetterAuth
     def resolve_base_url(config, base_path, source = nil, load_env: true, trusted_proxy_headers: false)
       if dynamic_config?(config)
         return resolve_dynamic_base_url(config, source, base_path, trusted_proxy_headers: trusted_proxy_headers) if source
-        return with_path(config[:fallback] || config["fallback"], base_path) if config[:fallback] || config["fallback"]
+        fallback = dynamic_option(config, :fallback)
+        return with_path(fallback, base_path) if fallback && !fallback.empty?
 
-        return env_base_url(base_path) if load_env
-        return nil
+        return load_env ? env_base_url(base_path) : nil
       end
 
-      return with_path(config, base_path) if config.is_a?(String)
-      return env_base_url(base_path) if load_env
-      return with_path(origin(source_url(source)), base_path) if source
+      return with_path(config, base_path) if config.is_a?(String) && !config.empty?
 
-      nil
+      load_env ? env_base_url(base_path) : nil
     end
 
     def resolve_dynamic_base_url(config, source, base_path, trusted_proxy_headers: false)
       host = host_from_source(source, trusted_proxy_headers: trusted_proxy_headers)
-      fallback = config[:fallback] || config["fallback"]
+      fallback = dynamic_option(config, :fallback)
+      fallback = nil if fallback == ""
       raise Error, "Could not determine host from request headers. Please provide a fallback URL in your baseURL config." unless host || fallback
 
-      allowed_hosts = config[:allowed_hosts] || config["allowed_hosts"] || config[:allowedHosts] || config["allowedHosts"] || []
+      allowed_hosts = allowed_hosts(config)
       if host && allowed_hosts.any? { |pattern| matches_host_pattern?(host, pattern) }
-        protocol = protocol_from_source(source, config_protocol: config[:protocol] || config["protocol"], trusted_proxy_headers: trusted_proxy_headers)
+        protocol = protocol_from_source(source, config_protocol: dynamic_option(config, :protocol), trusted_proxy_headers: trusted_proxy_headers)
         return with_path("#{protocol}://#{host}", base_path)
       end
 
       return with_path(fallback, base_path) if fallback
 
-      raise Error, "Host \"#{host}\" is not in the allowed hosts list."
+      raise Error, "Host \"#{host}\" is not in the allowed hosts list. Allowed hosts: #{allowed_hosts.join(", ")}. Add this host to your allowedHosts config or provide a fallback URL."
     end
 
     def with_path(url, path = "/api/auth")
-      parsed = URI.parse(url.to_s)
+      parsed = parse_url(url)
+      raise Error, "Invalid base URL: #{url}. Please provide a valid base URL." unless parsed
       raise Error, "Invalid base URL: #{url}. URL must include 'http://' or 'https://'" unless ["http", "https"].include?(parsed.scheme)
 
       current_path = parsed.path.to_s.gsub(%r{/+\z}, "")
@@ -121,33 +129,35 @@ module BetterAuth
 
       suffix = path.start_with?("/") ? path : "/#{path}"
       "#{trimmed}#{suffix}"
-    rescue URI::InvalidURIError
-      raise Error, "Invalid base URL: #{url}. Please provide a valid base URL."
     end
 
     def origin(url)
-      parsed = URI.parse(url.to_s)
-      return nil unless ["http", "https"].include?(parsed.scheme)
+      parsed = parse_url(url)
+      return unless parsed && ["http", "https"].include?(parsed.scheme)
 
-      port = parsed.port
-      default_port = (parsed.scheme == "http" && port == 80) || (parsed.scheme == "https" && port == 443)
-      default_port ? "#{parsed.scheme}://#{parsed.host}" : "#{parsed.scheme}://#{parsed.host}:#{port}"
-    rescue URI::InvalidURIError
-      nil
+      Configuration.origin_for(parsed).downcase
     end
 
     def uri_host(url)
-      parsed = URI.parse(url.to_s)
-      return nil unless parsed.host
+      parsed = parse_url(url)
+      return unless parsed&.host
 
       default_port = (parsed.scheme == "http" && parsed.port == 80) || (parsed.scheme == "https" && parsed.port == 443)
       default_port ? parsed.host : "#{parsed.host}:#{parsed.port}"
-    rescue URI::InvalidURIError
-      nil
     end
 
     def uri_scheme(url)
-      URI.parse(url.to_s).scheme
+      parse_url(url)&.scheme
+    end
+
+    def parse_url(url)
+      parsed = URI.parse(url.to_s)
+      return unless parsed.scheme
+      if parsed.is_a?(URI::HTTP)
+        return if parsed.host.to_s.empty? || !parsed.port.between?(0, 65_535)
+      end
+
+      parsed
     rescue URI::InvalidURIError
       nil
     end
@@ -158,8 +168,8 @@ module BetterAuth
 
     def headers_from_source(source)
       return {} unless source
-      return source.headers if source.respond_to?(:headers)
       return rack_request_headers(source) if source.respond_to?(:get_header)
+      return source.headers if source.respond_to?(:headers)
       return source if source.is_a?(Hash)
 
       {}
@@ -179,26 +189,38 @@ module BetterAuth
       source.get_header("REQUEST_URI") if source.respond_to?(:get_header)
     end
 
+    def rack_scheme(source)
+      (source.get_header("HTTPS") == "on") ? "https" : source.get_header("rack.url_scheme")
+    end
+
     def dynamic_config?(config)
-      config.is_a?(Hash) && (config.key?(:allowed_hosts) || config.key?("allowed_hosts") || config.key?(:allowedHosts) || config.key?("allowedHosts"))
+      config.is_a?(Hash) && allowed_hosts(config).is_a?(Array)
+    end
+
+    def allowed_hosts(config)
+      dynamic_option(config, :allowed_hosts) || dynamic_option(config, :allowedHosts)
+    end
+
+    def dynamic_option(config, key)
+      config.fetch(key) { config[key.to_s] }
     end
 
     def env_base_url(base_path)
-      url = Env.get("BETTER_AUTH_URL")
-      url ||= ENV["BASE_URL"] if ENV["BASE_URL"] && ENV["BASE_URL"] != "/"
-      url ? with_path(url, base_path) : nil
+      base_url = ENV["BASE_URL"]
+      url = [
+        Env.get("BETTER_AUTH_URL"),
+        ENV["NEXT_PUBLIC_BETTER_AUTH_URL"],
+        ENV["PUBLIC_BETTER_AUTH_URL"],
+        ENV["NUXT_PUBLIC_BETTER_AUTH_URL"],
+        ENV["NUXT_PUBLIC_AUTH_URL"],
+        (base_url unless base_url == "/")
+      ].find { |value| value && !value.empty? }
+      with_path(url, base_path) if url
     end
 
     def loopback_for_dev_scheme?(host)
       hostname = host.to_s.sub(/:\d+\z/, "").sub(/\A\[/, "").sub(/\]\z/, "").downcase
       hostname == "localhost" || hostname.end_with?(".localhost") || hostname == "::1" || hostname.start_with?("127.")
-    end
-
-    def valid_port?(host)
-      port = host[/:(\d{1,5})\z/, 1]
-      return true unless port
-
-      port.to_i.between?(1, 65_535)
     end
 
     def rack_request_headers(source)

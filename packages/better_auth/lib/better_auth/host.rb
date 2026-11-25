@@ -62,8 +62,7 @@ module BetterAuth
         closing = host.index("]")
         return host unless closing
 
-        return host[0..closing] if host[(closing + 1)..]&.match?(/\A:\d+\z/)
-        return host
+        return host[0..closing]
       end
 
       first_colon = host.index(":")
@@ -74,6 +73,8 @@ module BetterAuth
     end
 
     def parse_ip(host)
+      return if host.include?("/")
+
       IPAddr.new(host)
     rescue ArgumentError
       nil

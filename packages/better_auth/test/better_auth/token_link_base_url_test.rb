@@ -42,12 +42,23 @@ class BetterAuthTokenLinkBaseURLTest < Minitest::Test
     assert_empty auth.context.adapter.find_many(model: "verification")
   end
 
+  def test_dynamic_token_links_use_the_allowlisted_host_or_the_configured_fallback
+    sent = []
+    auth = build_auth(sent: sent, base_url: {allowed_hosts: ["tenant.example"], fallback: "https://auth.example.com"})
+    create_user(auth, "tenant@example.com")
+
+    assert_equal 200, request_password_reset(auth, "tenant@example.com", host: "tenant.example")
+    assert_equal 200, request_password_reset(auth, "tenant@example.com", host: "other.example")
+
+    assert_equal ["http://tenant.example", "https://auth.example.com"], sent.map { |data| URI.parse(data.fetch(:url)).origin }
+  end
+
   private
 
-  def build_auth(sent:, serving_origins: [])
+  def build_auth(sent:, base_url: "https://auth.example.com", serving_origins: [])
     BetterAuth.auth(
       secret: SECRET,
-      base_url: "https://auth.example.com",
+      base_url: base_url,
       serving_origins: serving_origins,
       database: :memory,
       email_and_password: {

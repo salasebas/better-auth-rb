@@ -10,6 +10,11 @@ class BetterAuthHostTest < Minitest::Test
     assert_equal "fe80:0000:0000:0000:0000:0000:0000:0001", BetterAuth::Host.classify_host("fe80::1%lo0")[:canonical]
   end
 
+  def test_classification_accepts_bracketed_ipv6_and_treats_cidr_as_nonliteral
+    assert_equal :loopback, BetterAuth::Host.classify_host("[::1]suffix")[:kind]
+    assert_equal({kind: :public, literal: :fqdn, canonical: "127.0.0.1/8"}, BetterAuth::Host.classify_host("127.0.0.1/8"))
+  end
+
   def test_classify_host_matches_upstream_ipv4_special_ranges
     cases = {
       "127.0.0.1" => :loopback,

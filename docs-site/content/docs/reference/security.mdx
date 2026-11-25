@@ -225,7 +225,7 @@ Better Auth first verifies that the direct network peer matches `trusted_proxies
 
 ## Canonical and request-serving origins
 
-RubyAuth requires a static canonical `base_url` (or `BETTER_AUTH_URL`). Security-sensitive identity values such as OAuth/OIDC issuer metadata, provider callback defaults, JWT issuer/audience, and OpenAPI server metadata always use that canonical URL and never use request headers.
+RubyAuth requires a configured URL or host allowlist at startup. A static `base_url` (or `BETTER_AUTH_URL`) fixes the origin used for OAuth and OIDC issuer metadata, provider callbacks, JWT issuer and audience defaults, and OpenAPI server metadata.
 
 For approved multi-domain deployments, list full origins in `serving_origins`. RubyAuth may use a matching request origin for self-referential capability links such as verification, password reset, deletion, and magic links. An unknown or malformed host falls back to the canonical URL and is never added to trusted origins.
 
@@ -243,11 +243,13 @@ auth = BetterAuth.auth(
 
 ### Trusted proxy headers
 
-By default, `X-Forwarded-Host` and `X-Forwarded-Proto` are ignored. Set `advanced.trusted_proxy_headers: true` only when a trusted edge proxy overwrites both headers and prevents clients from supplying them directly. Even then, the resulting full origin must match `serving_origins`; syntactic header validation alone is not authorization.
+With a static URL and `serving_origins`, set `advanced.trusted_proxy_headers: true` only when your edge proxy overwrites both forwarding headers. The resulting origin must match `serving_origins`.
+
+Dynamic `base_url` trusts `X-Forwarded-Host` and `X-Forwarded-Proto` by default. Every resolved host must match `allowed_hosts` or the request uses the configured fallback. Set `advanced.trusted_proxy_headers: false` if clients can reach the origin directly or your proxy passes through those headers.
 
 Request-specific state is isolated and cleared after every Rack or direct `auth.api` call. One request can never change the canonical URL or select a serving origin for a later request.
 
-See [Multiple Serving Origins](/docs/guides/dynamic-base-url) for deployment and migration guidance.
+See [Dynamic base URL](/docs/guides/dynamic-base-url) for deployment examples.
 
 ## Trusted Origins
 

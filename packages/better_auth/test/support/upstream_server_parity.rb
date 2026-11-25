@@ -186,14 +186,15 @@ module BetterAuth
           notes: "Update/delete/change-password/change-email flows, enumeration-safe change-email, delete-user verification, and secondary storage propagation covered in user_routes_test"
         },
         "api/to-auth-endpoints.test.ts" => {
-          owner: ["better_auth/api_test.rb", "better_auth/router_error_test.rb"],
+          owner: ["better_auth/api_test.rb", "better_auth/router_error_test.rb", "better_auth/auth_context_upstream_parity_test.rb"],
           status: :covered,
           plan: "007",
           evidence: {
             "better_auth/api_test.rb" => %w[test_direct_api_before_hook_can_short_circuit test_direct_api_runs_after_hooks_and_last_response_wins],
-            "better_auth/router_error_test.rb" => %w[test_primitive_before_hook_result_is_ignored test_dispatch_creates_and_reuses_request_state]
+            "better_auth/router_error_test.rb" => %w[test_primitive_before_hook_result_is_ignored test_dispatch_creates_and_reuses_request_state],
+            "better_auth/auth_context_upstream_parity_test.rb" => "test_dynamic_base_url_resolves_direct_headers_and_synthesizes_callback_request"
           },
-          notes: "Endpoint conversion, hook responses, and direct API dispatch are covered"
+          notes: "Endpoint conversion, hook responses, and direct API dispatch with dynamic URL resolution from host headers or a fallback"
         },
         "api/server-only-endpoints.test.ts" => {
           owner: "better_auth/api_test.rb",
@@ -205,7 +206,8 @@ module BetterAuth
           owner: ["better_auth/auth_test.rb", "better_auth/auth_context_upstream_parity_test.rb"],
           status: :covered,
           plan: "007",
-          notes: "Full auth configuration and context bootstrap covered in auth_test and auth_context_upstream_parity_test"
+          evidence: {"better_auth/auth_context_upstream_parity_test.rb" => "test_dynamic_base_url_resolves_rack_request_and_restores_shared_context"},
+          notes: "Full auth bootstrap and Rack dynamic URL, trusted origins, and cookie domains. Ruby requires a configured URL or allowlist at startup."
         },
         "auth/minimal.test.ts" => {
           owner: "better_auth/auth_test.rb",
@@ -226,10 +228,11 @@ module BetterAuth
           notes: "Auth call dispatch, hooks, cookies, and error chaining covered in api_test and auth_context_upstream_parity_test"
         },
         "context/create-context.test.ts" => {
-          owner: "better_auth/auth_context_upstream_parity_test.rb",
+          owner: ["better_auth/auth_context_upstream_parity_test.rb", "better_auth/configuration_test.rb"],
           status: :covered,
           plan: "007",
-          notes: "Context bootstrap for secrets, session defaults, plugins, dynamic base URL, and password utilities covered in auth_context_upstream_parity_test; upstream hasPlugin has no Ruby equivalent"
+          evidence: {"better_auth/configuration_test.rb" => "test_base_url_base_path_env_and_protocol_match_upstream_context_cases"},
+          notes: "Context bootstrap, base path defaults, and URL validation. Ruby requires a configured URL or allowlist at startup. Upstream hasPlugin has no Ruby equivalent."
         },
         "context/init-minimal.test.ts" => {
           owner: "better_auth/auth_test.rb",
@@ -621,10 +624,11 @@ module BetterAuth
           notes: "safeCloneRequest guards Fetch Request#clone; Rack requests are never cloned"
         },
         "utils/url.test.ts" => {
-          owner: "better_auth/host_test.rb",
+          owner: ["better_auth/url_helpers_test.rb", "better_auth/configuration_test.rb"],
           status: :covered,
           plan: "006",
-          notes: "URL/host utilities covered in host_test"
+          evidence: {"better_auth/url_helpers_test.rb" => "test_port_range_is_checked_when_parsing_the_url"},
+          notes: "Static and dynamic URL resolution, environment precedence, host patterns, and proxy header validation"
         }
       }.freeze
 

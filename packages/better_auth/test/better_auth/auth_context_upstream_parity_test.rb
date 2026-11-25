@@ -95,12 +95,154 @@ class BetterAuthAuthContextUpstreamParityTest < Minitest::Test
     assert_equal false, password.fetch(:check_password).call("short")
   end
 
-  def test_dynamic_base_url_is_rejected_with_actionable_migration
-    error = assert_raises(BetterAuth::Error) do
-      BetterAuth.auth(secret: SECRET, base_url: {allowed_hosts: ["tenant.example.com"]})
+  def test_dynamic_base_url_resolves_rack_request_and_restores_shared_context
+    captured = []
+    config = {allowed_hosts: ["*.example.com", "localhost:3000"], fallback: "https://fallback.example.net"}
+    auth = BetterAuth.auth(
+      secret: SECRET,
+      base_url: config,
+      advanced: {cross_subdomain_cookies: {enabled: true}},
+      plugins: [capture_context_plugin(captured)]
+    )
+
+    trusted_origins = ["https://*.example.com", "https://localhost:3000", "http://localhost:3000", "https://fallback.example.net"]
+    %w[tenant-a.example.com tenant-b.example.com].each do |host|
+      status, = auth.call(rack_env("GET", "/api/auth/capture-context", headers: {
+        "HTTP_X_FORWARDED_HOST" => host,
+        "HTTP_X_FORWARDED_PROTO" => "https"
+      }))
+
+      assert_equal 200, status
+      result = captured.last
+      assert_equal "https://#{host}/api/auth", result.fetch(:base_url)
+      assert_equal "https://#{host}", result.fetch(:options_base_url)
+      assert_equal host, result.fetch(:cookie_domain)
+      assert_equal host, result.fetch(:created_cookie_domain)
+      trusted_origins.each { |origin| assert_includes result.fetch(:trusted_origins), origin }
     end
 
-    assert_includes error.message, "serving_origins"
+    assert_equal "", auth.context.base_url
+    assert_equal config, auth.context.options.base_url
+  end
+
+  def test_dynamic_base_url_resolves_direct_headers_and_synthesizes_callback_request
+    captured = []
+    callback_requests = []
+    auth = BetterAuth.auth(
+      secret: SECRET,
+      base_url: {allowed_hosts: ["example.com"], protocol: "https"},
+      trusted_origins: ->(request) {
+        callback_requests << request
+        ["https://frontend.example.com"]
+      },
+      plugins: [capture_context_plugin(captured)]
+    )
+
+    auth.api.capture_context(headers: {"host" => "Example.COM", "x-forwarded-proto" => "http"})
+
+    assert_equal "https://Example.COM/api/auth", captured.last.fetch(:base_url)
+    assert_equal "https://example.com", captured.last.fetch(:options_base_url)
+    assert_equal "https://example.com/api/auth", callback_requests.last.url
+    assert_equal "Example.COM", callback_requests.last.get_header("HTTP_HOST")
+    assert_includes captured.last.fetch(:trusted_origins), "https://frontend.example.com"
+    assert_equal "", auth.context.base_url
+  end
+
+  def test_dynamic_base_url_uses_fallback_without_host_and_routes_under_its_path
+    captured = []
+    auth = BetterAuth.auth(
+      secret: SECRET,
+      base_url: {allowed_hosts: ["auth.example.com"], fallback: "https://fallback.example.net/custom/"},
+      plugins: [capture_context_plugin(captured)]
+    )
+
+    auth.api.capture_context(headers: {"accept" => "application/json"})
+    status, = auth.call(rack_env("GET", "/custom/capture-context"))
+
+    assert_equal 200, status
+    assert_equal ["https://fallback.example.net/custom/"] * 2, captured.map { |result| result.fetch(:base_url) }
+  end
+
+  def test_dynamic_base_url_reports_resolution_errors_at_both_entry_points
+    auth = BetterAuth.auth(
+      secret: SECRET,
+      base_url: {allowed_hosts: ["example.com"]},
+      plugins: [capture_context_plugin([])]
+    )
+
+    error = assert_raises(BetterAuth::Error) do
+      auth.call(rack_env("GET", "/api/auth/capture-context"))
+    end
+    assert_includes error.message, 'Host "localhost:3000" is not in the allowed hosts list.'
+
+    error = assert_raises(BetterAuth::APIError) do
+      auth.api.capture_context(headers: {"host" => "other.example"})
+    end
+    assert_equal 500, error.status_code
+    assert_includes error.message, 'Host "other.example" is not in the allowed hosts list.'
+
+    error = assert_raises(BetterAuth::APIError) { auth.api.capture_context }
+    assert_equal 500, error.status_code
+    assert_includes error.message, "Dynamic baseURL could not be resolved for this direct auth.api call."
+  end
+
+  def test_dynamic_base_url_uses_rack_scheme_when_proxy_trust_is_disabled
+    captured = []
+    auth = BetterAuth.auth(
+      secret: SECRET,
+      base_url: {allowed_hosts: ["local.example", "proxy.example"]},
+      advanced: {trusted_proxy_headers: false},
+      plugins: [capture_context_plugin(captured)]
+    )
+
+    status, = auth.call(rack_env("GET", "/api/auth/capture-context", headers: {
+      "HTTP_HOST" => "local.example",
+      "HTTP_X_FORWARDED_HOST" => "proxy.example",
+      "HTTP_X_FORWARDED_PROTO" => "https"
+    }))
+
+    assert_equal 200, status
+    assert_equal "http://local.example/api/auth", captured.last.fetch(:base_url)
+  end
+
+  def test_dynamic_base_url_omits_the_default_port_when_falling_back_to_server_authority
+    captured = []
+    auth = BetterAuth.auth(
+      secret: SECRET,
+      base_url: {allowed_hosts: ["localhost"]},
+      plugins: [capture_context_plugin(captured)]
+    )
+
+    status, = auth.call(rack_env("GET", "/api/auth/capture-context", headers: {"SERVER_PORT" => "80"}))
+
+    assert_equal 200, status
+    assert_equal "http://localhost/api/auth", captured.last.fetch(:base_url)
+  end
+
+  def test_nested_direct_api_call_restores_the_outer_resolved_context
+    captured = []
+    hook_base_urls = []
+    auth = BetterAuth.auth(
+      secret: SECRET,
+      base_url: {allowed_hosts: ["*.example.com"]},
+      plugins: [capture_context_plugin(captured)],
+      database_hooks: {verification: {create: {after: ->(_value, ctx) { hook_base_urls << ctx.context.base_url }}}},
+      hooks: {before: ->(ctx) {
+        if ctx.request
+          auth.api.capture_context(headers: {"host" => "inner.example.com"})
+        else
+          ctx.context.internal_adapter.create_verification_value(identifier: "nested", value: "data", expiresAt: Time.now + 60)
+        end
+        nil
+      }}
+    )
+
+    status, = auth.call(rack_env("GET", "/api/auth/capture-context", headers: {"HTTP_HOST" => "outer.example.com"}))
+
+    assert_equal 200, status
+    assert_equal ["https://inner.example.com", "http://outer.example.com"], captured.map { |result| result.fetch(:options_base_url) }
+    assert_equal ["https://inner.example.com/api/auth"], hook_base_urls
+    assert_equal "", auth.context.base_url
   end
 
   def test_serving_origin_selects_request_base_and_is_trusted
@@ -497,7 +639,8 @@ class BetterAuthAuthContextUpstreamParityTest < Minitest::Test
             base_url: ctx.context.base_url,
             options_base_url: ctx.context.options.base_url,
             trusted_origins: ctx.context.trusted_origins,
-            cookie_domain: ctx.context.auth_cookies[:session_token].attributes[:domain]
+            cookie_domain: ctx.context.auth_cookies[:session_token].attributes[:domain],
+            created_cookie_domain: ctx.context.create_auth_cookie("extra").attributes[:domain]
           }
           ctx.json({ok: true})
         end

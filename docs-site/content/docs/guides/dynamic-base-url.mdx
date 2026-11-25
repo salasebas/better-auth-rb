@@ -1,85 +1,122 @@
 ---
-title: Multiple Serving Origins
-description: Serve RubyAuth from approved hosts while preserving one canonical identity.
+icon: guidesDynamicBaseURL
+title: Dynamic Base URL
+description: Configure RubyAuth for preview deployments, multiple domains, and per-request URL resolution.
 ---
 
 <RubyAuthDisclaimer />
 
-RubyAuth separates its canonical identity from the origins that may serve a request:
-
-* `base_url` is required (or supplied by `BETTER_AUTH_URL`) and is the stable canonical URL used for OAuth/OIDC identity, provider callback defaults, JWT issuer/audience, and OpenAPI metadata.
-* `serving_origins` is an optional allowlist of full origin patterns that may be selected from an inbound request for self-referential links such as email verification, password reset, account deletion, and magic links.
-
-An unrecognized request host safely falls back to `base_url`. RubyAuth never derives its canonical identity from `Host` or forwarded headers.
+Use dynamic `base_url` when your app serves requests from several hostnames, such as custom domains, preview deployments, or branch environments.
 
 ## Basic setup
 
-```ruby title="config/initializers/better_auth.rb"
+Set `base_url` to a hash with a nonempty `allowed_hosts` list.
+
+```ruby
+require "better_auth"
+
 auth = BetterAuth.auth(
   secret: ENV.fetch("BETTER_AUTH_SECRET"),
-  base_url: ENV.fetch("BETTER_AUTH_URL"),
-  serving_origins: [
-    "https://myapp.com",
-    "https://www.myapp.com",
-    "https://*.vercel.app"
-  ],
-  database: :postgres
+  base_url: {allowed_hosts: ["myapp.com", "www.myapp.com", "preview-*.myapp.com"]}
 )
 ```
 
-`serving_origins` entries must include `http://` or `https://` and must not include a path. The existing wildcard matching rules apply. The canonical origin is always a serving origin, even when omitted from the list.
+RubyAuth checks `X-Forwarded-Host`, then `Host`, then the request URL's host. The selected host must match an entry in `allowed_hosts`, including the port if present.
 
-## Reverse proxies
+Dynamic configuration trusts forwarded host and protocol headers by default. Use `advanced: {trusted_proxy_headers: false}` if clients can reach the Rack server directly or your proxy passes through client-supplied forwarding headers.
 
-RubyAuth reads `Host` for the request-facing candidate. It reads `X-Forwarded-Host` and `X-Forwarded-Proto` only when proxy trust is explicitly enabled:
+## Common deployment patterns
+
+### Vercel deployment
+
+```ruby
+auth = BetterAuth.auth(
+  secret: ENV.fetch("BETTER_AUTH_SECRET"),
+  base_url: {allowed_hosts: ["myapp.com", "my-app-*.vercel.app"]}
+)
+```
+
+### Development and production
+
+```ruby
+auth = BetterAuth.auth(
+  secret: ENV.fetch("BETTER_AUTH_SECRET"),
+  base_url: {
+    allowed_hosts: ["localhost:3000", "myapp.com"],
+    protocol: ENV["RACK_ENV"] == "production" ? "https" : "http"
+  }
+)
+```
+
+### Multiple production domains
+
+```ruby
+auth = BetterAuth.auth(
+  secret: ENV.fetch("BETTER_AUTH_SECRET"),
+  base_url: {allowed_hosts: ["myapp.com", "myapp.co.uk", "myapp.eu"], protocol: "https"}
+)
+```
+
+## Choosing a fallback
+
+RubyAuth raises when the request host is missing or outside `allowed_hosts`. Set `fallback` to use a configured URL in those cases.
+
+```ruby
+auth = BetterAuth.auth(
+  secret: ENV.fetch("BETTER_AUTH_SECRET"),
+  base_url: {allowed_hosts: ["myapp.com", "preview-*.myapp.com"], fallback: "https://myapp.com"}
+)
+```
+
+Pass the incoming Rack request to a direct `auth.api` call, or pass headers that include a host.
+
+```ruby
+auth.api.get_session(headers: {"host" => "myapp.com"})
+```
+
+Direct calls without a request or host headers use `fallback`. If there is no fallback, the call raises `BetterAuth::APIError` with status `INTERNAL_SERVER_ERROR`.
+
+## Cookies across subdomains
+
+When `cross_subdomain_cookies` is enabled, RubyAuth uses the resolved hostname as the cookie domain.
+
+```ruby
+auth = BetterAuth.auth(
+  secret: ENV.fetch("BETTER_AUTH_SECRET"),
+  base_url: {allowed_hosts: ["auth.example.com", "preview.example.com"], protocol: "https"},
+  advanced: {cross_subdomain_cookies: {enabled: true}}
+)
+```
+
+Set `domain` to share cookies across a specific parent domain.
+
+```ruby
+auth = BetterAuth.auth(
+  secret: ENV.fetch("BETTER_AUTH_SECRET"),
+  base_url: {allowed_hosts: ["auth.example.com", "preview.example.com"], protocol: "https"},
+  advanced: {cross_subdomain_cookies: {enabled: true, domain: ".example.com"}}
+)
+```
+
+See [Cookies](/docs/concepts/cookies#cross-subdomain-cookies) for cookie behavior.
+
+## Security model
+
+Use exact hosts or patterns that match only domains you control. RubyAuth uses the resolved URL for OAuth callbacks and token-bearing links. It expands allowed hosts into trusted origins according to `protocol` and adds the fallback origin when configured. Add frontend-only origins to `trusted_origins`.
+
+For a fixed issuer and provider callback URL, configure a static `base_url` and use the Ruby-only `serving_origins` option for request-facing links.
 
 ```ruby
 auth = BetterAuth.auth(
   secret: ENV.fetch("BETTER_AUTH_SECRET"),
   base_url: "https://auth.example.com",
-  serving_origins: ["https://*.example.com"],
-  advanced: { trusted_proxy_headers: true }
-)
-```
-
-Only enable proxy-header trust when your edge proxy overwrites those headers and clients cannot supply them directly. A syntactically valid header is still ignored unless its full origin matches `serving_origins`.
-
-## Serving origins versus trusted origins
-
-Every serving origin is automatically trusted for origin and redirect checks. The reverse is intentionally false: adding a browser frontend to `trusted_origins` does not authorize that frontend's host to receive token-bearing links.
-
-```ruby
-auth = BetterAuth.auth(
-  secret: ENV.fetch("BETTER_AUTH_SECRET"),
-  base_url: "https://auth.example.com",
-  serving_origins: ["https://tenant.example.com"],
+  serving_origins: ["https://tenant.example.com", "https://*.preview.example.com"],
   trusted_origins: ["https://frontend.example.com"]
 )
 ```
 
-Here `tenant.example.com` may serve auth routes and appears in generated capability links. `frontend.example.com` may pass CSRF/redirect validation, but can never become the auth serving origin.
+RubyAuth requires a configured URL or an allowlist at startup so an incoming request alone cannot select the host used in token-bearing links.
 
-## Migrating from dynamic `base_url`
+## Reference
 
-The former hash form of `base_url` is rejected. Replace its fallback with the canonical `base_url` and convert allowed hosts to full `serving_origins`:
-
-```ruby
-# Before
-base_url: {
-  allowed_hosts: ["app.example.com", "*.vercel.app"],
-  protocol: "https",
-  fallback: "https://app.example.com"
-}
-
-# After
-base_url: "https://app.example.com",
-serving_origins: ["https://app.example.com", "https://*.vercel.app"]
-```
-
-There is no request-inferred fallback and no first-request caching. Each request gets isolated serving state, and state is cleared after both Rack and direct `auth.api` calls.
-
-## Token links
-
-Password-reset, email-verification, account-deletion, and magic-link URLs use only the canonical URL or a request origin explicitly matched by `serving_origins`. An unrecognized request host falls back to the canonical URL and can never control a token-bearing link.
-
-Cross-subdomain cookie domains remain explicit under `advanced.cross_subdomain_cookies.domain`; they are not derived from the request host.
+See [base_url](/docs/reference/options#base_url) and [serving_origins](/docs/reference/options#serving_origins) for the option shapes and defaults.

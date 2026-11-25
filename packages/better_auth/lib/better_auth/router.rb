@@ -60,11 +60,11 @@ module BetterAuth
     end
 
     def call(env)
-      DatabaseHooks.with_adapter_scope do
-        RequestState.with_current { dispatch(env) }
+      context.with_runtime do
+        DatabaseHooks.with_adapter_scope do
+          RequestState.with_current { dispatch(env) }
+        end
       end
-    ensure
-      context.clear_runtime! if context.respond_to?(:clear_runtime!)
     end
 
     private
@@ -73,8 +73,9 @@ module BetterAuth
       request = Rack::Request.new(env)
       context.prepare_for_request!(request) if context.respond_to?(:prepare_for_request!)
 
+      base_path = normalize_path(URI.parse(context.base_url).path).delete_suffix("/")
       original_path = normalize_path(request.path_info)
-      request_path = path_under_base(original_path) || original_path
+      request_path = path_under_base(original_path, base_path) || original_path
       return [404, {"content-type" => "text/plain;charset=UTF-8"}, ["Not Found"]] if disabled_path?(request_path)
 
       response = rate_limiter.call(request, context, request_path)
@@ -83,11 +84,11 @@ module BetterAuth
       request = run_on_request_chain(request)
       return request if rack_response?(request)
 
-      run_on_response_chain(process_request(request))
+      run_on_response_chain(process_request(request, base_path))
     end
 
-    def process_request(request)
-      route_path = route_path_for(request.path_info)
+    def process_request(request, base_path)
+      route_path = path_under_base(normalize_path(request.path_info, trim: context.options.advanced[:skip_trailing_slashes]), base_path)
       return not_found unless route_path
       query = parse_query(request)
       key, endpoint, params, allowed_methods = find_endpoint(route_path, request.request_method)
@@ -183,15 +184,10 @@ module BetterAuth
 
     private_class_method :conflicting_methods, :log
 
-    def path_under_base(path)
-      base_path = context.options.base_path
+    def path_under_base(path, base_path)
       return "/" if path == base_path
 
       path.delete_prefix(base_path) if path.start_with?("#{base_path}/")
-    end
-
-    def route_path_for(path_info)
-      path_under_base(normalize_path(path_info, trim: context.options.advanced[:skip_trailing_slashes]))
     end
 
     def normalize_path(path, trim: true)

@@ -20,16 +20,24 @@ class BetterAuthConfigurationTest < Minitest::Test
     assert_equal({enabled: true, strategy: "jwe", refresh_cache: true, max_age: 60 * 60 * 24 * 7}, config.session[:cookie_cache])
   end
 
-  def test_base_url_is_required_and_dynamic_hashes_are_rejected
-    with_env("BETTER_AUTH_URL" => nil, "OPEN_AUTH_URL" => nil, "BASE_URL" => nil) do
+  def test_base_url_is_required_and_dynamic_allowed_hosts_cannot_be_empty
+    with_env(
+      "OPEN_AUTH_URL" => nil,
+      "BETTER_AUTH_URL" => nil,
+      "NEXT_PUBLIC_BETTER_AUTH_URL" => nil,
+      "PUBLIC_BETTER_AUTH_URL" => nil,
+      "NUXT_PUBLIC_BETTER_AUTH_URL" => nil,
+      "NUXT_PUBLIC_AUTH_URL" => nil,
+      "BASE_URL" => nil
+    ) do
       error = assert_raises(BetterAuth::Error) { BetterAuth::Configuration.new(secret: SECRET) }
       assert_includes error.message, "base_url is required"
     end
 
     error = assert_raises(BetterAuth::Error) do
-      BetterAuth::Configuration.new(secret: SECRET, base_url: {allowed_hosts: ["example.com"]})
+      BetterAuth::Configuration.new(secret: SECRET, base_url: {allowed_hosts: []})
     end
-    assert_includes error.message, "serving_origins"
+    assert_includes error.message, "baseURL.allowedHosts cannot be empty"
   end
 
   def test_serving_origins_are_trusted_without_promoting_other_trusted_origins
@@ -203,7 +211,9 @@ class BetterAuthConfigurationTest < Minitest::Test
     https = BetterAuth::Configuration.new(base_url: "https://example.com/path/to/auth", secret: SECRET)
 
     assert_equal "http://localhost:5147", empty_path.context_base_url
+    assert_equal "/api/auth", empty_path.base_path
     assert_equal "http://localhost:5147", root_path.context_base_url
+    assert_equal "/", root_path.base_path
     assert_equal "http://localhost:5147/api/auth", trailing.context_base_url
     assert_equal "http://localhost:3000/api/v1/auth-service", special.context_base_url
     assert_equal "https://example.com", https.base_url
@@ -254,7 +264,7 @@ class BetterAuthConfigurationTest < Minitest::Test
     end
   end
 
-  def test_public_client_env_urls_are_ignored_for_server_configuration
+  def test_empty_base_url_resolves_environment_urls_in_upstream_order
     with_env(
       "BETTER_AUTH_SECRET" => SECRET,
       "BETTER_AUTH_URL" => nil,
@@ -268,8 +278,13 @@ class BetterAuthConfigurationTest < Minitest::Test
       "NUXT_PUBLIC_AUTH_URL" => "http://nuxt-public-auth.example",
       "BASE_URL" => nil
     ) do
-      error = assert_raises(BetterAuth::Error) { BetterAuth::Configuration.new }
-      assert_includes error.message, "base_url is required"
+      assert_equal "http://next-public-better.example", BetterAuth::Configuration.new(base_url: "").base_url
+      ENV.delete("NEXT_PUBLIC_BETTER_AUTH_URL")
+      assert_equal "http://public-better.example", BetterAuth::Configuration.new.base_url
+      ENV.delete("PUBLIC_BETTER_AUTH_URL")
+      assert_equal "http://nuxt-public-better.example", BetterAuth::Configuration.new.base_url
+      ENV.delete("NUXT_PUBLIC_BETTER_AUTH_URL")
+      assert_equal "http://nuxt-public-auth.example", BetterAuth::Configuration.new.base_url
     end
   end
 

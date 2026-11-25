@@ -142,7 +142,9 @@ module BetterAuth
       scope = Thread.current[SCOPE_KEY]
       hooks_for(model, action, :after).each do |hook|
         if scope
-          scope.pending_hooks << -> { hook.call(data, context) }
+          callback = -> { hook.call(data, context) }
+          callback = context.context.bind_runtime(&callback) if context.is_a?(Endpoint::Context)
+          scope.pending_hooks << callback
         else
           run_inline_after(hook, data, context)
         end

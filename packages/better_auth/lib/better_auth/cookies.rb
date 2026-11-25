@@ -35,8 +35,13 @@ module BetterAuth
 
     def create_cookie(options, cookie_name, override_attributes = {})
       advanced = options.advanced || {}
+      dynamic_protocol = options.base_url[:protocol] if URLHelpers.dynamic_config?(options.base_url)
       secure = if advanced.key?(:use_secure_cookies)
         advanced[:use_secure_cookies]
+      elsif %w[http https].include?(dynamic_protocol)
+        dynamic_protocol == "https"
+      elsif options.resolved_dynamic_base_url?
+        options.base_url.start_with?("https://")
       elsif options.base_url.to_s.start_with?("https://")
         true
       else
@@ -45,8 +50,7 @@ module BetterAuth
       cross_subdomain = advanced.dig(:cross_subdomain_cookies, :enabled)
       domain = if cross_subdomain
         advanced.dig(:cross_subdomain_cookies, :domain) || begin
-          uri = URI.parse(options.base_url.to_s)
-          uri.host unless uri.host.to_s.empty?
+          URLHelpers.parse_url(options.base_url)&.host if options.base_url.is_a?(String)
         end
       end
       custom = advanced.dig(:cookies, cookie_name.to_sym) || {}

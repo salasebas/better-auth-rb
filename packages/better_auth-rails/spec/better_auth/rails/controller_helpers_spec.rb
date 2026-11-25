@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require_relative "../../spec_helper"
+require "action_dispatch"
 
 class BetterAuthRailsHelperController
   include BetterAuth::Rails::ControllerHelpers
@@ -183,6 +184,33 @@ RSpec.describe BetterAuth::Rails::ControllerHelpers do
     controller.current_user
 
     expect(context.send(:request_runtime?)).to be(false)
+  end
+
+  it "uses the Rack scheme for direct API links when proxy trust is disabled" do
+    sent = []
+    auth = BetterAuth.auth(
+      secret: "test-secret-that-is-long-enough-for-validation",
+      database: :memory,
+      base_url: {allowed_hosts: ["app.example.com"]},
+      advanced: {trusted_proxy_headers: false},
+      email_and_password: {enabled: true, send_reset_password: ->(data, _request) { sent << data.fetch(:url) }}
+    )
+    auth.context.internal_adapter.create_user(name: "Ada", email: "ada@example.com")
+    request = ActionDispatch::Request.new(Rack::MockRequest.env_for(
+      "http://app.example.com/api/auth/request-password-reset",
+      :method => "POST",
+      "HTTP_HOST" => "app.example.com",
+      "HTTP_X_FORWARDED_PROTO" => "https"
+    ))
+
+    status, = auth.api.request_password_reset(request: request, body: {email: "ada@example.com"})
+
+    expect(status).to eq(200)
+    expect(URI.parse(sent.fetch(0)).origin).to eq("http://app.example.com")
+
+    auth.api.request_password_reset(headers: request.headers, body: {email: "ada@example.com"})
+
+    expect(URI.parse(sent.fetch(1)).origin).to eq("https://app.example.com")
   end
 
   it "allows route protection when a current user is present" do
