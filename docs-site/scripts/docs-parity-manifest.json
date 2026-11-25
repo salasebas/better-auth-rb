@@ -1255,7 +1255,7 @@
       "supported": true,
       "local_exists": true,
       "upstream_exists": true,
-      "current_local_lines": 29,
+      "current_local_lines": 32,
       "upstream_lines": 21,
       "status": "needs_manual_review"
     },

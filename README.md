@@ -1,5 +1,9 @@
 # Better Auth Ruby
 
+> [!WARNING]
+> **Better Auth Ruby is deprecated.** Development and security support ended on
+> November 25, 2026. Published gems remain available on RubyGems.
+
 A modern authentication framework for Ruby, inspired by Better Auth.
 
 > This project is independent and is not affiliated with, maintained by, or endorsed by the Better Auth project.
@@ -13,13 +17,8 @@ Ruby packages for selected Better Auth plugins.
 [Upstream Better Auth](https://better-auth.com) -
 [Issues](https://github.com/sebasxsala/better-auth-rb/issues)
 
-Current upstream reference target: Better Auth `v1.6.35` (see
-[`reference/upstream-better-auth/VERSION.md`](reference/upstream-better-auth/VERSION.md);
-fetch local sources with `./scripts/fetch-upstream-better-auth.sh`).
-
-This project is active work. The Ruby port implements a large server-side
-surface, but exact upstream parity is still being tightened across some routes,
-adapter edge cases, OpenAPI schemas, and docs pages.
+The final upstream reference is Better Auth `v1.6.35`. See
+[`reference/upstream-better-auth/VERSION.md`](reference/upstream-better-auth/VERSION.md).
 
 ## Install
 
@@ -222,14 +221,6 @@ Database-backed tests may require the repo services:
 ```bash
 docker compose up -d
 ```
-
-## Contributing
-
-1. Branch from `main`.
-2. Read [`AGENTS.md`](AGENTS.md) before editing.
-3. Check upstream source and tests for behavior changes (`./scripts/fetch-upstream-better-auth.sh` if needed).
-4. Run the relevant package tests, or `make ci` for the full repo.
-5. Open a PR to `main`.
 
 ## Security
 
