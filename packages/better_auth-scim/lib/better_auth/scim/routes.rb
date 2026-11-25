@@ -108,10 +108,11 @@ module BetterAuth
         email = scim_primary_email(body).downcase
         account_id = scim_account_id(body)
         scim_assert_active_supported!(ctx, body[:active])
-        existing_account = ctx.context.adapter.find_one(model: "account", where: [{field: "accountId", value: account_id}, {field: "providerId", value: provider_id}])
-        raise scim_error("CONFLICT", "User already exists", scim_type: "uniqueness") if existing_account
 
-        user, account = ctx.context.adapter.transaction do
+        user, account = DatabaseHooks.transaction(ctx.context.adapter) do |adapter|
+          existing_account = adapter.find_one(model: "account", where: [{field: "accountId", value: account_id}, {field: "providerId", value: provider_id}])
+          raise scim_error("CONFLICT", "User already exists", scim_type: "uniqueness") if existing_account
+
           user = ctx.context.internal_adapter.find_user_by_email(email)&.fetch(:user)
           if user && !scim_can_link_existing_user?(ctx, config, user, email, provider)
             raise scim_error("CONFLICT", "A user with this email already exists", scim_type: "uniqueness")
@@ -149,7 +150,7 @@ module BetterAuth
         user_update = scim_user_update(body)
         user_update[:emailVerified] = false if email != user.fetch("email").to_s.downcase
         user_update.merge!(scim_active_update(ctx, body[:active]))
-        updated, updated_account = ctx.context.adapter.transaction do
+        updated, updated_account = DatabaseHooks.transaction(ctx.context.adapter) do
           [
             ctx.context.internal_adapter.update_user(user.fetch("id"), user_update),
             ctx.context.internal_adapter.update_account(account.fetch("id"), accountId: scim_account_id(body), updatedAt: Time.now)
@@ -193,7 +194,7 @@ module BetterAuth
           update.merge!(scim_active_update(ctx, requested_active))
         end
 
-        ctx.context.adapter.transaction do
+        DatabaseHooks.transaction(ctx.context.adapter) do
           ctx.context.internal_adapter.update_user(user.fetch("id"), update.merge(updatedAt: Time.now)) unless update.empty?
           ctx.context.internal_adapter.update_account(account.fetch("id"), account_update.merge(updatedAt: Time.now)) unless account_update.empty?
         end

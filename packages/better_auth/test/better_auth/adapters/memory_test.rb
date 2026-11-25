@@ -251,6 +251,13 @@ class BetterAuthMemoryAdapterTest < Minitest::Test
     refute restored.key?("new")
     assert adapter.find_one(model: "user", where: [{field: "email", value: "committed@example.com"}])
     assert_nil adapter.find_one(model: "user", where: [{field: "email", value: "rolled-back@example.com"}])
+
+    adapter.transaction do |transaction_adapter|
+      stored = transaction_adapter.db.fetch("callbackStore").first.fetch("config")
+      stored.fetch("settings").default.freeze
+    end
+    committed = adapter.find_one(model: "callbackStore", where: [{field: "name", value: "oidc"}]).fetch("config")
+    assert_predicate committed.fetch("settings").default, :frozen?
   end
 
   def test_transaction_rejects_unknown_mutable_leaves_before_running_body

@@ -26,6 +26,42 @@ class BetterAuthPluginsScimUsersTest < Minitest::Test
     assert_equal "existing@example.com", linked.fetch(:userName)
   end
 
+  def test_concurrent_scim_provisioning_creates_one_user_for_an_email
+    first_create_started = Queue.new
+    release_first = Queue.new
+    pause_first_create = ->(user, _context) do
+      if user["name"] == "First SCIM User"
+        first_create_started << true
+        release_first.pop
+      end
+      nil
+    end
+    auth = build_scim_auth_with_database(:memory, database_hooks: {user: {create: {before: pause_first_create}}})
+    cookie = sign_up_cookie(auth)
+    token = auth.api.generate_scim_token(headers: {"cookie" => cookie}, body: {providerId: "okta"}).fetch(:scimToken)
+    email = "concurrent-scim@example.com"
+    provision = lambda do |name, external_id|
+      rack_json_request(auth, "POST", "/api/auth/scim/v2/Users", headers: rack_bearer(token), body: {
+        userName: email, externalId: external_id, name: {formatted: name}
+      })
+    end
+
+    first = Thread.new { provision.call("First SCIM User", "first") }
+    begin
+      Timeout.timeout(5) { first_create_started.pop }
+      second = Thread.new { provision.call("Second SCIM User", "second") }
+      second.join(1)
+    ensure
+      release_first << true
+      first.join
+    end
+
+    assert_equal 201, first.value.status
+    assert_equal 409, second.value.status
+    assert_equal "uniqueness", rack_json(second.value).fetch("scimType")
+    assert_equal 1, auth.context.adapter.count(model: "user", where: [{field: "email", value: email}])
+  end
+
   def test_scim_existing_user_linking_policy_requires_and_checks_constraints
     callback_payload = nil
     auth = build_auth(

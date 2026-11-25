@@ -192,6 +192,7 @@ module BetterAuth
 
       def transaction_values_equal?(before, after, seen = {})
         return true if before.equal?(after)
+        return false if before.frozen? != after.frozen?
         return before == after unless before.is_a?(Hash) || before.is_a?(Array) || before.is_a?(Struct)
 
         pair = [before.object_id, after.object_id]

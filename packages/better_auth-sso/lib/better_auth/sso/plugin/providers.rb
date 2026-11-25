@@ -134,7 +134,7 @@ module BetterAuth
         raise APIError.new("FORBIDDEN", message: "You don't have access to this provider") unless sso_provider_access?(provider, session.fetch(:user).fetch("id"), ctx)
 
         provider_id = provider.fetch("providerId")
-        ctx.context.adapter.transaction do |transaction_adapter|
+        DatabaseHooks.transaction(ctx.context.adapter) do |transaction_adapter|
           transaction_adapter.delete_many(
             model: "account",
             where: [{field: "providerId", value: [provider_id, "sso:#{provider_id}"], operator: "in"}]
