@@ -2,7 +2,7 @@
 
 Two prompts for comparing RubyAuth with an upstream Better Auth version. The
 first checks one feature. The second runs the first across features in
-parallel. Copy a prompt, fill in the `<...>` values, and give it to an agent.
+parallel, one fresh-context agent per feature. Copy a prompt, fill in the `<...>` values, and give it to an agent.
 
 Each check quotes both sides of every difference, so the run needs no separate
 validation pass.
@@ -66,10 +66,12 @@ Run RubyAuth parity checks from <FROM> to <TO>.
    paths changed: git diff --no-index --quiet on the two
    reference/upstream-src/<version>/repository/packages/<path> directories.
    For a full check (FROM "none"), take every entry.
-4. For each selected entry, start a new thread in parallel with the "Check one
-   feature" prompt from docs/agents/parity-check.md, filled in for that entry
-   with both issue numbers.
-5. When every thread finishes, reply with the four sections merged across
+4. For each selected entry, start a separate agent with fresh context, all in
+   parallel: a subagent, a delegated task, or a thread, whichever your
+   environment offers. Give it the "Check one feature" prompt from
+   docs/agents/parity-check.md, filled in for that entry with both issue
+   numbers.
+5. When every agent finishes, reply with the four sections merged across
    features. Add each "Upstream features still pending" item to the Planned
    section of docs/supported-features.md in one PR.
 ```
