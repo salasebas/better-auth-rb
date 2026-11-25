@@ -18,7 +18,7 @@ class BetterAuthVerificationStateInventoryTest < Minitest::Test
     "packages/better_auth-passkey/lib/better_auth/passkey/challenges.rb" => ["consume_verification_value(verification_token)"],
     "packages/better_auth-passkey/lib/better_auth/passkey/routes/authentication.rb" => ["adapter.increment_one("],
     "packages/better_auth-saml/lib/better_auth/sso/plugin/saml_response.rb" => ["reserve_verification_value("],
-    "packages/better_auth/lib/better_auth/plugins/oauth_protocol.rb" => ["consume_verification_value(stored_code)", "rescue JSON::ParserError"]
+    "packages/better_auth-oauth-provider/lib/better_auth/plugins/oauth_protocol/token.rb" => ["consume_verification_value(stored_code)", "rescue JSON::ParserError"]
   }.freeze
 
   UPSTREAM_FIND_THEN_DELETE_CONSUMERS = {
@@ -54,7 +54,7 @@ class BetterAuthVerificationStateInventoryTest < Minitest::Test
   end
 
   def test_legacy_find_then_delete_sequences_are_absent_from_single_use_consumers
-    single_use_files = CONSUMERS.keys.grep(%r{packages/better_auth/lib}).reject { |path| path.end_with?("device_authorization.rb", "phone_number.rb", "email_otp.rb", "two_factor.rb") }
+    single_use_files = CONSUMERS.keys.grep(%r{packages/better_auth(-oauth-provider)?/lib}).reject { |path| path.end_with?("device_authorization.rb", "phone_number.rb", "email_otp.rb", "two_factor.rb") }
     single_use_files.each do |relative_path|
       source = File.read(File.join(REPOSITORY_ROOT, relative_path))
       refute_match(/find_verification_value\([^\n]+\).*?delete_verification_value/m, source, relative_path)

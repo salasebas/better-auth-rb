@@ -2,6 +2,15 @@
 
 require "jwt"
 require_relative "../oauth_provider/version"
+
+BetterAuth::Plugins.load_plugin!(:oauth_protocol)
+require_relative "oauth_protocol/utils"
+require_relative "oauth_protocol/authorize"
+require_relative "oauth_protocol/register"
+require_relative "oauth_protocol/token"
+require_relative "oauth_protocol/introspect"
+require_relative "oauth_protocol/userinfo"
+require_relative "oauth_protocol/logout"
 require_relative "oauth_provider/authorize"
 require_relative "oauth_provider/client"
 require_relative "oauth_provider/client_resource"
