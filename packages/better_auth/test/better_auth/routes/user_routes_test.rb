@@ -403,15 +403,12 @@ class BetterAuthRoutesUserTest < Minitest::Test
       expiresAt: Time.now + 3600
     )
 
-    error = assert_raises(BetterAuth::APIError) do
-      auth.api.delete_user_callback(
-        headers: {"cookie" => cookie},
-        query: {token: token, callbackURL: "https://evil.example/deleted"}
-      )
-    end
+    request = Rack::MockRequest.new(auth)
+    query = URI.encode_www_form(token: token, callbackURL: "https://other.example/deleted")
+    response = request.get("/api/auth/delete-user/callback?#{query}", "HTTP_COOKIE" => cookie)
 
-    assert_equal 400, error.status_code
-    assert_equal BetterAuth::BASE_ERROR_CODES["INVALID_CALLBACK_URL"], error.message
+    assert_equal 403, response.status
+    assert_equal "INVALID_CALLBACK_URL", JSON.parse(response.body).fetch("code")
     assert auth.context.internal_adapter.find_user_by_id(user_id)
   end
 

@@ -44,6 +44,10 @@ module BetterAuth
       end
     end
 
+    def skip_origin_check
+      defined?(@skip_origin_check) ? @skip_origin_check : options.advanced[:disable_origin_check]
+    end
+
     def base_url
       runtime_fetch(:base_url, @base_url)
     end

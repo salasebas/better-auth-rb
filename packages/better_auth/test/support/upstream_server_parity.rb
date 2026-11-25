@@ -37,6 +37,12 @@ module BetterAuth
       ACTIVE_PLANS = {"019" => :todo}.freeze
       RECONCILED_EVIDENCE_PATHS = %w[
         api/middlewares/authorization.test.ts
+        api/middlewares/origin-check.test.ts
+        api/routes/email-verification.test.ts
+        api/routes/password.test.ts
+        api/routes/sign-in.test.ts
+        api/routes/sign-up.test.ts
+        api/routes/update-user.test.ts
         api/routes/cookie-cache-fallback.test.ts
         api/server-only-endpoints.test.ts
         db/secondary-storage.test.ts
@@ -79,7 +85,13 @@ module BetterAuth
           owner: ["better_auth/router_test.rb"],
           status: :covered,
           plan: "007",
-          notes: "Origin, Fetch Metadata CSRF, disable flags, and path-scoped skips covered in router_test"
+          evidence: {"better_auth/router_test.rb" => %w[
+            test_cookieless_sign_in_validates_present_origin_or_referer_without_fetch_metadata
+            test_origin_check_validates_callback_variants_and_relative_path_policy
+            test_origin_check_rejects_non_string_callback_values
+            test_plugin_origin_check_checks_each_callback_and_honors_plugin_skip_paths
+          ]},
+          notes: "Origin and Referer fallback, callback checks, Fetch Metadata CSRF, disable flags, and path-scoped skips"
         },
         "api/rate-limiter/rate-limiter.test.ts" => {
           owner: ["better_auth/router_test.rb", "better_auth/rate_limiter_test.rb"],
@@ -106,6 +118,12 @@ module BetterAuth
           owner: "better_auth/routes/email_verification_test.rb",
           status: :covered,
           plan: "009",
+          evidence: {"better_auth/routes/email_verification_test.rb" => %w[
+            test_verify_email_rejects_untrusted_callback_url
+            test_verify_email_validates_query_before_checking_callback_origin
+            test_verify_email_rejects_repeated_callback_query_values
+            test_verify_email_with_empty_callback_returns_json_for_success_and_failure
+          ]},
           notes: "Send/verify email flows, callback redirects, verification callbacks, change-email verification, and secondary storage covered in email_verification_test"
         },
         "api/routes/error.test.ts" => {
@@ -118,6 +136,11 @@ module BetterAuth
           owner: "better_auth/routes/password_test.rb",
           status: :covered,
           plan: "009",
+          evidence: {"better_auth/routes/password_test.rb" => %w[
+            test_request_password_reset_rejects_untrusted_redirect_to
+            test_reset_password_callback_rejects_untrusted_callback_url
+            test_reset_password_callback_redirects_with_token_or_invalid_token_error
+          ]},
           notes: "Password reset enumeration safety, callback redirects, credential creation, session revocation, verify-password scope, and length errors covered in password_test"
         },
         "api/routes/session-api.test.ts" => {
@@ -130,6 +153,11 @@ module BetterAuth
           owner: "better_auth/routes/sign_in_test.rb",
           status: :covered,
           plan: "009",
+          evidence: {"better_auth/routes/sign_in_test.rb" => %w[
+            test_sign_in_email_rejects_untrusted_callback_url
+            test_sign_in_email_preserves_an_empty_callback_url_without_redirecting
+            test_sign_in_email_blocks_cross_site_form_navigation
+          ]},
           notes: "Email sign-in, CSRF/origin checks, form-urlencoded bodies, verification-on-sign-in, and callback URL validation covered in sign_in_test; social callback URL checks live in social_test"
         },
         "api/routes/sign-out.test.ts" => {
@@ -142,12 +170,14 @@ module BetterAuth
           owner: "better_auth/routes/sign_up_test.rb",
           status: :covered,
           plan: "009",
+          evidence: {"better_auth/routes/sign_up_test.rb" => "test_sign_up_email_rejects_untrusted_callback_url"},
           notes: "Sign-up custom fields, enumeration protection, CSRF, form-urlencoded bodies, sendOnSignUp behavior, and synthetic user responses covered in sign_up_test"
         },
         "api/routes/update-user.test.ts" => {
           owner: "better_auth/routes/user_routes_test.rb",
           status: :covered,
           plan: "009",
+          evidence: {"better_auth/routes/user_routes_test.rb" => "test_delete_user_callback_rejects_untrusted_callback_url"},
           notes: "Update/delete/change-password/change-email flows, enumeration-safe change-email, delete-user verification, and secondary storage propagation covered in user_routes_test"
         },
         "api/to-auth-endpoints.test.ts" => {
@@ -397,7 +427,11 @@ module BetterAuth
             "better_auth/plugins/rate_limit_matrix_test.rb"
           ],
           status: :adapted,
-          evidence: {"better_auth/plugins/magic_link_test.rb" => "test_magic_link_empty_token_redirects_with_invalid_token"},
+          evidence: {"better_auth/plugins/magic_link_test.rb" => %w[
+            test_magic_link_empty_token_redirects_with_invalid_token
+            test_magic_link_rejects_untrusted_verify_callback_url
+            test_magic_link_verifies_last_issued_token_and_sets_cookie_for_json_response
+          ]},
           notes: "Magic-link issuance, single-use storage, Rack verification, invalid/empty token redirects, callbacks, and rate limits are covered in magic_link_test; Ruby validates the Rack query before endpoint dispatch"
         },
         "plugins/mcp/mcp.test.ts" => {
@@ -414,6 +448,10 @@ module BetterAuth
           owner: "better_auth/plugins/oauth_proxy_test.rb",
           status: :covered,
           plan: "006",
+          evidence: {"better_auth/plugins/oauth_proxy_test.rb" => %w[
+            test_oauth_proxy_callback_rejects_untrusted_callback_url
+            test_oauth_proxy_callback_rejects_an_array_of_callback_urls
+          ]},
           notes: "OAuth proxy plugin covered in oauth_proxy_test"
         },
         "plugins/oauth-popup/oauth-popup.test.ts" => {

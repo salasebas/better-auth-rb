@@ -78,6 +78,8 @@ module BetterAuth
       Endpoint.new(
         path: "/verify-email",
         method: "GET",
+        query_schema: request_query_schema(required_strings: %w[token], optional_strings: %w[callbackURL]),
+        use_after_validation: [Middleware::OriginCheck.callback { |ctx| ctx.query["callbackUrl"] }],
         metadata: {
           openapi: {
             operationId: "verifyEmail",
@@ -113,7 +115,7 @@ module BetterAuth
       ) do |ctx|
         token = fetch_value(ctx.query, "token").to_s
         callback_url = fetch_value(ctx.query, "callbackURL")
-        validate_callback_url!(ctx.context, callback_url)
+        callback_url = nil if callback_url == ""
         payload = verify_email_token(ctx, token, callback_url)
         change_email_token_identifier = validate_change_email_token!(ctx, token, payload, callback_url)
         email = payload["email"].to_s.downcase
@@ -165,8 +167,7 @@ module BetterAuth
 
     def self.send_verification_email_payload(ctx, user, callback_url)
       token = create_email_verification_token(ctx, user["email"])
-      callback = URI.encode_www_form_component(callback_url || "/")
-      url = "#{ctx.context.token_link_base_url}/verify-email?token=#{URI.encode_www_form_component(token)}&callbackURL=#{callback}"
+      url = email_verification_url(ctx, token, callback_url)
       ctx.context.options.email_verification[:send_verification_email].call({user: user, url: url, token: token}, ctx.request)
     end
 
@@ -176,9 +177,13 @@ module BetterAuth
 
       token = create_email_verification_token(ctx, user["email"], update_to: update_to, extra: {"requestType" => "change-email-verification"})
       record_single_use_change_email_token!(ctx, token)
-      callback = URI.encode_www_form_component(callback_url || "/")
-      url = "#{ctx.context.token_link_base_url}/verify-email?token=#{URI.encode_www_form_component(token)}&callbackURL=#{callback}"
+      url = email_verification_url(ctx, token, callback_url)
       sender.call({user: user.merge("email" => update_to), url: url, token: token}, ctx.request)
+    end
+
+    def self.email_verification_url(ctx, token, callback_url)
+      callback = URLHelpers.encode_uri_component(callback_url.to_s.empty? ? "/" : callback_url)
+      "#{ctx.context.token_link_base_url}/verify-email?token=#{URI.encode_www_form_component(token)}&callbackURL=#{callback}"
     end
 
     def self.preflight_follow_up_verification_token_link!(ctx, payload, update_to)

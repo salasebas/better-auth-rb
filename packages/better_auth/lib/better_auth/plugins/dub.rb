@@ -70,7 +70,9 @@ module BetterAuth
         if callback_url.to_s.empty?
           raise APIError.new("BAD_REQUEST", message: BASE_ERROR_CODES["VALIDATION_ERROR"])
         end
-        Routes.validate_auth_callback_url!(ctx.context, callback_url, "callbackURL")
+        unless ctx.context.trusted_origin?(callback_url.to_s, allow_relative_paths: true)
+          raise APIError.new("FORBIDDEN", message: "Invalid callbackURL")
+        end
 
         ctx.body = body.merge(provider_id: "dub", callback_url: callback_url)
         oauth_plugin.endpoints.fetch(:oauth2_link_account).call(ctx)

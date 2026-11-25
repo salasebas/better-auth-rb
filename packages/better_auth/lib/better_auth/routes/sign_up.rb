@@ -11,10 +11,11 @@ module BetterAuth
       Endpoint.new(
         path: "/sign-up/email",
         method: "POST",
-        use: [Middleware::OriginCheck.form_csrf],
+        use_after_validation: [Middleware::OriginCheck.form_csrf],
         body_schema: request_body_schema(
           required_strings: %w[name email],
-          required_nonempty_strings: %w[password]
+          required_nonempty_strings: %w[password],
+          optional_strings: %w[callbackURL]
         ),
         metadata: {
           allowed_media_types: [
@@ -69,7 +70,6 @@ module BetterAuth
         callback_url = body["callbackURL"] || body["callbackUrl"] || body["callback_url"]
         remember_me = body.key?("rememberMe") ? body["rememberMe"] : body["remember_me"]
 
-        validate_auth_callback_url!(ctx.context, callback_url, "callbackURL")
         validate_sign_up_input!(email, password, email_config)
         reserved = %w[email password name image callbackURL callbackUrl callback_url rememberMe remember_me]
         additional_user_fields = parse_sign_up_additional_user_fields(ctx, body.except(*reserved))
@@ -139,13 +139,6 @@ module BetterAuth
       if password.length > email_config[:max_password_length].to_i
         raise APIError.new("BAD_REQUEST", message: BASE_ERROR_CODES["PASSWORD_TOO_LONG"])
       end
-    end
-
-    def self.validate_auth_callback_url!(context, value, label)
-      return if value.nil? || value.to_s.empty?
-      return if context.trusted_origin?(value.to_s, allow_relative_paths: true)
-
-      raise APIError.new("FORBIDDEN", message: "Invalid #{label}")
     end
 
     def self.create_sign_up_user(ctx, additional, email, name, image)
@@ -258,8 +251,7 @@ module BetterAuth
         ctx.context.secret,
         expires_in: verification[:expires_in] || 3600
       )
-      callback = URI.encode_www_form_component(callback_url || "/")
-      url = "#{ctx.context.token_link_base_url}/verify-email?token=#{URI.encode_www_form_component(token)}&callbackURL=#{callback}"
+      url = email_verification_url(ctx, token, callback_url)
       sender.call({user: user, url: url, token: token}, ctx.request)
     end
 

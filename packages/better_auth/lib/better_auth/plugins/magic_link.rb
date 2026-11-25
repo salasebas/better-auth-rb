@@ -84,6 +84,14 @@ module BetterAuth
       Endpoint.new(
         path: "/magic-link/verify",
         method: "GET",
+        query_schema: Routes.request_query_schema(
+          required_strings: %w[token],
+          optional_strings: %w[callbackURL errorCallbackURL newUserCallbackURL]
+        ),
+        use_after_validation: [Middleware::OriginCheck.callback { |ctx|
+          query = normalize_hash(ctx.query)
+          %i[callback_url new_user_callback_url error_callback_url].map { |key| magic_link_callback(query[key]) }
+        }],
         metadata: {
           openapi: {
             operationId: "magicLinkVerify",
@@ -121,13 +129,10 @@ module BetterAuth
       ) do |ctx|
         query = normalize_hash(ctx.query)
         token = query[:token].to_s
-        callback_url = query[:callback_url] || "/"
-        error_callback_url = query[:error_callback_url] || callback_url
-        new_user_callback_url = query[:new_user_callback_url] || callback_url
-
-        validate_magic_link_callback!(ctx, callback_url, "callbackURL")
-        validate_magic_link_callback!(ctx, error_callback_url, "errorCallbackURL")
-        validate_magic_link_callback!(ctx, new_user_callback_url, "newUserCallbackURL")
+        callback = magic_link_callback(query[:callback_url])
+        callback_url = callback || "/"
+        error_callback_url = magic_link_callback(query[:error_callback_url]) || callback_url
+        new_user_callback_url = magic_link_callback(query[:new_user_callback_url]) || callback_url
 
         redirect_with_error = lambda do |error|
           raise ctx.redirect(magic_link_error_url(error_callback_url, error))
@@ -171,7 +176,7 @@ module BetterAuth
         redirect_with_error.call("failed_to_create_session") unless session
 
         Cookies.set_session_cookie(ctx, {session: session, user: user})
-        unless query.key?(:callback_url)
+        unless callback
           next ctx.json({
             token: session["token"],
             user: Schema.parse_output(ctx.context.options, "user", user),
@@ -221,11 +226,8 @@ module BetterAuth
       "#{base_url}/magic-link/verify?#{URI.encode_www_form(params)}"
     end
 
-    def validate_magic_link_callback!(ctx, value, label)
-      return if value.nil? || value.to_s.empty?
-      return if ctx.context.trusted_origin?(value.to_s, allow_relative_paths: true)
-
-      raise APIError.new("FORBIDDEN", message: "Invalid #{label}")
+    def magic_link_callback(value)
+      URLHelpers::URI_PARSER.unescape(value) if value.is_a?(String) && !value.empty?
     end
 
     def magic_link_error_url(url, error)

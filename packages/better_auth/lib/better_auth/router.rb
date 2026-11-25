@@ -3,6 +3,7 @@
 require "cgi"
 require "json"
 require "rack/request"
+require "uri"
 
 module BetterAuth
   class Router
@@ -205,7 +206,12 @@ module BetterAuth
     end
 
     def parse_query(request)
-      request.GET
+      query = request.GET
+      # Rack's nested parser drops plain duplicates. URI.decode_www_form requires ASCII input.
+      encoded_query = URLHelpers::URI_PARSER.escape(request.query_string.b, /[\x80-\xff]/n)
+      URI.decode_www_form(encoded_query).group_by(&:first).each_with_object(query.dup) do |(key, pairs), result|
+        result[key] = pairs.map(&:last) if pairs.length > 1 && query.key?(key)
+      end
     end
 
     def build_endpoint_context(request, path, query, body, params, raw_body)

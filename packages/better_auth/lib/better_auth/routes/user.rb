@@ -213,6 +213,8 @@ module BetterAuth
       Endpoint.new(
         path: "/delete-user/callback",
         method: "GET",
+        query_schema: request_query_schema(required_strings: %w[token], optional_strings: %w[callbackURL]),
+        use_after_validation: [Middleware::OriginCheck.callback { |ctx| ctx.query["callbackUrl"] }],
         metadata: {
           openapi: {
             operationId: "deleteUserCallback",
@@ -258,10 +260,9 @@ module BetterAuth
         end
         token = fetch_value(ctx.query, "token")
         callback_url = fetch_value(ctx.query, "callbackURL")
-        validate_callback_url!(ctx.context, callback_url)
         delete_user_by_token!(ctx, session, token)
         delete_current_user!(ctx, session)
-        raise ctx.redirect(callback_url) if callback_url
+        raise ctx.redirect(callback_url) unless callback_url.to_s.empty?
 
         ctx.json({success: true, message: "User deleted"})
       end
@@ -350,11 +351,6 @@ module BetterAuth
       token = create_email_verification_token(ctx, current_email, update_to: new_email, extra: {"requestType" => "change-email-verification"})
       record_single_use_change_email_token!(ctx, token)
       sender.call({user: user.merge("email" => new_email), url: email_verification_url(ctx, token, callback_url), token: token}, ctx.request)
-    end
-
-    def self.email_verification_url(ctx, token, callback_url)
-      callback = URI.encode_www_form_component(callback_url || "/")
-      "#{ctx.context.token_link_base_url}/verify-email?token=#{URI.encode_www_form_component(token)}&callbackURL=#{callback}"
     end
 
     def self.delete_user_by_token!(ctx, session, token)

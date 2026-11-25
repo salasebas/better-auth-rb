@@ -349,6 +349,7 @@ class BetterAuthRouterTest < Minitest::Test
 
     assert_equal 403, auth.call(rack_env("POST", "/api/auth/post", body: {"callbackURL" => "https://evil.com"})).first
     assert_equal 403, auth.call(rack_env("POST", "/api/auth/post", headers: {"HTTP_ORIGIN" => "https://evil.com", "HTTP_COOKIE" => "session=1"})).first
+    assert_equal 200, auth.call(rack_env("POST", "/api/auth/post", headers: {"HTTP_ORIGIN" => "", "HTTP_REFERER" => "http://localhost:3000/account", "HTTP_COOKIE" => "session=1"})).first
     assert_equal 200, auth.call(rack_env("POST", "/api/auth/post", headers: {"HTTP_ORIGIN" => "https://evil.com"})).first
 
     status, _headers, body = auth.call(
@@ -390,7 +391,9 @@ class BetterAuthRouterTest < Minitest::Test
     auth.api.sign_up_email(body: {email: "origin-signin@example.com", password: "password123", name: "Origin"})
     body = {email: "origin-signin@example.com", password: "password123"}
 
-    assert_equal 403, auth.call(rack_env("POST", "/api/auth/sign-in/email", body: body, headers: {"HTTP_REFERER" => "https://evil.example/login"})).first
+    status, _, response = auth.call(rack_env("POST", "/api/auth/sign-in/email", body: body, headers: {"HTTP_ORIGIN" => "", "HTTP_REFERER" => "https://evil.example/login"}))
+    assert_equal 403, status
+    assert_equal "INVALID_ORIGIN", JSON.parse(response.join).fetch("code")
     assert_equal 200, auth.call(rack_env("POST", "/api/auth/sign-in/email", body: body, headers: {"HTTP_ORIGIN" => "http://localhost:3000"})).first
   end
 
@@ -414,6 +417,7 @@ class BetterAuthRouterTest < Minitest::Test
     missing_status, _headers, missing_body = auth.call(rack_env("POST", "/api/auth/post", headers: {"HTTP_COOKIE" => "session=1"}))
     assert_equal 403, missing_status
     assert_equal "Missing or null Origin", JSON.parse(missing_body.join)["message"]
+    assert_equal "MISSING_OR_NULL_ORIGIN", JSON.parse(missing_body.join)["code"]
 
     assert_equal 403, auth.call(rack_env("POST", "/api/auth/post", headers: {"HTTP_ORIGIN" => "null", "HTTP_COOKIE" => "session=1"})).first
     assert_equal 403, auth.call(rack_env("POST", "/api/auth/post", headers: {"HTTP_ORIGIN" => "malicious.com", "HTTP_COOKIE" => "session=1"})).first
@@ -436,9 +440,19 @@ class BetterAuthRouterTest < Minitest::Test
 
     assert_equal 200, auth.call(rack_env("POST", "/api/auth/post", body: {"callbackURL" => "/dashboard?next=/profile"})).first
     assert_equal 200, auth.call(rack_env("POST", "/api/auth/post", body: {"redirectTo" => "https://trusted.example/reset"})).first
-    assert_equal 403, auth.call(rack_env("POST", "/api/auth/post", body: {"callbackURL" => "//evil.example"})).first
-    assert_equal 403, auth.call(rack_env("POST", "/api/auth/post", body: {"errorCallbackURL" => "https://evil.example/error"})).first
-    assert_equal 403, auth.call(rack_env("POST", "/api/auth/post", body: {"newUserCallbackURL" => "https://evil.example/welcome"})).first
+    {
+      "callbackURL" => "INVALID_CALLBACK_URL",
+      "redirectTo" => "INVALID_REDIRECT_URL",
+      "errorCallbackURL" => "INVALID_ERROR_CALLBACK_URL",
+      "newUserCallbackURL" => "INVALID_NEW_USER_CALLBACK_URL"
+    }.each do |key, code|
+      status, _, response = auth.call(rack_env("POST", "/api/auth/post", body: {key => "//evil.example"}))
+      assert_equal 403, status
+      assert_equal code, JSON.parse(response.join).fetch("code")
+      next if key == "callbackURL"
+
+      assert_equal 200, auth.call(rack_env("POST", "/api/auth/post?#{key}=https%3A%2F%2Fevil.example")).first
+    end
   end
 
   def test_origin_check_rejects_non_string_callback_values
@@ -485,18 +499,20 @@ class BetterAuthRouterTest < Minitest::Test
     )
 
     assert_equal 200, auth.call(rack_env("POST", "/api/auth/post", body: {"callbackURL" => 0})).first
-    status, _headers, body = auth.call(
-      rack_env(
-        "POST",
-        "/api/auth/post?callbackURL=https%3A%2F%2Fevil.example",
-        body: {"callbackURL" => 0}
+    [0, ""].each do |empty_callback|
+      status, _headers, body = auth.call(
+        rack_env(
+          "POST",
+          "/api/auth/post?callbackURL=https%3A%2F%2Fevil.example",
+          body: {"callbackURL" => empty_callback}
+        )
       )
-    )
-    assert_equal 403, status
-    assert_equal(
-      {code: "FORBIDDEN", message: "Invalid callbackURL"},
-      JSON.parse(body.join, symbolize_names: true)
-    )
+      assert_equal 403, status
+      assert_equal(
+        {code: "INVALID_CALLBACK_URL", message: "Invalid callbackURL"},
+        JSON.parse(body.join, symbolize_names: true)
+      )
+    end
     assert_equal 1, endpoint_calls
   end
 
@@ -578,6 +594,28 @@ class BetterAuthRouterTest < Minitest::Test
     assert_equal 200, auth.call(rack_env("POST", "/api/auth/public/data", body: {"callbackURL" => "https://evil.com"})).first
     assert_equal 403, auth.call(rack_env("POST", "/api/auth/publicity", body: {"callbackURL" => "https://evil.com"})).first
     assert_equal 403, auth.call(rack_env("POST", "/api/auth/public-data", body: {"redirectTo" => "https://evil.com"})).first
+  end
+
+  def test_plugin_origin_check_checks_each_callback_and_honors_plugin_skip_paths
+    check = BetterAuth::Middleware::OriginCheck.callback do |ctx|
+      %w[callbackURL fallbackURL].map { |key| BetterAuth::Routes.fetch_value(ctx.query, key) }
+    end
+    query_schema = BetterAuth::Routes.request_query_schema(required_strings: %w[callbackURL fallbackURL])
+    endpoints = ["/public/data", "/public/data/child", "/public/database"].to_h do |path|
+      [path, BetterAuth::Endpoint.new(path: path, method: "GET", query_schema: query_schema, use_after_validation: [check]) { {ok: true} }]
+    end
+    auth = BetterAuth.auth(
+      base_url: "http://localhost:3000",
+      secret: SECRET,
+      plugins: [{id: "test", init: ->(_) { {context: {skipOriginCheck: ["/public/data"]}} }, endpoints: endpoints}]
+    )
+    query = "?callbackURL=/dashboard&fallbackURL=https%3A%2F%2Fother.example"
+
+    assert_equal 200, auth.call(rack_env("GET", "/api/auth/public/data#{query}")).first
+    assert_equal 200, auth.call(rack_env("GET", "/api/auth/public/data/child#{query}")).first
+    status, _, response = auth.call(rack_env("GET", "/api/auth/public/database#{query}"))
+    assert_equal 403, status
+    assert_equal "INVALID_CALLBACK_URL", JSON.parse(response.join).fetch("code")
   end
 
   def test_plugin_middleware_wildcards_respect_path_segment_boundaries

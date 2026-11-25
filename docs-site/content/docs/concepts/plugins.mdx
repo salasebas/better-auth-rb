@@ -424,6 +424,18 @@ end
 
 ### Trusted origins
 
+To validate callback URLs on a plugin endpoint, add
+`BetterAuth::Middleware::OriginCheck.callback { |ctx| BetterAuth::Routes.fetch_value(ctx.query, "callbackURL") }`
+to the endpoint's `use_after_validation:` list. This runs the callback check
+after schema validation, matching Better Auth's endpoint middleware order.
+The existing `use:` list runs before validation and can read raw inputs.
+The selector accepts both the raw `callbackURL` and the schema's normalized `callbackUrl` key.
+Return a URL or an array of URLs from the block.
+For HTTP requests, the middleware checks each URL against the trusted origins
+and returns 403 with `INVALID_CALLBACK_URL` for an untrusted destination.
+It accepts trusted relative paths and honors `advanced.disable_origin_check`.
+RubyAuth also checks Ruby aliases such as `callback_url` in request bodies.
+
 If you're building custom plugins or endpoints, you can use the `trusted_origin?` method available on the auth context to validate URLs against your trusted origins configuration.
 This ensures your custom endpoints respect the same security settings as RubyAuth's built-in endpoints.
 

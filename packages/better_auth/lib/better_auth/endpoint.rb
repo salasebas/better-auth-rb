@@ -17,7 +17,7 @@ module BetterAuth
       :disable_body,
       :handler
 
-    def initialize(path: nil, method: nil, body_schema: nil, query_schema: nil, params_schema: nil, headers_schema: nil, metadata: {}, use: [], disable_body: false, &handler)
+    def initialize(path: nil, method: nil, body_schema: nil, query_schema: nil, params_schema: nil, headers_schema: nil, metadata: {}, use: [], use_after_validation: [], disable_body: false, &handler)
       @path = path
       @methods = Array(method || "*").map { |value| value.to_s.upcase }
       @body_schema = body_schema
@@ -30,6 +30,7 @@ module BetterAuth
       apply_open_api_schemas!
       @options = endpoint_options
       @use = Array(use)
+      @use_after_validation = Array(use_after_validation)
       @disable_body = !!disable_body
       @handler = handler || ->(_ctx) {}
     end
@@ -43,16 +44,25 @@ module BetterAuth
     end
 
     def call(context)
-      use.each do |middleware|
-        middleware_result = middleware.call(context)
-        return Result.from_value(middleware_result, context) if middleware_result
-      end
+      result = run_middleware(use, context)
+      return Result.from_value(result, context) if result
 
       apply_schemas!(context)
+      result = run_middleware(@use_after_validation, context)
+      return Result.from_value(result, context) if result
+
       context.with_current { Result.from_value(handler.call(context), context) }
     end
 
     private
+
+    def run_middleware(middlewares, context)
+      middlewares.each do |middleware|
+        result = middleware.call(context)
+        return result if result
+      end
+      nil
+    end
 
     def endpoint_options
       {

@@ -270,15 +270,45 @@ class BetterAuthRoutesEmailVerificationTest < Minitest::Test
 
   def test_verify_email_rejects_untrusted_callback_url
     auth = build_auth
-    auth.api.sign_up_email(body: {email: "unsafe-callback@example.com", password: "password123", name: "Unsafe"})
-    token = BetterAuth::Crypto.sign_jwt({"email" => "unsafe-callback@example.com"}, SECRET, expires_in: 3600)
+    request = Rack::MockRequest.new(auth)
+    response = rack_verify_email(request, token: "sample-token", callback_url: "https://other.example/callback")
 
-    error = assert_raises(BetterAuth::APIError) do
-      auth.api.verify_email(query: {token: token, callbackURL: "https://evil.example/callback"})
+    assert_equal 403, response.status
+    assert_equal "INVALID_CALLBACK_URL", JSON.parse(response.body).fetch("code")
+  end
+
+  def test_verify_email_validates_query_before_checking_callback_origin
+    request = Rack::MockRequest.new(build_auth)
+    response = request.get("/api/auth/verify-email?callbackURL=https%3A%2F%2Fother.example%2Fcallback")
+
+    assert_equal 400, response.status
+    assert_equal BetterAuth::BASE_ERROR_CODES.fetch("VALIDATION_ERROR"), JSON.parse(response.body).fetch("message")
+  end
+
+  def test_verify_email_rejects_repeated_callback_query_values
+    request = Rack::MockRequest.new(build_auth)
+    ["callbackURL=/first", "callbackURL"].each do |first_value|
+      response = request.get("/api/auth/verify-email?token=sample-token&#{first_value}&callbackURL=/second")
+
+      assert_equal 400, response.status
+      assert_equal BetterAuth::BASE_ERROR_CODES.fetch("VALIDATION_ERROR"), JSON.parse(response.body).fetch("message")
     end
+  end
 
-    assert_equal 400, error.status_code
-    assert_equal BetterAuth::BASE_ERROR_CODES["INVALID_CALLBACK_URL"], error.message
+  def test_verify_email_with_empty_callback_returns_json_for_success_and_failure
+    auth = build_auth
+    email = "empty-verification-callback@example.com"
+    auth.api.sign_up_email(body: {email: email, password: "password123", name: "Verification"})
+    token = BetterAuth::Crypto.sign_jwt({"email" => email}, SECRET, expires_in: 3600)
+    request = Rack::MockRequest.new(auth)
+
+    success = rack_verify_email(request, token: token, callback_url: "")
+    failure = rack_verify_email(request, token: "invalid-token", callback_url: "")
+
+    assert_equal 200, success.status
+    assert_equal({"status" => true, "user" => nil}, JSON.parse(success.body))
+    assert_equal 401, failure.status
+    assert_equal "INVALID_TOKEN", JSON.parse(failure.body).fetch("code")
   end
 
   def test_change_email_verification_updates_email_as_verified
