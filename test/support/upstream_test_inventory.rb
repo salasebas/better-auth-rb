@@ -40,7 +40,7 @@ module UpstreamTestInventory
         errors.concat(validate_named_evidence(path, entry, test_root)) if needs_named_evidence
       elsif status == :partial
         errors << "Missing partial reason for #{path}" unless present_string?(entry[:reason] || entry[:notes])
-        errors.concat(validate_partial_plan(path, entry[:plan], active_plans))
+        errors.concat(validate_partial_plan(path, entry[:plan], active_plans)) unless entry[:issue].is_a?(Integer)
       end
     end
 

@@ -75,6 +75,11 @@ module BetterAuth
           plan: "018",
           notes: "Init --database-dialect adds scaffold comments"
         },
+        "test/upgrade.test.ts" => {
+          owner: "better_auth/cli_upgrade_test.rb",
+          status: :partial,
+          notes: "New in v1.6.35. Ruby prints a bundle update command instead of installing packages and does not compare against the running CLI version (#256)"
+        },
         "src/commands/init/utility/plugin.test.ts" => {
           owner: "better_auth/cli_init_plugins_test.rb",
           status: :covered,

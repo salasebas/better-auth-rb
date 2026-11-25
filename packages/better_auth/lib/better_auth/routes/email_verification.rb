@@ -205,7 +205,7 @@ module BetterAuth
     end
 
     # Ruby hardening adaptation of upstream PR #9519. This is intentionally
-    # stricter than the pinned Better Auth v1.6.23 behavior, and hashes the JWT
+    # stricter than the pinned Better Auth v1.6.35 behavior, and hashes the JWT
     # before storage so the verification table never contains the bearer token.
     def self.register_change_email_token!(ctx, token)
       ctx.context.internal_adapter.create_verification_value(

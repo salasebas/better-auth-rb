@@ -101,7 +101,7 @@ class EndpointToolingTest < Minitest::Test
     entries = UpstreamEndpointRegistry.parse_endpoint_block_entries(
       "{ ...totp.endpoints }",
       accounted_spreads: accounted,
-      source_file: "reference/upstream-src/1.6.23/repository/packages/better-auth/src/plugins/two-factor/index.ts"
+      source_file: "reference/upstream-src/1.6.35/repository/packages/better-auth/src/plugins/two-factor/index.ts"
     )
 
     assert_empty entries
@@ -116,7 +116,7 @@ class EndpointToolingTest < Minitest::Test
     assert_raises(UpstreamEndpointRegistry::UnresolvedSpreadError) do
       UpstreamEndpointRegistry.parse_endpoint_block_entries(
         "{ ...unknown.endpoints }",
-        source_file: "reference/upstream-src/1.6.23/repository/packages/better-auth/src/plugins/two-factor/index.ts"
+        source_file: "reference/upstream-src/1.6.35/repository/packages/better-auth/src/plugins/two-factor/index.ts"
       )
     end
   end
