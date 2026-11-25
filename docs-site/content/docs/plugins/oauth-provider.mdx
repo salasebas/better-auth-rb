@@ -1190,7 +1190,7 @@ When migrating an older RubyAuth application:
 
 * Replace `BetterAuth::Plugins.oidc_provider(...)` with `BetterAuth::Plugins.oauth_provider(...)`.
 * Register `BetterAuth::Plugins.jwt` before the OAuth provider plugin unless you intentionally set `disable_jwt_plugin: true`.
-* Replace legacy `/mcp/*` routes with OAuth provider token, introspection, revocation, UserInfo, and resource-server bearer challenge handling.
+* Remove legacy `/mcp/*` routes. RubyAuth does not support MCP. Use OAuth provider token, introspection, revocation, UserInfo, and `ClientResource.verify_access_token` for resource-server bearer challenges.
 * Regenerate or run the OAuth provider schema migration after enabling the gem.
 
 `oauthAccessToken` uses the upstream canonical columns `token`, `expiresAt`, `scopes`, `clientId`, `sessionId`, `userId`, `referenceId`, and `refreshId`. Legacy `access_token`, `refresh_token`, `access_token_expires_at`, and `scope` columns should be copied forward before removal. `oauthConsent#consent_given` is also removed; a consent row means consent was granted.
