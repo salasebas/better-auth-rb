@@ -149,9 +149,10 @@ module BetterAuth
       def transaction
         base = @lock.synchronize { transaction_snapshot(db) }
         transaction_adapter = clone(freeze: false)
-        transaction_adapter.db = transaction_snapshot(base)
+        working_copies = {}
+        transaction_adapter.db = transaction_snapshot(base, working_copies)
         result = with_transaction_context(transaction_adapter) { yield transaction_adapter }
-        @lock.synchronize { merge_transaction(base, transaction_adapter.db) }
+        @lock.synchronize { merge_transaction(base, transaction_adapter.db, working_copies) }
         result
       end
 
@@ -163,11 +164,11 @@ module BetterAuth
 
       private
 
-      def merge_transaction(base, working)
+      def merge_transaction(base, working, working_copies)
         merged = db.dup
         (base.keys | working.keys).each do |model|
           if working.key?(model)
-            merged[model] = merge_transaction_rows(base.fetch(model, []), working.fetch(model), db.fetch(model, []))
+            merged[model] = merge_transaction_rows(base.fetch(model, []), working.fetch(model), db.fetch(model, []), working_copies)
           else
             merged.delete(model)
           end
@@ -175,7 +176,7 @@ module BetterAuth
         db.replace(merged)
       end
 
-      def merge_transaction_rows(base_rows, working_rows, live_rows)
+      def merge_transaction_rows(base_rows, working_rows, live_rows, working_copies)
         base_by_id = base_rows.to_h { |row| [row["id"], row] }
         working_by_id = working_rows.to_h { |row| [row["id"], row] }
         live_ids = live_rows.map { |row| row["id"] }.to_set
@@ -185,12 +186,12 @@ module BetterAuth
           next if base_by_id.key?(id) && !working_by_id.key?(id)
 
           working_row = working_by_id[id]
-          (working_row && !transaction_values_equal?(base_by_id[id], working_row)) ? working_row : row
+          (working_row && !transaction_values_equal?(base_by_id[id], working_row, working_copies)) ? working_row : row
         end
         merged.concat(working_rows.reject { |row| base_by_id.key?(row["id"]) || live_ids.include?(row["id"]) })
       end
 
-      def transaction_values_equal?(before, after, seen = {})
+      def transaction_values_equal?(before, after, working_copies, seen = {})
         return true if before.equal?(after)
         return false if before.frozen? != after.frozen?
         return before == after unless before.is_a?(Hash) || before.is_a?(Array) || before.is_a?(Struct)
@@ -202,17 +203,23 @@ module BetterAuth
         case before
         when Hash
           return false unless after.is_a?(Hash) && before.size == after.size && before.compare_by_identity? == after.compare_by_identity?
-          return false unless before.default_proc.equal?(after.default_proc) && transaction_values_equal?(before.default, after.default, seen)
+          return false unless before.default_proc.equal?(after.default_proc) && transaction_values_equal?(before.default, after.default, working_copies, seen)
 
           before.each_pair.zip(after.each_pair).all? do |(key, value), (after_key, after_value)|
-            key.eql?(after_key) && transaction_values_equal?(key, after_key, seen) && transaction_values_equal?(value, after_value, seen)
+            same_key = if before.compare_by_identity?
+              working_copies.fetch(key.object_id, key).equal?(after_key)
+            else
+              key.eql?(after_key)
+            end
+            same_key && transaction_values_equal?(key, after_key, working_copies, seen) &&
+              transaction_values_equal?(value, after_value, working_copies, seen)
           end
         when Array
           after.is_a?(Array) && before.size == after.size &&
-            before.each_with_index.all? { |value, index| transaction_values_equal?(value, after[index], seen) }
+            before.each_with_index.all? { |value, index| transaction_values_equal?(value, after[index], working_copies, seen) }
         when Struct
           after.instance_of?(before.class) &&
-            before.each_pair.all? { |member, value| transaction_values_equal?(value, after[member], seen) }
+            before.each_pair.all? { |member, value| transaction_values_equal?(value, after[member], working_copies, seen) }
         end
       end
 
