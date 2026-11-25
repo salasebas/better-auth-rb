@@ -10,8 +10,9 @@ in. RubyAuth already relies on SQL rollback for auth writes and migrations.
 
 RubyAuth's SQL adapters use database transactions. The public Memory adapter
 runs transactions on a snapshot and merges their row changes at commit.
-Organization mutations hold the Memory database lock through the transaction to
-preserve capacity and ownership checks across concurrent requests.
+Auth and organization mutations hold the Memory database lock through the
+transaction. This preserves unique accounts, single-use verification values,
+capacity checks, and ownership checks across concurrent requests.
 
 Upstream resolves the active transaction adapter inside its internal adapter,
 hooks, and organization adapter. RubyAuth also resolves it from

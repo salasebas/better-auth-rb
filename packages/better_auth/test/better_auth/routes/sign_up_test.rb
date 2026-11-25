@@ -292,15 +292,38 @@ class BetterAuthRoutesSignUpTest < Minitest::Test
   end
 
   def test_sign_up_email_rejects_duplicate_email
-    auth = build_auth
+    first_hash_started = Queue.new
+    release_first = Queue.new
+    hasher = ->(password) do
+      if password == "first-password"
+        first_hash_started << true
+        release_first.pop
+      end
+      "hash:#{password}"
+    end
+    auth = build_auth(email_and_password: {enabled: true, password: {hash: hasher}})
 
-    auth.api.sign_up_email(body: {email: "duplicate@example.com", password: "password123", name: "First"})
-    error = assert_raises(BetterAuth::APIError) do
-      auth.api.sign_up_email(body: {email: "DUPLICATE@example.com", password: "password123", name: "Second"})
+    first = Thread.new do
+      auth.api.sign_up_email(body: {email: "duplicate@example.com", password: "first-password", name: "First"})
+    end
+    begin
+      Timeout.timeout(5) { first_hash_started.pop }
+      second = Thread.new do
+        auth.api.sign_up_email(body: {email: "DUPLICATE@example.com", password: "second-password", name: "Second"})
+      rescue BetterAuth::APIError => error
+        error
+      end
+      second.join(1)
+    ensure
+      release_first << true
+      first.value
     end
 
+    error = second.value
+    assert_kind_of BetterAuth::APIError, error
     assert_equal 422, error.status_code
     assert_equal BetterAuth::BASE_ERROR_CODES["USER_ALREADY_EXISTS_USE_ANOTHER_EMAIL"], error.message
+    assert_equal 1, auth.context.adapter.count(model: "user", where: [{field: "email", value: "duplicate@example.com"}])
   end
 
   def test_sign_up_email_with_required_verification_returns_synthetic_user_for_existing_email

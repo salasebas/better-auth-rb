@@ -185,9 +185,31 @@ module BetterAuth
           next if base_by_id.key?(id) && !working_by_id.key?(id)
 
           working_row = working_by_id[id]
-          (working_row && working_row != base_by_id[id]) ? working_row : row
+          (working_row && !transaction_values_equal?(base_by_id[id], working_row)) ? working_row : row
         end
         merged.concat(working_rows.reject { |row| base_by_id.key?(row["id"]) || live_ids.include?(row["id"]) })
+      end
+
+      def transaction_values_equal?(before, after, seen = {})
+        return true if before.equal?(after)
+        return before == after unless before.is_a?(Hash) || before.is_a?(Array) || before.is_a?(Struct)
+
+        pair = [before.object_id, after.object_id]
+        return true if seen[pair]
+
+        seen[pair] = true
+        case before
+        when Hash
+          after.is_a?(Hash) && before.size == after.size && before.default_proc.equal?(after.default_proc) &&
+            transaction_values_equal?(before.default, after.default, seen) &&
+            before.all? { |key, value| after.key?(key) && transaction_values_equal?(value, after[key], seen) }
+        when Array
+          after.is_a?(Array) && before.size == after.size &&
+            before.each_with_index.all? { |value, index| transaction_values_equal?(value, after[index], seen) }
+        when Struct
+          after.instance_of?(before.class) &&
+            before.each_pair.all? { |member, value| transaction_values_equal?(value, after[member], seen) }
+        end
       end
 
       def transaction_snapshot(value, copies = {})

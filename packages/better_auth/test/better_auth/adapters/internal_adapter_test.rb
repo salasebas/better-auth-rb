@@ -932,6 +932,39 @@ class BetterAuthInternalAdapterTest < Minitest::Test
     assert_nil internal.find_verification_value("consume-expired")
   end
 
+  def test_consume_verification_value_has_one_winner_across_memory_adapters_sharing_a_database
+    first_lookup_done = Queue.new
+    release_first = Queue.new
+    pause_before_delete = ->(_record, _context) do
+      first_lookup_done << true
+      release_first.pop
+    end
+    first_config = BetterAuth::Configuration.new(
+      secret: SECRET,
+      database: :memory,
+      database_hooks: {verification: {delete: {before: pause_before_delete}}}
+    )
+    second_config = BetterAuth::Configuration.new(secret: SECRET, database: :memory)
+    first_database_adapter = BetterAuth::Adapters::Memory.new(first_config)
+    second_database_adapter = BetterAuth::Adapters::Memory.new(second_config, first_database_adapter.db)
+    first_internal = BetterAuth::Adapters::InternalAdapter.new(first_database_adapter, first_config)
+    second_internal = BetterAuth::Adapters::InternalAdapter.new(second_database_adapter, second_config)
+    first_internal.create_verification_value(identifier: "shared-code", value: "single-use", expiresAt: Time.now + 120)
+
+    first = Thread.new { first_internal.consume_verification_value("shared-code") }
+    begin
+      Timeout.timeout(5) { first_lookup_done.pop }
+      second = Thread.new { second_internal.consume_verification_value("shared-code") }
+      second.join(1)
+    ensure
+      release_first << true
+      first.join
+    end
+
+    assert_equal "single-use", first.value.fetch("value")
+    assert_nil second.value
+  end
+
   def test_consume_verification_value_preserves_a_vetoed_row
     internal = internal_adapter(database_hooks: {verification: {delete: {
       before: ->(_row, _context) { false }

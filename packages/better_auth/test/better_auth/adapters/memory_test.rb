@@ -208,10 +208,13 @@ class BetterAuthMemoryAdapterTest < Minitest::Test
 
     adapter.transaction do |transaction_adapter|
       transaction_adapter.create(model: "user", data: {name: "Committed", email: "committed@example.com"})
+      stored = transaction_adapter.db.fetch("callbackStore").first.fetch("config")
+      stored.fetch("settings").default << "-committed"
     end
     committed = adapter.find_one(model: "callbackStore", where: [{field: "name", value: "oidc"}]).fetch("config")
     assert_same callback, committed.fetch("callback")
     assert_equal "called", committed.fetch("callback").call
+    assert_equal "fallback-committed", committed.fetch("settings").default
 
     error = assert_raises(RuntimeError) do
       adapter.transaction do |transaction_adapter|
@@ -235,7 +238,7 @@ class BetterAuthMemoryAdapterTest < Minitest::Test
     assert_equal "called", restored.fetch("callback").call
     assert_equal ["original", "original"], labels
     assert_same labels.first, labels.last
-    assert_equal "fallback", restored.fetch("settings").default
+    assert_equal "fallback-committed", restored.fetch("settings").default
     assert_same callback_default, restored.fetch("settings").fetch("dynamic").default_proc
     assert_same restored, restored.fetch("cycle")
     assert_predicate restored.fetch("frozen"), :frozen?

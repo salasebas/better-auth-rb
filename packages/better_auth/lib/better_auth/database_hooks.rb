@@ -22,8 +22,9 @@ module BetterAuth
       end
 
       pending_hooks = []
+      run_transaction = adapter.is_a?(Adapters::Memory) ? adapter.method(:serialized_transaction) : adapter.method(:transaction)
       begin
-        adapter.transaction do |transaction_adapter|
+        run_transaction.call do |transaction_adapter|
           transaction_adapter ||= adapter
           with_scope(Scope.new(adapter, transaction_adapter, pending_hooks)) { yield transaction_adapter }
         end

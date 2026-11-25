@@ -248,8 +248,9 @@ still exists.
 
 Inside a transaction, RubyAuth resolves `ctx.context.adapter` and internal
 adapter operations to the active transaction adapter. This lets plugin code and
-database hooks share the transaction. Organization mutations serialize their
-Memory transactions to enforce capacity and ownership checks.
+database hooks share the transaction. RubyAuth serializes Memory transactions
+for auth and organization mutations to preserve unique accounts, single-use
+verification values, membership limits, and ownership checks.
 
 SQL filters treat `%` and `_` as wildcards in `contains`, `starts_with`, and
 `ends_with`. Memory matches them as ordinary characters.

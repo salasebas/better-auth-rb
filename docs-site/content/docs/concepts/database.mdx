@@ -21,7 +21,7 @@ Ruby's built-in SQL adapters always use database transactions. This preserves ro
 
 The Memory adapter yields a separate adapter for each transaction. Use the yielded adapter to read and write uncommitted data. A failed nested transaction discards its own writes. Commit merges changes by row and preserves changes made outside the transaction to other rows.
 
-Inside a transaction, RubyAuth resolves `ctx.context.adapter` and internal adapter operations to the active transaction adapter. Plugin code and database hooks can share the transaction. Organization mutations serialize their Memory transactions to enforce capacity and ownership checks.
+Inside a transaction, RubyAuth resolves `ctx.context.adapter` and internal adapter operations to the active transaction adapter. Plugin code and database hooks can share the transaction. RubyAuth serializes Memory transactions for auth and organization mutations to preserve unique accounts, single-use verification values, membership limits, and ownership checks.
 
 SQL filters treat `%` and `_` as wildcards in `contains`, `starts_with`, and `ends_with`. Memory matches them as ordinary characters.
 
