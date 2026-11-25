@@ -637,19 +637,15 @@ class BetterAuthRoutesSignUpTest < Minitest::Test
   end
 
   def test_sign_up_email_rejects_untrusted_callback_url
-    auth = build_auth(email_and_password: {require_email_verification: true})
+    auth = build_auth
+    body = {email: "bad-callback-sign-up@example.com", password: "password123", name: "Bad Callback"}
+    callback_url = "https://other.example/callback"
+    status, _, response = auth.call(rack_env("POST", "/api/auth/sign-up/email", body: JSON.generate(body.merge(callbackURL: callback_url))))
 
-    error = assert_raises(BetterAuth::APIError) do
-      auth.api.sign_up_email(body: {
-        email: "bad-callback-sign-up@example.com",
-        password: "password123",
-        name: "Bad Callback",
-        callbackURL: "https://evil.example/callback"
-      })
-    end
-
-    assert_equal 403, error.status_code
-    assert_equal "Invalid callbackURL", error.message
+    assert_equal 403, status
+    assert_equal "INVALID_CALLBACK_URL", JSON.parse(response.join).fetch("code")
+    result = auth.api.sign_up_email(body: body.merge(callbackURL: callback_url))
+    assert_equal body.fetch(:email), result.fetch(:user).fetch("email")
   end
 
   def test_sign_up_email_sends_verification_by_default_when_required
@@ -661,10 +657,11 @@ class BetterAuthRoutesSignUpTest < Minitest::Test
       email_verification: {send_verification_email: ->(data, _request = nil) { sent << data }}
     )
 
-    auth.api.sign_up_email(body: {email: "default-send@example.com", password: "password123", name: "Default Send"})
+    auth.api.sign_up_email(body: {email: "default-send@example.com", password: "password123", name: "Default Send", callbackURL: ""})
 
     assert_equal 1, sent.length
     assert_equal "default-send@example.com", sent.first[:user]["email"]
+    assert sent.first.fetch(:url).end_with?("&callbackURL=%2F")
   end
 
   def test_sign_up_email_rejects_unsupported_content_type_for_rack_requests

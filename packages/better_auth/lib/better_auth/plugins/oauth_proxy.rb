@@ -46,6 +46,8 @@ module BetterAuth
       Endpoint.new(
         path: "/oauth-proxy-callback",
         method: "GET",
+        query_schema: Routes.request_query_schema(required_strings: %w[callbackURL], optional_strings: %w[profile]),
+        use_after_validation: [Middleware::OriginCheck.callback { |ctx| ctx.query["callbackUrl"] }],
         metadata: {
           openapi: {
             operationId: "oauthProxyCallback",
@@ -60,11 +62,8 @@ module BetterAuth
           }
         }
       ) do |ctx|
-        query = normalize_hash(ctx.query)
-        callback_url = query[:callback_url] || "/"
-        oauth_proxy_validate_callback!(ctx, callback_url)
         default_error_url = ctx.context.options.on_api_error[:error_url] || "#{ctx.context.options.base_url}/api/auth/error"
-        encrypted_profile = query[:profile]
+        encrypted_profile = ctx.query["profile"]
         if encrypted_profile.to_s.empty?
           raise oauth_proxy_redirect_error(ctx, default_error_url, "missing_profile")
         end
@@ -386,13 +385,6 @@ module BetterAuth
 
     def oauth_proxy_strip_trailing(value)
       value.to_s.sub(%r{/+\z}, "")
-    end
-
-    def oauth_proxy_validate_callback!(ctx, callback_url)
-      return if callback_url.to_s.empty?
-      return if ctx.context.trusted_origin?(callback_url.to_s, allow_relative_paths: true)
-
-      raise APIError.new("FORBIDDEN", message: "Invalid callbackURL")
     end
 
     def oauth_proxy_after_callback(ctx, config)

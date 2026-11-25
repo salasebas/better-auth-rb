@@ -121,13 +121,20 @@ class BetterAuthPluginsOAuthProxyTest < Minitest::Test
 
   def test_oauth_proxy_callback_rejects_untrusted_callback_url
     auth = build_auth(trusted_origins: ["http://localhost:3000"], plugins: [BetterAuth::Plugins.oauth_proxy])
+    request = Rack::MockRequest.new(auth)
+    response = request.get("/api/auth/oauth-proxy-callback?callbackURL=https%3A%2F%2Fother.example%2Fdashboard")
 
-    error = assert_raises(BetterAuth::APIError) do
-      auth.api.oauth_proxy(query: {callbackURL: "https://evil.example/dashboard"})
-    end
+    assert_equal 403, response.status
+    assert_equal "INVALID_CALLBACK_URL", JSON.parse(response.body).fetch("code")
+  end
 
-    assert_equal 403, error.status_code
-    assert_equal "Invalid callbackURL", error.message
+  def test_oauth_proxy_callback_rejects_an_array_of_callback_urls
+    auth = build_auth(plugins: [BetterAuth::Plugins.oauth_proxy])
+    request = Rack::MockRequest.new(auth)
+    response = request.get("/api/auth/oauth-proxy-callback?callbackURL%5B%5D=/dashboard&callbackURL%5B%5D=/settings")
+
+    assert_equal 400, response.status
+    assert_equal BetterAuth::BASE_ERROR_CODES.fetch("VALIDATION_ERROR"), JSON.parse(response.body).fetch("message")
   end
 
   def test_same_origin_sign_in_keeps_the_canonical_provider_redirect_uri

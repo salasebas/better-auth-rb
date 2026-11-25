@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require "json"
+require "rack/mock"
 require "stringio"
 require "uri"
 require_relative "../../test_helper"
@@ -191,11 +192,12 @@ class BetterAuthPluginsMagicLinkTest < Minitest::Test
     3.times { auth.api.sign_in_magic_link(body: {email: "latest-magic@example.com"}) }
     latest_token = sent.last.fetch(:token)
 
-    status, headers, body = auth.api.magic_link_verify(query: {token: latest_token}, as_response: true)
+    request = Rack::MockRequest.new(auth)
+    response = request.get("/api/auth/magic-link/verify?#{URI.encode_www_form(token: latest_token, callbackURL: "")}")
 
-    assert_equal 200, status
-    assert_includes headers.fetch("set-cookie"), "better-auth.session_token="
-    parsed = JSON.parse(body.join)
+    assert_equal 200, response.status
+    assert_includes response.headers.fetch("set-cookie"), "better-auth.session_token="
+    parsed = JSON.parse(response.body)
     assert_match(/\A[0-9a-f]{32}\z/, parsed.fetch("token"))
     assert_match(/\A[0-9a-f]{32}\z/, parsed.fetch("session").fetch("token"))
     assert_equal "latest-magic@example.com", parsed.fetch("user").fetch("email")
@@ -343,21 +345,17 @@ class BetterAuthPluginsMagicLinkTest < Minitest::Test
   end
 
   def test_magic_link_rejects_untrusted_verify_callback_url
-    sent = []
     auth = build_auth(
       trusted_origins: ["http://localhost:3000"],
       plugins: [
-        BetterAuth::Plugins.magic_link(send_magic_link: ->(data, _ctx = nil) { sent << data })
+        BetterAuth::Plugins.magic_link(send_magic_link: ->(*) {})
       ]
     )
-    auth.api.sign_in_magic_link(body: {email: "origin@example.com"})
+    request = Rack::MockRequest.new(auth)
+    response = request.get("/api/auth/magic-link/verify?token=sample-token&callbackURL=https%3A%2F%2Fother.example")
 
-    error = assert_raises(BetterAuth::APIError) do
-      auth.api.magic_link_verify(query: {token: sent.first[:token], callbackURL: "http://malicious.com"})
-    end
-
-    assert_equal 403, error.status_code
-    assert_equal "Invalid callbackURL", error.message
+    assert_equal 403, response.status
+    assert_equal "INVALID_CALLBACK_URL", JSON.parse(response.body).fetch("code")
   end
 
   def test_magic_link_secondary_storage_string_flow_verifies_and_signs_up

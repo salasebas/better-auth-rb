@@ -4,7 +4,13 @@ require "uri"
 
 module BetterAuth
   module URLHelpers
+    URI_PARSER = URI::RFC2396_Parser.new
+
     module_function
+
+    def encode_uri_component(value)
+      URI_PARSER.escape(value, /[^a-zA-Z0-9_.!~*'()-]/)
+    end
 
     def valid_proxy_header?(header, type)
       value = header.to_s

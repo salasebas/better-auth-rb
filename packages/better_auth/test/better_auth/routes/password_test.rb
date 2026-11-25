@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require "json"
+require "rack/mock"
 require_relative "../../test_helper"
 
 class BetterAuthRoutesPasswordTest < Minitest::Test
@@ -19,12 +20,12 @@ class BetterAuthRoutesPasswordTest < Minitest::Test
     cookie = sign_up_cookie(auth, email: "reset@example.com", password: "old-password")
     old_session = auth.api.get_session(headers: {"cookie" => cookie})[:session]["token"]
 
-    response = auth.api.request_password_reset(body: {email: "reset@example.com", redirectTo: "/reset"})
+    response = auth.api.request_password_reset(body: {email: "reset@example.com", redirectTo: "/reset?next=a b!()"})
 
     assert_equal({status: true, message: "If this email exists in our system, check your email for the reset link"}, response)
     assert_equal 1, sent.length
     assert_equal "reset@example.com", sent.first[:user]["email"]
-    assert_match(%r{/reset-password/[^?]+\?callbackURL=%2Freset}, sent.first[:url])
+    assert_match(%r{/reset-password/[^?]+\?callbackURL=%2Freset%3Fnext%3Da%20b!\(\)\z}, sent.first[:url])
 
     token = sent.first[:token]
     assert_equal({status: true}, auth.api.reset_password(body: {token: token, newPassword: "new-password"}))
@@ -129,13 +130,12 @@ class BetterAuthRoutesPasswordTest < Minitest::Test
     auth = build_auth(email_and_password: {send_reset_password: ->(data, _request = nil) { sent << data }})
     auth.api.sign_up_email(body: {email: "unsafe-redirect@example.com", password: "password123", name: "Reset"})
 
-    error = assert_raises(BetterAuth::APIError) do
-      auth.api.request_password_reset(body: {email: "unsafe-redirect@example.com", redirectTo: "https://evil.example/reset"})
-    end
+    status, _, body = auth.call(rack_env("POST", "/api/auth/request-password-reset", body: {
+      email: "unsafe-redirect@example.com", redirectTo: "https://other.example/reset"
+    }))
 
-    assert_equal 403, error.status_code
-    assert_equal "FORBIDDEN", error.code
-    assert_equal BetterAuth::BASE_ERROR_CODES["INVALID_REDIRECT_URL"], error.message
+    assert_equal 403, status
+    assert_equal "INVALID_REDIRECT_URL", JSON.parse(body.join).fetch("code")
     assert_empty sent
   end
 
@@ -191,12 +191,12 @@ class BetterAuthRoutesPasswordTest < Minitest::Test
 
     status, headers, _body = auth.api.request_password_reset_callback(
       params: {token: token},
-      query: {callbackURL: "/reset"},
+      query: {callbackURL: "/reset?from=email&token=old&next=dashboard&token=older"},
       as_response: true
     )
 
     assert_equal 302, status
-    assert_equal "http://localhost:3000/reset?token=#{token}", headers["location"]
+    assert_equal "http://localhost:3000/reset?from=email&token=#{token}&next=dashboard", headers["location"]
 
     status, headers, _body = auth.api.request_password_reset_callback(
       params: {token: "bad-token"},
@@ -206,24 +206,23 @@ class BetterAuthRoutesPasswordTest < Minitest::Test
 
     assert_equal 302, status
     assert_equal "http://localhost:3000/reset?error=INVALID_TOKEN", headers["location"]
+
+    status, headers, = auth.api.request_password_reset_callback(
+      params: {token: token},
+      query: {callbackURL: ""},
+      as_response: true
+    )
+    assert_equal 302, status
+    assert_equal "http://localhost:3000/api/auth/error?error=INVALID_TOKEN", headers["location"]
   end
 
   def test_reset_password_callback_rejects_untrusted_callback_url
-    auth = build_auth(email_and_password: {send_reset_password: ->(_data, _request = nil) {}})
-    auth.api.sign_up_email(body: {email: "unsafe-reset@example.com", password: "old-password", name: "Reset"})
-    auth.api.request_password_reset(body: {email: "unsafe-reset@example.com", redirectTo: "/reset"})
-    verification = auth.context.adapter.find_many(model: "verification").first
-    token = verification["identifier"].delete_prefix("reset-password:")
+    auth = build_auth
+    request = Rack::MockRequest.new(auth)
+    response = request.get("/api/auth/reset-password/sample-token?callbackURL=https%3A%2F%2Fother.example%2Freset")
 
-    error = assert_raises(BetterAuth::APIError) do
-      auth.api.request_password_reset_callback(
-        params: {token: token},
-        query: {callbackURL: "https://evil.example/reset"}
-      )
-    end
-
-    assert_equal 400, error.status_code
-    assert_equal BetterAuth::BASE_ERROR_CODES["INVALID_CALLBACK_URL"], error.message
+    assert_equal 403, response.status
+    assert_equal "INVALID_CALLBACK_URL", JSON.parse(response.body).fetch("code")
   end
 
   def test_reset_password_callback_requires_callback_url

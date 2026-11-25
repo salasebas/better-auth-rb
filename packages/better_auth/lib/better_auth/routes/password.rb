@@ -11,7 +11,8 @@ module BetterAuth
       Endpoint.new(
         path: "/request-password-reset",
         method: "POST",
-        body_schema: request_body_schema(email_strings: %w[email]),
+        body_schema: request_body_schema(email_strings: %w[email], optional_strings: %w[redirectTo]),
+        use_after_validation: [Middleware::OriginCheck.callback { |ctx| ctx.body["redirectTo"] }],
         metadata: {
           openapi: {
             operationId: "requestPasswordReset",
@@ -48,7 +49,6 @@ module BetterAuth
         body = normalize_hash(ctx.body)
         email = body["email"].to_s.downcase
         redirect_to = body["redirectTo"] || body["redirect_to"]
-        validate_redirect_url!(ctx.context, redirect_to)
         found = ctx.context.internal_adapter.find_user_by_email(email, include_accounts: true)
         unless found
           SecureRandom.hex(12)
@@ -64,7 +64,7 @@ module BetterAuth
           expiresAt: Time.now + expires_in.to_i
         )
 
-        callback = redirect_to ? URI.encode_www_form_component(redirect_to) : ""
+        callback = URLHelpers.encode_uri_component(redirect_to.to_s)
         url = "#{token_link_base_url}/reset-password/#{token}?callbackURL=#{callback}"
         begin
           sender.call({user: found[:user], url: url, token: token}, ctx.request)
@@ -80,6 +80,7 @@ module BetterAuth
         path: "/reset-password/:token",
         method: "GET",
         query_schema: request_query_schema(required_strings: %w[callbackURL]),
+        use_after_validation: [Middleware::OriginCheck.callback { |ctx| ctx.query["callbackUrl"] }],
         metadata: {
           openapi: {
             operationId: "requestPasswordResetCallback",
@@ -106,14 +107,17 @@ module BetterAuth
       ) do |ctx|
         token = ctx.params[:token].to_s
         callback_url = fetch_value(ctx.query, "callbackURL")
-        validate_callback_url!(ctx.context, callback_url)
+        if token.empty? || callback_url.empty?
+          callback_url = "#{ctx.context.base_url}/error" if callback_url.empty?
+          raise ctx.redirect(password_reset_redirect_url(ctx.context, callback_url, "error", "INVALID_TOKEN"))
+        end
         verification = ctx.context.internal_adapter.find_verification_value("reset-password:#{token}")
 
         unless verification && !expired_time?(verification["expiresAt"])
-          raise ctx.redirect(absolute_callback(ctx.context, callback_url, error: "INVALID_TOKEN"))
+          raise ctx.redirect(password_reset_redirect_url(ctx.context, callback_url, "error", "INVALID_TOKEN"))
         end
 
-        raise ctx.redirect(absolute_callback(ctx.context, callback_url, token: token))
+        raise ctx.redirect(password_reset_redirect_url(ctx.context, callback_url, "token", token))
       end
     end
 
@@ -262,13 +266,13 @@ module BetterAuth
         hash[snake_key.to_sym]
     end
 
-    def self.absolute_callback(context, callback_url, params)
-      validate_callback_url!(context, callback_url)
-      uri = URI.parse(callback_url.to_s)
-      origin = Configuration.origin_for(URI.parse(context.base_url))
-      url = uri.relative? ? URI.join("#{origin}/", callback_url.to_s.delete_prefix("/")) : uri
+    def self.password_reset_redirect_url(context, callback_url, key, value)
+      url = URI.join(context.base_url, callback_url)
+      url.path = "/" if url.is_a?(URI::HTTP) && url.path.empty?
       query = URI.decode_www_form(url.query.to_s)
-      params.each { |key, value| query << [key.to_s, value] }
+      first_match = query.index { |name, _| name == key }
+      query.reject! { |name, _| name == key }
+      query.insert(first_match || query.length, [key, value])
       url.query = URI.encode_www_form(query)
       url.to_s
     end
@@ -288,14 +292,6 @@ module BetterAuth
       end
 
       raise APIError.new("BAD_REQUEST", message: BASE_ERROR_CODES["INVALID_CALLBACK_URL"])
-    end
-
-    def self.validate_redirect_url!(context, redirect_url)
-      validate_callback_url!(context, redirect_url)
-    rescue APIError => error
-      raise error unless error.message == BASE_ERROR_CODES["INVALID_CALLBACK_URL"]
-
-      raise APIError.new("FORBIDDEN", message: BASE_ERROR_CODES["INVALID_REDIRECT_URL"])
     end
   end
 end

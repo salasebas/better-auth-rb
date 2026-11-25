@@ -8,8 +8,8 @@ module BetterAuth
       Endpoint.new(
         path: "/sign-in/email",
         method: "POST",
-        use: [Middleware::OriginCheck.form_csrf],
-        body_schema: request_body_schema(required_strings: %w[email password]),
+        use_after_validation: [Middleware::OriginCheck.form_csrf],
+        body_schema: request_body_schema(required_strings: %w[email password], optional_strings: %w[callbackURL]),
         metadata: {
           allowed_media_types: [
             "application/x-www-form-urlencoded",
@@ -50,7 +50,6 @@ module BetterAuth
         callback_url = body["callbackURL"] || body["callbackUrl"] || body["callback_url"]
         remember_me = body.key?("rememberMe") ? body["rememberMe"] : body["remember_me"]
 
-        validate_auth_callback_url!(ctx.context, callback_url, "callbackURL")
         preflight_sign_in_token_link!(ctx)
 
         unless EMAIL_PATTERN.match?(email)
@@ -88,13 +87,15 @@ module BetterAuth
         raise APIError.new("UNAUTHORIZED", message: BASE_ERROR_CODES["FAILED_TO_CREATE_SESSION"]) unless session
 
         Cookies.set_session_cookie(ctx, {session: session, user: user}, dont_remember_me)
-        ctx.set_header("location", callback_url) if callback_url
-        ctx.json({
-          redirect: !!callback_url,
+        redirect = !callback_url.to_s.empty?
+        ctx.set_header("location", callback_url) if redirect
+        result = {
+          redirect: redirect,
           token: session["token"],
-          url: callback_url,
           user: Schema.parse_output(options, "user", user)
-        })
+        }
+        result[:url] = callback_url unless callback_url.nil?
+        ctx.json(result)
       end
     end
 
@@ -108,8 +109,7 @@ module BetterAuth
         ctx.context.secret,
         expires_in: verification[:expires_in] || 3600
       )
-      callback = URI.encode_www_form_component(callback_url || "/")
-      url = "#{ctx.context.token_link_base_url}/verify-email?token=#{URI.encode_www_form_component(token)}&callbackURL=#{callback}"
+      url = email_verification_url(ctx, token, callback_url)
       sender.call({user: user, url: url, token: token}, ctx.request)
     end
 

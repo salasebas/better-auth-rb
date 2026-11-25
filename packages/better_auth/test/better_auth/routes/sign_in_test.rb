@@ -20,6 +20,7 @@ class BetterAuthRoutesSignInTest < Minitest::Test
 
     assert_equal 200, status
     assert_equal false, data.fetch("redirect")
+    refute data.key?("url")
     assert_match(/\A[0-9a-f]{32}\z/, data.fetch("token"))
     assert_equal "ada@example.com", data.fetch("user").fetch("email")
     assert_includes headers.fetch("set-cookie"), "better-auth.session_token="
@@ -55,16 +56,34 @@ class BetterAuthRoutesSignInTest < Minitest::Test
     auth = build_auth
     auth.api.sign_up_email(body: {email: "bad-callback-sign-in@example.com", password: "password123", name: "Bad Callback"})
 
-    error = assert_raises(BetterAuth::APIError) do
-      auth.api.sign_in_email(body: {
-        email: "bad-callback-sign-in@example.com",
-        password: "password123",
-        callbackURL: "https://evil.example/dashboard"
-      })
-    end
+    body = {email: "bad-callback-sign-in@example.com", password: "password123"}
+    callback_url = "https://other.example/dashboard"
+    status, _, response = auth.call(rack_env("POST", "/api/auth/sign-in/email", body: JSON.generate(body.merge(callbackURL: callback_url))))
 
-    assert_equal 403, error.status_code
-    assert_equal "Invalid callbackURL", error.message
+    assert_equal 403, status
+    assert_equal "INVALID_CALLBACK_URL", JSON.parse(response.join).fetch("code")
+
+    status, _, response = auth.call(rack_env("POST", "/api/auth/sign-in/email", body: JSON.generate(
+      body.merge(callbackURL: "/dashboard", callback_url: callback_url)
+    )))
+    assert_equal 403, status
+    assert_equal "INVALID_CALLBACK_URL", JSON.parse(response.join).fetch("code")
+
+    assert_equal callback_url, auth.api.sign_in_email(body: body.merge(callbackURL: callback_url)).fetch(:url)
+  end
+
+  def test_sign_in_email_preserves_an_empty_callback_url_without_redirecting
+    auth = build_auth
+    body = {email: "empty-callback-sign-in@example.com", password: "password123"}
+    auth.api.sign_up_email(body: body.merge(name: "Empty Callback"))
+
+    status, headers, response = auth.call(rack_env("POST", "/api/auth/sign-in/email", body: JSON.generate(body.merge(callbackURL: ""))))
+    data = JSON.parse(response.join)
+
+    assert_equal 200, status
+    assert_equal false, data.fetch("redirect")
+    assert_equal "", data.fetch("url")
+    refute headers.key?("location")
   end
 
   def test_sign_in_email_requires_email_password_to_be_enabled
@@ -290,6 +309,7 @@ class BetterAuthRoutesSignInTest < Minitest::Test
     data = JSON.parse(body.join)
 
     assert_equal 403, status
+    assert_equal "CROSS_SITE_NAVIGATION_LOGIN_BLOCKED", data.fetch("code")
     assert_equal BetterAuth::BASE_ERROR_CODES["CROSS_SITE_NAVIGATION_LOGIN_BLOCKED"], data.fetch("message")
   end
 
@@ -345,11 +365,11 @@ class BetterAuthRoutesSignInTest < Minitest::Test
     body = {email: "origin-disabled-sign-in@example.com", password: "password123"}
     auth.api.sign_up_email(body: body.merge(name: "CSRF"))
 
-    cookie_status, _headers, _body = auth.call(
+    cookie_status, cookie_headers, _body = auth.call(
       rack_env(
         "POST",
         "/api/auth/sign-in/email",
-        body: JSON.generate(body),
+        body: JSON.generate(body.merge(callbackURL: "https://other.example/dashboard")),
         extra_headers: {
           "HTTP_COOKIE" => "some_cookie=value",
           "HTTP_ORIGIN" => "https://evil.example"
@@ -371,6 +391,7 @@ class BetterAuthRoutesSignInTest < Minitest::Test
     )
 
     assert_equal 200, cookie_status
+    assert_equal "https://other.example/dashboard", cookie_headers.fetch("location")
     assert_equal 403, form_status
     assert_equal BetterAuth::BASE_ERROR_CODES["CROSS_SITE_NAVIGATION_LOGIN_BLOCKED"], JSON.parse(form_body.join).fetch("message")
   end

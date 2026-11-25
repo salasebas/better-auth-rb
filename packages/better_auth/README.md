@@ -503,6 +503,16 @@ environment and keep browser CORS headers in the host Rack stack or reverse prox
 [`host-app-responsibilities.md`](../../.docs/features/host-app-responsibilities.md)
 for the boundary between origin validation, CORS, and CSRF ownership.
 
+For plugin endpoints, add
+`BetterAuth::Middleware::OriginCheck.callback { |ctx| BetterAuth::Routes.fetch_value(ctx.query, "callbackURL") }`
+to the endpoint's `use_after_validation:` list. This runs the callback check
+after schema validation, matching Better Auth's endpoint middleware order.
+The existing `use:` list runs before validation and can read raw inputs.
+The selector accepts both the raw `callbackURL` and the schema's normalized `callbackUrl` key.
+The block can return one URL or an array. The middleware checks HTTP requests
+and raises `INVALID_CALLBACK_URL` for an untrusted destination. RubyAuth also
+checks Ruby aliases such as `callback_url` when it validates request bodies.
+
 If you discover a security vulnerability within Better Auth Ruby, please send an e-mail to [security@openparcel.dev](mailto:security@openparcel.dev).
 
 All reports will be promptly addressed, and you'll be credited accordingly.
