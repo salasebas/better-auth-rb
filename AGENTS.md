@@ -39,6 +39,10 @@ pin. Parity audits skip those
 features. When an upgrade brings a new one, add it to that ADR instead of
 porting it.
 
+`docs/supported-features.md` lists every feature RubyAuth ports, with its Ruby
+and upstream code. Scope a parity check to one entry of it. When you port a new
+feature, add an entry.
+
 Keep shared auth behavior in `packages/better_auth`; adapter and plugin
 packages only integrate it.
 
