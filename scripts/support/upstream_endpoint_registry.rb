@@ -1,14 +1,11 @@
-#!/usr/bin/env ruby
 # frozen_string_literal: true
 
 require "json"
 require "open3"
-require "time"
-require_relative "support/endpoint_naming"
+require_relative "endpoint_naming"
 
 module UpstreamEndpointRegistry
-  ROOT = File.expand_path("..", __dir__)
-  OUTPUT = File.join(ROOT, "reference", "upstream-endpoint-registry.json")
+  ROOT = File.expand_path("../..", __dir__)
   VERSION_FILE = File.join(ROOT, "reference", "upstream-better-auth", "VERSION.md")
   UNSUPPORTED_PLUGINS = %w[mcp electron oidc-provider].freeze
   DENY_PATH_PREFIXES = %w[
@@ -63,7 +60,11 @@ module UpstreamEndpointRegistry
 
   module_function
 
-  def run!
+  def entries
+    @entries ||= build_entries
+  end
+
+  def build_entries
     metadata = upstream_metadata
     upstream_packages = validate_upstream!(metadata)
     route_index = build_route_index(scan_route_files(upstream_packages))
@@ -82,20 +83,7 @@ module UpstreamEndpointRegistry
       raise "Unresolved supported endpoint mappings: #{details}"
     end
 
-    payload = {
-      generated_at: Time.now.utc.iso8601,
-      upstream_version: metadata.fetch(:version),
-      upstream_commit: metadata.fetch(:commit),
-      extraction_loss_count: 0,
-      extraction_losses: [],
-      accounted_spread_count: spread_accounting.length,
-      accounted_spreads: spread_accounting,
-      unresolved_mapping_count: unresolved.length,
-      unresolved_mappings: unresolved,
-      entries: entries.sort_by { |entry| [entry[:path].to_s, entry[:method].to_s, entry[:registry_key]] }
-    }
-    File.write(OUTPUT, JSON.pretty_generate(stringify_keys(payload)))
-    puts "Wrote #{OUTPUT} (#{entries.length} entries; #{unresolved.length} unresolved unsupported mappings)"
+    stringify_keys(entries.sort_by { |entry| [entry[:path].to_s, entry[:method].to_s, entry[:registry_key]] })
   end
 
   def upstream_metadata(version_file = VERSION_FILE)
@@ -716,5 +704,3 @@ module UpstreamEndpointRegistry
     end
   end
 end
-
-UpstreamEndpointRegistry.run! if $PROGRAM_NAME == __FILE__
