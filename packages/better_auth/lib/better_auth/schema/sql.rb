@@ -153,13 +153,11 @@ module BetterAuth
       end
 
       def sql_type(logical_field, attributes, dialect)
-        type = attributes[:type] || "string"
-        if type.is_a?(Array)
-          references_id = attributes.dig(:references, :field).to_s == "id"
-          return indexed_string_sql_type(logical_field, attributes, dialect) if logical_field == "id" || references_id
+        references_id = (attributes[:logical_reference_field] || attributes.dig(:references, :field)).to_s == "id"
+        return indexed_string_sql_type(logical_field, attributes, dialect) if logical_field == "id" || references_id
 
-          return "text"
-        end
+        type = attributes[:type]
+        return "text" if type.is_a?(Array)
 
         case type
         when "boolean"
@@ -200,7 +198,13 @@ module BetterAuth
         when "string"
           indexed_string_sql_type(logical_field, attributes, dialect)
         else
-          raise BetterAuth::Error, "Unsupported field type: #{type}"
+          column = attributes[:field_name] || physical_name(logical_field)
+          type_name = attributes.fetch(:type, "undefined")
+          type_name = "null" if type_name.nil?
+          raise BetterAuth::Error,
+            "Unsupported field type '#{type_name}' for field '#{column}'. Allowed types are: string, number, boolean, date, string[], number[]. " \
+            'If you need to store structured data, store it as a JSON string (type: "string") or split it into primitive fields. ' \
+            "See https://better-auth.com/docs/advanced/schema#additional-fields"
         end
       end
 

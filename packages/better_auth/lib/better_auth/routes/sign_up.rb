@@ -72,7 +72,7 @@ module BetterAuth
 
         validate_sign_up_input!(email, password, email_config)
         reserved = %w[email password name image callbackURL callbackUrl callback_url rememberMe remember_me]
-        additional_user_fields = parse_sign_up_additional_user_fields(ctx, body.except(*reserved))
+        additional_user_fields = Schema.parse_model_input(options, "user", body.except(*reserved), action: :create)
 
         DatabaseHooks.transaction(ctx.context.adapter) do
           existing = ctx.context.internal_adapter.find_user_by_email(email)
@@ -192,43 +192,6 @@ module BetterAuth
         id: core_fields["id"]
       }
       stringify_synthetic_user(custom.call(value))
-    end
-
-    def self.parse_sign_up_additional_user_fields(ctx, data)
-      input = normalize_hash(data || {})
-      fields = Schema.auth_tables(ctx.context.options).fetch("user").fetch(:fields)
-        .except(*core_model_fields("user"))
-
-      fields.each_with_object({}) do |(field, attributes), result|
-        if input.key?(field)
-          if attributes[:input] == false
-            if attributes.key?(:default_value)
-              result[field] = resolve_default(attributes[:default_value])
-            elsif js_truthy_input?(input[field])
-              raise APIError.new("BAD_REQUEST", message: "#{field} is not allowed to be set")
-            end
-            next
-          end
-
-          result[field] = coerce_input_value(input[field], attributes)
-        elsif attributes.key?(:default_value)
-          result[field] = resolve_default(attributes[:default_value])
-        elsif attributes[:required]
-          raise APIError.new("BAD_REQUEST", message: "#{field} is required")
-        end
-      end
-    end
-
-    def self.js_truthy_input?(value)
-      return false if value.nil? || value == false
-      return false if value.is_a?(Numeric) && (value.zero? || (value.respond_to?(:nan?) && value.nan?))
-      return false if value.is_a?(String) && value.empty?
-
-      true
-    end
-
-    def self.resolve_default(value)
-      value.respond_to?(:call) ? value.call : value
     end
 
     def self.stringify_synthetic_user(value)

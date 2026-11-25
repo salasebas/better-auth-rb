@@ -5,9 +5,10 @@ module BetterAuth
     module_function
 
     def organization_add_member_endpoint(config)
-      Endpoint.new(path: "/organization/add-member", method: "POST", metadata: organization_openapi("addOrganizationMember", "Add an organization member", response: organization_ref_schema("Member"))) do |ctx|
+      schema = OrganizationSchema.create_body(config, :member, :organization_id, :user_id, :role, :team_id)
+      Endpoint.new(path: "/organization/add-member", method: "POST", body_schema: schema, metadata: organization_openapi("addOrganizationMember", "Add an organization member", response: organization_ref_schema("Member"))) do |ctx|
         session = Routes.current_session(ctx)
-        body = normalize_hash(ctx.body)
+        body = ctx.body
         organization_id = body[:organization_id] || session[:session]["activeOrganizationId"]
         raise APIError.new("BAD_REQUEST", message: ORGANIZATION_ERROR_CODES.fetch("NO_ACTIVE_ORGANIZATION")) unless organization_id
 
@@ -35,7 +36,7 @@ module BetterAuth
           end
         end
 
-        member_data = {organizationId: organization_id, userId: user_id, role: parse_roles(body[:role] || "member"), createdAt: Time.now}.merge(additional_input(body, :organization_id, :user_id, :role, :team_id))
+        member_data = {organizationId: organization_id, userId: user_id, role: parse_roles(body[:role] || "member"), createdAt: Time.now}.merge(body.fetch(:additional_fields))
         merge_hook_data!(member_data, run_org_hook(config, :before_add_member, {member: member_data, user: user, organization: organization_wire(ctx, organization)}, ctx))
         member = organization_transaction(ctx) do |adapter|
           lock_organization_capacity!(adapter, organization)

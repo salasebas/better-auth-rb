@@ -38,6 +38,19 @@ class BetterAuthStripeSchemaTest < Minitest::Test
     assert_includes tables.fetch("users").fetch(:fields), "stripe_customer_id"
   end
 
+  def test_renamed_customer_field_keeps_its_sql_type
+    plugin = BetterAuth::Plugins.stripe(schema: {user: {fields: {stripeCustomerId: "customer_id"}}})
+    config = BetterAuth::Configuration.new(
+      secret: "stripe-schema-secret-with-enough-entropy",
+      database: :memory,
+      plugins: [plugin]
+    )
+
+    sql = BetterAuth::Schema::SQL.create_statements(config, dialect: :postgres).join("\n")
+
+    assert_includes sql, '"customer_id" text'
+  end
+
   def test_custom_subscription_schema_is_ignored_when_subscriptions_are_disabled
     schema = BetterAuth::Stripe::Schema.schema(
       schema: {

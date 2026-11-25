@@ -662,19 +662,7 @@ module BetterAuth
 
     def email_otp_sign_up_user_data(ctx, body, email)
       reserved = %i[email otp name image callback_url callbackURL callbackUrl]
-      user_fields = Schema.auth_tables(ctx.context.options).fetch("user").fetch(:fields)
-      core_fields = %w[id name email emailVerified image createdAt updatedAt]
-      additional = body.each_with_object({}) do |(key, value), result|
-        next if reserved.include?(key.to_sym)
-
-        field = Schema.storage_key(key)
-        attributes = user_fields[field]
-        next unless attributes
-        next if core_fields.include?(field)
-        next if attributes[:input] == false
-
-        result[field] = value
-      end
+      additional = Schema.parse_model_input(ctx.context.options, "user", body.except(*reserved), action: :create)
       additional.merge(
         "email" => email,
         "emailVerified" => true,

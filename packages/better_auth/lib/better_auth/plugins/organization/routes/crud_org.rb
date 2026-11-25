@@ -5,8 +5,9 @@ module BetterAuth
     module_function
 
     def organization_create_endpoint(config)
-      Endpoint.new(path: "/organization/create", method: "POST", metadata: organization_openapi("createOrganization", "Create an organization", response: organization_ref_schema("Organization"))) do |ctx|
-        body = normalize_hash(ctx.body)
+      schema = OrganizationSchema.create_body(config, :organization, :name, :slug, :logo, :metadata, :keep_current_active_organization, :user_id)
+      Endpoint.new(path: "/organization/create", method: "POST", body_schema: schema, metadata: organization_openapi("createOrganization", "Create an organization", response: organization_ref_schema("Organization"))) do |ctx|
+        body = ctx.body
         session = Routes.current_session(ctx, allow_nil: true)
         user = session ? session[:user] : ctx.context.internal_adapter.find_user_by_id(body[:user_id])
         raise APIError.new("UNAUTHORIZED") unless user
@@ -34,7 +35,7 @@ module BetterAuth
           logo: body[:logo],
           metadata: serialize_metadata(body[:metadata]),
           createdAt: Time.now
-        }.merge(additional_input(body, :name, :slug, :logo, :metadata, :keep_current_active_organization, :user_id))
+        }.merge(body.fetch(:additional_fields))
         merge_hook_data!(data, run_org_hook(config, :before_create_organization, {organization: data, user: user}, ctx))
         organization = ctx.context.adapter.create(model: "organization", data: data, force_allow_id: true)
         member_data = {organizationId: organization["id"], userId: user["id"], role: config[:creator_role], createdAt: Time.now}
@@ -73,11 +74,12 @@ module BetterAuth
     end
 
     def organization_update_endpoint(config)
-      Endpoint.new(path: "/organization/update", method: "POST", metadata: organization_openapi("updateOrganization", "Update an organization", response: organization_ref_schema("Organization"))) do |ctx|
+      schema = OrganizationSchema.update_body(config, :organization, :name, :slug, :logo, :metadata, outer: %i[organization_id organization_slug])
+      Endpoint.new(path: "/organization/update", method: "POST", body_schema: schema, metadata: organization_openapi("updateOrganization", "Update an organization", response: organization_ref_schema("Organization"))) do |ctx|
         session = Routes.current_session(ctx)
-        body = normalize_hash(ctx.body)
-        id = body[:organization_id] || body[:organizationId]
-        data = normalize_hash(body[:data] || body)
+        body = ctx.body
+        id = body[:organization_id]
+        data = body.fetch(:data)
         organization = organization_by_id(ctx, id) || organization_by_slug(ctx, body[:organization_slug])
         raise APIError.new("BAD_REQUEST", message: ORGANIZATION_ERROR_CODES.fetch("ORGANIZATION_NOT_FOUND")) unless organization
         member = require_org_permission!(ctx, config, session, organization["id"], {organization: ["update"]}, ORGANIZATION_ERROR_CODES.fetch("YOU_ARE_NOT_ALLOWED_TO_UPDATE_THIS_ORGANIZATION"))
@@ -89,10 +91,9 @@ module BetterAuth
         end
         existing = data[:slug] ? organization_by_slug(ctx, data[:slug]) : nil
         raise APIError.new("CONFLICT", message: ORGANIZATION_ERROR_CODES.fetch("ORGANIZATION_SLUG_ALREADY_TAKEN")) if existing && existing["id"] != organization["id"]
-        update = additional_input(data, :organization_id, :organizationId, :organization_slug, :data)
-        update[:metadata] = serialize_metadata(update[:metadata]) if update.key?(:metadata)
-        merge_hook_data!(update, run_org_hook(config, :before_update_organization, {organization: update, user: session[:user], member: member_wire(ctx, member)}, ctx))
-        updated = ctx.context.adapter.update(model: "organization", where: [{field: "id", value: organization["id"]}], update: update)
+        data[:metadata] = serialize_metadata(data[:metadata]) if data.key?(:metadata)
+        merge_hook_data!(data, run_org_hook(config, :before_update_organization, {organization: data, user: session[:user], member: member_wire(ctx, member)}, ctx))
+        updated = ctx.context.adapter.update(model: "organization", where: [{field: "id", value: organization["id"]}], update: data)
         run_org_hook(config, :after_update_organization, {organization: organization_wire(ctx, updated), user: session[:user], member: member_wire(ctx, member)}, ctx)
         ctx.json(organization_wire(ctx, updated))
       end

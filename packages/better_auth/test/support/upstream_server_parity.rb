@@ -108,6 +108,7 @@ module BetterAuth
           owner: "better_auth/routes/account_test.rb",
           status: :covered,
           plan: "009",
+          evidence: {"better_auth/routes/account_test.rb" => "test_list_accounts_omits_sensitive_token_and_password_fields"},
           notes: "Account listing, unlink guards, access-token refresh, account cookie, refresh-token errors, and account info covered in account_test"
         },
         "api/routes/cookie-cache-fallback.test.ts" => {
@@ -152,6 +153,7 @@ module BetterAuth
           owner: ["better_auth/routes/session_routes_test.rb", "better_auth/session_test.rb", "better_auth/session_remember_me_test.rb"],
           status: :covered,
           plan: "008",
+          evidence: {"better_auth/routes/session_routes_test.rb" => "test_update_session_rejects_plugin_authority_fields"},
           notes: "Session refresh deadlines, deferred response shape, request-scoped refresh, invalid cache expiry, and stateless cookie renewal covered alongside existing route, cache strategy, secondary storage, and update-session cases"
         },
         "api/routes/sign-in.test.ts" => {
@@ -175,14 +177,25 @@ module BetterAuth
           owner: "better_auth/routes/sign_up_test.rb",
           status: :covered,
           plan: "009",
-          evidence: {"better_auth/routes/sign_up_test.rb" => "test_sign_up_email_rejects_untrusted_callback_url"},
+          evidence: {
+            "better_auth/routes/sign_up_test.rb" => %w[
+              test_sign_up_email_rejects_untrusted_callback_url
+              test_sign_up_email_transforms_the_validator_output_before_writing
+              test_sign_up_protected_duplicate_ignores_js_falsy_input_false_values_before_lookup
+            ]
+          },
           notes: "Sign-up custom fields, enumeration protection, CSRF, form-urlencoded bodies, sendOnSignUp behavior, and synthetic user responses covered in sign_up_test"
         },
         "api/routes/update-user.test.ts" => {
           owner: "better_auth/routes/user_routes_test.rb",
           status: :covered,
           plan: "009",
-          evidence: {"better_auth/routes/user_routes_test.rb" => "test_delete_user_callback_rejects_untrusted_callback_url"},
+          evidence: {
+            "better_auth/routes/user_routes_test.rb" => %w[
+              test_delete_user_callback_rejects_untrusted_callback_url
+              test_update_user_rejects_input_false_additional_fields
+            ]
+          },
           notes: "Update/delete/change-password/change-email flows, enumeration-safe change-email, delete-user verification, and secondary storage propagation covered in user_routes_test"
         },
         "api/to-auth-endpoints.test.ts" => {
@@ -285,7 +298,10 @@ module BetterAuth
           status: :covered,
           plan: "006",
           evidence: {
-            "better_auth/adapters/internal_adapter_test.rb" => "test_create_oauth_user_uses_custom_generate_id_and_plugin_hooks",
+            "better_auth/adapters/internal_adapter_test.rb" => %w[
+              test_create_oauth_user_uses_custom_generate_id_and_plugin_hooks
+              test_find_session_filters_user_and_session_output_on_both_storage_paths
+            ],
             "better_auth/database_hooks_test.rb" => "test_nested_transaction_runs_after_hooks_when_outer_transaction_finishes"
           },
           notes: "Internal adapter tests cover OAuth creation, hook ordering, verification consumption, and the nested after-hook case from core's context/transaction.test.ts."
@@ -293,7 +309,12 @@ module BetterAuth
         "db/secondary-storage.test.ts" => {
           owner: "better_auth/adapters/internal_adapter_test.rb",
           status: :covered,
-          evidence: {"better_auth/adapters/internal_adapter_test.rb" => "test_create_find_update_and_delete_session_with_secondary_storage"},
+          evidence: {
+            "better_auth/adapters/internal_adapter_test.rb" => %w[
+              test_create_find_update_and_delete_session_with_secondary_storage
+              test_find_session_filters_user_and_session_output_on_both_storage_paths
+            ]
+          },
           notes: "Secondary-storage reads, writes, deletes, atomic consume, increment, and fallback behavior are covered in internal_adapter_test"
         },
         "db/to-zod.test.ts" => {
@@ -395,6 +416,7 @@ module BetterAuth
           ],
           status: :covered,
           plan: "011",
+          evidence: {"better_auth/plugins/email_otp_test.rb" => "test_sign_in_with_email_otp_sign_up_preserves_profile_and_additional_fields"},
           notes: "Email OTP plugin covered in email_otp_test; custom rate-limit storage in rate_limit_matrix_test"
         },
         "plugins/generic-oauth/generic-oauth.test.ts" => {
@@ -519,7 +541,10 @@ module BetterAuth
             "better_auth/plugins/organization_members_test.rb"
           ],
           status: :adapted,
-          evidence: {"better_auth/plugins/organization_test.rb" => "test_teams_and_dynamic_roles"},
+          evidence: {
+            "better_auth/plugins/organization_test.rb" => "test_teams_and_dynamic_roles",
+            "better_auth/plugins/organization_org_crud_test.rb" => "test_organization_create_validates_additional_fields_and_strips_server_input"
+          },
           notes: "Organization creation, membership limits, invitations, teams, hooks, and access control are covered; TypeScript-only schema ordering assertions do not apply to Ruby"
         },
         "plugins/organization/routes/crud-access-control.test.ts" => {
@@ -572,6 +597,7 @@ module BetterAuth
           owner: "better_auth/plugins/phone_number_test.rb",
           status: :covered,
           plan: "006",
+          evidence: {"better_auth/plugins/phone_number_test.rb" => "test_sign_up_on_verification_preserves_additional_user_fields"},
           notes: "Phone-number plugin covered in phone_number_test"
         },
         "plugins/siwe/siwe.test.ts" => {

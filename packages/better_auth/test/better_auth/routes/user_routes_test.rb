@@ -250,7 +250,14 @@ class BetterAuthRoutesUserTest < Minitest::Test
     end
 
     assert_equal 400, error.status_code
+    assert_equal "FIELD_NOT_ALLOWED", error.code
     assert_equal "role is not allowed to be set", error.message
+
+    result = auth.api.update_user(headers: {"cookie" => cookie}, body: {name: "Updated", role: nil})
+    assert_equal({status: true}, result)
+    user = auth.context.internal_adapter.find_user_by_email("input-false-update@example.com").fetch(:user)
+    assert_equal "Updated", user.fetch("name")
+    refute user.key?("role")
   end
 
   def test_delete_user_disabled_returns_not_found

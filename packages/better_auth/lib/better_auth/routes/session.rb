@@ -81,7 +81,7 @@ module BetterAuth
         session = current_session(ctx)
         raise APIError.new("BAD_REQUEST", code: "BODY_MUST_BE_AN_OBJECT", message: BASE_ERROR_CODES["BODY_MUST_BE_AN_OBJECT"]) unless ctx.body.is_a?(Hash)
 
-        body = Routes.parse_declared_input(ctx, "session", ctx.body, allowed_base: [])
+        body = Schema.parse_model_input(ctx.context.options, "session", ctx.body, action: :update)
         raise APIError.new("BAD_REQUEST", message: "No fields to update") if body.empty?
 
         update = body.merge("updatedAt" => Time.now)

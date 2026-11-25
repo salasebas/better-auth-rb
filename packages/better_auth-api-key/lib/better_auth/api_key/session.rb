@@ -56,6 +56,8 @@ module BetterAuth
           }
         }
         ctx.context.set_current_session(session)
+        return ctx.json(BetterAuth::Routes.parsed_session_response(ctx, session)) if ctx.path == "/get-session"
+
         nil
       end
     end

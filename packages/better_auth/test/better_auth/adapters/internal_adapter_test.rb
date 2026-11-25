@@ -647,6 +647,24 @@ class BetterAuthInternalAdapterTest < Minitest::Test
     assert_equal ["token-valid"], internal.find_sessions(["token-valid", "token-corrupt"]).map { |entry| entry[:session]["token"] }
   end
 
+  def test_find_session_filters_user_and_session_output_on_both_storage_paths
+    [nil, MemoryStorage.new].each do |storage|
+      internal = internal_adapter(
+        secondary_storage: storage,
+        user: {additional_fields: {privateProfile: {type: "string", returned: false}}},
+        session: {additional_fields: {privateSession: {type: "string", returned: false}}}
+      )
+      user = internal.create_user(name: "Ada", email: "ada@example.com", privateProfile: "private")
+      session = internal.create_session(user.fetch("id"), false, {privateSession: "private"})
+
+      found = internal.find_session(session.fetch("token"))
+      assert_equal user.fetch("id"), found.fetch(:user).fetch("id")
+      assert_equal session.fetch("token"), found.fetch(:session).fetch("token")
+      refute found.fetch(:user).key?("privateProfile")
+      refute found.fetch(:session).key?("privateSession")
+    end
+  end
+
   def test_find_session_uses_adapter_join_when_experimental_joins_enabled
     config = BetterAuth::Configuration.new(secret: SECRET, database: :memory, experimental: {joins: true})
     adapter = BetterAuth::Adapters::Memory.new(config)

@@ -64,6 +64,19 @@ class BetterAuthAPIKeySchemaTest < Minitest::Test
     assert_equal "string", schema.fetch(:apikey).fetch(:fields).fetch(:name).fetch(:type)
   end
 
+  def test_renamed_reference_field_keeps_its_sql_type
+    plugin = BetterAuth::Plugins.api_key(schema: {apikey: {fields: {referenceId: "owner_id"}}})
+    config = BetterAuth::Configuration.new(
+      secret: "api-key-schema-secret-with-enough-entropy",
+      database: :memory,
+      plugins: [plugin]
+    )
+
+    sql = BetterAuth::Schema::SQL.create_statements(config, dialect: :postgres).join("\n")
+
+    assert_includes sql, '"owner_id" text NOT NULL'
+  end
+
   def test_api_key_fields_reach_migration_projection
     config = BetterAuth::Configuration.new(
       secret: "api-key-schema-secret-with-enough-entropy",

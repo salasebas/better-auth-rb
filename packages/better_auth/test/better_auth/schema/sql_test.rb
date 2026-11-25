@@ -613,7 +613,34 @@ class BetterAuthSchemaSQLTest < Minitest::Test
     error = assert_raises(BetterAuth::Error) do
       BetterAuth::Schema::SQL.create_statements(config, dialect: :postgres)
     end
-    assert_includes error.message, "Unsupported field type: object"
+    assert_includes error.message, "Unsupported field type 'object' for field 'payload'. Allowed types are: string, number, boolean, date, string[], number[]."
+    assert_includes error.message, "https://better-auth.com/docs/advanced/schema#additional-fields"
+  end
+
+  def test_renamed_plugin_fields_keep_their_sql_types
+    plugins = [
+      BetterAuth::Plugins.two_factor(schema: {user: {fields: {twoFactorEnabled: "mfa_enabled"}}}),
+      BetterAuth::Plugins.phone_number(schema: {user: {fields: {phoneNumber: "phone"}}}),
+      BetterAuth::Plugins.device_authorization(schema: {deviceCode: {fields: {userCode: "display_code"}}})
+    ]
+    config = BetterAuth::Configuration.new(secret: SECRET, database: :memory, plugins: plugins)
+
+    sql = BetterAuth::Schema::SQL.create_statements(config, dialect: :postgres).join("\n")
+
+    assert_includes sql, '"mfa_enabled" boolean'
+    assert_includes sql, '"phone" text'
+    assert_includes sql, '"display_code" text NOT NULL'
+  end
+
+  def test_typeless_additional_field_is_rejected_during_sql_generation
+    config = BetterAuth::Configuration.new(secret: SECRET, database: :memory, user: {
+      additional_fields: {legacyPayload: {required: false}}
+    })
+
+    error = assert_raises(BetterAuth::Error) do
+      BetterAuth::Schema::SQL.create_statements(config, dialect: :postgres)
+    end
+    assert_includes error.message, "Unsupported field type 'undefined' for field 'legacy_payload'."
   end
 
   def test_literal_enum_field_types_are_unconstrained_text_for_each_dialect
@@ -674,6 +701,24 @@ class BetterAuthSchemaSQLTest < Minitest::Test
 
       columns.each { |column| assert_includes sql, column, dialect.to_s }
     end
+  end
+
+  def test_reference_to_id_inherits_the_id_type_without_a_declared_type
+    plugin = BetterAuth::Plugin.new(id: "registry", schema: {
+      registry: {model_name: "registries", fields: {id: {type: "string", field_name: "record_id"}}}
+    })
+    config = BetterAuth::Configuration.new(secret: SECRET, database: :memory, plugins: [plugin], user: {
+      additional_fields: {
+        referredBy: {references: {model: "user", field: "id"}, required: false},
+        registryId: {references: {model: "registry", field: "id"}, required: false}
+      }
+    })
+
+    sql = BetterAuth::Schema::SQL.create_statements(config, dialect: :postgres).join("\n")
+
+    assert_includes sql, '"referred_by" text'
+    assert_includes sql, '"registry_id" text'
+    assert_includes sql, 'REFERENCES "registries" ("record_id")'
   end
 
   def test_empty_and_duplicate_literal_enum_definitions_are_supported

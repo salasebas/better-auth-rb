@@ -35,6 +35,26 @@ module BetterAuth
       data
     end
 
+    def merge_schema(base, custom)
+      return base unless custom.is_a?(Hash)
+
+      tables = base.transform_keys { |model| normalize_key(model) }
+      custom.each_with_object(tables) do |(name, overrides), schema|
+        model = normalize_key(name)
+        table = schema.fetch(model, {})
+        overrides = (overrides || {}).transform_keys { |key| normalize_key(key) }
+        fields = table.fetch(:fields, {}).dup
+        field_keys = fields.keys.to_h { |key| [normalize_key(key), key] }
+        (overrides.delete(:fields) || {}).each do |key, value|
+          field = field_keys[normalize_key(key)] ||= key
+          attributes = (value.is_a?(String) || value.is_a?(Symbol)) ? {field_name: value.to_s} : normalize_hash(value)
+          fields[field] = deep_merge_hashes(fields.fetch(field, {}), attributes)
+        end
+        fields.merge!(overrides.delete(:additional_fields) || {})
+        schema[model] = table.merge(overrides).merge(fields: fields)
+      end
+    end
+
     def fetch_value(data, key)
       return nil unless data.respond_to?(:[])
 

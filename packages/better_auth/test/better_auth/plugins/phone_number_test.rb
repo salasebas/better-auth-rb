@@ -558,7 +558,7 @@ class BetterAuthPluginsPhoneNumberTest < Minitest::Test
     auth = build_auth(
       user: {
         additional_fields: {
-          lastName: {type: "string", required: true, returned: true}
+          lastName: {type: "string", required: true, returned: true, transform: {input: ->(value) { value.capitalize }}}
         }
       },
       plugins: [
@@ -573,7 +573,7 @@ class BetterAuthPluginsPhoneNumberTest < Minitest::Test
     auth.api.send_phone_number_otp(body: {phoneNumber: "+15105550125"})
 
     result = auth.api.verify_phone_number(
-      body: {phoneNumber: "+15105550125", code: sent.last[:code], lastName: "Doe"}
+      body: {phoneNumber: "+15105550125", code: sent.last[:code], lastName: "doe"}
     )
 
     assert_equal true, result[:status]

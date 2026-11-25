@@ -111,16 +111,6 @@ module BetterAuth
       Array(roles).flat_map { |role| role.to_s.split(",") }.map(&:strip).reject(&:empty?)
     end
 
-    def additional_input(hash, *exclude)
-      data = normalize_hash(hash)
-      additional = normalize_hash(data.delete(:additional_fields))
-      extra_input(data, *exclude, :additional_fields).merge(additional)
-    end
-
-    def extra_input(hash, *exclude)
-      normalize_hash(hash).except(*exclude.map(&:to_sym))
-    end
-
     def org_truthy?(value)
       value == true || value.to_s == "true"
     end

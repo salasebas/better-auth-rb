@@ -774,7 +774,9 @@ class BetterAuthRoutesAccountTest < Minitest::Test
   end
 
   def test_list_accounts_omits_sensitive_token_and_password_fields
-    auth = build_auth
+    forbidden_fields = %w[accessToken refreshToken idToken accessTokenExpiresAt refreshTokenExpiresAt password]
+    fields = forbidden_fields.to_h { |field| [field, {type: field.end_with?("At") ? "date" : "string", required: false, returned: true}] }
+    auth = build_auth(account: {additional_fields: fields})
     cookie = sign_up_cookie(auth, email: "sensitive-fields@example.com")
     user_id = auth.api.get_session(headers: {"cookie" => cookie})[:user]["id"]
     auth.context.internal_adapter.create_account(
@@ -783,6 +785,8 @@ class BetterAuthRoutesAccountTest < Minitest::Test
       accountId: "gh-sensitive",
       accessToken: "secret-access",
       refreshToken: "secret-refresh",
+      accessTokenExpiresAt: Time.now + 60,
+      refreshTokenExpiresAt: Time.now + 60,
       password: "secret-password",
       idToken: "secret-id"
     )
@@ -790,10 +794,7 @@ class BetterAuthRoutesAccountTest < Minitest::Test
     accounts = auth.api.list_accounts(headers: {"cookie" => cookie})
     github = accounts.find { |account| account["providerId"] == "github" }
 
-    refute github.key?("accessToken")
-    refute github.key?("refreshToken")
-    refute github.key?("password")
-    refute github.key?("idToken")
+    assert_empty github.keys & forbidden_fields
   end
 
   def test_unlink_account_requires_fresh_sensitive_session

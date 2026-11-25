@@ -162,7 +162,7 @@ class BetterAuthPluginsEmailOTPTest < Minitest::Test
     auth = build_auth(
       user: {
         additional_fields: {
-          favoriteColor: {type: "string", required: false}
+          favoriteColor: {type: "string", required: false, transform: {input: ->(value) { "#{value.downcase}!" }}}
         }
       },
       plugins: [
@@ -177,13 +177,13 @@ class BetterAuthPluginsEmailOTPTest < Minitest::Test
         otp: sent.last[:otp],
         name: "Profile User",
         image: "https://example.com/avatar.png",
-        favoriteColor: "green"
+        favoriteColor: "GREEN"
       }
     )
 
     assert_equal "Profile User", result[:user]["name"]
     assert_equal "https://example.com/avatar.png", result[:user]["image"]
-    assert_equal "green", result[:user]["favoriteColor"]
+    assert_equal "green!!", result[:user]["favoriteColor"]
   end
 
   def test_sign_in_with_email_otp_sign_up_ignores_input_false_fields_and_uses_default

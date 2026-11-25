@@ -89,7 +89,7 @@ class BetterAuthPluginsAdditionalFieldsTest < Minitest::Test
       plugins: [
         BetterAuth::Plugins.additional_fields(
           session: {
-            deviceName: {type: "string", required: false, default_value: "web"},
+            deviceName: {type: "string", required: false, default_value: "web", transform: {input: ->(value) { value.downcase }}},
             hookField: {type: "string", required: false},
             lockedSessionField: {type: "string", required: false, input: false}
           }
@@ -107,7 +107,7 @@ class BetterAuthPluginsAdditionalFieldsTest < Minitest::Test
     end
     assert_equal 400, locked.status_code
 
-    update = auth.api.update_session(headers: {"cookie" => cookie}, body: {deviceName: "mobile"}, return_headers: true)
+    update = auth.api.update_session(headers: {"cookie" => cookie}, body: {deviceName: "MOBILE", lockedSessionField: false}, return_headers: true)
     assert_equal "mobile", update.fetch(:response).fetch(:session).fetch("deviceName")
     updated_cookie = [cookie, cookie_header(update.fetch(:headers).fetch("set-cookie"))].join("; ")
     updated = auth.api.get_session(headers: {"cookie" => updated_cookie})
