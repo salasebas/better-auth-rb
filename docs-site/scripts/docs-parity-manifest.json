@@ -32,7 +32,7 @@
       "ruby_source": "packages/better_auth-mongodb/test/better_auth/adapters/mongodb_upstream_parity_test.rb",
       "local_exists": true,
       "upstream_exists": true,
-      "current_local_lines": 208,
+      "current_local_lines": 206,
       "upstream_lines": 63,
       "status": "needs_manual_review"
     },
@@ -43,7 +43,7 @@
       "ruby_source": "packages/better_auth/test/better_auth/adapters/mssql_test.rb",
       "local_exists": true,
       "upstream_exists": true,
-      "current_local_lines": 171,
+      "current_local_lines": 169,
       "upstream_lines": 132,
       "status": "needs_manual_review"
     },
@@ -54,7 +54,7 @@
       "ruby_source": "packages/better_auth/test/better_auth/adapters/mysql_test.rb",
       "local_exists": true,
       "upstream_exists": true,
-      "current_local_lines": 251,
+      "current_local_lines": 249,
       "upstream_lines": 111,
       "status": "needs_manual_review"
     },
@@ -76,7 +76,7 @@
       "ruby_source": "packages/better_auth/test/better_auth/adapters/postgres_test.rb",
       "local_exists": true,
       "upstream_exists": true,
-      "current_local_lines": 293,
+      "current_local_lines": 291,
       "upstream_lines": 190,
       "status": "needs_manual_review"
     },
@@ -99,7 +99,7 @@
       "ruby_source": "packages/better_auth/test/better_auth/adapters/sqlite_test.rb",
       "local_exists": true,
       "upstream_exists": true,
-      "current_local_lines": 181,
+      "current_local_lines": 179,
       "upstream_lines": 135,
       "status": "needs_manual_review"
     },
@@ -1517,7 +1517,7 @@
       "gem": "better_auth",
       "local_exists": true,
       "upstream_exists": true,
-      "current_local_lines": 101,
+      "current_local_lines": 99,
       "upstream_lines": 226,
       "status": "thin"
     },
