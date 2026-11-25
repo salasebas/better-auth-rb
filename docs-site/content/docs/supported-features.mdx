@@ -86,11 +86,17 @@ Use this page as a conservative support inventory. A feature listed as supported
 
 ## Intentionally Omitted or Unsupported Upstream Docs
 
+RubyAuth does not port the upstream features below. The repository records this decision in `docs/adr/0002-unsupported-upstream-features.md`.
+
 | Area | RubyAuth status |
 | --- | --- |
-| Browser client packages | Not documented as supported Ruby server features. Call RubyAuth HTTP endpoints from your frontend, mobile client, HTMX, Turbo, or server-rendered forms. |
-| JavaScript framework integrations | Not documented as supported Ruby integrations. Use the Ruby framework integrations listed above. |
-| `mcp` | Not documented as a supported RubyAuth plugin. |
-| Upstream `oidc-provider` | Not documented as a supported RubyAuth plugin. RubyAuth documents its own [OAuth Provider](/docs/plugins/oauth-provider) package separately. |
-| Non-Stripe payment plugins | Not documented as supported RubyAuth payment plugins. |
-| AI and infrastructure pages | Not documented as supported RubyAuth features unless a Ruby package or docs page explicitly covers the feature. |
+| Browser client packages | Not ported. Call RubyAuth HTTP endpoints from your frontend, mobile client, HTMX, Turbo, or server-rendered forms. |
+| JavaScript framework integrations | Not ported. Use the Ruby framework integrations listed above. |
+| Electron and the Expo client | Not ported. The Expo server plugin is supported. |
+| Drizzle, Prisma, and Kysely adapters | Not ported. Use the Ruby adapters listed above. |
+| `mcp`, Agent Auth, CIMD, and CIBA | Not ported. RubyAuth does not provide AI agent or MCP authentication. |
+| Upstream `oidc-provider` | Not ported. Upstream deprecated it. Use the [OAuth Provider](/docs/plugins/oauth-provider) package. |
+| Deprecated upstream endpoints and options | Not ported. Use the replacement that upstream names. |
+| Payment plugins other than Stripe | Not ported. Polar, Autumn, Chargebee, Commet, Creem, and Dodo Payments have no RubyAuth plugin. |
+| Better Auth Infrastructure | Not ported. The hosted dashboard, audit logs, Sentinel, and email and SMS services have no RubyAuth plugin. |
+| AI and infrastructure CLI commands | Not ported. |
