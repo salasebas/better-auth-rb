@@ -4,8 +4,8 @@ Two prompts for comparing RubyAuth with an upstream Better Auth version. The
 first checks one feature. The second runs the first across features in
 parallel. Copy a prompt, fill in the `<...>` values, and give it to an agent.
 
-Both use Claude Opus 5.5 at high effort. Each thread does its own check and
-quotes both sides, so the run needs no separate validation pass.
+Each check quotes both sides of every difference, so the run needs no separate
+validation pass.
 
 ## Check one feature
 
@@ -65,7 +65,6 @@ Run RubyAuth parity checks from <FROM> to <TO>.
    For a full check (FROM "none"), take every entry.
 3. For each selected entry, start a new thread in parallel with the "Check one
    feature" prompt from docs/agents/parity-check.md, filled in for that entry.
-   Each thread uses Claude Opus 5.5 at high effort.
 4. When every thread finishes, reply with the four sections merged across
    features. Add each "Upstream features still pending" item to the Planned
    section of docs/supported-features.md in one PR.
