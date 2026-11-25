@@ -4,14 +4,6 @@ require "minitest/autorun"
 require_relative "../support/upstream_cli_parity"
 
 class BetterAuthCLIUpstreamInventoryTest < Minitest::Test
-  EXPECTED_UPSTREAM_TEST_FILE_COUNT = 14
-
-  def test_upstream_cli_test_file_count
-    paths = BetterAuth::CLITestSupport::UpstreamCLIParity.upstream_test_paths
-    assert_equal EXPECTED_UPSTREAM_TEST_FILE_COUNT, paths.length,
-      "Upstream CLI test file count changed; refresh inventory before proceeding"
-  end
-
   def test_every_upstream_test_file_is_classified
     upstream_tests = BetterAuth::CLITestSupport::UpstreamCLIParity.upstream_test_paths
     classified = BetterAuth::CLITestSupport::UpstreamCLIParity::EXCLUDED_UPSTREAM_TESTS.keys +

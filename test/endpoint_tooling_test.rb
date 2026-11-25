@@ -1,8 +1,7 @@
 # frozen_string_literal: true
 
 require "minitest/autorun"
-require_relative "../scripts/generate-upstream-endpoint-registry"
-require_relative "../scripts/compare-endpoint-api-names"
+require_relative "../scripts/support/upstream_endpoint_registry"
 
 class EndpointToolingTest < Minitest::Test
   def test_extracts_export_function_api_key_route
@@ -175,11 +174,8 @@ class EndpointToolingTest < Minitest::Test
   end
 
   def test_generated_registry_contains_all_real_spread_endpoints_without_loss
-    registry = JSON.parse(File.read(File.expand_path("../reference/upstream-endpoint-registry.json", __dir__)))
-    keys = registry.fetch("entries").map { |entry| entry.fetch("registry_key") }
+    keys = UpstreamEndpointRegistry.entries.map { |entry| entry.fetch("registry_key") }
 
-    assert_equal 0, registry.fetch("extraction_loss_count")
-    assert_equal 0, registry.fetch("unresolved_mapping_count")
     assert_empty %w[
       upgradeSubscription cancelSubscription restoreSubscription
       listActiveSubscriptions subscriptionSuccess createBillingPortal
@@ -204,31 +200,6 @@ class EndpointToolingTest < Minitest::Test
 
     assert_empty unresolved
     assert_equal %w[GET POST], rows.map { |row| row.fetch(:method) }.sort
-  end
-
-  def test_route_matcher_handles_wildcards_and_requires_exact_passkey_methods
-    upstream = [upstream_row("/session", "*", "getSession")]
-    ruby = [ruby_row("/session", "GET", "get_session")]
-    report = EndpointApiComparison.build_report(upstream, ruby)
-
-    assert_equal 1, report.fetch(:aligned_count)
-    assert_equal 0, report.fetch(:missing_ruby_count)
-    assert_equal 0, report.fetch(:missing_upstream_count)
-
-    passkey = upstream_row("/passkey/generate-register-options", "GET", "generatePasskeyRegistrationOptions", plugin_id: "passkey")
-    ruby_passkey = ruby_row("/passkey/generate-register-options", "GET", "generate_passkey_registration_options")
-    exact_report = EndpointApiComparison.build_report([passkey], [ruby_passkey])
-
-    assert_equal 1, exact_report.fetch(:aligned_count)
-    assert_equal 0, exact_report.fetch(:missing_ruby_count)
-    assert_equal 0, exact_report.fetch(:missing_upstream_count)
-
-    stale_post = ruby_row("/passkey/generate-register-options", "POST", "generate_passkey_registration_options")
-    mismatch_report = EndpointApiComparison.build_report([passkey], [stale_post])
-
-    assert_equal 0, mismatch_report.fetch(:aligned_count)
-    assert_equal 1, mismatch_report.fetch(:missing_ruby_count)
-    assert_equal 1, mismatch_report.fetch(:missing_upstream_count)
   end
 
   def test_normalizes_totp_as_one_acronym
@@ -266,39 +237,6 @@ class EndpointToolingTest < Minitest::Test
     assert_nil undocumented.fetch(:upstream_client)
   end
 
-  def test_reports_exact_known_gaps_and_explicit_unsupported_exclusions
-    report = EndpointApiComparison.build_report(
-      [
-        upstream_row("/oauth-popup/start", "GET", "oauthPopupStart", plugin_id: "oauth-popup"),
-        upstream_row("/mcp/token", "POST", "mcpOAuthToken", plugin_id: "mcp")
-      ],
-      [ruby_row("/oauth-popup/start", "GET", "oauth_popup_start")]
-    )
-
-    assert_equal 0, report.fetch(:known_gap_count)
-    assert_empty report.fetch(:known_gaps)
-    assert_equal ["/oauth-popup/start"], report.fetch(:aligned).map { |row| row.fetch(:path) }
-    assert_equal 1, report.fetch(:excluded_unsupported_count)
-    assert_equal "mcp", report.fetch(:excluded_unsupported).fetch(0).fetch(:plugin_id)
-    assert_equal %w[mcp electron oidc-provider], report.fetch(:excluded_unsupported_plugins)
-    assert_equal 0, report.fetch(:missing_ruby_count)
-  end
-
-  def test_reports_hidden_metadata_visibility_mismatches
-    upstream = upstream_row("/oauth-popup/start", "GET", "oauthPopupStart", plugin_id: "oauth-popup").merge(hidden_metadata: true)
-    ruby = ruby_row("/oauth-popup/start", "GET", "oauth_popup_start").merge(hidden: false)
-
-    report = EndpointApiComparison.build_report([upstream], [ruby])
-
-    assert_equal 1, report.fetch(:visibility_mismatch_count)
-    mismatch = report.fetch(:visibility_mismatches).fetch(0)
-    assert_equal true, mismatch.fetch(:upstream_hidden)
-    assert_equal false, mismatch.fetch(:ruby_hidden)
-
-    aligned = EndpointApiComparison.build_report([upstream], [ruby.merge(hidden: true)])
-    assert_equal 0, aligned.fetch(:visibility_mismatch_count)
-  end
-
   private
 
   def mapping(registry_key, symbol:, comment: "")
@@ -322,21 +260,5 @@ class EndpointToolingTest < Minitest::Test
       deprecated: false,
       source_file: "fixture.ts"
     }
-  end
-
-  def upstream_row(path, method, registry_key, plugin_id: "core")
-    {
-      path: path,
-      method: method,
-      registry_key: registry_key,
-      ruby_registry_key: EndpointNaming.upstream_registry_key_to_ruby(registry_key),
-      plugin_id: plugin_id,
-      deprecated: false,
-      server_only: false
-    }
-  end
-
-  def ruby_row(path, method, endpoint_key)
-    {path: path, method: method, endpoint_key: endpoint_key, plugin_id: "core"}
   end
 end

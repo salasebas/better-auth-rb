@@ -78,9 +78,10 @@ Do not add new shortenings without updating this table and the parity tests.
 
 ## Verification
 
+`test/endpoint_registry_parity_test.rb` reads the pinned upstream source and the
+loaded Ruby endpoints at run time, so fetch the pin first:
+
 ```bash
-ruby scripts/generate-upstream-endpoint-registry.rb
-ruby scripts/generate-endpoint-inventory.rb
-ruby scripts/compare-endpoint-api-names.rb
-bundle exec rake test TEST=packages/better_auth/test/better_auth/endpoint_registry_parity_test.rb
+./scripts/fetch-upstream-better-auth.sh
+bundle exec rake test:workspace
 ```

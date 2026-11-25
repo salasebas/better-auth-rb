@@ -1,23 +1,18 @@
 # frozen_string_literal: true
 
-require "json"
 require "minitest/autorun"
-require_relative "../scripts/support/inventory_auth"
+require_relative "../scripts/support/endpoint_inventory"
+require_relative "../scripts/support/upstream_endpoint_registry"
 require_relative "../scripts/support/endpoint_naming"
 
 InventoryAuth.require_plugin_gems!
 
 class BetterAuthEndpointRegistryParityTest < Minitest::Test
-  REGISTRY_PATH = File.expand_path("../reference/upstream-endpoint-registry.json", __dir__)
-  INVENTORY_PATH = File.expand_path("../reference/endpoints-inventory.json", __dir__)
   SKIP_PLUGINS = %w[mcp electron oidc-provider].freeze
   KNOWN_GAPS = [].freeze
 
   def setup
-    assert_path_exists REGISTRY_PATH, "Run `ruby scripts/generate-upstream-endpoint-registry.rb` first"
-    assert_path_exists INVENTORY_PATH, "Run `ruby scripts/generate-endpoint-inventory.rb` first"
-
-    @registry = JSON.parse(File.read(REGISTRY_PATH)).fetch("entries")
+    @registry = UpstreamEndpointRegistry.entries
     @auth = InventoryAuth.build_inventory_auth
     @endpoints = @auth.api.endpoints
     @inventory_index = inventory_index
@@ -103,17 +98,13 @@ class BetterAuthEndpointRegistryParityTest < Minitest::Test
   end
 
   def inventory_index
-    inventory.fetch("routes").each_with_object({}) do |row, index|
+    EndpointInventory.routes.each_with_object({}) do |row, index|
       index[[row["path"], row["method"].to_s.upcase]] = row
     end
   end
 
   def inventory_by_path
-    inventory.fetch("routes").group_by { |row| row["path"] }
-  end
-
-  def inventory
-    @inventory ||= JSON.parse(File.read(INVENTORY_PATH))
+    EndpointInventory.routes.group_by { |row| row["path"] }
   end
 
   def normalized_upstream_method(entry)

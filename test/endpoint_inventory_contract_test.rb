@@ -1,15 +1,11 @@
 # frozen_string_literal: true
 
-require "json"
-require_relative "../test_helper"
+require "minitest/autorun"
+require_relative "../scripts/support/endpoint_inventory"
 
 class BetterAuthEndpointInventoryContractTest < Minitest::Test
-  INVENTORY_PATH = File.expand_path("../../../../reference/endpoints-inventory.json", __dir__)
-
   def test_generated_inventory_has_no_duplicate_camel_case_and_snake_case_body_fields
-    skip "Run `ruby scripts/generate-endpoint-inventory.rb` to generate #{INVENTORY_PATH}" unless File.exist?(INVENTORY_PATH)
-
-    routes = JSON.parse(File.read(INVENTORY_PATH)).fetch("routes")
+    routes = EndpointInventory.routes
     bad = routes.select do |route|
       next false if route["path"].to_s.start_with?("/sso/saml2/")
 
@@ -21,9 +17,7 @@ class BetterAuthEndpointInventoryContractTest < Minitest::Test
   end
 
   def test_oauth_popup_inventory_records_hidden_query_contract
-    skip "Run `ruby scripts/generate-endpoint-inventory.rb` to generate #{INVENTORY_PATH}" unless File.exist?(INVENTORY_PATH)
-
-    routes = JSON.parse(File.read(INVENTORY_PATH)).fetch("routes")
+    routes = EndpointInventory.routes
     popup = routes.find { |route| route["method"] == "GET" && route["path"] == "/oauth-popup/start" }
 
     assert_equal true, popup.fetch("hidden")
@@ -39,9 +33,7 @@ class BetterAuthEndpointInventoryContractTest < Minitest::Test
   end
 
   def test_admin_get_user_inventory_records_only_the_canonical_id_selector
-    skip "Run `ruby scripts/generate-endpoint-inventory.rb` to generate #{INVENTORY_PATH}" unless File.exist?(INVENTORY_PATH)
-
-    routes = JSON.parse(File.read(INVENTORY_PATH)).fetch("routes")
+    routes = EndpointInventory.routes
     get_user = routes.find { |route| route["method"] == "GET" && route["path"] == "/admin/get-user" }
 
     assert_equal(
