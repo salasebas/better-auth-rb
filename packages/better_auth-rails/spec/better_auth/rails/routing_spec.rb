@@ -150,7 +150,7 @@ RSpec.describe BetterAuth::Rails::Routing do
     )
 
     expect(response.status).to eq(403)
-    expect(JSON.parse(response.body)).to eq("code" => "FORBIDDEN", "message" => "Missing or null Origin")
+    expect(JSON.parse(response.body)).to eq("code" => "MISSING_OR_NULL_ORIGIN", "message" => "Missing or null Origin")
   end
 
   it "rejects malicious callback URLs through the Rails mount" do
@@ -172,7 +172,7 @@ RSpec.describe BetterAuth::Rails::Routing do
     )
 
     expect(response.status).to eq(403)
-    expect(JSON.parse(response.body)).to eq("code" => "FORBIDDEN", "message" => "Invalid callbackURL")
+    expect(JSON.parse(response.body)).to eq("code" => "INVALID_CALLBACK_URL", "message" => "Invalid callbackURL")
   end
 
   it "dispatches correctly when Rails is mounted below an outer script name" do

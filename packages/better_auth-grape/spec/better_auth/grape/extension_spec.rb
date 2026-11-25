@@ -171,7 +171,7 @@ RSpec.describe "BetterAuth::Grape extension" do
     post "/api/auth/sign-out", "{}", "CONTENT_TYPE" => "application/json", "HTTP_COOKIE" => "better-auth.session_token=stale-token"
 
     expect(last_response.status).to eq(403)
-    expect(JSON.parse(last_response.body)).to eq("code" => "FORBIDDEN", "message" => "Missing or null Origin")
+    expect(JSON.parse(last_response.body)).to eq("code" => "MISSING_OR_NULL_ORIGIN", "message" => "Missing or null Origin")
   end
 
   it "rejects malicious callback URLs through the Grape mount" do
@@ -185,7 +185,7 @@ RSpec.describe "BetterAuth::Grape extension" do
     )
 
     expect(last_response.status).to eq(403)
-    expect(JSON.parse(last_response.body)).to eq("code" => "FORBIDDEN", "message" => "Invalid callbackURL")
+    expect(JSON.parse(last_response.body)).to eq("code" => "INVALID_CALLBACK_URL", "message" => "Invalid callbackURL")
   end
 
   it "keeps mounted origin checks active for callback URLs and fetch metadata" do
