@@ -101,5 +101,20 @@ These have no upstream code in the monorepo. A parity check does not apply.
 
 ## Planned
 
-ADR 0002 lists the features that are missing but in scope, under "Still in
-scope". Add each one to a table above when it is ported.
+[ADR 0002](adr/0002-unsupported-upstream-features.md#still-in-scope) lists
+other features RubyAuth plans to port. Move each feature to its entry above
+when the port lands.
+
+The v1.6.35 parity check identified these additions since v1.6.23.
+
+| Feature | Upstream behavior to port | Tracking |
+| --- | --- | --- |
+| Router | Match multiple unnamed wildcards in one path segment and expose each capture under its numeric key. | [#299](https://github.com/salasebas/better-auth-rb/issues/299) |
+| Instrumentation | Let each auth instance disable tracing with `experimental.instrumentation.enabled`. Use the instance setting when tracing database hooks. | [#245](https://github.com/salasebas/better-auth-rb/issues/245) |
+| Social sign-in and account linking | Pass the endpoint context to custom ID-token verifiers on sign-in and account linking. Forward it through the Apple, Cognito, Facebook, Google, LINE, Microsoft Entra ID, and PayPal providers. | [Sign-in #286](https://github.com/salasebas/better-auth-rb/issues/286), [linking #179](https://github.com/salasebas/better-auth-rb/issues/179), [providers #285](https://github.com/salasebas/better-auth-rb/issues/285) |
+| Apple social provider | Include an S256 PKCE challenge in the authorization URL when the caller supplies a verifier. | [#280](https://github.com/salasebas/better-auth-rb/issues/280) |
+| Captcha | Log structured warnings for Turnstile rejection, action mismatch, and hostname mismatch. Omit sensitive provider data. | [#273](https://github.com/salasebas/better-auth-rb/issues/273) |
+| Last login method | Let `beforeStoreCookie` suppress the tracking cookie independently of database tracking. Log hook errors. | [#272](https://github.com/salasebas/better-auth-rb/issues/272) |
+| OpenAPI | Include writable user fields from configuration and plugins in the sign-up and update-user request schemas. Preserve types and literal defaults, and mark required fields on sign-up. | [#276](https://github.com/salasebas/better-auth-rb/issues/276) |
+| SAML sign-in | Support `idpInitiatedCallbackUrl` for each provider and as a global default, including for error redirects. | [#298](https://github.com/salasebas/better-auth-rb/issues/298) |
+| CLI | Upgrade eligible dependencies to the running CLI version. Exit successfully without installing when all dependencies are current or newer. | [#256](https://github.com/salasebas/better-auth-rb/issues/256) |
