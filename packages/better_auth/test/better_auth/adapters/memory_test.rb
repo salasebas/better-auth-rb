@@ -280,6 +280,24 @@ class BetterAuthMemoryAdapterTest < Minitest::Test
     assert_same replacement, committed.fetch("settings").fetch("identity_index").keys.first
   end
 
+  def test_nested_transaction_copies_of_identity_keys_do_not_overwrite_a_live_update
+    adapter = memory_adapter_with_callback_store
+    index = {["key"] => "value"}.compare_by_identity
+    record = adapter.create(model: "callbackStore", data: {name: "base", config: index})
+    where = [{field: "id", value: record.fetch("id")}]
+
+    adapter.transaction do |outer|
+      outer.transaction do |inner|
+        inner.update(model: "callbackStore", where: where, update: {name: "temporary"})
+      end
+      assert_equal "temporary", outer.find_one(model: "callbackStore", where: where).fetch("name")
+      outer.update(model: "callbackStore", where: where, update: {name: "base"})
+      adapter.update(model: "callbackStore", where: where, update: {name: "live"})
+    end
+
+    assert_equal "live", adapter.find_one(model: "callbackStore", where: where).fetch("name")
+  end
+
   def test_transaction_rejects_unknown_mutable_leaves_before_running_body
     adapter = memory_adapter_with_callback_store
     unknown = Object.new

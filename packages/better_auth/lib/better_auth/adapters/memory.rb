@@ -147,28 +147,34 @@ module BetterAuth
       end
 
       def transaction
-        base = @lock.synchronize { transaction_snapshot(db) }
+        snapshot_origins = @snapshot_origins || {}.compare_by_identity
+        base, working = @lock.synchronize do
+          base = transaction_snapshot(db, snapshot_origins)
+          [base, transaction_snapshot(base, snapshot_origins)]
+        end
         transaction_adapter = clone(freeze: false)
-        working_copies = {}
-        transaction_adapter.db = transaction_snapshot(base, working_copies)
+        transaction_adapter.db = working
+        transaction_adapter.snapshot_origins = snapshot_origins
         result = with_transaction_context(transaction_adapter) { yield transaction_adapter }
-        @lock.synchronize { merge_transaction(base, transaction_adapter.db, working_copies) }
+        @lock.synchronize { merge_transaction(base, transaction_adapter.db, snapshot_origins) }
         result
+      ensure
+        transaction_adapter.snapshot_origins = nil if transaction_adapter
       end
 
       def serialized_transaction(&block)
         @lock.synchronize { transaction(&block) }
       end
 
-      protected attr_writer :db
+      protected attr_writer :db, :snapshot_origins
 
       private
 
-      def merge_transaction(base, working, working_copies)
+      def merge_transaction(base, working, snapshot_origins)
         merged = db.dup
         (base.keys | working.keys).each do |model|
           if working.key?(model)
-            merged[model] = merge_transaction_rows(base.fetch(model, []), working.fetch(model), db.fetch(model, []), working_copies)
+            merged[model] = merge_transaction_rows(base.fetch(model, []), working.fetch(model), db.fetch(model, []), snapshot_origins)
           else
             merged.delete(model)
           end
@@ -176,7 +182,7 @@ module BetterAuth
         db.replace(merged)
       end
 
-      def merge_transaction_rows(base_rows, working_rows, live_rows, working_copies)
+      def merge_transaction_rows(base_rows, working_rows, live_rows, snapshot_origins)
         base_by_id = base_rows.to_h { |row| [row["id"], row] }
         working_by_id = working_rows.to_h { |row| [row["id"], row] }
         live_ids = live_rows.map { |row| row["id"] }.to_set
@@ -186,12 +192,12 @@ module BetterAuth
           next if base_by_id.key?(id) && !working_by_id.key?(id)
 
           working_row = working_by_id[id]
-          (working_row && !transaction_values_equal?(base_by_id[id], working_row, working_copies)) ? working_row : row
+          (working_row && !transaction_values_equal?(base_by_id[id], working_row, snapshot_origins)) ? working_row : row
         end
         merged.concat(working_rows.reject { |row| base_by_id.key?(row["id"]) || live_ids.include?(row["id"]) })
       end
 
-      def transaction_values_equal?(before, after, working_copies, seen = {})
+      def transaction_values_equal?(before, after, snapshot_origins, seen = {})
         return true if before.equal?(after)
         return false if before.frozen? != after.frozen?
         return before == after unless before.is_a?(Hash) || before.is_a?(Array) || before.is_a?(Struct)
@@ -203,27 +209,27 @@ module BetterAuth
         case before
         when Hash
           return false unless after.is_a?(Hash) && before.size == after.size && before.compare_by_identity? == after.compare_by_identity?
-          return false unless before.default_proc.equal?(after.default_proc) && transaction_values_equal?(before.default, after.default, working_copies, seen)
+          return false unless before.default_proc.equal?(after.default_proc) && transaction_values_equal?(before.default, after.default, snapshot_origins, seen)
 
           before.each_pair.zip(after.each_pair).all? do |(key, value), (after_key, after_value)|
             same_key = if before.compare_by_identity?
-              working_copies.fetch(key.object_id, key).equal?(after_key)
+              snapshot_origins.fetch(key, key).equal?(snapshot_origins.fetch(after_key, after_key))
             else
               key.eql?(after_key)
             end
-            same_key && transaction_values_equal?(key, after_key, working_copies, seen) &&
-              transaction_values_equal?(value, after_value, working_copies, seen)
+            same_key && transaction_values_equal?(key, after_key, snapshot_origins, seen) &&
+              transaction_values_equal?(value, after_value, snapshot_origins, seen)
           end
         when Array
           after.is_a?(Array) && before.size == after.size &&
-            before.each_with_index.all? { |value, index| transaction_values_equal?(value, after[index], working_copies, seen) }
+            before.each_with_index.all? { |value, index| transaction_values_equal?(value, after[index], snapshot_origins, seen) }
         when Struct
           after.instance_of?(before.class) &&
-            before.each_pair.all? { |member, value| transaction_values_equal?(value, after[member], working_copies, seen) }
+            before.each_pair.all? { |member, value| transaction_values_equal?(value, after[member], snapshot_origins, seen) }
         end
       end
 
-      def transaction_snapshot(value, copies = {})
+      def transaction_snapshot(value, snapshot_origins, copies = {})
         object_id = value.object_id
         return copies.fetch(object_id) if copies.key?(object_id)
 
@@ -235,23 +241,23 @@ module BetterAuth
             if value.default_proc
               hash.default_proc = value.default_proc
             else
-              hash.default = transaction_snapshot(value.default, copies)
+              hash.default = transaction_snapshot(value.default, snapshot_origins, copies)
             end
             value.each do |key, child|
-              hash[transaction_snapshot(key, copies)] = transaction_snapshot(child, copies)
+              hash[transaction_snapshot(key, snapshot_origins, copies)] = transaction_snapshot(child, snapshot_origins, copies)
             end
           end
         when Array
           value.dup.tap do |array|
             array.clear
             copies[object_id] = array
-            value.each { |child| array << transaction_snapshot(child, copies) }
+            value.each { |child| array << transaction_snapshot(child, snapshot_origins, copies) }
           end
         when Struct
           value.dup.tap do |struct|
             copies[object_id] = struct
             value.each_pair do |member, child|
-              struct[member] = transaction_snapshot(child, copies)
+              struct[member] = transaction_snapshot(child, snapshot_origins, copies)
             end
           end
         when String, Time
@@ -262,6 +268,7 @@ module BetterAuth
           raise TypeError, "Unsupported Memory transaction snapshot value: #{value.class}"
         end
         copy.freeze if value.frozen?
+        snapshot_origins[copy] = snapshot_origins.fetch(value, value)
         copy
       end
 
