@@ -21,6 +21,8 @@ auth = BetterAuth.auth(
 )
 ```
 
+Keep `better_auth` and `better_auth-oauth-provider` on the same version, and upgrade them together. The provider gem depends on core internals that can move between releases.
+
 ## Client Registration
 
 Dynamic registration is disabled by default. Enable it explicitly and call it with an authenticated session unless unauthenticated registration is also enabled.
