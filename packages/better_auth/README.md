@@ -218,6 +218,21 @@ Only mutable schema fields declared with `type: "number"` may be incremented;
 IDs and string, boolean, date, array, immutable, or unknown fields are rejected.
 The base adapter intentionally has no check-then-create fallback.
 
+### Database Hooks
+
+Plugin database hooks run in registration order, followed by application
+hooks. A `create.before` hook receives the data from the preceding hook. Each
+`update.before` hook receives the original update data, and the adapter writes
+the merged result. A Ruby hook can return `nil` to leave the data as-is.
+
+An `after` hook queued during a RubyAuth transaction runs after the outer
+transaction finishes, including after rollback. During an endpoint call,
+hooks receive the endpoint context as their second argument.
+
+Magic-link and email-OTP sign-in raise an error if a delete hook vetoes the
+revocation of a credential or session created before the user's email was
+verified. RubyAuth requires revocation to succeed before verifying the user.
+
 ### Social Providers
 
 ```ruby

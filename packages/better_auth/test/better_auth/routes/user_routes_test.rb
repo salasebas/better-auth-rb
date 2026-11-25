@@ -571,8 +571,8 @@ class BetterAuthRoutesUserTest < Minitest::Test
       database_hooks: {
         user: {
           delete: {
-            before: ->(user, _context) {
-              calls << [:before, user["email"]]
+            before: ->(user, context) {
+              calls << [:before, user["email"], context&.path]
               false
             },
             after: ->(user, _context) { calls << [:after, user["email"]] }
@@ -588,7 +588,7 @@ class BetterAuthRoutesUserTest < Minitest::Test
     result = auth.api.delete_user(headers: {"cookie" => cookie}, body: {password: "password123"})
 
     assert_equal({success: true, message: "User deleted"}, result)
-    assert_equal [[:before, "abort-delete@example.com"]], calls
+    assert_equal [[:before, "abort-delete@example.com", "/delete-user"]], calls
     assert auth.context.internal_adapter.find_user_by_id(user_id)
     assert_nil storage.get(token)
     assert_nil storage.get("active-sessions-#{user_id}")

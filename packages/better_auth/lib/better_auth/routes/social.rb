@@ -341,7 +341,7 @@ module BetterAuth
           return {error: existing[:user]["banned"] ? "banned" : "account not linked"}
         end
         user = existing[:user]
-        user = ctx.context.adapter.transaction do
+        user = DatabaseHooks.transaction(ctx.context.adapter) do
           account = begin
             ctx.context.internal_adapter.create_account(account_info.merge("providerId" => provider_id, "accountId" => account_id, "userId" => user["id"]))
           rescue

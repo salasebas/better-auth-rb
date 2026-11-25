@@ -49,7 +49,7 @@ module BetterAuth
       end
 
       apply_schemas!(context)
-      Result.from_value(handler.call(context), context)
+      context.with_current { Result.from_value(handler.call(context), context) }
     end
 
     private
@@ -330,6 +330,13 @@ module BetterAuth
     end
 
     class Context
+      CURRENT_KEY = :better_auth_endpoint_context
+      private_constant :CURRENT_KEY
+
+      def self.current
+        Thread.current[CURRENT_KEY]
+      end
+
       attr_writer :oauth_redirect_base_url
 
       attr_accessor :path,
@@ -358,6 +365,14 @@ module BetterAuth
         @status = 200
         @response_headers = {}
         @returned = nil
+      end
+
+      def with_current
+        previous = Thread.current[CURRENT_KEY]
+        Thread.current[CURRENT_KEY] = self
+        yield
+      ensure
+        Thread.current[CURRENT_KEY] = previous
       end
 
       def set_status(value)
@@ -412,7 +427,7 @@ module BetterAuth
       def json(value, status: nil, headers: {})
         set_status(status) if status
         headers.each { |key, header_value| set_header(key, header_value) }
-        Result.new(response: value, status: self.status, headers: response_headers)
+        Result.new(response: value, status: self.status).tap { |result| result.headers = response_headers }
       end
 
       def error(status, message: nil, headers: {})

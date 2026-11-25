@@ -105,14 +105,15 @@ class BetterAuthInternalAdapterTest < Minitest::Test
       yielder << "user-1"
       yielder << "account-1"
     end
-    internal = internal_adapter(
+    auth = BetterAuth.auth(
+      secret: SECRET,
       advanced: {database: {generate_id: -> { ids.next }}},
       database_hooks: {
         user: {
           create: {
             before: ->(user, _context) {
-              calls << [:app_before, user["email"]]
-              {data: user}
+              calls << [:app_before, user["image"]]
+              {data: {image: "from-app"}}
             },
             after: ->(user, _context) { calls << [:app_after, user["id"]] }
           }
@@ -121,24 +122,26 @@ class BetterAuthInternalAdapterTest < Minitest::Test
       plugins: [
         {
           id: "test-plugin",
-          options: {
-            database_hooks: {
-              user: {
-                create: {
-                  before: ->(user, _context) {
-                    calls << [:plugin_before, user["email"]]
-                    {data: user.merge("image" => "from-plugin")}
-                  },
-                  after: ->(user, _context) { calls << [:plugin_after, user["image"]] }
+          init: ->(_context) {
+            {options: {
+              database_hooks: {
+                user: {
+                  create: {
+                    before: ->(user, _context) {
+                      calls << [:plugin_before, user["email"]]
+                      {data: user.merge("image" => "from-plugin")}
+                    },
+                    after: ->(user, _context) { calls << [:plugin_after, user["image"]] }
+                  }
                 }
               }
-            }
+            }}
           }
         }
       ]
     )
 
-    result = internal.create_oauth_user(
+    result = auth.context.internal_adapter.create_oauth_user(
       {email: "hooked@example.com", name: "Hooked", emailVerified: false},
       {providerId: "github", accountId: "github-hooked"}
     )
@@ -146,12 +149,12 @@ class BetterAuthInternalAdapterTest < Minitest::Test
     assert_equal "user-1", result[:user]["id"]
     assert_equal "account-1", result[:account]["id"]
     assert_equal "user-1", result[:account]["userId"]
-    assert_equal "from-plugin", result[:user]["image"]
+    assert_equal "from-app", result[:user]["image"]
     assert_equal [
-      [:app_before, "hooked@example.com"],
       [:plugin_before, "hooked@example.com"],
-      [:app_after, "user-1"],
-      [:plugin_after, "from-plugin"]
+      [:app_before, "from-plugin"],
+      [:plugin_after, "from-app"],
+      [:app_after, "user-1"]
     ], calls
   end
 
@@ -375,6 +378,25 @@ class BetterAuthInternalAdapterTest < Minitest::Test
 
     assert internal.find_account_by_provider_id(credential["accountId"], "credential")
     assert internal.find_session(session["token"])
+    refute internal.find_user_by_id(user["id"])["emailVerified"]
+  end
+
+  def test_revoke_unproven_account_access_stops_when_credential_delete_lookup_fails
+    adapter_class = Class.new(BetterAuth::Adapters::Memory) do
+      def find_many(model:, limit: nil, **options)
+        raise "credential lookup unavailable" if model == "account" && limit == 1
+
+        super
+      end
+    end
+    internal = internal_adapter(adapter_class)
+    user = internal.create_user(name: "Ada", email: "lookup-failure@example.com", emailVerified: false)
+    credential = internal.create_account(userId: user["id"], providerId: "credential", accountId: user["id"], password: "secret")
+
+    error = assert_raises(RuntimeError) { internal.revoke_unproven_account_access(user["id"]) }
+
+    assert_equal "credential lookup unavailable", error.message
+    assert_equal [credential], internal.find_accounts(user["id"])
     refute internal.find_user_by_id(user["id"])["emailVerified"]
   end
 
@@ -883,7 +905,10 @@ class BetterAuthInternalAdapterTest < Minitest::Test
   end
 
   def test_consume_verification_value_has_one_winner_and_rejects_expired_rows
-    internal = internal_adapter
+    hook_values = Queue.new
+    internal = internal_adapter(database_hooks: {verification: {delete: {
+      after: ->(row, _context) { hook_values << row.fetch("value") }
+    }}})
     internal.create_verification_value(identifier: "consume-race", value: "winner", expiresAt: Time.now + 120)
     ready = Queue.new
     start = Queue.new
@@ -898,11 +923,23 @@ class BetterAuthInternalAdapterTest < Minitest::Test
     8.times { start << true }
 
     assert_equal ["winner"], threads.map(&:value).compact.map { |row| row.fetch("value") }
+    assert_equal "winner", hook_values.pop(true)
+    assert_empty hook_values
     assert_nil internal.find_verification_value("consume-race")
 
     internal.create_verification_value(identifier: "consume-expired", value: "expired", expiresAt: Time.now - 1)
     assert_nil internal.consume_verification_value("consume-expired")
     assert_nil internal.find_verification_value("consume-expired")
+  end
+
+  def test_consume_verification_value_preserves_a_vetoed_row
+    internal = internal_adapter(database_hooks: {verification: {delete: {
+      before: ->(_row, _context) { false }
+    }}})
+    verification = internal.create_verification_value(identifier: "consume-veto", value: "held", expiresAt: Time.now + 120)
+
+    assert_nil internal.consume_verification_value("consume-veto")
+    assert_equal verification, internal.find_verification_value("consume-veto")
   end
 
   def test_consume_verification_value_supports_hashed_secondary_and_database_modes

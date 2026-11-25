@@ -45,6 +45,8 @@ class BetterAuthPostgresAdapterTest < Minitest::Test
 
     config = BetterAuth::Configuration.new(secret: SECRET, database: :memory)
     connection = PG.connect(TestDatabases.postgres_url)
+    observer = PG.connect(TestDatabases.postgres_url)
+    observed_accounts = []
     reset_schema(connection)
     create_schema(connection, config)
     auth = BetterAuth.auth(
@@ -52,7 +54,10 @@ class BetterAuthPostgresAdapterTest < Minitest::Test
       secret: SECRET,
       database: ->(options) { BetterAuth::Adapters::Postgres.new(options, connection: connection) },
       email_and_password: {enabled: true},
-      session: {cookie_cache: {enabled: false}}
+      session: {cookie_cache: {enabled: false}},
+      database_hooks: {user: {create: {after: ->(user, _ctx) {
+        observed_accounts << direct_postgres_value(observer, %(SELECT provider_id FROM "accounts" WHERE user_id = $1), [user.fetch("id")])
+      }}}}
     )
 
     status, headers, body = auth.api.sign_up_email(
@@ -64,6 +69,7 @@ class BetterAuthPostgresAdapterTest < Minitest::Test
     user_id = payload.fetch("user").fetch("id")
 
     assert_equal 200, status
+    assert_equal ["credential"], observed_accounts
     assert_equal "postgres-route@example.com", direct_postgres_value(connection, %(SELECT email FROM "users" WHERE id = $1), [user_id])
     assert_equal "credential", direct_postgres_value(connection, %(SELECT provider_id FROM "accounts" WHERE user_id = $1), [user_id])
     assert_equal user_id, direct_postgres_value(connection, %(SELECT user_id FROM "sessions" WHERE token = $1), [token])
@@ -79,6 +85,7 @@ class BetterAuthPostgresAdapterTest < Minitest::Test
   rescue PG::ConnectionBad
     skip "PostgreSQL test service is not available"
   ensure
+    observer&.close
     connection&.close
   end
 

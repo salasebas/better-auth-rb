@@ -19,7 +19,7 @@ module BetterAuth
       end
 
       def create_oauth_user(user, account, context: nil)
-        adapter.transaction do
+        DatabaseHooks.transaction(adapter) do
           created_user = create_user(user, context: context)
           created_account = create_account(stringify_keys(account).merge("userId" => created_user["id"]))
           {user: created_user, account: created_account}
@@ -67,6 +67,7 @@ module BetterAuth
         end
         hooks.delete_many([{field: "userId", value: user_id}], "account")
         hooks.delete([{field: "id", value: user_id}], "user")
+        nil
       end
 
       def create_session(user_id, dont_remember_me = false, override = nil, override_all = false, context = nil)
@@ -148,16 +149,12 @@ module BetterAuth
         end
 
         hooks.delete([{field: "token", value: token}], "session")
+        nil
       end
 
       def delete_user_sessions(user_id)
-        if secondary_storage
-          active_session_entries(user_id).each { |entry| secondary_storage.delete(entry["token"]) }
-          secondary_storage.delete(active_key(user_id))
-          return if !options.session[:store_session_in_database] || options.session[:preserve_session_in_database]
-        end
-
-        hooks.delete_many([{field: "userId", value: user_id}], "session")
+        remove_user_sessions(user_id)
+        nil
       end
 
       def delete_sessions(tokens)
@@ -168,33 +165,34 @@ module BetterAuth
         end
 
         hooks.delete_many([{field: "token", value: session_tokens, operator: "in"}], "session")
+        nil
       end
 
       def delete_accounts(user_id)
         hooks.delete_many([{field: "userId", value: user_id}], "account")
+        nil
       end
 
       def delete_account(account_id)
         hooks.delete([{field: "id", value: account_id}], "account")
+        nil
       end
 
       # Removes access established before control of an email address was proven.
       # The user is intentionally left unverified until the caller completes the
       # proof transition and may safely mint a replacement session.
       def revoke_unproven_account_access(user_id)
-        adapter.transaction do
+        DatabaseHooks.transaction(adapter) do
           user = find_user_by_id(user_id)
           next unless user && !user["emailVerified"]
 
           find_accounts(user_id).each do |account|
             next unless account["providerId"] == "credential"
 
-            deleted = delete_account(account.fetch("id"))
-            raise Error, "Credential account revocation was vetoed" if deleted == false
+            hooks.delete([{field: "id", value: account.fetch("id")}], "account", veto_error: "Credential account revocation was vetoed")
           end
 
-          deleted_sessions = delete_user_sessions(user_id)
-          raise Error, "Session revocation was vetoed" if deleted_sessions == false
+          remove_user_sessions(user_id, veto_error: "Session revocation was vetoed")
         end
       end
 
@@ -322,12 +320,7 @@ module BetterAuth
         end
 
         invalidate_secondary_verification(identifiers, consumed) if consumed && secondary_storage && verification_store_in_database?
-        return nil unless consumed
-
-        expires_at = normalize_time(consumed["expiresAt"] || consumed[:expiresAt])
-        (expires_at > Time.now) ? normalize_verification_dates(consumed) : nil
-      rescue ArgumentError, TypeError
-        nil
+        unexpired_verification(consumed) if consumed
       end
 
       def reserve_verification_value(data)
@@ -376,6 +369,7 @@ module BetterAuth
         end
 
         hooks.delete([{field: "id", value: id}], "verification")
+        nil
       end
 
       def delete_verification_by_identifier(identifier)
@@ -388,6 +382,7 @@ module BetterAuth
         end
 
         hooks.delete([{field: "identifier", value: stored_identifier}], "verification")
+        nil
       end
 
       def update_verification_value(id, data)
@@ -425,6 +420,23 @@ module BetterAuth
       end
 
       private
+
+      def remove_user_sessions(user_id, veto_error: nil)
+        if secondary_storage
+          active_session_entries(user_id).each { |entry| secondary_storage.delete(entry["token"]) }
+          secondary_storage.delete(active_key(user_id))
+          return if !options.session[:store_session_in_database] || options.session[:preserve_session_in_database]
+        end
+
+        hooks.delete_many([{field: "userId", value: user_id}], "session", veto_error: veto_error)
+      end
+
+      def unexpired_verification(verification)
+        expires_at = normalize_time(verification["expiresAt"] || verification[:expiresAt])
+        normalize_verification_dates(verification) if expires_at > Time.now
+      rescue ArgumentError, TypeError
+        nil
+      end
 
       def verification_identifiers(identifier)
         stored_identifier = processed_verification_identifier(identifier)
@@ -480,7 +492,7 @@ module BetterAuth
       def consume_database_verification(identifiers)
         identifiers.each do |stored_identifier|
           consumed = with_verification_lock(verification_key(stored_identifier)) do
-            adapter.transaction do |transaction_adapter|
+            DatabaseHooks.transaction(adapter) do |transaction_adapter|
               where = [{field: "identifier", value: stored_identifier}]
               latest = transaction_adapter.find_many(
                 model: "verification",
@@ -489,17 +501,15 @@ module BetterAuth
                 limit: 1
               ).first
               next nil unless latest
-              next nil if verification_delete_vetoed?(latest)
 
-              row = transaction_adapter.consume_one(
-                model: "verification",
-                where: [{field: "id", value: latest.fetch("id")}]
-              )
-              next nil unless row
-
-              transaction_adapter.delete_many(model: "verification", where: where)
-              run_verification_delete_after(row)
-              row
+              hooks.consume_one("verification", latest) do
+                row = transaction_adapter.consume_one(
+                  model: "verification",
+                  where: [{field: "id", value: latest.fetch("id")}]
+                )
+                transaction_adapter.delete_many(model: "verification", where: where) if row
+                row
+              end
             end
           end
           return consumed if consumed
@@ -511,14 +521,6 @@ module BetterAuth
         identifiers.each { |stored_identifier| secondary_storage.delete(verification_key(stored_identifier)) }
         id = consumed && (consumed["id"] || consumed[:id])
         secondary_storage.delete(verification_id_key(id)) if id
-      end
-
-      def verification_delete_vetoed?(entity)
-        hooks.send(:before_hooks, "verification", :delete).any? { |hook| hook.call(entity, nil) == false }
-      end
-
-      def run_verification_delete_after(entity)
-        hooks.send(:after_hooks, "verification", :delete).each { |hook| hook.call(entity, nil) }
       end
 
       def with_verification_lock(key)
