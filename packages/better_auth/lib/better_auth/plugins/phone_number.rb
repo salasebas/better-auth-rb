@@ -348,7 +348,7 @@ module BetterAuth
           }
         }
       }
-      deep_merge_hashes(base, normalize_hash(custom_schema || {}))
+      merge_schema(base, custom_schema)
     end
 
     def phone_number_database_hooks
@@ -366,14 +366,13 @@ module BetterAuth
     end
 
     def phone_number_create_user(ctx, config, body, phone_number)
+      reserved = %i[phone_number code disable_session update_phone_number]
+      additional = Schema.parse_model_input(ctx.context.options, "user", body.except(*reserved), action: :create)
       sign_up = config[:sign_up_on_verification]
       email_callback = sign_up[:get_temp_email]
       name_callback = sign_up[:get_temp_name]
       email = email_callback.respond_to?(:call) ? email_callback.call(phone_number) : "temp-#{phone_number}"
       name = name_callback.respond_to?(:call) ? name_callback.call(phone_number) : phone_number
-      reserved = %i[phone_number code disable_session update_phone_number]
-      additional = body.reject { |key, _value| reserved.include?(key.to_sym) }
-
       ctx.context.internal_adapter.create_user(
         additional.merge(
           "email" => email,

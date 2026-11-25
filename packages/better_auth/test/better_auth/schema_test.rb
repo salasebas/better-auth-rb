@@ -174,6 +174,13 @@ class BetterAuthSchemaTest < Minitest::Test
     assert_equal "app_users", schema["account"][:fields]["userId"][:references][:model]
   end
 
+  def test_output_filter_honors_returned_false_for_id
+    options = {user: {additional_fields: {id: {type: "string", returned: false}}}}
+    output = BetterAuth::Schema.parse_output(options, "user", {"id" => "user-id", "name" => "Ada"})
+
+    assert_equal({"name" => "Ada"}, output)
+  end
+
   def test_returned_false_fields_are_valid_input_and_excluded_from_output
     config = BetterAuth::Configuration.new(
       secret: SECRET,

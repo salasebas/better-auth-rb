@@ -97,11 +97,21 @@ module BetterAuth
       end
 
       def find_session(token)
+        result = find_unfiltered_session(token)
+        return nil unless result
+
+        {
+          session: Schema.parse_output(options, "session", result.fetch(:session)),
+          user: Schema.parse_output(options, "user", result.fetch(:user))
+        }
+      end
+
+      def find_unfiltered_session(token)
         if secondary_storage
           stored = secondary_storage.get(token)
-          unless javascript_falsy?(stored)
+          unless Schema.javascript_falsy?(stored)
             data = parse_session_storage(stored)
-            return nil if javascript_falsy?(data)
+            return nil if Schema.javascript_falsy?(data)
 
             return {
               session: normalize_session_dates(data.fetch("session").to_hash),
@@ -115,12 +125,12 @@ module BetterAuth
         found = find_session_with_user(token)
         return nil unless found && found["user"]
 
-        user = found.delete("user")
-        {session: found, user: user}
+        {session: found.except("user"), user: found.fetch("user")}
       end
+      private :find_unfiltered_session
 
       def find_sessions(tokens)
-        tokens.filter_map { |token| find_session(token) }
+        tokens.filter_map { |token| find_unfiltered_session(token) }
       end
 
       def update_session(token, session)
@@ -705,10 +715,6 @@ module BetterAuth
         JSON.parse(value)
       rescue JSON::ParserError
         nil
-      end
-
-      def javascript_falsy?(value)
-        value.nil? || value == false || value == "" || value == 0 || (value.is_a?(Float) && value.nan?)
       end
 
       def normalize_session_dates(session)

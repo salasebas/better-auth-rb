@@ -34,4 +34,17 @@ class BetterAuthPasskeySchemaTest < Minitest::Test
     assert_equal({type: "string", required: false}, fields.fetch(:public_key))
     assert_equal({type: "number", required: true}, fields.fetch(:counter))
   end
+
+  def test_renamed_counter_keeps_its_sql_type
+    plugin = BetterAuth::Plugins.passkey(schema: {passkey: {fields: {counter: "sign_count"}}})
+    config = BetterAuth::Configuration.new(
+      secret: "passkey-schema-secret-with-enough-entropy",
+      database: :memory,
+      plugins: [plugin]
+    )
+
+    sql = BetterAuth::Schema::SQL.create_statements(config, dialect: :postgres).join("\n")
+
+    assert_includes sql, '"sign_count" integer NOT NULL'
+  end
 end

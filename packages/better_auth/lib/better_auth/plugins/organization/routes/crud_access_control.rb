@@ -5,9 +5,10 @@ module BetterAuth
     module_function
 
     def organization_create_role_endpoint(config)
-      Endpoint.new(path: "/organization/create-role", method: "POST", metadata: organization_openapi("createOrganizationRole", "Create an organization role", response: organization_role_action_schema)) do |ctx|
+      schema = OrganizationSchema.create_body(config, :organization_role, :organization_id, :role, :role_name, :permission, :permissions, nested: true)
+      Endpoint.new(path: "/organization/create-role", method: "POST", body_schema: schema, metadata: organization_openapi("createOrganizationRole", "Create an organization role", response: organization_role_action_schema)) do |ctx|
         session = Routes.current_session(ctx)
-        body = normalize_hash(ctx.body)
+        body = ctx.body
         organization_id = body[:organization_id] || session[:session]["activeOrganizationId"]
         require_org_permission!(ctx, config, session, organization_id, {ac: ["create"]}, ORGANIZATION_ERROR_CODES.fetch("YOU_ARE_NOT_ALLOWED_TO_CREATE_A_ROLE"))
         role_name = (body[:role] || body[:role_name]).to_s
@@ -17,7 +18,7 @@ module BetterAuth
         unless organization_can_delegate_permissions?(ctx, config, require_member!(ctx, session[:user]["id"], organization_id)["role"], permission, organization_id)
           raise APIError.new("FORBIDDEN", message: ORGANIZATION_ERROR_CODES.fetch("YOU_ARE_NOT_ALLOWED_TO_CREATE_A_ROLE"))
         end
-        role = ctx.context.adapter.create(model: "organizationRole", data: {organizationId: organization_id, role: role_name, permission: JSON.generate(permission), createdAt: Time.now}.merge(additional_input(body, :organization_id, :role, :role_name, :permission, :permissions)))
+        role = ctx.context.adapter.create(model: "organizationRole", data: {organizationId: organization_id, role: role_name, permission: JSON.generate(permission), createdAt: Time.now}.merge(body.fetch(:additional_fields)))
         wired = organization_role_wire(role)
         ctx.json({success: true, roleData: wired, statements: (config[:ac] || create_access_control(ORGANIZATION_DEFAULT_STATEMENTS)).new_role(permission).statements})
       end
@@ -47,15 +48,17 @@ module BetterAuth
     end
 
     def organization_update_role_endpoint(config)
-      Endpoint.new(path: "/organization/update-role", method: "POST", metadata: organization_openapi("updateOrganizationRole", "Update an organization role", response: organization_role_action_schema)) do |ctx|
+      schema = OrganizationSchema.update_body(config, :organization_role, :role, :role_name, :permission, :permissions, outer: %i[organization_id role_id role role_name permission permissions])
+      Endpoint.new(path: "/organization/update-role", method: "POST", body_schema: schema, metadata: organization_openapi("updateOrganizationRole", "Update an organization role", response: organization_role_action_schema)) do |ctx|
         session = Routes.current_session(ctx)
-        body = normalize_hash(ctx.body)
+        body = ctx.body
         organization_id = body[:organization_id] || session[:session]["activeOrganizationId"]
         require_org_permission!(ctx, config, session, organization_id, {ac: ["update"]}, ORGANIZATION_ERROR_CODES.fetch("YOU_ARE_NOT_ALLOWED_TO_UPDATE_A_ROLE"))
         role = organization_role_by_id(ctx, body[:role_id]) || organization_role_by_name(ctx, organization_id, body[:role] || body[:role_name])
         raise APIError.new("BAD_REQUEST", message: ORGANIZATION_ERROR_CODES.fetch("ROLE_NOT_FOUND")) unless role
-        update = {}
-        update[:role] = body[:data][:role] || body[:data][:role_name] if body[:data].is_a?(Hash) && (body[:data][:role] || body[:data][:role_name])
+        data = body.fetch(:data)
+        update = data.except(:role, :role_name, :permission, :permissions)
+        update[:role] = data[:role] || data[:role_name] if data[:role] || data[:role_name]
         permission = body[:permission] || body[:permissions] || body.dig(:data, :permission) || body.dig(:data, :permissions)
         if permission
           permission = stringify_permission(permission)
@@ -65,7 +68,6 @@ module BetterAuth
           end
           update[:permission] = JSON.generate(permission)
         end
-        update.merge!(additional_input(body[:data], :role, :role_name, :permission, :permissions)) if body[:data].is_a?(Hash)
         updated = ctx.context.adapter.update(model: "organizationRole", where: [{field: "id", value: role["id"]}], update: update)
         ctx.json({success: true, roleData: organization_role_wire(updated)})
       end

@@ -5,9 +5,10 @@ module BetterAuth
     module_function
 
     def organization_invite_endpoint(config)
-      Endpoint.new(path: "/organization/invite-member", method: "POST", metadata: organization_openapi("createOrganizationInvitation", "Create an organization invitation", response: organization_ref_schema("Invitation"))) do |ctx|
+      schema = OrganizationSchema.create_body(config, :invitation, :organization_id, :organization_slug, :email, :role, :resend, :team_id, :team_ids)
+      Endpoint.new(path: "/organization/invite-member", method: "POST", body_schema: schema, metadata: organization_openapi("createOrganizationInvitation", "Create an organization invitation", response: organization_ref_schema("Invitation"))) do |ctx|
         session = Routes.current_session(ctx)
-        body = normalize_hash(ctx.body)
+        body = ctx.body
         organization = organization_by_id(ctx, body[:organization_id] || session[:session]["activeOrganizationId"]) || organization_by_slug(ctx, body[:organization_slug])
         raise APIError.new("BAD_REQUEST", message: ORGANIZATION_ERROR_CODES.fetch("ORGANIZATION_NOT_FOUND")) unless organization
         member = require_org_permission!(ctx, config, session, organization["id"], {invitation: ["create"]}, ORGANIZATION_ERROR_CODES.fetch("YOU_ARE_NOT_ALLOWED_TO_INVITE_USERS_TO_THIS_ORGANIZATION"))
@@ -74,7 +75,7 @@ module BetterAuth
             inviterId: session[:user]["id"],
             teamId: team_ids.any? ? team_ids.join(",") : nil,
             createdAt: Time.now
-          }.merge(additional_input(body, :organization_id, :organization_slug, :email, :role, :resend, :team_id, :team_ids))
+          }.merge(body.fetch(:additional_fields))
           merge_hook_data!(invitation_data, run_org_hook(config, :before_create_invitation, {invitation: invitation_data, inviter: session[:user], organization: organization_wire(ctx, organization)}, ctx))
           {invitation: adapter.create(model: "invitation", data: invitation_data, force_allow_id: true), reused: false}
         end

@@ -4,6 +4,8 @@ require "time"
 
 module BetterAuth
   module Schema
+    ACCOUNT_SECRET_FIELDS = %w[accessToken refreshToken idToken accessTokenExpiresAt refreshTokenExpiresAt password].freeze
+
     module_function
 
     def auth_tables(options)
@@ -72,54 +74,89 @@ module BetterAuth
     def parse_output(options, model, data)
       return nil unless data
 
-      table = auth_tables(options).fetch(model.to_s)
-      table[:fields].each_with_object({}) do |(field, attributes), result|
-        next if attributes[:returned] == false && field != "id"
-        next unless data.key?(field)
+      model = model.to_s
+      fields = auth_tables(options).dig(model, :fields) || {}
+      fields = fields.merge(declared_model_fields(options, model)) if %w[user session account].include?(model)
+      hidden = fields.filter_map { |field, attributes| field if attributes[:returned] == false }
+      hidden.concat(ACCOUNT_SECRET_FIELDS) if model == "account"
+      filtered = data.reject { |field, _value| hidden.include?(storage_key(field)) }
+      filtered.slice(*fields.keys).merge(filtered)
+    end
 
-        result[field] = data[field]
-      end.tap do |result|
-        data.each { |key, value| result[key] = value unless result.key?(key) || table[:fields].key?(key) }
-      end
-    rescue KeyError
-      data
+    def parse_model_input(options, model, data, action:)
+      fields = declared_model_fields(options, model.to_s)
+      parse_input(data.transform_keys { |key| storage_key(key) }, fields, action)
+    end
+
+    def input_transform(attributes)
+      transform = attributes[:transform]
+      transform[:input] if transform.is_a?(Hash)
     end
 
     def parse_provider_profile_user_input(options, profile, action:)
       action = action.to_sym
       raise ArgumentError, "action must be :create or :update" unless [:create, :update].include?(action)
 
-      input = (profile || {}).each_with_object({}) do |(key, value), result|
-        result[storage_key(key)] = value
-      end
-      core_fields = %w[id email emailVerified name image createdAt updatedAt]
-      fields = auth_tables(options).fetch("user").fetch(:fields).except(*core_fields)
+      fields = declared_model_fields(options, "user")
+      input = (profile || {}).transform_keys { |key| storage_key(key) }
+      input.reject! { |key, _value| fields.dig(key, :input) == false }
+      parse_input(input, fields, action)
+    end
 
+    private_class_method def self.declared_model_fields(options, model)
+      normalize_fields(additional_fields(options, model.to_sym)).merge(plugin_tables(options).dig(model, :fields) || {})
+    end
+
+    private_class_method def self.parse_input(input, fields, action)
       fields.each_with_object({}) do |(field, attributes), result|
-        provider_value_allowed = attributes[:input] != false && input.key?(field)
-        if provider_value_allowed
-          value = coerce_provider_profile_value(input[field], attributes)
-          transform = attributes[:transform]
-          value = transform.call(value) if transform.respond_to?(:call)
-          validator = attributes[:validator]
-          if validator.respond_to?(:call) && !validator.call(value)
-            raise APIError.new("BAD_REQUEST", message: "#{field} is invalid")
-          end
-          result[field] = value
+        provided = input.key?(field)
+        if provided && attributes[:input] != false
+          result[field] = parse_input_value(input[field], field, attributes)
         elsif action == :create && attributes.key?(:default_value)
-          default = attributes[:default_value]
-          result[field] = default.respond_to?(:call) ? default.call : default
+          result[field] = resolve_input_default(attributes.fetch(:default_value))
+        elsif provided
+          unless javascript_falsy?(input[field])
+            raise APIError.new("BAD_REQUEST", code: "FIELD_NOT_ALLOWED", message: "#{field} is not allowed to be set")
+          end
         elsif action == :create && attributes[:required]
-          raise APIError.new("BAD_REQUEST", message: "#{field} is required")
+          raise APIError.new("BAD_REQUEST", code: "MISSING_FIELD", message: "#{field} is required")
         end
       end
     end
 
-    private_class_method def self.coerce_provider_profile_value(value, attributes)
-      return value if value.nil?
-      return Time.parse(value) if attributes[:type] == "date" && value.is_a?(String)
+    private_class_method def self.parse_input_value(value, field, attributes)
+      validator = attributes[:validator]
+      transform = attributes[:transform]
+      if validator.is_a?(Hash) && validator[:input]
+        result = validator.fetch(:input).call(value)
+        if result.is_a?(Thread)
+          raise APIError.new("INTERNAL_SERVER_ERROR", code: "ASYNC_VALIDATION_NOT_SUPPORTED", message: BASE_ERROR_CODES.fetch("ASYNC_VALIDATION_NOT_SUPPORTED"))
+        end
+        if (issues = result[:issues])
+          message = issues.first&.fetch(:message, nil)
+          message = BASE_ERROR_CODES.fetch("VALIDATION_ERROR") if message.nil? || message.empty?
+          raise APIError.new("BAD_REQUEST", code: "VALIDATION_ERROR", message: message)
+        end
+        return result.fetch(:value)
+      end
+      structured_transform = input_transform(attributes)
+      return structured_transform.call(value) if structured_transform
+
+      value = Time.parse(value) if attributes[:type] == "date" && value.is_a?(String)
+      value = transform.call(value) if transform.respond_to?(:call)
+      if validator.respond_to?(:call) && !validator.call(value)
+        raise APIError.new("BAD_REQUEST", code: "VALIDATION_ERROR", message: "#{field} is invalid")
+      end
 
       value
+    end
+
+    private_class_method def self.resolve_input_default(default)
+      default.respond_to?(:call) ? default.call : default
+    end
+
+    def javascript_falsy?(value)
+      value.nil? || value == false || value == "" || value == 0 || (value.is_a?(Float) && value.nan?)
     end
 
     private_class_method def self.user_table(options, plugin_table)
@@ -218,7 +255,10 @@ module BetterAuth
       reference = attributes[:references]
       return physical_attributes unless reference
 
-      physical_attributes.merge(references: physical_reference(reference, tables))
+      physical_attributes.merge(
+        references: physical_reference(reference, tables),
+        logical_reference_field: reference.fetch(:field).to_s
+      )
     end
 
     private_class_method def self.physical_reference(reference, tables)

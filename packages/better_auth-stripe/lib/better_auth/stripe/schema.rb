@@ -45,48 +45,14 @@ module BetterAuth
         end
 
         custom_schema = custom_schema.except(:subscription) unless config.dig(:subscription, :enabled)
-        deep_merge_schema(base_schema, custom_schema)
+        BetterAuth::Plugins.merge_schema(base_schema, custom_schema)
       end
 
       def custom_schema(config)
         raw = config && (config[:schema] || config["schema"])
-        normalize_custom_schema(raw || {})
-      end
+        return {} unless raw.is_a?(Hash)
 
-      def normalize_custom_schema(value)
-        return {} unless value.is_a?(Hash)
-
-        value.each_with_object({}) do |(model_name, model_schema), result|
-          normalized_model = BetterAuth::Plugins.normalize_key(model_name)
-          result[normalized_model] = normalize_custom_model_schema(model_schema)
-        end
-      end
-
-      def normalize_custom_model_schema(value)
-        return value unless value.is_a?(Hash)
-
-        value.each_with_object({}) do |(key, object), result|
-          normalized_key = BetterAuth::Plugins.normalize_key(key)
-          result[normalized_key] = if normalized_key == :fields && object.is_a?(Hash)
-            object.each_with_object({}) do |(field_name, field_schema), fields|
-              fields[field_name] = field_schema
-            end
-          elsif object.is_a?(Hash)
-            BetterAuth::Plugins.normalize_hash(object)
-          else
-            object
-          end
-        end
-      end
-
-      def deep_merge_schema(base, override)
-        base.merge(override) do |_key, old_value, new_value|
-          if old_value.is_a?(Hash) && new_value.is_a?(Hash)
-            deep_merge_schema(old_value, new_value)
-          else
-            new_value
-          end
-        end
+        raw.transform_keys { |model| BetterAuth::Plugins.normalize_key(model) }
       end
     end
   end

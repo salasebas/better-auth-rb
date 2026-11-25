@@ -251,6 +251,10 @@ Magic-link and email-OTP sign-in raise an error if a delete hook vetoes the
 revocation of a credential or session created before the user's email was
 verified. RubyAuth requires revocation to succeed before verifying the user.
 
+### Additional Fields
+
+Use `validator: {input: callback}` to validate an additional user or session field. The Ruby callback runs synchronously and returns `{value: parsed_value}` or `{issues: [{message: "Invalid value"}]}`. Database adapters call `transform: {input: callback}` before writing the value. Request parsing also calls that transform when the field has no input validator. A field with `input: false` is managed by the server.
+
 ### Social Providers
 
 ```ruby

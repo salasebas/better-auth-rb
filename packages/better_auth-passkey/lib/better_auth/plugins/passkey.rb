@@ -163,9 +163,5 @@ module BetterAuth
     def passkey_credential_descriptor(record, kind: :allow)
       BetterAuth::Passkey::Credentials.credential_descriptor(record, kind: kind)
     end
-
-    def passkey_deep_merge_hashes(base, override)
-      BetterAuth::Passkey::Schema.deep_merge_hashes(base, override)
-    end
   end
 end

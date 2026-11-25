@@ -23,17 +23,7 @@ module BetterAuth
             }
           }
         }
-        deep_merge_hashes(normalize_hash(base), normalize_hash(custom_schema || {}))
-      end
-
-      def deep_merge_hashes(base, override)
-        base.merge(override) do |_key, old_value, new_value|
-          if old_value.is_a?(Hash) && new_value.is_a?(Hash)
-            deep_merge_hashes(old_value, new_value)
-          else
-            new_value
-          end
-        end
+        BetterAuth::Plugins.merge_schema(normalize_hash(base), normalize_hash(custom_schema))
       end
 
       def normalize_hash(value)

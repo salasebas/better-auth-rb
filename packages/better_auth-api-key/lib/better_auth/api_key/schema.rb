@@ -34,7 +34,7 @@ module BetterAuth
             }
           }
         }
-        BetterAuth::Plugins.deep_merge_hashes(base, BetterAuth::Plugins.normalize_hash(custom_schema || {}))
+        BetterAuth::Plugins.merge_schema(base, custom_schema)
       end
     end
   end

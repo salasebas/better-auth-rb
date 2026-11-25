@@ -613,7 +613,7 @@
       "ruby_source": "packages/better_auth/test/better_auth/schema/sql_test.rb",
       "local_exists": true,
       "upstream_exists": true,
-      "current_local_lines": 953,
+      "current_local_lines": 955,
       "upstream_lines": 1035,
       "status": "thin"
     },

@@ -94,6 +94,29 @@ class BetterAuthRoutesSignUpTest < Minitest::Test
     refute result[:user].key?("plan")
   end
 
+  def test_sign_up_email_transforms_the_validator_output_before_writing
+    auth = build_auth(user: {
+      additional_fields: {
+        profileCode: {
+          type: "string",
+          validator: {input: ->(value) { (value == "accepted") ? {value: "validated"} : {issues: [{message: "Invalid profile code"}]} }},
+          transform: {input: ->(value) { "#{value}!" }}
+        }
+      }
+    })
+    body = {email: "validated-sign-up@example.com", password: "password123", name: "Validated"}
+
+    error = assert_raises(BetterAuth::APIError) do
+      auth.api.sign_up_email(body: body.merge(profileCode: "rejected"))
+    end
+    assert_equal "VALIDATION_ERROR", error.code
+    assert_equal "Invalid profile code", error.message
+    assert_nil auth.context.internal_adapter.find_user_by_email(body.fetch(:email))
+
+    result = auth.api.sign_up_email(body: body.merge(profileCode: "accepted"))
+    assert_equal "validated!", result.fetch(:user).fetch("profileCode")
+  end
+
   def test_sign_up_email_rejects_input_false_additional_user_fields
     auth = build_auth(
       user: {

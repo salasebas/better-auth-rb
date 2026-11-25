@@ -283,29 +283,10 @@ module BetterAuth
 
       def transform_input(model, data, action, force_allow_id)
         fields = schema_for(model).fetch(:fields)
-        input = stringify_keys(data)
-        output = {}
-        fields.each do |field, attributes|
-          next if field == "id" && input.key?(field) && !force_allow_id
-
-          value_provided = input.key?(field)
-          value = input[field]
-          if value_provided && attributes[:input] == false && value && !force_allow_id
-            raise APIError.new("BAD_REQUEST", message: "#{field} is not allowed to be set")
-          end
-
-          if !value_provided && action == "create" && attributes.key?(:default_value)
-            value = resolve_default(attributes[:default_value])
-            value_provided = true
-          elsif !value_provided && action == "update" && attributes[:on_update]
-            value = resolve_default(attributes[:on_update])
-            value_provided = true
-          end
-          if !value_provided && action == "create" && attributes[:required]
-            raise APIError.new("BAD_REQUEST", message: "#{field} is required") unless field == "id"
-          end
-          output[field] = coerce_value(value, attributes) if value_provided
+        output = transform_input_fields(fields, stringify_keys(data), action, force_allow_id) do |value, _field, attributes|
+          coerce_value(value, attributes)
         end
+
         output["id"] = generated_id if action == "create" && !output.key?("id") && fields.key?("id")
         output
       end
@@ -590,10 +571,6 @@ module BetterAuth
 
       def physical_name(value)
         BetterAuth::Schema.send(:physical_name, value)
-      end
-
-      def resolve_default(value)
-        value.respond_to?(:call) ? value.call : value
       end
 
       def coerce_value(value, attributes)

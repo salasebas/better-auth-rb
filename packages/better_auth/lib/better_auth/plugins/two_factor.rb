@@ -436,7 +436,7 @@ module BetterAuth
       if config[:two_factor_table] && config[:two_factor_table] != TWO_FACTOR_MODEL
         base[:twoFactor][:model_name] = config[:two_factor_table].to_s
       end
-      deep_merge_hashes(base, normalize_hash(custom_schema || {}))
+      merge_schema(base, custom_schema)
     end
 
     def two_factor_after_sign_in(ctx, config)

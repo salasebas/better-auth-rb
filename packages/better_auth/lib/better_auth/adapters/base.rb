@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require "time"
+
 module BetterAuth
   module Adapters
     class Base
@@ -78,6 +80,42 @@ module BetterAuth
       end
 
       private
+
+      def transform_input_fields(fields, input, action, force_allow_id)
+        creating = action == "create"
+        fields.each_with_object({}) do |(field, attributes), output|
+          supplied = input.key?(field)
+          next if field == "id" && supplied && !force_allow_id
+
+          value = input[field]
+          if supplied && attributes[:input] == false && value && !force_allow_id
+            raise APIError.new("BAD_REQUEST", message: "#{field} is not allowed to be set")
+          end
+
+          transform = Schema.input_transform(attributes)
+          if transform && attributes[:type] == "date" && value.is_a?(String)
+            value = value.match?(/\A\d{4}-\d{2}-\d{2}\z/) ? Time.iso8601("#{value}T00:00:00Z") : Time.parse(value)
+          end
+          if creating && attributes.key?(:default_value) && (!supplied || (attributes[:required] == true && value.nil?))
+            value = resolve_default(attributes.fetch(:default_value))
+            supplied = true
+          elsif !creating && !supplied && attributes[:on_update]
+            value = resolve_default(attributes.fetch(:on_update))
+            supplied = true
+          end
+
+          if supplied || (creating && transform)
+            value = transform.call(value) if transform
+            output[field] = yield(value, field, attributes)
+          elsif creating && attributes[:required] && field != "id"
+            raise APIError.new("BAD_REQUEST", message: "#{field} is required")
+          end
+        end
+      end
+
+      def resolve_default(default)
+        default.respond_to?(:call) ? default.call : default
+      end
 
       attr_reader :transaction_context_key
 

@@ -463,9 +463,7 @@ module BetterAuth
           }
         }
       }
-      return base unless custom_schema.is_a?(Hash)
-
-      deep_merge_hashes(base, normalize_hash(custom_schema))
+      merge_schema(base, custom_schema)
     end
   end
 end

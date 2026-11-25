@@ -5,13 +5,14 @@ module BetterAuth
     module_function
 
     def organization_create_team_endpoint(config)
-      Endpoint.new(path: "/organization/create-team", method: "POST", metadata: organization_openapi("createOrganizationTeam", "Create an organization team", response: organization_ref_schema("Team"))) do |ctx|
+      schema = OrganizationSchema.create_body(config, :team, :organization_id, :name)
+      Endpoint.new(path: "/organization/create-team", method: "POST", body_schema: schema, metadata: organization_openapi("createOrganizationTeam", "Create an organization team", response: organization_ref_schema("Team"))) do |ctx|
         session = Routes.current_session(ctx)
-        body = normalize_hash(ctx.body)
+        body = ctx.body
         organization_id = body[:organization_id] || session[:session]["activeOrganizationId"]
         require_org_permission!(ctx, config, session, organization_id, {team: ["create"]}, ORGANIZATION_ERROR_CODES.fetch("YOU_ARE_NOT_ALLOWED_TO_CREATE_TEAMS_IN_THIS_ORGANIZATION"))
         organization = organization_by_id(ctx, organization_id)
-        team_data = {organizationId: organization_id, name: body[:name].to_s, createdAt: Time.now}.merge(additional_input(body, :organization_id, :name))
+        team_data = {organizationId: organization_id, name: body[:name].to_s, createdAt: Time.now}.merge(body.fetch(:additional_fields))
         merge_hook_data!(team_data, run_org_hook(config, :before_create_team, {team: team_data, user: session[:user], organization: organization_wire(ctx, organization)}, ctx))
         team = organization_transaction(ctx) do |adapter|
           lock_organization_capacity!(adapter, organization)
@@ -39,14 +40,15 @@ module BetterAuth
     end
 
     def organization_update_team_endpoint(config)
-      Endpoint.new(path: "/organization/update-team", method: "POST", metadata: organization_openapi("updateOrganizationTeam", "Update an organization team", response: organization_ref_schema("Team"))) do |ctx|
+      schema = OrganizationSchema.update_body(config, :team, :name, :organization_id, outer: %i[team_id], additional_fields_override_base: true)
+      Endpoint.new(path: "/organization/update-team", method: "POST", body_schema: schema, metadata: organization_openapi("updateOrganizationTeam", "Update an organization team", response: organization_ref_schema("Team"))) do |ctx|
         session = Routes.current_session(ctx)
-        body = normalize_hash(ctx.body)
+        body = ctx.body
         team = team_by_id(ctx, body[:team_id])
         raise APIError.new("BAD_REQUEST", message: ORGANIZATION_ERROR_CODES.fetch("TEAM_NOT_FOUND")) unless team
         require_org_permission!(ctx, config, session, team["organizationId"], {team: ["update"]}, ORGANIZATION_ERROR_CODES.fetch("YOU_ARE_NOT_ALLOWED_TO_UPDATE_THIS_TEAM"))
         organization = organization_by_id(ctx, team["organizationId"])
-        update = additional_input(body[:data].is_a?(Hash) ? body[:data] : body, :team_id, :organization_id)
+        update = body.fetch(:data).except(:organization_id)
         merge_hook_data!(update, run_org_hook(config, :before_update_team, {team: team_wire(ctx, team), updates: update, user: session[:user], organization: organization_wire(ctx, organization)}, ctx))
         updated = ctx.context.adapter.update(model: "team", where: [{field: "id", value: team["id"]}], update: update)
         run_org_hook(config, :after_update_team, {team: team_wire(ctx, updated), user: session[:user], organization: organization_wire(ctx, organization)}, ctx)

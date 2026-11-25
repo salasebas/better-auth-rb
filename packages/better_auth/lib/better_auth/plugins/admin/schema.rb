@@ -17,11 +17,11 @@ module BetterAuth
           },
           session: {
             fields: {
-              impersonatedBy: {type: "string", required: false}
+              impersonatedBy: {type: "string", required: false, input: false}
             }
           }
         }
-        OrganizationSchema.merge_custom_schema(schema, custom)
+        Plugins.merge_schema(schema, custom)
       end
     end
   end

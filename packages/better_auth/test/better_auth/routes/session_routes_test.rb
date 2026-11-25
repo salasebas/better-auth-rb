@@ -50,6 +50,29 @@ class BetterAuthRoutesSessionTest < Minitest::Test
     assert_equal BetterAuth::BASE_ERROR_CODES["BODY_MUST_BE_AN_OBJECT"], error.message
   end
 
+  def test_update_session_rejects_plugin_authority_fields
+    auth = build_auth(
+      plugins: [
+        BetterAuth::Plugins.organization(
+          teams: {enabled: true},
+          schema: {session: {fields: {activeTeamId: "current_team"}}}
+        ),
+        BetterAuth::Plugins.admin(schema: {session: {fields: {impersonatedBy: "acting_admin"}}})
+      ],
+      session: {additional_fields: {activeOrganizationId: {type: "string", required: false}}}
+    )
+    cookie = sign_up_cookie(auth, email: "plugin-session-fields@example.com")
+
+    %w[activeOrganizationId activeTeamId impersonatedBy].each do |field|
+      error = assert_raises(BetterAuth::APIError) do
+        auth.api.update_session(headers: {"cookie" => cookie}, body: {field => "client-value"})
+      end
+      assert_equal 400, error.status_code
+      assert_equal "FIELD_NOT_ALLOWED", error.code
+      assert_equal "#{field} is not allowed to be set", error.message
+    end
+  end
+
   def test_get_session_deferred_get_reports_needs_refresh_without_updating_session
     auth = build_auth(session: {defer_session_refresh: true, update_age: 60, expires_in: 120, cookie_cache: {enabled: false}})
     cookie = sign_up_cookie(auth, email: "deferred-session@example.com")

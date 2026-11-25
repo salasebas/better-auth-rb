@@ -26,6 +26,43 @@ class BetterAuthMemoryAdapterTest < Minitest::Test
     assert_kind_of Time, user["updatedAt"]
   end
 
+  def test_required_null_uses_the_default_before_the_input_transform
+    config = BetterAuth::Configuration.new(secret: SECRET, database: :memory, user: {
+      additional_fields: {label: {type: "string", required: true, default_value: "guest", transform: {input: ->(value) { value.upcase }}}}
+    })
+    adapter = BetterAuth::Adapters::Memory.new(config)
+
+    user = adapter.create(model: "user", data: {name: "Ada", email: "ada@example.com", label: nil})
+
+    assert_equal "GUEST", user.fetch("label")
+  end
+
+  def test_input_transform_receives_an_on_update_result_before_date_coercion
+    original_timezone = ENV["TZ"]
+    ENV["TZ"] = "America/Chicago"
+    supplied_date = "2026-01-01"
+    generated_date = "2026-02-01T00:00:00Z"
+    inputs = []
+    transform = lambda do |value|
+      inputs << value
+      value
+    end
+    config = BetterAuth::Configuration.new(secret: SECRET, database: :memory, user: {
+      additional_fields: {
+        lastSeenAt: {type: "date", on_update: -> { generated_date }, transform: {input: transform}}
+      }
+    })
+    adapter = BetterAuth::Adapters::Memory.new(config)
+    user = adapter.create(model: "user", data: {name: "Ada", email: "ada@example.com", lastSeenAt: supplied_date})
+
+    updated = adapter.update(model: "user", where: [{field: "id", value: user.fetch("id")}], update: {name: "Ada Lovelace"})
+
+    assert_equal [Time.utc(2026, 1, 1), generated_date], inputs
+    assert_equal Time.utc(2026, 2, 1), updated.fetch("lastSeenAt")
+  ensure
+    ENV["TZ"] = original_timezone
+  end
+
   def test_find_many_supports_where_operators_sort_limit_offset_and_count
     3.times do |index|
       @adapter.create(model: "user", data: {

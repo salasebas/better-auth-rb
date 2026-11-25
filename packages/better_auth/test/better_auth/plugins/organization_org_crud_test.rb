@@ -5,6 +5,59 @@ require_relative "../../test_helper"
 class BetterAuthPluginsOrganizationOrgCrudTest < Minitest::Test
   include BetterAuthTestHelpers
 
+  def test_organization_create_validates_additional_fields_and_strips_server_input
+    auth = build_organization_auth(plugins: [BetterAuth::Plugins.organization(schema: {
+      organization: {additional_fields: {
+        publicCode: {type: "string"},
+        privateCode: {type: "string", required: false, input: false},
+        tags: {type: "string[]", required: false}
+      }}
+    })])
+    cookie = sign_up_cookie(auth, email: "validated-organization@example.com")
+    headers = {"cookie" => cookie}
+    body = {name: "Validated", slug: "validated"}
+
+    [{}, {publicCode: 123}].each do |fields|
+      error = assert_raises(BetterAuth::APIError) do
+        auth.api.create_organization(headers: headers, body: body.merge(fields))
+      end
+      assert_equal 400, error.status_code
+      assert_equal "VALIDATION_ERROR", error.code
+    end
+
+    error = assert_raises(BetterAuth::APIError) do
+      auth.api.create_organization(headers: headers, body: body.merge(publicCode: "public", tags: ["valid", 3]))
+    end
+    assert_equal "VALIDATION_ERROR", error.code
+    assert_equal "[body.tags.1] Invalid input: expected string, received number", error.message
+
+    created = auth.api.create_organization(headers: headers, body: body.merge(publicCode: "public", privateCode: "ignored"))
+    assert_equal "public", created.fetch("publicCode")
+    row = auth.context.adapter.find_one(model: "organization", where: [{field: "id", value: created.fetch("id")}])
+    refute row.key?("privateCode")
+
+    updated = auth.api.update_organization(headers: headers, body: {organizationId: created.fetch("id"), data: {name: "Updated"}})
+    assert_equal "Updated", updated.fetch("name")
+    assert_equal "public", updated.fetch("publicCode")
+  end
+
+  def test_team_update_applies_the_additional_field_schema_to_name
+    plugin = BetterAuth::Plugins.organization(teams: {enabled: true}, schema: {
+      team: {additional_fields: {name: {type: "string"}}}
+    })
+    auth = build_organization_auth(plugins: [plugin])
+    cookie = sign_up_cookie(auth, email: "team-schema@example.com")
+    headers = {"cookie" => cookie}
+    organization = auth.api.create_organization(headers: headers, body: {name: "Test", slug: "test"})
+    team = auth.api.create_team(headers: headers, body: {name: "Original", organizationId: organization.fetch("id")})
+
+    error = assert_raises(BetterAuth::APIError) do
+      auth.api.update_team(headers: headers, body: {teamId: team.fetch("id"), data: {name: 123}})
+    end
+    assert_equal "VALIDATION_ERROR", error.code
+    assert_equal "[body.data.name] Invalid input: expected string, received number", error.message
+  end
+
   def test_create_organization_rejects_empty_name_and_slug
     auth = build_organization_auth
     cookie = sign_up_cookie(auth, email: "empty-fields@example.com")
