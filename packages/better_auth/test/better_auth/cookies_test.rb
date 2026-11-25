@@ -357,17 +357,27 @@ class BetterAuthCookiesTest < Minitest::Test
   end
 
   def test_cross_subdomain_cookies_derive_domain_from_base_url_and_require_base_url
-    config = BetterAuth::Configuration.new(
-      secret: SECRET,
-      base_url: "https://app.example.com",
-      database: :memory,
-      advanced: {cross_subdomain_cookies: {enabled: true}}
-    )
-    cookie = BetterAuth::Cookies.create_cookie(config, "session_token")
+    {"https://app.example.com" => "app.example.com", "http://[::1]:3000" => "[::1]"}.each do |url, domain|
+      config = BetterAuth::Configuration.new(
+        secret: SECRET,
+        base_url: url,
+        database: :memory,
+        advanced: {cross_subdomain_cookies: {enabled: true}}
+      )
+      cookie = BetterAuth::Cookies.create_cookie(config, "session_token")
 
-    assert_equal "app.example.com", cookie.attributes[:domain]
+      assert_equal domain, cookie.attributes[:domain]
+    end
 
-    with_env("BETTER_AUTH_URL" => nil, "OPEN_AUTH_URL" => nil, "BASE_URL" => nil) do
+    with_env(
+      "OPEN_AUTH_URL" => nil,
+      "BETTER_AUTH_URL" => nil,
+      "NEXT_PUBLIC_BETTER_AUTH_URL" => nil,
+      "PUBLIC_BETTER_AUTH_URL" => nil,
+      "NUXT_PUBLIC_BETTER_AUTH_URL" => nil,
+      "NUXT_PUBLIC_AUTH_URL" => nil,
+      "BASE_URL" => nil
+    ) do
       assert_raises(BetterAuth::Error, "base_url is required") do
         BetterAuth::Configuration.new(
           secret: SECRET,
@@ -376,14 +386,38 @@ class BetterAuthCookiesTest < Minitest::Test
         )
       end
     end
+  end
 
-    assert_raises(BetterAuth::Error, "dynamic base_url is unsupported") do
-      BetterAuth::Configuration.new(
+  def test_dynamic_protocol_sets_the_initial_secure_cookie_flag
+    %w[http https].each do |protocol|
+      auth = BetterAuth.auth(secret: SECRET, base_url: {allowed_hosts: ["example.com"], protocol: protocol})
+
+      assert_equal protocol == "https", auth.context.auth_cookies[:session_token].attributes[:secure]
+    end
+  end
+
+  def test_dynamic_cross_subdomain_cookie_uses_resolved_scheme_in_production
+    with_env("RACK_ENV" => "production") do
+      auth = BetterAuth.auth(
         secret: SECRET,
         database: :memory,
-        base_url: {allowed_hosts: ["example.com"], fallback: "https://example.com"},
-        advanced: {cross_subdomain_cookies: {enabled: true}}
+        base_url: {allowed_hosts: ["auth.example.com"], protocol: "http"},
+        advanced: {cross_subdomain_cookies: {enabled: true}},
+        email_and_password: {enabled: true}
       )
+
+      result = auth.api.sign_up_email(
+        headers: {"host" => "auth.example.com"},
+        body: {name: "Ada", email: "ada@example.com", password: "example-password-123"},
+        return_headers: true
+      )
+      session_cookie = BetterAuth::Cookies.split_set_cookie_header(result.fetch(:headers).fetch("set-cookie"))
+        .map { |header| BetterAuth::Cookies.parse_set_cookie(header) }
+        .find { |cookie| cookie.fetch(:name).end_with?(".session_token") }
+
+      assert_equal "better-auth.session_token", session_cookie.fetch(:name)
+      assert_equal "auth.example.com", session_cookie.fetch(:attributes).fetch("domain")
+      refute session_cookie.fetch(:attributes).key?("secure")
     end
   end
 

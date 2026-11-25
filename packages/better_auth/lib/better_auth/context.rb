@@ -6,7 +6,6 @@ module BetterAuth
   class Context
     attr_reader :app_name,
       :version,
-      :options,
       :social_providers,
       :adapter,
       :internal_adapter,
@@ -62,11 +61,17 @@ module BetterAuth
       runtime_fetch(:base_url, @base_url)
     end
 
+    def options
+      runtime_fetch(:options, @options)
+    end
+
     def token_link_base_url
       base_url
     end
 
-    attr_reader :canonical_base_url
+    def canonical_base_url
+      runtime_fetch(:canonical_base_url, @canonical_base_url)
+    end
 
     def trusted_origins
       runtime_fetch(:trusted_origins, @trusted_origins)
@@ -135,7 +140,7 @@ module BetterAuth
     end
 
     def create_auth_cookie(cookie_name, override_attributes = {})
-      Cookies.create_cookie(options, cookie_name.to_s, override_attributes)
+      Cookies.create_cookie(runtime_fetch(:cookie_options, @options), cookie_name.to_s, override_attributes)
     end
 
     def set_adapter(adapter)
@@ -174,19 +179,11 @@ module BetterAuth
     end
 
     def prepare_for_request!(request)
-      runtime = request_runtime
-      runtime[:current_session] = nil
-      runtime[:new_session] = nil
-      runtime[:base_url] = serving_base_url(request)
-      runtime[:trusted_origins] = current_trusted_origins(request)
+      prepare_runtime!(request)
     end
 
     def prepare_for_api_call!(source)
-      runtime = request_runtime
-      runtime[:current_session] = nil
-      runtime[:new_session] = nil
-      runtime[:base_url] = serving_base_url(source)
-      runtime[:trusted_origins] = current_trusted_origins(request_for_callbacks(source))
+      prepare_runtime!(source, direct: true)
     end
 
     def reset_runtime!
@@ -199,22 +196,64 @@ module BetterAuth
       Thread.current[runtime_key] = nil
     end
 
+    def with_runtime(runtime = nil)
+      previous = Thread.current[runtime_key]
+      Thread.current[runtime_key] = runtime
+      yield
+    ensure
+      Thread.current[runtime_key] = previous
+    end
+
+    def bind_runtime(&callback)
+      runtime = Thread.current[runtime_key]
+      -> { with_runtime(runtime, &callback) }
+    end
+
     private
 
+    def prepare_runtime!(source, direct: false)
+      runtime = request_runtime
+      runtime[:current_session] = nil
+      runtime[:new_session] = nil
+      if URLHelpers.dynamic_config?(@options.base_url)
+        resolve_dynamic_runtime!(runtime, source, direct: direct)
+      else
+        runtime[:base_url] = serving_base_url(source)
+      end
+      runtime[:trusted_origins] = current_trusted_origins(request_for_callbacks(source))
+    end
+
+    def resolve_dynamic_runtime!(runtime, source, direct:)
+      config = @options.base_url
+      if direct && source.nil? && config[:fallback].to_s.empty?
+        raise Error, "Dynamic baseURL could not be resolved for this direct auth.api call. Pass `headers: request.headers` (or `request`) to the call, or add `fallback` to your baseURL config."
+      end
+
+      trusted_proxy_headers = @options.advanced[:trusted_proxy_headers] != false
+      url = URLHelpers.resolve_base_url(config, @options.base_path, source, load_env: false, trusted_proxy_headers: trusted_proxy_headers)
+      resolved_options = @options.with_resolved_base_url(url)
+      runtime[:base_url] = url
+      runtime[:canonical_base_url] = url
+      runtime[:options] = resolved_options
+      if @options.advanced.dig(:cross_subdomain_cookies, :enabled)
+        runtime[:cookie_options] = resolved_options
+        runtime[:auth_cookies] = runtime[:cookies] = Cookies.get_cookies(resolved_options)
+      end
+    end
+
     def serving_base_url(source)
+      return canonical_base_url unless options.serving_origins.any? { |origin| origin != options.base_url }
+
       candidate = inferred_origin(source)
       return canonical_base_url unless candidate
       return canonical_base_url if candidate == options.base_url
       return canonical_base_url unless options.serving_origins.any? { |pattern| Configuration.matches_origin_pattern?(candidate, pattern) }
 
-      path = options.base_path
-      path.empty? ? candidate : "#{candidate}#{path}"
+      URLHelpers.with_path(candidate, URI.parse(canonical_base_url).path)
     end
 
     def request_for_callbacks(source)
-      return source if source.respond_to?(:get_header)
-
-      DirectAPIRequest.new(source, base_url) if source.is_a?(Hash)
+      source.is_a?(Hash) ? DirectAPIRequest.new(source, base_url) : source
     end
 
     def request_runtime
@@ -255,54 +294,16 @@ module BetterAuth
       forwarded_host = URLHelpers.header_value(URLHelpers.headers_from_source(source), "x-forwarded-host")
       if trusted_proxy_headers && forwarded_host
         forwarded_proto = URLHelpers.header_value(URLHelpers.headers_from_source(source), "x-forwarded-proto")
-        return nil unless valid_proxy_host?(forwarded_host.to_s) && valid_proxy_proto?(forwarded_proto.to_s)
+        return unless URLHelpers.valid_proxy_header?(forwarded_host, :host) && URLHelpers.valid_proxy_header?(forwarded_proto, :proto)
 
-        return "#{forwarded_proto}://#{forwarded_host}"
+        return URLHelpers.origin("#{forwarded_proto}://#{forwarded_host}")
       end
 
       host = URLHelpers.host_from_source(source, trusted_proxy_headers: false)
-      return nil unless host && valid_proxy_host?(host)
+      return unless URLHelpers.valid_proxy_header?(host, :host)
 
       protocol = URLHelpers.protocol_from_source(source, trusted_proxy_headers: false)
-      return nil unless valid_proxy_proto?(protocol)
-
-      "#{protocol}://#{host}"
-    end
-
-    def valid_proxy_proto?(proto)
-      %w[http https].include?(proto)
-    end
-
-    def valid_proxy_host?(host)
-      return false if host.strip.empty?
-
-      suspicious_patterns = [
-        /\.\./,
-        /\0/,
-        /\s/,
-        /\A[.]/,
-        /[<>'"]/,
-        /javascript:/i,
-        /file:/i,
-        /data:/i,
-        %r{[/\\]}
-      ]
-      return false if suspicious_patterns.any? { |pattern| host.match?(pattern) }
-
-      hostname = /\A[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*(:[0-9]{1,5})?\z/
-      ipv4 = /\A(\d{1,3}\.){3}\d{1,3}(:[0-9]{1,5})?\z/
-      ipv6 = /\A\[[0-9a-fA-F:]+\](:[0-9]{1,5})?\z/
-      localhost = /\Alocalhost(:[0-9]{1,5})?\z/i
-      return false unless [hostname, ipv4, ipv6, localhost].any? { |pattern| host.match?(pattern) }
-
-      valid_port?(host)
-    end
-
-    def valid_port?(host)
-      port = host[/:(\d{1,5})\z/, 1]
-      return true unless port
-
-      port.to_i.between?(1, 65_535)
+      URLHelpers.origin("#{protocol}://#{host}")
     end
 
     def current_trusted_origins(request)
@@ -339,7 +340,7 @@ module BetterAuth
 
       def initialize(headers, url)
         @headers = headers.transform_keys { |key| key.to_s.downcase }
-        @url = url
+        @url = URI.parse(url).normalize.to_s
       end
 
       def get_header(key)

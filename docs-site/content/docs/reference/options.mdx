@@ -25,9 +25,9 @@ auth = BetterAuth.auth(
 
 ## `base_url`
 
-The required canonical URL for RubyAuth. Pass a static HTTP(S) URL or set `BETTER_AUTH_URL`. RubyAuth fails during initialization when neither is present. Request headers are never used to infer this canonical identity.
+Pass a static HTTP(S) URL or a hash with `allowed_hosts`. RubyAuth requires a configured URL or allowlist at startup so an incoming request alone cannot select the origin for token-bearing links.
 
-If the URL includes a path, that path takes precedence over `base_path`.
+If the URL includes a non-root path, that path takes precedence over `base_path` for routing. A static URL also sets the canonical origin for issuer metadata and provider callbacks.
 
 ```ruby
 auth = BetterAuth.auth(
@@ -37,15 +37,21 @@ auth = BetterAuth.auth(
 )
 ```
 
-JWT issuer/audience defaults, OAuth/OIDC issuer metadata, provider redirect URI defaults, and OpenAPI servers always use this canonical URL.
+A missing or empty static value falls back to the first nonempty environment variable in this order: `OPEN_AUTH_URL`, `BETTER_AUTH_URL`, `NEXT_PUBLIC_BETTER_AUTH_URL`, `PUBLIC_BETTER_AUTH_URL`, `NUXT_PUBLIC_BETTER_AUTH_URL`, `NUXT_PUBLIC_AUTH_URL`, then `BASE_URL`. RubyAuth ignores `BASE_URL=/`.
 
-<Callout type="warn">
-  The legacy hash form of `base_url` is no longer supported. Use a static canonical `base_url` plus `serving_origins`.
-</Callout>
+With a hash, RubyAuth resolves the auth URL for each request.
+
+| Key | Behavior |
+| --- | --- |
+| `allowed_hosts` | Required list of exact hosts or wildcard patterns. Include the port when requests specify one. |
+| `protocol` | Use `"https"` or `"http"` to fix the scheme. Omit it or set `"auto"` to infer the scheme. |
+| `fallback` | Optional static URL for missing or unmatched hosts. Direct API calls without a request or host headers also use it. |
+
+For proxy settings and deployment examples, see [Dynamic base URL](/docs/guides/dynamic-base-url).
 
 ## `serving_origins`
 
-Optional request-facing origins from which RubyAuth may serve auth routes. Entries are full HTTP(S) origin patterns without paths. Exact and wildcard matching use the same syntax as `trusted_origins`. The canonical origin from `base_url` is always included.
+Optional request-facing origins for a static `base_url`. Entries are full HTTP(S) origin patterns without paths. Exact and wildcard matching use the same syntax as `trusted_origins`. The canonical origin is always included.
 
 ```ruby
 auth = BetterAuth.auth(
@@ -59,7 +65,7 @@ For each request, RubyAuth uses the inbound `Host` only when the resulting origi
 
 Serving origins are automatically added to `trusted_origins`. This relationship is one-way: a `trusted_origins` entry cannot become a serving origin or control token-bearing links.
 
-See [Multiple Serving Origins](/docs/guides/dynamic-base-url) for deployment examples and migration from dynamic `base_url`.
+See [Dynamic base URL](/docs/guides/dynamic-base-url) for deployment examples.
 
 ## `base_path`
 

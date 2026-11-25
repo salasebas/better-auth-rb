@@ -13,7 +13,15 @@ class BetterAuthURLHelpersTest < Minitest::Test
     refute BetterAuth::URLHelpers.valid_proxy_header?("<script>", :host)
     refute BetterAuth::URLHelpers.valid_proxy_header?("", :host)
     refute BetterAuth::URLHelpers.valid_proxy_header?("   ", :host)
-    refute BetterAuth::URLHelpers.valid_proxy_header?("example.com:99999", :host)
+  end
+
+  def test_port_range_is_checked_when_parsing_the_url
+    assert BetterAuth::URLHelpers.valid_proxy_header?("example.com:99999", :host)
+
+    error = assert_raises(BetterAuth::Error) do
+      BetterAuth::URLHelpers.with_path("https://example.com:99999")
+    end
+    assert_includes error.message, "Please provide a valid base URL."
   end
 
   def test_validate_proxy_header_accepts_valid_hosts_and_protocols

@@ -67,13 +67,8 @@ auth = BetterAuth.auth(
 )
 ```
 
-In production, token-bearing email links require either a static `base_url`
-(including `BETTER_AUTH_URL`) or a dynamic `base_url` with `allowed_hosts`.
-Request-host inference remains available for other routes and in development.
-Legacy deployments can opt out with
-`advanced: { allow_unsafe_token_link_base_url_inference: true }`, but doing so
-allows request headers to select the origin used in security-token links and is
-not recommended.
+RubyAuth requires either a static `base_url`, which can come from
+`BETTER_AUTH_URL`, or a dynamic `base_url` with `allowed_hosts`.
 
 ### Session cookies
 
@@ -492,10 +487,9 @@ The gem is available as open source under the terms of the [MIT License](https:/
 
 ### Canonical and serving origins
 
-`base_url` (or `BETTER_AUTH_URL`) is required and defines the stable canonical
-identity of the auth server. RubyAuth never infers that identity from request
-headers. For an approved multi-domain deployment, configure full origin
-patterns separately:
+A static `base_url` defines the canonical identity of the auth server.
+Set `serving_origins` to serve token-bearing links on other approved origins
+while using the canonical URL for issuer metadata and OAuth callbacks.
 
 ```ruby
 BetterAuth.auth(
@@ -512,11 +506,31 @@ to the canonical URL. Serving origins are trusted for CSRF and redirect checks,
 but the reverse is intentionally false: a `trusted_origins` entry cannot become
 a serving origin or control token-bearing links.
 
-`X-Forwarded-Host` and `X-Forwarded-Proto` are considered only when
-`advanced.trusted_proxy_headers` is explicitly `true`, and the resulting origin
-must still match `serving_origins`. The former hash/dynamic form of `base_url`
-is unsupported; migrate its fallback to `base_url` and its allowlist to full
-`serving_origins` patterns.
+With `serving_origins`, set `advanced.trusted_proxy_headers: true` to use
+`X-Forwarded-Host` and `X-Forwarded-Proto`. The resulting origin must match
+`serving_origins`.
+
+### Dynamic base URL
+
+Use a hash when the auth URL itself should vary by host.
+
+```ruby
+BetterAuth.auth(
+  secret: ENV.fetch("BETTER_AUTH_SECRET"),
+  base_url: {
+    allowed_hosts: ["auth.example.com", "preview-*.example.com"],
+    protocol: "https",
+    fallback: "https://auth.example.com"
+  }
+)
+```
+
+RubyAuth resolves the URL for each request and also uses it for OAuth callbacks
+and token-bearing links. Dynamic configuration trusts proxy headers by default.
+Set `advanced: {trusted_proxy_headers: false}` when the proxy does not overwrite
+those headers. A direct API call needs a request, host headers, or `fallback`.
+RubyAuth requires an explicit URL or host allowlist at startup so an incoming
+request alone cannot select the origin for token-bearing links.
 
 ### Trusted origins
 

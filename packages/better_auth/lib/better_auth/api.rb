@@ -12,37 +12,8 @@ module BetterAuth
     end
 
     def call_endpoint(key, input = {})
-      RequestState.with_current do
-        context.reset_runtime! if context.respond_to?(:reset_runtime!)
-        endpoint = endpoints.fetch(key.to_sym)
-        input = symbolize_keys(input || {})
-        request = input[:request]
-        headers = request_headers(request).merge(normalize_headers_hash(input[:headers] || {}))
-        begin
-          prepare_context_for_call!(request, headers)
-        rescue APIError => error
-          result = Endpoint::Result.new(response: error)
-          return format_result(result, input)
-        rescue Error => error
-          api_error = APIError.new("INTERNAL_SERVER_ERROR", message: error.message)
-          result = Endpoint::Result.new(response: api_error)
-          return format_result(result, input)
-        end
-        input[:as_response] = true if request_like?(request) && !input.key?(:as_response)
-        endpoint_context = Endpoint::Context.new(
-          path: endpoint.path,
-          method: input[:method] || request_method(request) || Array(endpoint.methods).first,
-          query: input[:query] || {},
-          body: input[:body] || {},
-          params: input[:params] || {},
-          headers: headers,
-          context: context,
-          request: request_like?(request) ? request : nil
-        )
-
-        @dispatcher.call(endpoint, endpoint_context, key: key) { |result| format_result(result, input) }
-      ensure
-        context.clear_runtime! if context.respond_to?(:clear_runtime!)
+      context.with_runtime do
+        RequestState.with_current { dispatch_endpoint(key, input) }
       end
     end
 
@@ -53,6 +24,36 @@ module BetterAuth
     end
 
     private
+
+    def dispatch_endpoint(key, input)
+      endpoint = endpoints.fetch(key.to_sym)
+      input = symbolize_keys(input || {})
+      request = input[:request]
+      headers = request_headers(request).merge(normalize_headers_hash(input[:headers] || {}))
+      begin
+        prepare_context_for_call!(request, headers)
+      rescue APIError => error
+        result = Endpoint::Result.new(response: error)
+        return format_result(result, input)
+      rescue Error => error
+        api_error = APIError.new("INTERNAL_SERVER_ERROR", message: error.message)
+        result = Endpoint::Result.new(response: api_error)
+        return format_result(result, input)
+      end
+      input[:as_response] = true if request_like?(request) && !input.key?(:as_response)
+      endpoint_context = Endpoint::Context.new(
+        path: endpoint.path,
+        method: input[:method] || request_method(request) || Array(endpoint.methods).first,
+        query: input[:query] || {},
+        body: input[:body] || {},
+        params: input[:params] || {},
+        headers: headers,
+        context: context,
+        request: request_like?(request) ? request : nil
+      )
+
+      @dispatcher.call(endpoint, endpoint_context, key: key) { |result| format_result(result, input) }
+    end
 
     def define_endpoint_methods
       endpoints.each_key do |key|
@@ -151,16 +152,19 @@ module BetterAuth
         else
           next unless key.start_with?("HTTP_")
 
-          header = key.delete_prefix("HTTP_").downcase.tr("_", "-")
-          headers[header] = value
+          headers[normalize_header_name(key)] = value
         end
       end
     end
 
     def normalize_headers_hash(headers)
       headers.each_with_object({}) do |(key, value), result|
-        result[key.to_s.downcase.tr("_", "-")] = value
+        result[normalize_header_name(key)] = value
       end
+    end
+
+    def normalize_header_name(key)
+      key.to_s.delete_prefix("HTTP_").downcase.tr("_", "-")
     end
 
     def symbolize_keys(value)

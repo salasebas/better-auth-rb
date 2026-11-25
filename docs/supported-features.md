@@ -19,7 +19,8 @@ To check one entry against an upstream version, use the prompts in
 | Origin check and trusted origins | `middleware/origin_check.rb`, `host.rb` | `better-auth/src/api/middlewares/` |
 | Client IP | `request_ip.rb` | `core/src/utils/` |
 | Rate limiting | `rate_limiter.rb` | `better-auth/src/api/rate-limiter/` |
-| Configuration, context and plugin system | `configuration.rb`, `context.rb`, `auth.rb`, `plugin.rb`, `plugin_context.rb`, `plugin_loader.rb`, `plugin_registry.rb`, `secret_config.rb`, `url_helpers.rb`, `env.rb`, `logger.rb` | `better-auth/src/context/`, `better-auth/src/auth/`, `core/src/context/`, `core/src/env/` |
+| Configuration, context and plugin system | `configuration.rb`, `context.rb`, `auth.rb`, `plugin.rb`, `plugin_context.rb`, `plugin_loader.rb`, `plugin_registry.rb`, `secret_config.rb`, `env.rb`, `logger.rb` | `better-auth/src/context/`, `better-auth/src/auth/`, `core/src/context/`, `core/src/env/` |
+| Base URL resolution | `configuration.rb`, `context.rb`, `url_helpers.rb` | `better-auth/src/utils/url.ts`, `better-auth/src/context/helpers.ts`, `better-auth/src/auth/base.ts`, `better-auth/src/api/to-auth-endpoints.ts` |
 | Instrumentation | `instrumentation.rb` | `core/src/instrumentation/` |
 | Cookies and sessions | `cookies.rb`, `session.rb`, `session_store.rb`, `routes/session.rb`, `routes/sign_out.rb` | `better-auth/src/cookies/`, `better-auth/src/api/routes/session.ts`, `better-auth/src/api/routes/sign-out.ts` |
 | Crypto and password hashing | `crypto.rb`, `crypto/`, `password.rb` | `better-auth/src/crypto/`, `core/src/utils/` |

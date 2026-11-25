@@ -817,7 +817,7 @@
       "supported": true,
       "local_exists": true,
       "upstream_exists": true,
-      "current_local_lines": 85,
+      "current_local_lines": 122,
       "upstream_lines": 156,
       "status": "thin"
     },
@@ -2086,7 +2086,7 @@
       "supported": true,
       "local_exists": true,
       "upstream_exists": true,
-      "current_local_lines": 154,
+      "current_local_lines": 153,
       "upstream_lines": 257,
       "status": "thin"
     },
@@ -2106,7 +2106,7 @@
       "supported": true,
       "local_exists": true,
       "upstream_exists": true,
-      "current_local_lines": 794,
+      "current_local_lines": 800,
       "upstream_lines": 956,
       "status": "thin"
     },
@@ -2148,7 +2148,7 @@
       "supported": true,
       "local_exists": true,
       "upstream_exists": true,
-      "current_local_lines": 355,
+      "current_local_lines": 357,
       "upstream_lines": 314,
       "status": "needs_manual_review"
     },
