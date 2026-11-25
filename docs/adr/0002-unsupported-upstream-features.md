@@ -24,14 +24,22 @@ for them, and an upgrade to a newer upstream version skips them.
 - CIMD, OAuth Client ID Metadata Documents (`@better-auth/cimd`, v1.7).
 - CIBA, Client-Initiated Backchannel Authentication (`@better-auth/ciba`, v1.8).
 - The CLI's AI, MCP, and infrastructure login and logout commands.
+- The upstream docs' AI resources: the docs MCP server and agent skills.
+
+### Better Auth Infrastructure
+
+The hosted Better Auth service and its plugins: the dashboard (`dash`), audit
+logs, Sentinel, and the email and SMS services.
 
 ### Anything outside the Ruby ecosystem
 
-- Browser clients, client plugins, and JavaScript framework integrations.
+- Browser clients, client plugins, and JavaScript framework integrations, such
+  as Next.js, Nuxt, Convex, and Effect.
 - Electron (`@better-auth/electron`) and the client half of Expo
   (`@better-auth/expo`). The Expo server plugin stays.
-- JavaScript ORM adapters (Drizzle, Prisma, Kysely) and CLI schema generation for
-  them.
+- JavaScript ORM adapters (Drizzle, Prisma, Kysely), including Drizzle
+  relations v2, and CLI schema generation for them.
+- Deployment guides for JavaScript runtimes, such as Cloudflare Workers.
 - Node.js-only behavior, such as detecting npm packages in telemetry.
 
 ### Payments other than Stripe
@@ -42,17 +50,28 @@ sign-in provider is not a payment plugin and stays.
 
 ### Deprecated upstream APIs
 
-Anything the pinned upstream version marks `@deprecated` or has removed. For
-example: the `oidc-provider` plugin, which `better_auth-oauth-provider` replaces,
-and the `/forget-password/email-otp` endpoint, which
-`/email-otp/request-password-reset` replaces.
+Anything upstream marks `@deprecated` or has removed. Port the replacement
+instead. Examples:
+
+- v1.6: the `oidc-provider` plugin, which `better_auth-oauth-provider` replaces,
+  and the `/forget-password/email-otp` endpoint, which
+  `/email-otp/request-password-reset` replaces.
+- v1.7: the legacy OAuth proxy callback path, which `/callback/:id/oauth-proxy`
+  replaces; the option that `tokenEndpointAuth` replaces; and the context
+  helpers that `getCurrentAuthEndpointContext` replaces.
+- v1.8: the restriction options that `securityRestrictions` with `"mfa"` and
+  `"sso"` replaces.
 
 ## Still in scope
 
 These are missing or incomplete, but RubyAuth plans to port them:
 
-- Test utilities, limited to the helpers that are useful in Ruby tests.
+- Test utilities (`@better-auth/test-utils` from v1.7), limited to the helpers
+  that are useful in Ruby tests.
 - OpenTelemetry instrumentation.
+- From v1.7 and v1.8: the Cloudflare social sign-in provider, the OAuth
+  provider's resource-server helpers (`oauthResource`), SCIM groups and roles,
+  new i18n locales, and the identity-provider changes in the v1.8 upgrade guide.
 
 ## Consequences
 

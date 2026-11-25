@@ -31,9 +31,11 @@ upstream version it ports, for example
 title into the commit on `main`.
 
 Port only Ruby server behavior. `docs/adr/0002-unsupported-upstream-features.md`
-lists what RubyAuth never ports: AI agents and MCP, anything outside the Ruby
-ecosystem (JavaScript clients, JavaScript ORMs, Electron), payment providers
-other than Stripe, and deprecated upstream APIs. Parity audits skip those
+lists what RubyAuth never ports: AI agents and MCP, the hosted Better Auth
+Infrastructure, anything outside the Ruby ecosystem (JavaScript clients,
+JavaScript ORMs, Electron), payment providers other than Stripe, and deprecated
+upstream APIs. Check it against every upstream version you port, not only the
+pin. Parity audits skip those
 features. When an upgrade brings a new one, add it to that ADR instead of
 porting it.
 
