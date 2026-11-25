@@ -1,6 +1,6 @@
 # Better Auth OAuth 2.1 Provider
 
-Canonical Ruby provider surface for OAuth 2.1, OIDC compatibility, MCP/resource-server helpers, and dynamic client registration.
+Canonical Ruby provider surface for OAuth 2.1, OIDC compatibility, resource-server helpers, and dynamic client registration.
 
 Upstream ships OAuth provider as `@better-auth/oauth-provider`, separate from core plugin exports. This gem mirrors that boundary for Ruby while keeping Ruby option names snake_case and upstream-compatible HTTP paths and JSON keys.
 
@@ -219,7 +219,7 @@ Then drop the legacy access-token and consent columns. Rails apps using `better_
 
 When the JWT plugin is registered, JWT access tokens and ID tokens use the JWT plugin's configured `jwks.key_pair_config.alg`, defaulting to `EdDSA` like upstream, and discovery metadata publishes the active JWKS URI. With `disable_jwt_plugin: true`, confidential-client ID tokens use HS256 with the original client credential, matching upstream; public clients do not receive an ID token in this mode.
 
-Upstream `oauthProviderResourceClient` and MCP protected-resource helpers are available through `BetterAuth::Plugins::OAuthProvider::ClientResource` and `BetterAuth::Plugins::OAuthProvider::MCP`.
+Upstream `oauthProviderResourceClient` is available through `BetterAuth::Plugins::OAuthProvider::ClientResource`, including the `WWW-Authenticate` bearer challenge that points clients to protected-resource metadata. Upstream `mcpHandler` is not ported: RubyAuth does not support MCP (see `docs/adr/0002-unsupported-upstream-features.md`).
 
 Route OpenAPI metadata blocks from upstream TypeScript are intentionally not ported into this package. Use the Ruby `open_api` plugin for generated OpenAPI output.
 
@@ -230,7 +230,7 @@ Core `BetterAuth::Plugins.oidc_provider` and `BetterAuth::Plugins.mcp` were remo
 ## Migration from removed core plugins
 
 - Replace `BetterAuth::Plugins.oidc_provider(...)` with `BetterAuth::Plugins.oauth_provider(...)` after adding `gem "better_auth-oauth-provider"` and `require "better_auth/oauth_provider"`.
-- Replace `BetterAuth::Plugins.mcp(...)` with `BetterAuth::Plugins.oauth_provider(...)` and use `/oauth2/*` routes plus `OAuthProvider::MCP.mcp_handler` for resource-server bearer challenges.
+- `BetterAuth::Plugins.mcp(...)` has no replacement. For resource-server bearer challenges, use `/oauth2/*` routes and `OAuthProvider::ClientResource.verify_access_token`.
 - Legacy `/mcp/*` routes are not supported. Use OAuth Provider token and introspection endpoints instead of `/mcp/get-session`.
 
 ## Development

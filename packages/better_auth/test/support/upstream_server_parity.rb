@@ -393,11 +393,8 @@ module BetterAuth
           notes: "Magic-link issuance, single-use storage, Rack verification, invalid/empty token redirects, callbacks, and rate limits are covered in magic_link_test; Ruby validates the Rack query before endpoint dispatch"
         },
         "plugins/mcp/mcp.test.ts" => {
-          owner: [
-            "../../better_auth-oauth-provider/test/better_auth/oauth_provider/mcp_test.rb"
-          ],
-          status: :covered,
-          notes: "MCP/resource-server behavior covered by oauth-provider package"
+          status: :ruby_not_applicable,
+          notes: "RubyAuth does not port MCP (docs/adr/0002-unsupported-upstream-features.md)"
         },
         "plugins/multi-session/multi-session.test.ts" => {
           owner: "better_auth/plugins/multi_session_test.rb",

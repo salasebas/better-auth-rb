@@ -99,6 +99,46 @@ class OAuthProviderClientResourceTest < Minitest::Test
     assert_equal 403, error.status_code
   end
 
+  def test_verify_access_token_challenges_an_invalid_token_with_resource_metadata
+    auth = build_auth(scopes: ["read"])
+
+    error = assert_raises(BetterAuth::APIError) do
+      ClientResource.verify_access_token(
+        "invalid",
+        verify_options: {audience: "http://localhost:3000", issuer: "http://localhost:3000"},
+        ctx: build_endpoint_context(auth)
+      )
+    end
+
+    assert_equal 401, error.status_code
+    assert_equal 'Bearer resource_metadata="http://localhost:3000/.well-known/oauth-protected-resource"', error.headers["www-authenticate"]
+  end
+
+  def test_www_authenticate_points_each_resource_to_its_protected_resource_metadata
+    header = ClientResource.www_authenticate(["http://localhost:5000", "http://localhost:5000/resource1"])
+
+    assert_equal(
+      'Bearer resource_metadata="http://localhost:5000/.well-known/oauth-protected-resource", Bearer resource_metadata="http://localhost:5000/.well-known/oauth-protected-resource/resource1"',
+      header
+    )
+  end
+
+  def test_verify_access_token_challenges_a_non_url_resource_with_its_mapped_metadata
+    auth = build_auth(scopes: ["read"])
+
+    error = assert_raises(BetterAuth::APIError) do
+      ClientResource.verify_access_token(
+        "invalid",
+        verify_options: {audience: "urn:api", issuer: "http://localhost:3000"},
+        resource_metadata_mappings: {"urn:api" => "https://api.example/.well-known/oauth-protected-resource"},
+        ctx: build_endpoint_context(auth)
+      )
+    end
+
+    assert_equal 401, error.status_code
+    assert_equal 'Bearer resource_metadata="https://api.example/.well-known/oauth-protected-resource"', error.headers["www-authenticate"]
+  end
+
   def test_verify_access_token_remote_introspection
     token = "opaque-token"
 

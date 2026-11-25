@@ -61,13 +61,13 @@ module BetterAuth
     }.freeze
 
     REMOVED_PLUGIN_FACTORIES = {
-      oidc_provider: "BetterAuth::Plugins.oauth_provider (require \"better_auth/oauth_provider\")",
-      mcp: "BetterAuth::Plugins.oauth_provider (require \"better_auth/oauth_provider\")"
+      oidc_provider: "Use BetterAuth::Plugins.oauth_provider (require \"better_auth/oauth_provider\") instead.",
+      mcp: "RubyAuth does not support MCP."
     }.freeze
 
     def method_missing(name, ...)
-      if (replacement = REMOVED_PLUGIN_FACTORIES[name.to_sym])
-        raise ArgumentError, "BetterAuth::Plugins.#{name} was removed. Use #{replacement} instead."
+      if (advice = REMOVED_PLUGIN_FACTORIES[name.to_sym])
+        raise ArgumentError, "BetterAuth::Plugins.#{name} was removed. #{advice}"
       end
 
       if (loader = plugin_loader_for_method(name))

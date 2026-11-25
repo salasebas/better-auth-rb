@@ -20,6 +20,6 @@ class OAuthProviderUnifiedSurfaceTest < Minitest::Test
     assert_match(/oauth_provider/i, oidc_error.message)
 
     mcp_error = assert_raises(ArgumentError) { BetterAuth::Plugins.mcp }
-    assert_match(/oauth_provider/i, mcp_error.message)
+    assert_match(/does not support MCP/, mcp_error.message)
   end
 end

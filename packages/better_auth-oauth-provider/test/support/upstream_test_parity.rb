@@ -29,10 +29,8 @@ module BetterAuthOAuthProviderUpstreamParity
         notes: "End-session ID-token validation"
       },
       "src/mcp.test.ts" => {
-        owner: "better_auth/oauth_provider/mcp_test.rb",
-        status: :covered,
-        evidence: {"better_auth/oauth_provider/mcp_test.rb" => "test_mcp_handler_with_verifier_accepts_valid_jwt"},
-        notes: "Protected-resource metadata and bearer challenges"
+        status: :ruby_not_applicable,
+        notes: "RubyAuth does not port MCP (docs/adr/0002-unsupported-upstream-features.md); the shared bearer challenge is covered in client_resource_test.rb"
       },
       "src/metadata.test.ts" => {
         owner: "better_auth/oauth_provider/metadata_test.rb",
