@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.12.0](https://github.com/salasebas/better-auth-rb/compare/better_auth-passkey/v0.11.0...better_auth-passkey/v0.12.0) (2026-11-25)
+
+
+### Bug Fixes
+
+* **last-login-method:** persist tracking through database hooks ([#74](https://github.com/salasebas/better-auth-rb/issues/74)) ([663600d](https://github.com/salasebas/better-auth-rb/commit/663600dc3a05856bf0e1697bb04f9f0a9d264476))
+* **passkey:** use GET for challenge routes ([e232f02](https://github.com/salasebas/better-auth-rb/commit/e232f02f487509601d72b1333393918ccd625dea))
+* **schema:** enforce request and output field rules (v1.6.35) ([#308](https://github.com/salasebas/better-auth-rb/issues/308)) ([78e2461](https://github.com/salasebas/better-auth-rb/commit/78e2461277e4a4c285e1514f756a6a42385d7038))
+
 ## [0.11.0](https://github.com/salasebas/better-auth-rb/compare/better_auth-passkey-v0.10.0...better_auth-passkey/v0.11.0) (2026-07-23)
 
 

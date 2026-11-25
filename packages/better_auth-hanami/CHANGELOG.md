@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.12.0](https://github.com/salasebas/better-auth-rb/compare/better_auth-hanami/v0.11.0...better_auth-hanami/v0.12.0) (2026-11-25)
+
+
+### Bug Fixes
+
+* **core:** default omitted schema fields to required ([#89](https://github.com/salasebas/better-auth-rb/issues/89)) ([f570148](https://github.com/salasebas/better-auth-rb/commit/f570148f20b6910a34d122b58884143e2f6155e8))
+* **schema:** enforce request and output field rules (v1.6.35) ([#308](https://github.com/salasebas/better-auth-rb/issues/308)) ([78e2461](https://github.com/salasebas/better-auth-rb/commit/78e2461277e4a4c285e1514f756a6a42385d7038))
+
 ## [0.11.0](https://github.com/salasebas/better-auth-rb/compare/better_auth-hanami-v0.10.0...better_auth-hanami/v0.11.0) (2026-07-23)
 
 
