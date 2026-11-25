@@ -7,45 +7,49 @@ module BetterAuth
     def initialize(context, endpoints)
       @context = context
       @endpoints = endpoints
+      @dispatcher = EndpointDispatcher.new(context)
       define_endpoint_methods
     end
 
     def call_endpoint(key, input = {})
-      context.reset_runtime! if context.respond_to?(:reset_runtime!)
-      endpoint = endpoints.fetch(key.to_sym)
-      input = symbolize_keys(input || {})
-      request = input[:request]
-      headers = request_headers(request).merge(normalize_headers_hash(input[:headers] || {}))
-      begin
-        prepare_context_for_call!(request, headers)
-      rescue APIError => error
-        result = Endpoint::Result.new(response: error, status: error.status_code, headers: error.headers)
-        return format_result(result, input)
-      rescue Error => error
-        api_error = APIError.new("INTERNAL_SERVER_ERROR", message: error.message)
-        result = Endpoint::Result.new(response: api_error, status: api_error.status_code, headers: api_error.headers)
-        return format_result(result, input)
-      end
-      input[:as_response] = true if request_like?(request) && !input.key?(:as_response)
-      endpoint_context = Endpoint::Context.new(
-        path: endpoint.path,
-        method: input[:method] || request_method(request) || Array(endpoint.methods).first,
-        query: input[:query] || {},
-        body: input[:body] || {},
-        params: input[:params] || {},
-        headers: headers,
-        context: context,
-        request: request_like?(request) ? request : nil
-      )
+      RequestState.with_current do
+        context.reset_runtime! if context.respond_to?(:reset_runtime!)
+        endpoint = endpoints.fetch(key.to_sym)
+        input = symbolize_keys(input || {})
+        request = input[:request]
+        headers = request_headers(request).merge(normalize_headers_hash(input[:headers] || {}))
+        begin
+          prepare_context_for_call!(request, headers)
+        rescue APIError => error
+          result = Endpoint::Result.new(response: error)
+          return format_result(result, input)
+        rescue Error => error
+          api_error = APIError.new("INTERNAL_SERVER_ERROR", message: error.message)
+          result = Endpoint::Result.new(response: api_error)
+          return format_result(result, input)
+        end
+        input[:as_response] = true if request_like?(request) && !input.key?(:as_response)
+        endpoint_context = Endpoint::Context.new(
+          path: endpoint.path,
+          method: input[:method] || request_method(request) || Array(endpoint.methods).first,
+          query: input[:query] || {},
+          body: input[:body] || {},
+          params: input[:params] || {},
+          headers: headers,
+          context: context,
+          request: request_like?(request) ? request : nil
+        )
 
-      result = RequestState.with_current { execute(endpoint, endpoint_context) }
-      format_result(result, input)
-    ensure
-      context.clear_runtime! if context.respond_to?(:clear_runtime!)
+        @dispatcher.call(endpoint, endpoint_context, key: key) { |result| format_result(result, input) }
+      ensure
+        context.clear_runtime! if context.respond_to?(:clear_runtime!)
+      end
     end
 
     def execute(endpoint, endpoint_context)
-      endpoint_context.with_current { run_endpoint_with_hooks(endpoint, endpoint_context) }
+      @dispatcher.call(endpoint, endpoint_context)
+    rescue APIError => error
+      Endpoint::Result.new(response: error)
     end
 
     private
@@ -80,95 +84,11 @@ module BetterAuth
       nil
     end
 
-    def run_endpoint_with_hooks(endpoint, endpoint_context)
-      before = run_before_hooks(endpoint_context)
-      return normalize_short_circuit(before, endpoint_context) if before
-
-      result = begin
-        endpoint.call(endpoint_context)
-      rescue APIError => error
-        Endpoint::Result.new(
-          response: error,
-          status: error.status_code,
-          headers: Endpoint::Result.merge_headers(endpoint_context.response_headers, error.headers)
-        )
-      end
-
-      return result if result.raw_response?
-
-      endpoint_context.returned = result.response
-      endpoint_context.response_headers = result.headers.dup
-
-      run_after_hooks(endpoint_context)
-    rescue APIError => error
-      Endpoint::Result.new(response: error, status: error.status_code, headers: error.headers)
-    end
-
-    def run_before_hooks(endpoint_context)
-      before_hooks.each do |hook|
-        next unless hook_matches?(hook, endpoint_context)
-
-        result = hook[:handler].call(endpoint_context)
-        next unless result
-
-        context_data = fetch_key(result, :context)
-        if result.is_a?(Hash) && context_data.is_a?(Hash)
-          endpoint_context.merge_context!(context_data)
-          next
-        end
-
-        return result
-      end
-
-      nil
-    end
-
-    def run_after_hooks(endpoint_context)
-      result = Endpoint::Result.new(
-        response: endpoint_context.returned,
-        status: endpoint_context.status,
-        headers: endpoint_context.response_headers
-      )
-
-      after_hooks.each do |hook|
-        next unless hook_matches?(hook, endpoint_context)
-
-        hook_result = begin
-          hook[:handler].call(endpoint_context)
-        rescue APIError => error
-          error
-        end
-
-        result.headers = endpoint_context.response_headers.dup
-
-        next unless hook_result
-
-        normalized = Endpoint::Result.from_value(hook_result, endpoint_context)
-        result = normalized
-        endpoint_context.returned = result.response
-        endpoint_context.response_headers = result.headers
-      end
-
-      result
-    end
-
-    def normalize_short_circuit(value, endpoint_context)
-      Endpoint::Result.from_value(value, endpoint_context)
-    rescue APIError => error
-      Endpoint::Result.new(response: error, status: error.status_code, headers: error.headers)
-    end
-
     def format_result(result, input)
       return result.to_response if result.raw_response?
       as_response = input[:as_response] || request_like?(input[:request])
-
-      if result.response.is_a?(APIError)
-        return error_response(result.response, headers: result.headers) if as_response
-
-        raise error_with_headers(result.response, result.headers)
-      end
-
       return result.to_response if as_response
+      raise error_with_headers(result.response, result.headers) if result.response.is_a?(APIError)
 
       if input[:return_headers]
         output = {
@@ -184,61 +104,14 @@ module BetterAuth
       result.response
     end
 
-    def error_response(error, headers: {})
-      Endpoint::Result.new(
-        response: error.to_h,
-        status: error.status_code,
-        headers: Endpoint::Result.merge_headers(headers, error.headers)
-      ).to_response
-    end
-
     def error_with_headers(error, headers)
       APIError.new(
         error.status,
         message: error.message,
-        headers: Endpoint::Result.merge_headers(headers, error.headers),
+        headers: headers,
         code: error.code,
         body: error.body
       )
-    end
-
-    def before_hooks
-      hooks = []
-      user_before = context.options.hooks&.fetch(:before, nil)
-      hooks << {matcher: ->(_ctx) { true }, handler: user_before} if user_before
-      hooks.concat(plugin_hooks(:before))
-      hooks
-    end
-
-    def after_hooks
-      hooks = []
-      user_after = context.options.hooks&.fetch(:after, nil)
-      hooks << {matcher: ->(_ctx) { true }, handler: user_after} if user_after
-      hooks.concat(plugin_hooks(:after))
-      hooks
-    end
-
-    def plugin_hooks(type)
-      context.options.plugins.flat_map do |plugin|
-        hooks = plugin.dig(:hooks, type)
-        Array(hooks).map do |hook|
-          {
-            matcher: hook[:matcher] || ->(_ctx) { true },
-            handler: hook[:handler]
-          }
-        end
-      end.compact
-    end
-
-    def hook_matches?(hook, endpoint_context)
-      matcher = hook[:matcher] || ->(_ctx) { true }
-      matcher.call(endpoint_context)
-    end
-
-    def fetch_key(hash, key)
-      return unless hash.is_a?(Hash)
-
-      hash[key] || hash[key.to_s]
     end
 
     def request_like?(value)

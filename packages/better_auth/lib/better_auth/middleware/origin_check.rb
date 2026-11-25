@@ -45,8 +45,6 @@ module BetterAuth
 
         validate_callback_urls(endpoint_context)
         nil
-      rescue APIError => error
-        Endpoint::Result.new(response: error.to_h, status: error.status_code, headers: error.headers).to_rack_response
       end
 
       def call_form_csrf(endpoint_context)

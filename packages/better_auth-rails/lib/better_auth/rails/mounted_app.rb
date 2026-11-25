@@ -11,14 +11,21 @@ module BetterAuth
       end
 
       def call(env)
-        @auth.call(env.merge("PATH_INFO" => mounted_path_info(env)))
+        next_env = env.merge("PATH_INFO" => mounted_path_info(env))
+        return @auth.call(next_env) if @auth.is_a?(BetterAuth::Auth)
+
+        call_custom_app(next_env, env)
+      end
+
+      private
+
+      def call_custom_app(next_env, env)
+        @auth.call(next_env)
       rescue BetterAuth::APIError, JSON::ParserError
         raise
       rescue => error
         handle_unexpected_error(error, env)
       end
-
-      private
 
       def mounted_path_info(env)
         path_info = normalize_path(env["PATH_INFO"])

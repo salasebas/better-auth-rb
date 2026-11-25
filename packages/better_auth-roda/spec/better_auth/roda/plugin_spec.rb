@@ -195,7 +195,7 @@ RSpec.describe "BetterAuth::Roda plugin" do
     post "/api/auth/sign-out", "{}", "CONTENT_TYPE" => "application/json", "HTTP_COOKIE" => "better-auth.session_token=stale-token"
 
     expect(last_response.status).to eq(403)
-    expect(JSON.parse(last_response.body)).to eq("code" => "FORBIDDEN", "message" => "Missing or null Origin")
+    expect(JSON.parse(last_response.body)).to eq("code" => "MISSING_OR_NULL_ORIGIN", "message" => "Missing or null Origin")
   end
 
   it "rejects malicious callback URLs through the Roda mount" do
@@ -209,7 +209,7 @@ RSpec.describe "BetterAuth::Roda plugin" do
     )
 
     expect(last_response.status).to eq(403)
-    expect(JSON.parse(last_response.body)).to eq("code" => "FORBIDDEN", "message" => "Invalid callbackURL")
+    expect(JSON.parse(last_response.body)).to eq("code" => "INVALID_CALLBACK_URL", "message" => "Invalid callbackURL")
   end
 
   it "keeps mounted origin checks active for callback URLs and fetch metadata" do
@@ -325,7 +325,7 @@ RSpec.describe "BetterAuth::Roda plugin" do
     expect(last_response.status).to eq(429)
   end
 
-  it "converts unexpected mounted endpoint errors into Better Auth JSON errors" do
+  it "returns the core router's empty 500 for unexpected mounted endpoint errors" do
     plugin = BetterAuth::Plugin.new(
       id: "raising",
       endpoints: {
@@ -337,7 +337,7 @@ RSpec.describe "BetterAuth::Roda plugin" do
     get "/api/auth/boom"
 
     expect(last_response.status).to eq(500)
-    expect(JSON.parse(last_response.body)).to eq("code" => "INTERNAL_SERVER_ERROR", "message" => "Internal Server Error")
+    expect(last_response.body).to be_empty
   end
 
   it "honors on_api_error callbacks for unexpected mounted endpoint errors" do
@@ -348,12 +348,12 @@ RSpec.describe "BetterAuth::Roda plugin" do
         boom: BetterAuth::Endpoint.new(path: "/boom", method: "GET") { raise "boom" }
       }
     )
-    self.app = build_app(plugins: [plugin], on_api_error: {on_error: ->(error, ctx) { captured << [error.message, ctx.path] }})
+    self.app = build_app(plugins: [plugin], on_api_error: {on_error: ->(error, ctx) { captured << [error.message, ctx.class] }})
 
     get "/api/auth/boom"
 
     expect(last_response.status).to eq(500)
-    expect(captured).to eq([["boom", "/boom"]])
+    expect(captured).to eq([["boom", BetterAuth::Context]])
   end
 
   it "re-raises unexpected mounted endpoint errors when on_api_error throw is enabled" do

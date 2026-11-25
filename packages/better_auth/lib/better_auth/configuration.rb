@@ -341,9 +341,9 @@ module BetterAuth
 
     def normalize_experimental(value)
       configured = symbolize_keys(value || {})
-      {
-        joins: !!configured[:joins]
-      }
+      result = {joins: !!configured[:joins]}
+      result[:instrumentation] = configured[:instrumentation] if configured[:instrumentation].is_a?(Hash)
+      result
     end
 
     def normalize_rate_limit(value)

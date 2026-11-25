@@ -97,6 +97,29 @@ The Ruby router decodes Rack paths before route lookup. It uses the same
 normalization for disabled paths and rate-limit keys so equivalent paths
 share one quota. Upstream uses the URL pathname for these checks.
 
+### HTTP errors
+
+The Rack router returns an empty `500` for unexpected errors during request
+processing. Configure `on_api_error: { on_error: ->(error, context) { ... } }`
+to observe those errors and `APIError` exceptions that reach the router. The
+callback receives a `BetterAuth::Context`. Set `on_api_error: { throw: true }`
+to propagate unexpected exceptions to your Rack application.
+
+The Rack router treats an empty request body as absent, including for JSON
+requests.
+
+Mounted Rails, Grape, and Roda endpoints use the same boundary. If you relied
+on the JSON `500` or the mount-specific callback context, update your error
+handling to accept an empty response and a `BetterAuth::Context`.
+
+Use `ctx.redirect(location)` in a plugin to create a `302` redirect. Return a
+Rack response with your chosen status for other redirects.
+
+To export dispatch and hook spans, load and configure OpenTelemetry in your
+application. RubyAuth uses the application's tracer provider when available.
+Set `experimental: { instrumentation: { enabled: false } }` to turn off these
+spans for one auth instance.
+
 ### Secret Rotation
 
 Better Auth Ruby supports upstream-style non-destructive rotation for encrypted data through versioned secrets. The first entry is used for new encrypted payloads; older entries remain available for decrypting existing data.

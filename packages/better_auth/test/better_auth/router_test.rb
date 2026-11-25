@@ -1185,9 +1185,11 @@ class BetterAuthRouterTest < Minitest::Test
   end
 
   def test_form_media_type_is_rejected_unless_endpoint_allows_it
+    received = []
     json_only = BetterAuth.auth(
       base_url: "http://localhost:3000",
       secret: SECRET,
+      on_api_error: {on_error: ->(error, _ctx) { received << error }},
       plugins: [
         {
           id: "test",
@@ -1214,7 +1216,13 @@ class BetterAuthRouterTest < Minitest::Test
       ]
     )
 
-    assert_equal 415, json_only.call(rack_env("POST", "/api/auth/post", form: {"name" => "Ada"})).first
+    status, _headers, body = json_only.call(rack_env("POST", "/api/auth/post", form: {"name" => "Ada"}))
+    assert_equal 415, status
+    assert_equal ["UNSUPPORTED_MEDIA_TYPE"], received.map(&:status)
+    assert_equal({
+      "code" => "UNSUPPORTED_MEDIA_TYPE",
+      "message" => 'Content-Type "application/x-www-form-urlencoded" is not allowed. Allowed types: application/json'
+    }, JSON.parse(body.join))
     status, _headers, body = form_allowed.call(rack_env("POST", "/api/auth/post", form: {"name" => "Ada"}))
 
     assert_equal 200, status
@@ -1271,6 +1279,7 @@ class BetterAuthRouterTest < Minitest::Test
 
     assert messages.any? { |level, message| level == :error && message.include?("Endpoint path conflicts detected") }
     assert messages.any? { |_level, message| message.include?("\"/shared\" [GET] used by plugins: one, two") }
+    assert_includes messages.last.last, "3. Ensure plugins use different HTTP methods for the same path"
   end
 
   def test_endpoint_conflict_matrix_matches_upstream

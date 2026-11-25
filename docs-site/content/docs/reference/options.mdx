@@ -694,7 +694,9 @@ auth = BetterAuth.auth(
 
 ## `on_api_error`
 
-API error handling configuration.
+The Rack router returns an empty `500` when request processing raises an unexpected error. This behavior also applies to routes mounted in Rails, Grape, and Roda. Direct `auth.api` calls propagate unexpected exceptions to the caller.
+
+The Rack router treats an empty request body as absent, including for JSON requests. It returns `400` for malformed JSON.
 
 ```ruby
 require "better_auth"
@@ -709,8 +711,8 @@ auth = BetterAuth.auth(
 )
 ```
 
-* `throw`: Throw an error on API error (default: `false`)
-* `onError`: Custom error handler
+* `throw` re-raises unexpected exceptions from request processing and takes precedence over `on_error`. The default is `false`.
+* `on_error` receives the exception and a `BetterAuth::Context` when an exception reaches the router. The router ignores the callback's return value. A `FOUND` redirect or an `APIError` already serialized by the endpoint bypasses this callback.
 * `errorURL`: URL to redirect to on error (default: `/api/auth/error`)
 * `customizeDefaultErrorPage`: Configure the default error page provided by RubyAuth. Start your dev server and go to `/api/auth/error` to see the error page.
   * `colors`: Customize color scheme for the error page

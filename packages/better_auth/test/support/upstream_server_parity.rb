@@ -64,16 +64,21 @@ module BetterAuth
 
       SERVER_UPSTREAM_TEST_OWNERS = {
         "api/check-endpoint-conflicts.test.ts" => {
-          owner: "better_auth/endpoint_test.rb",
+          owner: "better_auth/router_test.rb",
           status: :covered,
           plan: "006",
-          notes: "Endpoint conflict detection covered in core endpoint tests"
+          evidence: {"better_auth/router_test.rb" => %w[test_endpoint_conflict_logging test_endpoint_conflict_matrix_matches_upstream]},
+          notes: "Endpoint conflict detection and resolution guidance are covered in router_test"
         },
         "api/index.test.ts" => {
-          owner: "better_auth/api_test.rb",
+          owner: ["better_auth/router_test.rb", "better_auth/router_error_test.rb"],
           status: :covered,
           plan: "007",
-          notes: "Direct API index, hooks, disabled paths, and response formatting covered in api_test"
+          evidence: {
+            "better_auth/router_test.rb" => %w[test_plugin_request_and_response_chain_runs_around_endpoint test_on_request_response_skips_remaining_request_and_response_hooks test_form_media_type_is_rejected_unless_endpoint_allows_it],
+            "better_auth/router_error_test.rb" => %w[test_unexpected_handler_error_returns_empty_500_and_runs_response_hook test_callback_exception_propagates_or_becomes_an_api_error_response test_malformed_json_reaches_error_callback_as_bad_request]
+          },
+          notes: "Router lifecycle tests include the error cases from the pinned Better Call v1.4.0 router.test.ts"
         },
         "api/middlewares/authorization.test.ts" => {
           owner: "better_auth/api_test.rb",
@@ -181,10 +186,14 @@ module BetterAuth
           notes: "Update/delete/change-password/change-email flows, enumeration-safe change-email, delete-user verification, and secondary storage propagation covered in user_routes_test"
         },
         "api/to-auth-endpoints.test.ts" => {
-          owner: "better_auth/api_test.rb",
+          owner: ["better_auth/api_test.rb", "better_auth/router_error_test.rb"],
           status: :covered,
           plan: "007",
-          notes: "Endpoint conversion and direct API dispatch covered in api_test"
+          evidence: {
+            "better_auth/api_test.rb" => %w[test_direct_api_before_hook_can_short_circuit test_direct_api_runs_after_hooks_and_last_response_wins],
+            "better_auth/router_error_test.rb" => %w[test_primitive_before_hook_result_is_ignored test_dispatch_creates_and_reuses_request_state]
+          },
+          notes: "Endpoint conversion, hook responses, and direct API dispatch are covered"
         },
         "api/server-only-endpoints.test.ts" => {
           owner: "better_auth/api_test.rb",

@@ -12,6 +12,7 @@ module BetterAuth
     def initialize(context, endpoints, rate_limiter: RateLimiter.new)
       @context = context
       @endpoints = endpoints
+      @dispatcher = EndpointDispatcher.new(context)
       @rate_limiter = rate_limiter
       @origin_check = Middleware::OriginCheck.new
     end
@@ -47,6 +48,14 @@ module BetterAuth
       message += conflicts.map do |conflict|
         "  - \"#{conflict[:path]}\" [#{conflict[:methods].join(", ")}] used by plugins: #{conflict[:plugins].join(", ")}"
       end.join("\n")
+      message += <<~GUIDANCE
+
+
+        To resolve this, you can:
+        \t1. Use only one of the conflicting plugins
+        \t2. Configure the plugins to use different paths (if supported)
+        \t3. Ensure plugins use different HTTP methods for the same path
+      GUIDANCE
       log(logger, :error, message)
     end
 
@@ -57,6 +66,8 @@ module BetterAuth
     ensure
       context.clear_runtime! if context.respond_to?(:clear_runtime!)
     end
+
+    private
 
     def dispatch(env)
       request = Rack::Request.new(env)
@@ -72,34 +83,80 @@ module BetterAuth
       request = run_on_request_chain(request)
       return request if rack_response?(request)
 
+      run_on_response_chain(process_request(request))
+    end
+
+    def process_request(request)
       route_path = route_path_for(request.path_info)
-      return run_on_response_chain(not_found) unless route_path
+      return not_found unless route_path
       query = parse_query(request)
-      endpoint, params, allowed_methods = find_endpoint(route_path, request.request_method)
-      return run_on_response_chain(not_found) unless endpoint
-      return run_on_response_chain(method_not_allowed(allowed_methods)) unless endpoint.matches_method?(request.request_method)
-      return run_on_response_chain(unsupported_media_type) unless allowed_media_type?(request, endpoint)
+      key, endpoint, params, allowed_methods = find_endpoint(route_path, request.request_method)
+      return not_found unless endpoint
+      return method_not_allowed(allowed_methods) unless endpoint.matches_method?(request.request_method)
+      validate_media_type!(request, endpoint) unless endpoint.disable_body
 
       raw_body = read_raw_body(request)
       body = parse_body(request, raw_body: raw_body, disable_body: endpoint.disable_body)
       endpoint_context = build_endpoint_context(request, route_path, query, body, params, raw_body)
-      return run_on_response_chain(forbidden) if server_only?(endpoint)
+      return forbidden if server_only?(endpoint)
 
-      response = @origin_check.call(endpoint_context)
-      return run_on_response_chain(response) if response
+      @origin_check.call(endpoint_context)
 
       response = run_plugin_middlewares(endpoint_context)
-      return run_on_response_chain(response) if response
+      return response if response
 
-      result = API.new(context, endpoints).execute(endpoint, endpoint_context)
-      response = result.response.is_a?(APIError) ? error_response(result.response, headers: result.headers) : result.to_rack_response
-      run_on_response_chain(response)
-    rescue APIError => error
-      error_response(error)
-    rescue JSON::ParserError
-      error_response(APIError.new("BAD_REQUEST", message: "Invalid JSON body"))
+      @dispatcher.call(endpoint, endpoint_context, key: key).to_rack_response
+    rescue => error
+      handle_processing_error(error, request)
     end
-    private :dispatch
+
+    def handle_processing_error(error, request)
+      errors = request.env["rack.errors"] || $stderr
+      begin
+        if !error.is_a?(APIError) || error.status != "FOUND"
+          options = context.options.on_api_error
+          raise error if options[:throw]
+
+          callback = options[:on_error]
+          if callback.respond_to?(:call)
+            callback.call(error, context)
+          else
+            log_processing_error(error, errors)
+          end
+        end
+      rescue APIError => callback_error
+        return error_response(callback_error)
+      end
+
+      return error_response(error) if error.is_a?(APIError)
+
+      errors.puts("# SERVER_ERROR: #{error.full_message(highlight: false)}")
+      [500, {}, []]
+    end
+
+    def log_processing_error(error, errors)
+      if /column|relation|table|does not exist/.match?(error.message)
+        context.log_error(error.message, fallback: errors)
+      elsif error.is_a?(APIError)
+        if error.status == "INTERNAL_SERVER_ERROR"
+          context.log_error("#{error.status}: #{error.full_message(highlight: false)}", fallback: errors)
+        end
+        context.log_error(error.message) if log_api_error_message?
+      else
+        context.log_error("#{error.class}: #{error.full_message(highlight: false)}", fallback: errors)
+      end
+    end
+
+    def log_api_error_message?
+      logger = context.logger
+      return false unless logger.respond_to?(:level)
+
+      level = logger.level
+      if defined?(::Logger::SEV_LABEL) && level.is_a?(Integer)
+        level = ::Logger::SEV_LABEL.fetch(level, "")
+      end
+      %w[debug warn error].include?(level.to_s.downcase)
+    end
 
     def self.conflicting_methods(entries)
       method_map = Hash.new { |hash, key| hash[key] = [] }
@@ -125,8 +182,6 @@ module BetterAuth
     end
 
     private_class_method :conflicting_methods, :log
-
-    private
 
     def path_under_base(path)
       base_path = context.options.base_path
@@ -170,28 +225,30 @@ module BetterAuth
     end
 
     def parse_body(request, raw_body:, disable_body: false)
-      return {} if disable_body
-
-      raw = raw_body.to_s
-      return {} if raw.empty?
+      return {} if disable_body || raw_body.empty?
 
       if json_media_type?(request.media_type)
-        JSON.parse(raw)
+        JSON.parse(raw_body)
       else
         request.POST
       end
+    rescue JSON::ParserError
+      raise APIError.new("BAD_REQUEST", message: "Invalid JSON in request body")
     end
 
     def json_media_type?(media_type)
       media_type == "application/json" || media_type.to_s.end_with?("+json")
     end
 
-    def allowed_media_type?(request, endpoint)
-      return true unless request_body_method?(request.request_method)
-      return true if request.media_type.nil? || request.media_type.empty?
-      return true if request.body.nil? || request.content_length.to_i.zero?
+    def validate_media_type!(request, endpoint)
+      return unless request_body_method?(request.request_method)
+      return if request.media_type.nil? || request.media_type.empty?
+      return if request.body.nil? || request.content_length.to_i.zero?
 
-      allowed_media_types(endpoint).include?(request.media_type)
+      types = allowed_media_types(endpoint)
+      return if types.include?(request.media_type)
+
+      raise APIError.new("UNSUPPORTED_MEDIA_TYPE", message: "Content-Type \"#{request.content_type}\" is not allowed. Allowed types: #{types.join(", ")}")
     end
 
     def request_body_method?(method)
@@ -245,16 +302,16 @@ module BetterAuth
     end
 
     def find_endpoint(route_path, method)
-      path_matches = endpoints.values.filter_map do |endpoint|
+      path_matches = endpoints.filter_map do |key, endpoint|
         params = match_path(endpoint.path, route_path)
-        [endpoint, params] if params
+        [key, endpoint, params] if params
       end
 
-      return [nil, {}, []] if path_matches.empty?
+      return if path_matches.empty?
 
-      endpoint, params = path_matches.reverse.find { |candidate, _candidate_params| candidate.matches_method?(method) } || path_matches.first
-      allowed_methods = path_matches.flat_map { |candidate, _candidate_params| candidate.methods }.uniq
-      [endpoint, params, allowed_methods]
+      match = path_matches.reverse.find { |_, candidate, _| candidate.matches_method?(method) } || path_matches.first
+      allowed_methods = path_matches.flat_map { |_, candidate, _| candidate.methods }.uniq
+      [*match, allowed_methods]
     end
 
     def match_path(pattern, path)
@@ -283,7 +340,14 @@ module BetterAuth
 
         middleware_context = endpoint_context.dup
         middleware_context.params = params
-        result = middleware[:middleware].call(middleware_context)
+        attributes = {
+          "better_auth.hook.type" => "middleware",
+          "better_auth.context" => "plugin:#{middleware[:plugin_id]}",
+          "http.route" => middleware[:path]
+        }
+        result = Instrumentation.with_span("middleware #{middleware[:path]} #{middleware[:plugin_id]}", attributes: attributes, options: context.options) do
+          middleware[:middleware].call(middleware_context)
+        end
         return Endpoint::Result.from_value(result, middleware_context).to_rack_response if result
       end
       nil
@@ -294,7 +358,8 @@ module BetterAuth
         Array(plugin[:middlewares]).map do |middleware|
           {
             path: middleware[:path],
-            middleware: middleware[:middleware]
+            middleware: middleware[:middleware],
+            plugin_id: plugin.id
           }
         end
       end
@@ -312,7 +377,7 @@ module BetterAuth
         handler = plugin[:on_request]
         next unless handler
 
-        result = handler.call(current_request, context)
+        result = with_plugin_hook_span("onRequest", plugin.id) { handler.call(current_request, context) }
         next unless result
 
         return result[:response] if result[:response]
@@ -322,15 +387,24 @@ module BetterAuth
     end
 
     def run_on_response_chain(response)
-      current_response = response
       context.options.plugins.each do |plugin|
         handler = plugin[:on_response]
         next unless handler
 
-        result = handler.call(current_response, context)
-        current_response = result[:response] if result && result[:response]
+        result = with_plugin_hook_span("onResponse", plugin.id, "http.response.status_code" => response.first) do
+          handler.call(response, context)
+        end
+        next unless result
+
+        replacement = result[:response] if result.is_a?(Hash)
+        return rack_response?(replacement) ? replacement : response
       end
-      current_response
+      response
+    end
+
+    def with_plugin_hook_span(hook_type, plugin_id, extra = {})
+      attributes = {"better_auth.hook.type" => hook_type, "better_auth.context" => "plugin:#{plugin_id}"}.merge(extra)
+      Instrumentation.with_span("#{hook_type} #{plugin_id}", attributes: attributes, options: context.options) { yield }
     end
 
     def not_found
@@ -339,10 +413,6 @@ module BetterAuth
 
     def method_not_allowed(methods)
       [405, {"content-type" => "application/json", "allow" => methods.reject { |method| method == "*" }.join(", ")}, [JSON.generate({error: "Method Not Allowed"})]]
-    end
-
-    def unsupported_media_type
-      [415, {"content-type" => "application/json"}, [JSON.generate({error: "Unsupported Media Type"})]]
     end
 
     def forbidden
@@ -355,12 +425,8 @@ module BetterAuth
         endpoint.metadata["SERVER_ONLY"]
     end
 
-    def error_response(error, headers: {})
-      Endpoint::Result.new(
-        response: error.to_h,
-        status: error.status_code,
-        headers: Endpoint::Result.merge_headers(headers, error.headers)
-      ).to_rack_response
+    def error_response(error)
+      Endpoint::Result.new(response: error).to_rack_response
     end
 
     def rack_response?(value)
