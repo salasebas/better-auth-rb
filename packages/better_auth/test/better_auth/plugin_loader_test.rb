@@ -55,7 +55,8 @@ class BetterAuthPluginLoaderTest < Minitest::Test
   def test_removed_mcp_factory_raises_migration_error
     error = assert_raises(ArgumentError) { BetterAuth::Plugins.mcp }
     assert_match(/mcp was removed/i, error.message)
-    assert_match(/oauth_provider/i, error.message)
+    assert_match(/does not support MCP/, error.message)
+    refute_match(/oauth_provider/i, error.message)
   end
 
   def test_plugin_factory_method_missing_loads_plugin_file

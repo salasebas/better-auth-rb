@@ -32,7 +32,7 @@ class ExternalPluginShimTest < Minitest::Test
   def test_mcp_is_not_an_external_plugin_shim
     error = assert_raises(ArgumentError) { BetterAuth::Plugins.mcp }
     assert_match(/mcp was removed/i, error.message)
-    assert_match(/oauth_provider/i, error.message)
+    assert_match(/does not support MCP/, error.message)
   end
 
   private

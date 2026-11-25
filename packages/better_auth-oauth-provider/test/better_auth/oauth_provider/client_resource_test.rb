@@ -123,10 +123,20 @@ class OAuthProviderClientResourceTest < Minitest::Test
     )
   end
 
-  def test_www_authenticate_uses_the_mapping_for_a_non_url_resource
-    header = ClientResource.www_authenticate("urn:api", resource_metadata_mappings: {"urn:api" => "https://api.example/.well-known/oauth-protected-resource"})
+  def test_verify_access_token_challenges_a_non_url_resource_with_its_mapped_metadata
+    auth = build_auth(scopes: ["read"])
 
-    assert_equal 'Bearer resource_metadata="https://api.example/.well-known/oauth-protected-resource"', header
+    error = assert_raises(BetterAuth::APIError) do
+      ClientResource.verify_access_token(
+        "invalid",
+        verify_options: {audience: "urn:api", issuer: "http://localhost:3000"},
+        resource_metadata_mappings: {"urn:api" => "https://api.example/.well-known/oauth-protected-resource"},
+        ctx: build_endpoint_context(auth)
+      )
+    end
+
+    assert_equal 401, error.status_code
+    assert_equal 'Bearer resource_metadata="https://api.example/.well-known/oauth-protected-resource"', error.headers["www-authenticate"]
   end
 
   def test_verify_access_token_remote_introspection
