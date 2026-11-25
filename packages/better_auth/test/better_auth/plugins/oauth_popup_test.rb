@@ -93,7 +93,7 @@ class BetterAuthPluginsOAuthPopupTest < Minitest::Test
     assert_equal "nonce-1", data.fetch("nonce")
     assert_equal "/dashboard", data.fetch("redirectTo")
     session_cookie = cookies.reverse.find { |line| line.start_with?("#{auth.context.auth_cookies[:session_token].name}=") }
-    expected_token = URI.decode_uri_component(BetterAuth::Cookies.parse_set_cookie(session_cookie).fetch(:value))
+    expected_token = BetterAuth::Cookies.parse_set_cookie(session_cookie).fetch(:value)
     assert_equal expected_token, data.fetch("token")
     refute data.key?("error")
   end
@@ -784,8 +784,7 @@ class BetterAuthPluginsOAuthPopupTest < Minitest::Test
 
   def signed_cookie_payload(line, name)
     value = BetterAuth::Cookies.parse_set_cookie(line).fetch(:value)
-    encoded = URI.decode_uri_component(value)
-    payload, signature = encoded.rpartition(".").values_at(0, 2)
+    payload, signature = value.rpartition(".").values_at(0, 2)
     return nil unless BetterAuth::Crypto.verify_hmac_signature(payload, signature, SECRET, encoding: :base64url)
 
     JSON.parse(payload)

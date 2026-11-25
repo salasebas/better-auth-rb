@@ -62,6 +62,14 @@ class BetterAuthCookiesTest < Minitest::Test
     assert_equal "secure", BetterAuth::Cookies.get_session_cookie(header)
   end
 
+  def test_empty_secure_session_cookie_masks_its_nonsecure_counterpart
+    header = "better-auth.session_token=stale; __Secure-better-auth.session_token="
+
+    assert_nil BetterAuth::Cookies.get_session_cookie(header)
+    assert_equal "legacy", BetterAuth::Cookies.get_session_cookie("#{header}; better-auth-session_token=legacy")
+    assert_equal "__Host-x", BetterAuth::Cookies.strip_secure_cookie_prefix("__Secure-__Host-x")
+  end
+
   def test_set_cookie_splitter_accepts_rack_header_forms_without_splitting_expires
     first = "first=one; Path=/; Expires=Wed, 09 Jun 2027 10:18:14 GMT"
     second = "second=two; Path=/; HttpOnly"
@@ -79,6 +87,19 @@ class BetterAuthCookiesTest < Minitest::Test
 
     assert_equal ["first", "second"], parsed.map { |cookie| cookie.fetch(:value) }
     assert_equal({"path" => "/"}, parsed.first.fetch(:attributes))
+  end
+
+  def test_set_cookie_parser_decodes_values_and_converts_attributes_to_cookie_options
+    cookie = BetterAuth::Cookies.parse_set_cookie('token="hello%20world%3Dfoo"; Path=/auth; Expires=Thu, 01 Jan 2026 00:00:00 GMT; Max-Age=300; Secure; HttpOnly; SameSite=None; Partitioned')
+
+    assert_equal "hello world=foo", cookie.fetch(:value)
+    assert_equal({path: "/auth", expires: Time.utc(2026, 1, 1), max_age: 300, secure: true, http_only: true, same_site: "none", partitioned: true}, BetterAuth::Cookies.to_cookie_options(cookie.fetch(:attributes)))
+  end
+
+  def test_apply_set_cookies_merges_multiple_headers_with_last_value_winning
+    cookies = BetterAuth::Cookies.apply_set_cookies("a=0; keep=old", ['a=1; Path=/, b="hello%20world%3Dfoo"; Secure', "a=2; HttpOnly"])
+
+    assert_equal "a=2; keep=old; b=hello%20world%3Dfoo", cookies
   end
 
   def test_expiring_cookie_scrubs_prior_same_name_and_chunked_set_cookie_entries
@@ -449,6 +470,22 @@ class BetterAuthCookiesTest < Minitest::Test
     assert_nil BetterAuth::Cookies.decode_cookie_cache(tampered, SECRET, strategy: "compact")
   end
 
+  def test_cookie_cache_can_read_the_environment_secret
+    auth = BetterAuth.auth(secret: SECRET, session: {cookie_cache: {enabled: true, strategy: "compact", version: "2"}})
+    ctx = endpoint_context(auth)
+    BetterAuth::Cookies.set_cookie_cache(ctx, cookie_sync_session("user-1"), false)
+    cookie = request_cookie_header(ctx.response_headers.fetch("set-cookie"))
+
+    with_env("BETTER_AUTH_SECRET" => nil) do
+      assert_nil BetterAuth::Cookies.get_cookie_cache("other=cookie")
+      assert_raises(BetterAuth::Error) { BetterAuth::Cookies.get_cookie_cache(cookie) }
+    end
+    with_env("BETTER_AUTH_SECRET" => SECRET) do
+      assert_equal "2", BetterAuth::Cookies.get_cookie_cache(cookie).fetch("version")
+      assert_equal "2", BetterAuth::Cookies.get_cookie_cache(cookie, version: "").fetch("version")
+    end
+  end
+
   def test_jwt_and_jwe_cookie_cache_reject_wrong_secrets
     data = {
       "session" => {"id" => "session-1", "token" => "token-1", "userId" => "user-1"},
@@ -530,7 +567,7 @@ class BetterAuthCookiesTest < Minitest::Test
     chunked_header = large_ctx.response_headers.fetch("set-cookie").to_s.lines(chomp: true).map { |line| line.split(";").first }.join("; ")
     refute_includes chunked_header, "better-auth.session_data="
 
-    request_ctx = endpoint_context(auth, cookie: chunked_header)
+    request_ctx = endpoint_context(auth, cookie: "#{chunked_header}; better-auth.session_data_backup=stale")
     BetterAuth::Cookies.set_cookie_cache(request_ctx, {
       session: {"id" => "session-1", "token" => "token-1", "userId" => "user-1"},
       user: {"id" => "user-1", "email" => "chunked@example.com"}
@@ -539,13 +576,54 @@ class BetterAuthCookiesTest < Minitest::Test
 
     assert cleanup_header.lines.any? { |line| line.include?("better-auth.session_data.") && line.include?("Max-Age=0") }
     assert_includes cleanup_header, "better-auth.session_data="
+    assert_includes cleanup_header, "better-auth.session_data_backup=;"
 
     ordered = BetterAuth::SessionStore.join_chunks({
       "better-auth.session_data.10" => "bbb",
       "better-auth.session_data.0" => "aaa",
-      "better-auth.session_data.1" => "ccc"
+      "better-auth.session_data.1tail" => "ccc",
+      "better-auth.session_data.abc" => "ignored"
     })
     assert_equal "aaacccbbb", ordered
+  end
+
+  def test_session_store_uses_serialized_size_and_replaces_existing_cookie_in_one_header
+    auth = BetterAuth.auth(secret: SECRET)
+    name = auth.context.auth_cookies.fetch(:session_data).name
+    attributes = auth.context.auth_cookies.fetch(:session_data).attributes
+    ctx = endpoint_context(auth, cookie: "#{name}=old")
+    store = BetterAuth::SessionStore.new(name, attributes, ctx)
+    store.set_cookies(store.chunk("x" * 3950))
+
+    assert_equal [name], ctx.response_headers.fetch("set-cookie").lines.map { |line| line.split("=", 2).first }
+
+    ctx = endpoint_context(auth)
+    store = BetterAuth::SessionStore.new(name, attributes.merge(domain: "#{"x" * 90}.example.com"), ctx)
+    store.set_cookies(store.chunk("x" * 3950))
+    lines = ctx.response_headers.fetch("set-cookie").lines(chomp: true)
+
+    assert_equal ["#{name}.0", "#{name}.1"], lines.map { |line| line.split("=", 2).first }
+    assert lines.all? { |line| line.bytesize <= 4050 }
+  end
+
+  def test_oversized_session_cache_is_skipped_and_the_session_resolves_from_the_token
+    {chunk_count: ["better-auth", "x" * 420_000], overhead: ["x" * 4100, "small"]}.each do |label, (prefix, blob)|
+      warnings = []
+      logger = ->(level, message) { warnings << message if level == :warn }
+      auth = BetterAuth.auth(secret: SECRET, database: :memory, email_and_password: {enabled: true},
+        logger: logger, advanced: {cookie_prefix: prefix}, session: {cookie_cache: {enabled: true}},
+        user: {additional_fields: {blob: {type: "string"}}})
+      email = "#{label}@example.com"
+      status, headers, _body = auth.api.sign_up_email(body: {name: "Ada", email: email, password: "password123", blob: blob}, as_response: true)
+
+      assert_equal 200, status
+      set_cookie = headers.fetch("set-cookie")
+      names = BetterAuth::Cookies.split_set_cookie_header(set_cookie).map { |line| line.split("=", 2).first }
+      assert names.include?("#{prefix}.session_token"), label
+      refute names.any? { |name| name.start_with?("#{prefix}.session_data") }, label
+      assert warnings.any? { |message| message.include?("too large to store even after chunking") }
+      assert_equal email, auth.api.get_session(headers: {"cookie" => request_cookie_header(set_cookie)}).dig(:user, "email")
+    end
   end
 
   def test_account_cookie_chunking_mirrors_session_data_chunking

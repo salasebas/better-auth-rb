@@ -50,6 +50,10 @@ module BetterAuth
     end
 
     def call(env)
+      RequestState.with_current { dispatch(env) }
+    end
+
+    def dispatch(env)
       request = Rack::Request.new(env)
       context.prepare_for_request!(request) if context.respond_to?(:prepare_for_request!)
 
@@ -92,6 +96,7 @@ module BetterAuth
     ensure
       context.clear_runtime! if context.respond_to?(:clear_runtime!)
     end
+    private :dispatch
 
     def self.conflicting_methods(entries)
       method_map = Hash.new { |hash, key| hash[key] = [] }

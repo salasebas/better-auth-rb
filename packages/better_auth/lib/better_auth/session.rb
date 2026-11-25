@@ -4,6 +4,9 @@ require "time"
 
 module BetterAuth
   module Session
+    SKIP_SESSION_REFRESH = RequestState.define { false }
+    private_constant :SKIP_SESSION_REFRESH
+
     module_function
 
     def find_current(ctx, disable_cookie_cache: false, disable_refresh: false, sensitive: false)
@@ -12,6 +15,10 @@ module BetterAuth
         return ctx.context.current_session
       end
 
+      get_session(ctx, disable_cookie_cache: disable_cookie_cache || authoritative, disable_refresh: disable_refresh)
+    end
+
+    def get_session(ctx, disable_cookie_cache:, disable_refresh:, defer_refresh: ctx.context.session_config[:defer_session_refresh])
       token_cookie = ctx.context.auth_cookies[:session_token]
       token = ctx.get_signed_cookie(token_cookie.name, ctx.context.secret)
       unless token
@@ -21,7 +28,7 @@ module BetterAuth
         return nil
       end
 
-      cached = cached_session(ctx, token, disable_cookie_cache: disable_cookie_cache, sensitive: authoritative)
+      cached = cached_session(ctx, token, bypass_cache: disable_cookie_cache)
       if cached
         ctx.context.set_current_session(cached) if ctx.context.respond_to?(:set_current_session)
         return cached
@@ -32,36 +39,38 @@ module BetterAuth
 
       session = stringify_keys(found[:session] || found["session"])
       user = stringify_keys(found[:user] || found["user"])
-      return missing_session(ctx) if expired?(session)
+      if expired?(session)
+        missing_session(ctx)
+        ctx.context.internal_adapter.delete_session(token) unless defer_refresh
+        return nil
+      end
 
       result = {session: session, user: user}
-      unless Cookies.dont_remember?(ctx)
-        result = refresh_session(ctx, result) if should_refresh?(ctx, session, disable_refresh)
-        Cookies.set_cookie_cache(ctx, result, false)
-      end
       ctx.context.set_current_session(result) if ctx.context.respond_to?(:set_current_session)
-      result
+      return result if Cookies.dont_remember?(ctx) || disable_refresh
+
+      needs_refresh = should_refresh?(ctx, session)
+      if needs_refresh && !defer_refresh
+        refreshed = refresh_session(ctx, result)
+        ctx.context.set_current_session(refreshed) if ctx.context.respond_to?(:set_current_session)
+        return refreshed
+      end
+
+      Cookies.set_cookie_cache(ctx, result, false)
+      defer_refresh ? result.merge(needsRefresh: needs_refresh) : result
     end
 
-    def cached_session(ctx, token, disable_cookie_cache:, sensitive:)
+    def cached_session(ctx, token, bypass_cache:)
       config = ctx.context.session_config[:cookie_cache] || {}
-      return nil if disable_cookie_cache || sensitive || !config[:enabled]
-
-      payload = Cookies.get_cookie_cache(
-        ctx,
-        secret: ctx.context.secret,
-        strategy: config[:strategy] || "compact",
-        version: config[:version],
-        cookie_prefix: ctx.context.options.advanced[:cookie_prefix] || "better-auth",
-        is_secure: ctx.context.auth_cookies[:session_data].name.start_with?(Cookies::SECURE_COOKIE_PREFIX),
-        cookie_full_name: ctx.context.auth_cookies[:session_data].name,
-        include_expiry: true
-      )
+      payload = Cookies.read_session_cache(ctx, config, use_cache: config[:enabled] && !bypass_cache)
       return nil unless payload
       return nil if payload["session"]["token"] && payload["session"]["token"] != token
 
       result = {session: payload["session"], user: payload["user"]}
-      result = refresh_cached_session(ctx, result) if should_refresh_cookie_cache?(config, payload)
+      if should_refresh_cookie_cache?(config, payload) && !should_skip_session_refresh?
+        Cookies.set_cookie_cache(ctx, result, false)
+        Cookies.set_session_token(ctx, result[:session].fetch("token"), Cookies.dont_remember?(ctx))
+      end
       result
     end
 
@@ -81,14 +90,20 @@ module BetterAuth
       expires_at && expires_at <= Time.now
     end
 
-    def should_refresh?(ctx, session, disable_refresh)
-      return false if disable_refresh
+    def should_skip_session_refresh?
+      RequestState.present? && SKIP_SESSION_REFRESH.get == true
+    end
 
-      update_age = ctx.context.session_config[:update_age].to_i
-      return true if update_age.zero?
+    def set_should_skip_session_refresh(value)
+      SKIP_SESSION_REFRESH.set(value)
+    end
 
-      updated_at = normalize_time(session["updatedAt"])
-      updated_at && updated_at + update_age <= Time.now
+    def should_refresh?(ctx, session)
+      config = ctx.context.session_config
+      return false if config[:disable_session_refresh] || should_skip_session_refresh?
+
+      expires_at = normalize_time(session["expiresAt"])
+      !!expires_at && expires_at - config[:expires_in].to_i + config[:update_age].to_i <= Time.now
     end
 
     def refresh_session(ctx, result)
@@ -106,21 +121,7 @@ module BetterAuth
 
       session = stringify_keys(updated)
       refreshed = {session: session, user: result[:user]}
-      Cookies.set_session_cookie(ctx, refreshed, Cookies.dont_remember?(ctx))
-      refreshed
-    end
-
-    def refresh_cached_session(ctx, result)
-      now = Time.now
-      session = stringify_keys(result[:session])
-      expires_at = normalize_time(session["expiresAt"])
-      return missing_session(ctx) if expires_at && expires_at <= now
-
-      remaining = expires_at && [(expires_at - now).floor, 0].max
-      refreshed = {session: session, user: result[:user]}
-      dont_remember_me = Cookies.dont_remember?(ctx)
-      overrides = dont_remember_me ? {} : {max_age: remaining}
-      Cookies.set_session_cookie(ctx, refreshed, dont_remember_me, overrides)
+      Cookies.set_session_cookie(ctx, refreshed, false)
       refreshed
     end
 
@@ -128,17 +129,13 @@ module BetterAuth
       refresh_cache = config[:refresh_cache]
       return false if refresh_cache == false || refresh_cache.nil?
 
-      max_age = (config[:max_age] || 60 * 5).to_i
+      max_age = Cookies.cache_max_age(config[:max_age]).to_i
       update_age_key = [:update_age, "updateAge", "update_age"].find do |key|
         refresh_cache.is_a?(Hash) && refresh_cache.key?(key)
       end
       update_age = update_age_key ? refresh_cache[update_age_key].to_f : (max_age * 0.2).floor
-      expires_at = if payload["expiresAt"]
-        payload["expiresAt"].to_i
-      elsif payload["exp"]
-        payload["exp"].to_i * 1000
-      end
-      return false unless expires_at&.positive?
+      expires_at = payload["expiresAt"]
+      return false unless expires_at.is_a?(Numeric) && expires_at.positive?
 
       remaining_ms = expires_at - (Time.now.to_f * 1000).to_i
       remaining_ms < update_age * 1000

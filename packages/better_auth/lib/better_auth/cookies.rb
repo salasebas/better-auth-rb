@@ -10,6 +10,8 @@ module BetterAuth
     HOST_COOKIE_PREFIX = "__Host-"
     COOKIE_NAME_PATTERN = /\A[\x21\x23-\x27\x2A\x2B\x2D\x2E\x30-\x39\x41-\x5A\x5E\x5F\x60\x61-\x7A\x7C\x7E]+\z/
     COOKIE_VALUE_PATTERN = /\A[\x20\x21\x23-\x3A\x3C-\x5B\x5D-\x7E]*\z/
+    COOKIE_OPTION_KEYS = {"max-age" => :max_age, "expires" => :expires, "domain" => :domain, "path" => :path,
+                          "secure" => :secure, "httponly" => :http_only, "partitioned" => :partitioned, "samesite" => :same_site}.freeze
 
     Cookie = Struct.new(:name, :attributes) do
       alias_method :options, :attributes
@@ -18,12 +20,17 @@ module BetterAuth
     module_function
 
     def get_cookies(options)
+      max_age = cache_max_age(options.session.dig(:cookie_cache, :max_age))
       {
         session_token: create_cookie(options, "session_token", max_age: options.session[:expires_in] || 60 * 60 * 24 * 7),
-        session_data: create_cookie(options, "session_data", max_age: options.session.dig(:cookie_cache, :max_age) || 60 * 5),
-        account_data: create_cookie(options, "account_data", max_age: options.session.dig(:cookie_cache, :max_age) || 60 * 5),
+        session_data: create_cookie(options, "session_data", max_age: max_age),
+        account_data: create_cookie(options, "account_data", max_age: max_age),
         dont_remember: create_cookie(options, "dont_remember")
       }
+    end
+
+    def cache_max_age(max_age, default: 60 * 5)
+      (max_age && max_age != 0) ? max_age : default
     end
 
     def create_cookie(options, cookie_name, override_attributes = {})
@@ -88,28 +95,58 @@ module BetterAuth
 
     def parse_set_cookie(line)
       first, *attributes = line.to_s.split(";").map(&:strip)
-      name, value = first.split("=", 2)
-      return unless name && value
+      name, value = first.to_s.split("=", 2)
+      return if name.to_s.empty?
 
       {
         name: name,
-        value: value,
+        value: decode_cookie_value(unquote_cookie_value(value.to_s)),
         attributes: attributes.each_with_object({}) do |attribute, result|
-          key, attribute_value = attribute.split("=", 2)
-          result[key.to_s.downcase] = attribute_value || true unless key.to_s.empty?
+          key, raw = attribute.split("=", 2)
+          key = key.to_s.strip.downcase
+          next if key.empty?
+
+          raw = raw.to_s.strip
+          raw = nil if raw.empty?
+          result[key] = case key
+          when "max-age" then parse_cookie_integer(raw)
+          when "expires" then parse_cookie_expiry(raw)
+          when "secure", "httponly", "partitioned" then true
+          when "samesite" then raw&.downcase
+          when "domain", "path" then raw
+          else raw || true
+          end
         end
       }
+    end
+
+    def to_cookie_options(attributes)
+      attributes.slice(*COOKIE_OPTION_KEYS.keys).transform_keys(COOKIE_OPTION_KEYS).compact
+    end
+
+    def apply_set_cookies(cookie_header, set_cookie_values)
+      cookies = parse_cookies(cookie_header)
+      split_set_cookie_header(set_cookie_values).each do |line|
+        cookie = parse_set_cookie(line)
+        next unless cookie && COOKIE_NAME_PATTERN.match?(cookie[:name])
+
+        cookies[cookie[:name]] = cookie[:value]
+      end
+      serialize_request_cookies(cookies)
     end
 
     def set_request_cookie(cookie_header, name, value)
       cookies = parse_cookies(cookie_header)
       cookie_name = name.to_s
       cookies[cookie_name] = value.to_s if COOKIE_NAME_PATTERN.match?(cookie_name)
-      cookies.map { |key, semantic_value| "#{key}=#{encode_cookie_value(semantic_value)}" }.join("; ")
+      serialize_request_cookies(cookies)
     end
 
     def strip_secure_cookie_prefix(name)
-      name.to_s.delete_prefix(SECURE_COOKIE_PREFIX).delete_prefix(HOST_COOKIE_PREFIX)
+      name = name.to_s
+      return name.delete_prefix(SECURE_COOKIE_PREFIX) if name.start_with?(SECURE_COOKIE_PREFIX)
+
+      name.delete_prefix(HOST_COOKIE_PREFIX)
     end
 
     def get_session_cookie(request_or_cookie_header, config = {})
@@ -119,56 +156,46 @@ module BetterAuth
       parsed = parse_cookies(cookie_header)
       cookie_name = config[:cookie_name] || "session_token"
       cookie_prefix = config[:cookie_prefix] || "better-auth"
-      candidates = [
-        "#{SECURE_COOKIE_PREFIX}#{cookie_prefix}.#{cookie_name}",
-        "#{cookie_prefix}.#{cookie_name}",
-        "#{SECURE_COOKIE_PREFIX}#{cookie_prefix}-#{cookie_name}",
-        "#{cookie_prefix}-#{cookie_name}"
-      ]
-      candidates.lazy.filter_map { |candidate| parsed[candidate] }.first
+      ["#{cookie_prefix}.#{cookie_name}", "#{cookie_prefix}-#{cookie_name}"].each do |name|
+        value = parsed["#{SECURE_COOKIE_PREFIX}#{name}"] || parsed[name]
+        return value unless value.to_s.empty?
+      end
+      nil
     end
 
     def set_session_cookie(ctx, session, dont_remember_me = nil, overrides = {})
       dont_remember_me = dont_remember?(ctx) if dont_remember_me.nil?
-      token_cookie = ctx.context.auth_cookies[:session_token]
-      max_age = dont_remember_me ? nil : ctx.context.session_config[:expires_in]
-      ctx.set_signed_cookie(token_cookie.name, session.fetch(:session).fetch("token"), ctx.context.secret, token_cookie.attributes.merge(max_age: max_age).merge(overrides || {}))
+      set_session_token(ctx, session.fetch(:session).fetch("token"), dont_remember_me, overrides)
 
       if dont_remember_me
         dont_remember_cookie = ctx.context.auth_cookies[:dont_remember]
         ctx.set_signed_cookie(dont_remember_cookie.name, "true", ctx.context.secret, dont_remember_cookie.attributes)
       end
 
-      set_cookie_cache(ctx, session, dont_remember_me, max_age: overrides&.fetch(:max_age, nil))
+      set_cookie_cache(ctx, session, dont_remember_me)
       ctx.context.set_new_session(session) if ctx.context.respond_to?(:set_new_session)
     end
 
-    def set_cookie_cache(ctx, session, dont_remember_me, max_age: nil)
+    def set_session_token(ctx, token, dont_remember_me, overrides = {})
+      cookie = ctx.context.auth_cookies[:session_token]
+      max_age = dont_remember_me ? nil : ctx.context.session_config[:expires_in]
+      ctx.set_signed_cookie(cookie.name, token, ctx.context.secret, cookie.attributes.merge(max_age: max_age).merge(overrides || {}))
+    end
+
+    def set_cookie_cache(ctx, session, dont_remember_me)
       config = ctx.context.session_config[:cookie_cache] || {}
       return unless config[:enabled]
 
       cookie = ctx.context.auth_cookies[:session_data]
-      configured_max_age = cookie.attributes[:max_age]
-      max_age = if dont_remember_me
-        nil
-      elsif max_age
-        [configured_max_age, max_age].compact.map(&:to_i).min
-      else
-        configured_max_age
-      end
+      max_age = cookie.attributes[:max_age] unless dont_remember_me
       data = filtered_cache_data(ctx, session)
       strategy = config[:strategy] || "compact"
       secret = (strategy.to_s == "jwe") ? ctx.context.secret_config : ctx.context.secret
-      value = encode_cookie_cache(data, secret, strategy: strategy, max_age: max_age || 60 * 5)
+      default_max_age = compact_cache?(strategy) ? 60 : 60 * 5
+      value = encode_cookie_cache(data, secret, strategy: strategy, max_age: cache_max_age(max_age, default: default_max_age))
       attributes = cookie.attributes.merge(max_age: max_age)
       store = SessionStore.new(cookie.name, attributes, ctx)
-
-      if value.length > SessionStore::CHUNK_SIZE
-        store.set_cookies(store.chunk(value, attributes))
-      else
-        store.set_cookies(store.clean) if store.chunks?
-        ctx.set_cookie(cookie.name, value, attributes)
-      end
+      store.set_cookies(store.chunk(value))
 
       sync_account_cookie(ctx, session)
     end
@@ -179,14 +206,8 @@ module BetterAuth
       cookie = ctx.context.auth_cookies[:account_data]
       attributes = cookie.attributes.merge(max_age: cookie.attributes[:max_age] || 60 * 5)
       value = Crypto.symmetric_encode_jwt(stringify_keys(account_data), ctx.context.secret_config, "better-auth-account", expires_in: attributes[:max_age])
-      store = SessionStore.new(cookie.name, attributes, ctx)
-
-      if value.length > SessionStore::CHUNK_SIZE
-        store.set_cookies(store.chunk(value, attributes))
-      else
-        store.set_cookies(store.clean) if store.chunks?
-        ctx.set_cookie(cookie.name, value, attributes)
-      end
+      store = SessionStore.new(cookie.name, attributes, ctx, store_name: "Account")
+      store.set_cookies(store.chunk(value))
     end
 
     def get_account_cookie(ctx)
@@ -219,7 +240,7 @@ module BetterAuth
       !ctx.context.options.database || account["userId"] == user_id
     end
 
-    def get_cookie_cache(request_or_cookie_header, secret:, strategy: "compact", version: nil, cookie_prefix: "better-auth", cookie_name: "session_data", is_secure: nil, cookie_full_name: nil, include_expiry: false)
+    def get_cookie_cache(request_or_cookie_header, secret: nil, strategy: "compact", version: nil, cookie_prefix: "better-auth", cookie_name: "session_data", is_secure: nil, cookie_full_name: nil, include_expiry: false)
       cookie_header = header_value(request_or_cookie_header)
       return nil if cookie_header.to_s.empty?
 
@@ -232,16 +253,51 @@ module BetterAuth
         secure_prefix = is_secure ? SECURE_COOKIE_PREFIX : ""
         "#{secure_prefix}#{cookie_prefix}.#{cookie_name}"
       end
-      raw = parsed[name] || chunked_value(parsed, name)
-      return nil unless raw
+      raw = parsed[name]
+      raw = SessionStore.chunked_value(parsed, name) if raw.to_s.empty?
+      return nil if raw.to_s.empty?
+
+      secret = ENV["BETTER_AUTH_SECRET"] if secret.nil? || secret == ""
+      if secret.nil? || secret == ""
+        raise Error, "getCookieCache requires a secret to be provided. Either pass it as an option or set the BETTER_AUTH_SECRET environment variable"
+      end
 
       payload = decode_cookie_cache(raw, secret, strategy: strategy, include_expiry: include_expiry)
-      return nil unless payload && payload["session"] && payload["user"]
+      return nil unless session_cache_payload?(payload)
       return nil if embedded_session_expired?(payload["session"])
+      return nil if cache_version_configured?(version) && !cookie_cache_version_matches?(version, payload)
 
-      expected_version = cookie_cache_version(version, payload["session"], payload["user"])
-      return nil if version && (payload["version"] || "1") != expected_version
+      payload
+    end
 
+    def read_session_cache(ctx, config, use_cache:)
+      cookie = ctx.context.auth_cookies[:session_data]
+      raw = SessionStore.get_chunked_cookie(ctx, cookie.name)
+      return nil if raw.to_s.empty?
+
+      strategy = config[:strategy] || "compact"
+      payload = if compact_cache?(strategy)
+        envelope = parse_compact_cache(raw)
+        return nil unless envelope
+
+        verify_compact_cache(envelope, ctx.context.secret)
+      else
+        secret = (strategy.to_s == "jwe") ? ctx.context.secret_config : ctx.context.secret
+        decoded = decode_cookie_cache(raw, secret, strategy: strategy)
+        decoded&.merge("expiresAt" => decoded["exp"] ? decoded["exp"].to_i * 1000 : current_millis)
+      end
+
+      unless session_cache_payload?(payload)
+        expire_cookie(ctx, cookie)
+        return nil
+      end
+      return nil unless use_cache
+
+      if !cookie_cache_version_matches?(config[:version], payload) ||
+          cache_window_expired?(payload) || embedded_session_expired?(payload["session"])
+        expire_cookie(ctx, cookie)
+        return nil
+      end
       payload
     end
 
@@ -291,17 +347,44 @@ module BetterAuth
       when "jwe"
         Crypto.symmetric_decode_jwt(value, secret, "better-auth-session")
       else
-        payload = JSON.parse(Crypto.base64url_decode(value))
-        return nil if payload["expiresAt"].to_i <= current_millis
+        envelope = parse_compact_cache(value)
+        return nil unless envelope
 
-        signed = payload.fetch("session").merge("expiresAt" => payload.fetch("expiresAt"))
-        valid = Crypto.verify_hmac_signature(JSON.generate(signed), payload["signature"], secret, encoding: :base64url)
-        if valid
-          include_expiry ? signed : payload["session"]
-        end
+        payload = verify_compact_cache(envelope, secret)
+        return nil if !payload || cache_window_expired?(payload)
+
+        include_expiry ? payload : envelope["session"]
       end
-    rescue JSON::ParserError, KeyError, ArgumentError, JWT::DecodeError
+    rescue ArgumentError, JWT::DecodeError
       nil
+    end
+
+    def compact_cache?(strategy)
+      !%w[jwt jwe].include?(strategy.to_s)
+    end
+
+    def parse_compact_cache(raw)
+      parsed = JSON.parse(Crypto.base64url_decode(raw))
+      parsed if parsed.is_a?(Hash)
+    rescue JSON::ParserError, ArgumentError
+      nil
+    end
+
+    def verify_compact_cache(envelope, secret)
+      data = envelope["session"]
+      return nil unless data.is_a?(Hash)
+
+      signed = data.merge("expiresAt" => envelope["expiresAt"])
+      signed if Crypto.verify_hmac_signature(JSON.generate(signed), envelope["signature"], secret, encoding: :base64url)
+    end
+
+    def session_cache_payload?(payload)
+      payload.is_a?(Hash) && payload["session"].is_a?(Hash) && payload["user"].is_a?(Hash)
+    end
+
+    def cache_window_expired?(payload)
+      expiry = payload["expiresAt"]
+      expiry.is_a?(Numeric) && expiry < current_millis
     end
 
     def filtered_cache_data(ctx, session)
@@ -317,21 +400,10 @@ module BetterAuth
       }
     end
 
-    def chunked_value(cookies, name)
-      chunks = cookies.each_with_object([]) do |(cookie_name, value), result|
-        next unless cookie_name.start_with?("#{name}.")
-
-        result << [SessionStore.chunk_index(cookie_name), value]
-      end
-      return nil if chunks.empty?
-
-      chunks.sort_by(&:first).map(&:last).join
-    end
-
     def embedded_session_expired?(session)
       expires_at = session["expiresAt"] || session[:expiresAt] || session["expires_at"] || session[:expires_at]
       normalized = Session.normalize_time(expires_at)
-      normalized && normalized <= Time.now
+      normalized && normalized < Time.now
     rescue ArgumentError
       true
     end
@@ -342,7 +414,7 @@ module BetterAuth
 
       exact = "#{cookie_name}="
       chunk = "#{cookie_name}."
-      survivors = header.to_s.lines(chomp: true).reject do |entry|
+      survivors = split_set_cookie_header(header).reject do |entry|
         entry.start_with?(exact, chunk)
       end
       if survivors.empty?
@@ -367,6 +439,16 @@ module BetterAuth
       value
     end
 
+    def parse_cookie_integer(value)
+      value.to_s.lstrip[/\A[+-]?\d+/]&.to_i
+    end
+
+    def parse_cookie_expiry(value)
+      Time.parse(value) if value
+    rescue ArgumentError
+      nil
+    end
+
     def trim_cookie_ows(value)
       value.sub(/\A[ \t]*/, "").sub(/[ \t]*\z/, "")
     end
@@ -387,6 +469,10 @@ module BetterAuth
       end.join
     end
 
+    def serialize_request_cookies(cookies)
+      cookies.map { |key, value| "#{key}=#{encode_cookie_value(value)}" }.join("; ")
+    end
+
     def header_value(request_or_cookie_header)
       return request_or_cookie_header.headers["cookie"] if request_or_cookie_header.respond_to?(:headers)
       return request_or_cookie_header.get_header("HTTP_COOKIE") if request_or_cookie_header.respond_to?(:get_header)
@@ -395,10 +481,20 @@ module BetterAuth
     end
 
     def cookie_cache_version(config, session, user)
-      return "1" unless config
+      return "1" unless cache_version_configured?(config)
       return config.to_s unless config.respond_to?(:call)
 
       config.call(session, user).to_s
+    end
+
+    def cache_version_configured?(version)
+      version && version != ""
+    end
+
+    def cookie_cache_version_matches?(config, payload)
+      version = payload["version"]
+      version = "1" if version.nil? || version == ""
+      version == cookie_cache_version(config, payload.fetch("session"), payload.fetch("user"))
     end
 
     def current_millis

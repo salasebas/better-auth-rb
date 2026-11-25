@@ -25,12 +25,10 @@ module BetterAuth
           )
         end
 
-        session = current_session(ctx, allow_nil: true, disable_refresh: defer_refresh && ctx.method == "GET")
+        session = get_session_data(ctx, defer_refresh: defer_refresh && ctx.method == "GET")
         next ctx.json(nil) unless session
 
-        response = parsed_session_response(ctx, session)
-        response[:needsRefresh] = session_needs_refresh?(ctx, session[:session]) if defer_refresh && ctx.method == "GET"
-        ctx.json(response)
+        ctx.json(parsed_session_response(ctx, session))
       rescue APIError
         raise
       rescue => error
@@ -182,6 +180,15 @@ module BetterAuth
       end
     end
 
+    def self.get_session_data(ctx, defer_refresh: ctx.context.session_config[:defer_session_refresh])
+      Session.get_session(
+        ctx,
+        disable_cookie_cache: truthy_query?(ctx.query, "disableCookieCache"),
+        disable_refresh: truthy_query?(ctx.query, "disableRefresh"),
+        defer_refresh: defer_refresh
+      )
+    end
+
     def self.current_session(ctx, allow_nil: false, sensitive: false, fresh: false, disable_refresh: false)
       data = Session.find_current(
         ctx,
@@ -221,16 +228,6 @@ module BetterAuth
       raise APIError.new("FORBIDDEN", code: "SESSION_NOT_FRESH", message: BASE_ERROR_CODES.fetch("SESSION_NOT_FRESH"))
     end
 
-    def self.session_needs_refresh?(ctx, session)
-      return false if truthy_query?(ctx.query, "disableRefresh") || ctx.context.session_config[:disable_session_refresh]
-
-      update_age = ctx.context.session_config[:update_age].to_i
-      return true if update_age.zero?
-
-      updated_at = normalize_time(session["updatedAt"])
-      updated_at && updated_at + update_age <= Time.now
-    end
-
     def self.normalize_time(value)
       return value if value.is_a?(Time)
       return nil if value.nil? || value.to_s.empty?
@@ -243,7 +240,8 @@ module BetterAuth
     def self.parsed_session_response(ctx, session)
       {
         session: Schema.parse_output(ctx.context.options, "session", session[:session]),
-        user: Schema.parse_output(ctx.context.options, "user", session[:user])
+        user: Schema.parse_output(ctx.context.options, "user", session[:user]),
+        **session.slice(:needsRefresh)
       }
     end
 

@@ -24,7 +24,7 @@ class BetterAuthPluginsCustomSessionTest < Minitest::Test
     )
     cookie = sign_up_cookie(auth, email: "custom@example.com", name: "Ada Lovelace")
 
-    status, headers, body = auth.api.get_session(headers: {"cookie" => cookie}, as_response: true)
+    status, headers, body = auth.api.get_session(headers: {"cookie" => cookie}, query: {disableCookieCache: true}, as_response: true)
     data = JSON.parse(body.join)
 
     assert_equal 200, status
@@ -43,7 +43,7 @@ class BetterAuthPluginsCustomSessionTest < Minitest::Test
     )
     cookie = sign_up_cookie(auth, email: "max-age@example.com", name: "Max Age")
 
-    _status, headers, _body = auth.api.get_session(headers: {"cookie" => cookie}, as_response: true)
+    _status, headers, _body = auth.api.get_session(headers: {"cookie" => cookie}, query: {disableCookieCache: true}, as_response: true)
     cookies = headers.fetch("set-cookie").lines
     token_cookie = cookies.find { |line| line.start_with?("better-auth.session_token=") }
     data_cookie = cookies.find { |line| line.start_with?("better-auth.session_data=") && !line.match?(/Max-Age=0/i) }
@@ -140,9 +140,20 @@ class BetterAuthPluginsCustomSessionTest < Minitest::Test
     )
     cookie = sign_up_cookie(auth, email: "disable-refresh@example.com", name: "Disable Refresh")
 
-    result = auth.api.get_session(headers: {"cookie" => cookie}, query: {disableRefresh: true})
+    _status, headers, body = auth.api.get_session(headers: {"cookie" => cookie}, query: {disableRefresh: true}, as_response: true)
 
-    assert_equal "disable-refresh@example.com", result[:user]["email"]
+    assert_equal "disable-refresh@example.com", JSON.parse(body.join).dig("user", "email")
+    refute headers.key?("set-cookie")
+  end
+
+  def test_custom_session_passes_the_deferred_refresh_flag_to_the_resolver
+    auth = build_auth(
+      plugins: [BetterAuth::Plugins.custom_session(->(session, _ctx) { session })],
+      session: {defer_session_refresh: true, update_age: 0}
+    )
+    cookie = sign_up_cookie(auth, email: "deferred-custom-session@example.com", name: "Deferred Refresh")
+
+    assert_equal true, auth.api.get_session(headers: {"cookie" => cookie})[:needsRefresh]
   end
 
   private

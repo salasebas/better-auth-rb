@@ -38,7 +38,7 @@ module BetterAuth
         request: request_like?(request) ? request : nil
       )
 
-      result = run_endpoint_with_hooks(endpoint, endpoint_context)
+      result = RequestState.with_current { run_endpoint_with_hooks(endpoint, endpoint_context) }
       format_result(result, input)
     ensure
       context.clear_runtime! if context.respond_to?(:clear_runtime!)

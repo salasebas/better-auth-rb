@@ -256,11 +256,8 @@ module BetterAuth
       Cookies.split_set_cookie_header(ctx.response_headers["set-cookie"]).each do |line|
         cookie = Cookies.parse_set_cookie(line)
         next unless cookie && cookie[:name] == name
-        max_age = cookie.dig(:attributes, "max-age")
-        next if cookie[:value].empty? || (max_age.to_s.strip.match?(/\A[+-]?\d+\z/) && max_age.to_i == 0)
+        next if cookie[:value].empty? || cookie.dig(:attributes, "max-age") == 0
 
-        return URI.decode_uri_component(cookie[:value])
-      rescue ArgumentError
         return cookie[:value]
       end
       nil
